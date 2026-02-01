@@ -252,7 +252,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         f"{project_name}/src/apps",
         f"{project_name}/src/apps/users",
         f"{project_name}/src/apps/users/tests",
-        f"{project_name}/src/core",
+        f"{project_name}/src/api",
         f"{project_name}/migrations",
         f"{project_name}/tests",
     ]
@@ -452,45 +452,266 @@ async def test_create_user(client: AsyncClient):
     assert data["name"] == "Test User"
 ''',
         
-        # Core config package
-        f"{project_name}/src/core/__init__.py": '''"""
-Core configuration package.
+        # API config package
+        f"{project_name}/src/api/__init__.py": '''"""
+API configuration package.
 
-Configurações centrais da aplicação.
+Configuracoes centrais da aplicacao.
 """
 
-from src.core.config import settings
+from src.api.config import settings
 
 __all__ = ["settings"]
 ''',
-        f"{project_name}/src/core/config.py": '''"""
-Configurações da aplicação.
+        f"{project_name}/src/api/config.py": '''"""
+Configuracoes da aplicacao.
 
-Todas as configurações são carregadas de variáveis de ambiente
+Todas as configuracoes sao carregadas de variaveis de ambiente
 ou do arquivo .env.
+
+Variaveis de ambiente sao mapeadas automaticamente:
+    SECRET_KEY -> settings.secret_key
+    DATABASE_URL -> settings.database_url
+    DEBUG -> settings.debug
 """
 
+from typing import Literal
+from pydantic import Field as PydanticField
 from core import Settings
 
 
 class AppSettings(Settings):
     """
-    Configurações específicas da aplicação.
+    Configuracoes da aplicacao.
     
-    Adicione suas configurações customizadas aqui.
-    Elas serão carregadas automaticamente de variáveis de ambiente.
+    Todas as configuracoes abaixo podem ser sobrescritas via variaveis
+    de ambiente ou arquivo .env.
     
-    Exemplo:
-        STRIPE_API_KEY=sk_test_xxx -> settings.stripe_api_key
+    Para adicionar configuracoes customizadas, basta definir novos campos:
+    
+        stripe_api_key: str = ""
+        sendgrid_api_key: str = ""
+        
+    E definir no .env:
+    
+        STRIPE_API_KEY=sk_test_xxx
+        SENDGRID_API_KEY=SG.xxx
     """
     
-    # Suas configurações customizadas
+    # =========================================================================
+    # APPLICATION
+    # =========================================================================
+    
+    app_name: str = PydanticField(
+        default="My App",
+        description="Nome da aplicacao (exibido na documentacao)",
+    )
+    app_version: str = PydanticField(
+        default="0.1.0",
+        description="Versao da aplicacao",
+    )
+    environment: Literal["development", "staging", "production", "testing"] = PydanticField(
+        default="development",
+        description="Ambiente de execucao (development, staging, production, testing)",
+    )
+    debug: bool = PydanticField(
+        default=False,
+        description="Modo debug - NUNCA use True em producao",
+    )
+    secret_key: str = PydanticField(
+        default="change-me-in-production",
+        description="Chave secreta para criptografia e tokens JWT",
+    )
+    
+    # =========================================================================
+    # DATABASE
+    # =========================================================================
+    
+    database_url: str = PydanticField(
+        default="sqlite+aiosqlite:///./app.db",
+        description="URL de conexao do banco (async). Exemplos: "
+                    "sqlite+aiosqlite:///./app.db, "
+                    "postgresql+asyncpg://user:pass@localhost/db, "
+                    "mysql+aiomysql://user:pass@localhost/db",
+    )
+    database_echo: bool = PydanticField(
+        default=False,
+        description="Habilita logging de SQL (util para debug)",
+    )
+    database_pool_size: int = PydanticField(
+        default=5,
+        description="Tamanho do pool de conexoes",
+    )
+    database_max_overflow: int = PydanticField(
+        default=10,
+        description="Conexoes extras alem do pool",
+    )
+    database_pool_timeout: int = PydanticField(
+        default=30,
+        description="Timeout em segundos para obter conexao do pool",
+    )
+    database_pool_recycle: int = PydanticField(
+        default=3600,
+        description="Tempo em segundos para reciclar conexoes",
+    )
+    
+    # =========================================================================
+    # API
+    # =========================================================================
+    
+    api_prefix: str = PydanticField(
+        default="/api/v1",
+        description="Prefixo das rotas da API",
+    )
+    docs_url: str | None = PydanticField(
+        default="/docs",
+        description="URL da documentacao Swagger (None para desabilitar)",
+    )
+    redoc_url: str | None = PydanticField(
+        default="/redoc",
+        description="URL da documentacao ReDoc (None para desabilitar)",
+    )
+    openapi_url: str | None = PydanticField(
+        default="/openapi.json",
+        description="URL do schema OpenAPI (None para desabilitar)",
+    )
+    
+    # =========================================================================
+    # CORS
+    # =========================================================================
+    
+    cors_origins: list[str] = PydanticField(
+        default=["*"],
+        description="Origens permitidas para CORS. Use ['*'] para permitir todas",
+    )
+    cors_allow_credentials: bool = PydanticField(
+        default=True,
+        description="Permitir credenciais (cookies, auth headers) em CORS",
+    )
+    cors_allow_methods: list[str] = PydanticField(
+        default=["*"],
+        description="Metodos HTTP permitidos em CORS",
+    )
+    cors_allow_headers: list[str] = PydanticField(
+        default=["*"],
+        description="Headers permitidos em CORS",
+    )
+    
+    # =========================================================================
+    # AUTHENTICATION
+    # =========================================================================
+    
+    auth_secret_key: str | None = PydanticField(
+        default=None,
+        description="Chave secreta para tokens (usa secret_key se None)",
+    )
+    auth_algorithm: str = PydanticField(
+        default="HS256",
+        description="Algoritmo JWT (HS256, HS384, HS512, RS256, etc.)",
+    )
+    auth_access_token_expire_minutes: int = PydanticField(
+        default=30,
+        description="Tempo de expiracao do access token em minutos",
+    )
+    auth_refresh_token_expire_days: int = PydanticField(
+        default=7,
+        description="Tempo de expiracao do refresh token em dias",
+    )
+    auth_password_hasher: str = PydanticField(
+        default="pbkdf2_sha256",
+        description="Algoritmo de hash de senha: pbkdf2_sha256, argon2, bcrypt, scrypt",
+    )
+    
+    # =========================================================================
+    # DATETIME / TIMEZONE
+    # =========================================================================
+    
+    timezone: str = PydanticField(
+        default="UTC",
+        description="Timezone padrao da aplicacao (sempre use UTC)",
+    )
+    use_tz: bool = PydanticField(
+        default=True,
+        description="Usar datetimes aware (com timezone). Recomendado: True",
+    )
+    datetime_format: str = PydanticField(
+        default="%Y-%m-%dT%H:%M:%S%z",
+        description="Formato padrao de datetime (ISO 8601)",
+    )
+    date_format: str = PydanticField(
+        default="%Y-%m-%d",
+        description="Formato padrao de data",
+    )
+    time_format: str = PydanticField(
+        default="%H:%M:%S",
+        description="Formato padrao de hora",
+    )
+    
+    # =========================================================================
+    # SERVER
+    # =========================================================================
+    
+    host: str = PydanticField(
+        default="0.0.0.0",
+        description="Host do servidor",
+    )
+    port: int = PydanticField(
+        default=8000,
+        description="Porta do servidor",
+    )
+    workers: int = PydanticField(
+        default=1,
+        description="Numero de workers (use 1 em desenvolvimento)",
+    )
+    reload: bool = PydanticField(
+        default=True,
+        description="Auto-reload em desenvolvimento",
+    )
+    
+    # =========================================================================
+    # PERFORMANCE
+    # =========================================================================
+    
+    request_timeout: int = PydanticField(
+        default=30,
+        description="Timeout de requisicoes em segundos",
+    )
+    max_request_size: int = PydanticField(
+        default=10 * 1024 * 1024,  # 10MB
+        description="Tamanho maximo de requisicao em bytes",
+    )
+    
+    # =========================================================================
+    # LOGGING
+    # =========================================================================
+    
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = PydanticField(
+        default="INFO",
+        description="Nivel de log",
+    )
+    log_format: str = PydanticField(
+        default="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        description="Formato de log",
+    )
+    log_json: bool = PydanticField(
+        default=False,
+        description="Usar formato JSON para logs (recomendado em producao)",
+    )
+    
+    # =========================================================================
+    # CUSTOM SETTINGS
+    # Adicione suas configuracoes customizadas abaixo
+    # =========================================================================
+    
     # stripe_api_key: str = ""
     # sendgrid_api_key: str = ""
     # redis_url: str = "redis://localhost:6379"
+    # aws_access_key_id: str = ""
+    # aws_secret_access_key: str = ""
+    # aws_s3_bucket: str = ""
 
 
-# Instância global
+# Instancia global de configuracoes
 settings = AppSettings()
 ''',
         
@@ -504,7 +725,7 @@ Entry point da aplicação FastAPI.
 from core import CoreApp, AutoRouter
 from core.datetime import configure_datetime
 
-from src.core.config import settings
+from src.api.config import settings
 from src.apps.users import router as users_router
 
 
@@ -727,8 +948,8 @@ core run
 │   │       ├── services.py
 │   │       ├── routes.py
 │   │       └── tests/
-│   ├── core/              # Configurações centrais
-│   │   └── config.py      # Settings da aplicação
+│   ├── api/               # Configuracoes centrais
+│   │   └── config.py      # Settings da aplicacao
 │   └── main.py            # Entry point
 ├── migrations/            # Arquivos de migração
 ├── tests/                 # Testes globais
@@ -791,7 +1012,7 @@ DATABASE_URL="sqlite+aiosqlite:///./app.db"
 TIMEZONE="UTC"
 ```
 
-Adicione configurações customizadas em `src/core/config.py`.
+Adicione configuracoes customizadas em `src/api/config.py`.
 ''',
     }
     
