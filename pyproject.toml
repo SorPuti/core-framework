@@ -1,6 +1,6 @@
 [project]
-name = "elevator-pitch"
-version = "0.1.0"
+name = "core-framework"
+version = "0.2.0"
 description = "Core Framework - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.12"
 readme = "README.md"
@@ -8,7 +8,7 @@ license = { text = "MIT" }
 authors = [
     { name = "Core Framework Team" }
 ]
-keywords = ["fastapi", "django", "framework", "api", "rest", "async"]
+keywords = ["fastapi", "django", "framework", "api", "rest", "async", "cli"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -20,6 +20,7 @@ classifiers = [
     "Framework :: FastAPI",
     "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Environment :: Console",
 ]
 
 dependencies = [
@@ -32,6 +33,9 @@ dependencies = [
     "pyjwt>=2.8.0",
 ]
 
+[project.scripts]
+core = "core.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",
@@ -39,6 +43,7 @@ dev = [
     "httpx>=0.26.0",
     "mypy>=1.8.0",
     "ruff>=0.1.0",
+    "ipython>=8.0.0",
 ]
 postgres = [
     "asyncpg>=0.29.0",
@@ -49,9 +54,9 @@ mysql = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/core-framework/core"
-Documentation = "https://core-framework.readthedocs.io"
-Repository = "https://github.com/core-framework/core"
+Homepage = "https://github.com/SorPuti/core-framework"
+Documentation = "https://github.com/SorPuti/core-framework#readme"
+Repository = "https://github.com/SorPuti/core-framework"
 
 [build-system]
 requires = ["hatchling"]
