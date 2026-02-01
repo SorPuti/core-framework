@@ -22,6 +22,16 @@ from core.dependencies import Depends, get_db, get_current_user
 from core.config import Settings, get_settings
 from core.app import CoreApp
 
+# Migrations
+from core.migrations import (
+    makemigrations,
+    migrate,
+    showmigrations,
+    rollback,
+    MigrationEngine,
+    Migration,
+)
+
 __version__ = "0.1.0"
 __all__ = [
     # Models
@@ -51,4 +61,11 @@ __all__ = [
     "get_settings",
     # App
     "CoreApp",
+    # Migrations
+    "makemigrations",
+    "migrate",
+    "showmigrations",
+    "rollback",
+    "MigrationEngine",
+    "Migration",
 ]
