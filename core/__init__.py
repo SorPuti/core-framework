@@ -15,7 +15,7 @@ Princípios:
 
 from core.models import Model, Field
 from core.serializers import InputSchema, OutputSchema, Serializer
-from core.views import APIView, ViewSet, ModelViewSet
+from core.views import APIView, ViewSet, ModelViewSet, action
 from core.routing import Router, AutoRouter
 from core.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
 from core.dependencies import Depends, get_db, get_current_user
@@ -141,6 +141,7 @@ __all__ = [
     "APIView",
     "ViewSet",
     "ModelViewSet",
+    "action",
     # Routing
     "Router",
     "AutoRouter",
