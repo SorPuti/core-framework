@@ -2742,7 +2742,9 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     if target == "docker" or target == "all":
         print()
         print(info("To start with Docker:"))
-        print("  docker-compose up -d")
+        print("  # Set your GitHub token for private repos")
+        print("  export GITHUB_TOKEN=ghp_your_token_here")
+        print("  docker compose up -d")
     
     if target == "pm2" or target == "all":
         print()

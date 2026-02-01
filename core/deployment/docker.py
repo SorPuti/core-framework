@@ -206,7 +206,7 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Build argument for GitHub token (for private repos)
+# Build argument for GitHub token (for private repos via HTTPS)
 # Pass with: docker build --build-arg GITHUB_TOKEN=xxx
 ARG GITHUB_TOKEN=""
 
@@ -215,11 +215,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
     build-essential \\
     curl \\
     git \\
+    openssh-client \\
     && rm -rf /var/lib/apt/lists/*
 
 # Configure git for private repos if token provided
 RUN if [ -n "$GITHUB_TOKEN" ]; then \\
     git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \\
+    git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; \\
+    git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:"; \\
     fi
 
 # Install uv for faster package installation
@@ -234,10 +237,14 @@ COPY README.md* .
 COPY src/ ./src/
 
 # Install dependencies from pyproject.toml
-RUN --mount=type=secret,id=github_token \\
+# Uses SSH agent forwarding if available, or GITHUB_TOKEN for HTTPS
+RUN --mount=type=ssh \\
+    --mount=type=secret,id=github_token \\
     if [ -f /run/secrets/github_token ]; then \\
         export GITHUB_TOKEN=$(cat /run/secrets/github_token); \\
         git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \\
+        git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; \\
+        git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:"; \\
     fi && \\
     uv pip install --system .
 
