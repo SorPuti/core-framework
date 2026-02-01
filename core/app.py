@@ -176,12 +176,30 @@ class CoreApp:
             request: Request,
             exc: ValidationError,
         ) -> JSONResponse:
+            # Converte erros para formato JSON serializável
+            errors = []
+            for error in exc.errors():
+                err = {
+                    "loc": list(error.get("loc", [])),
+                    "msg": str(error.get("msg", "")),
+                    "type": error.get("type", ""),
+                }
+                # Inclui input apenas se for serializável
+                if "input" in error:
+                    try:
+                        import json
+                        json.dumps(error["input"])
+                        err["input"] = error["input"]
+                    except (TypeError, ValueError):
+                        err["input"] = str(error["input"])
+                errors.append(err)
+            
             return JSONResponse(
                 status_code=422,
                 content={
                     "detail": "Validation error",
                     "code": "validation_error",
-                    "errors": exc.errors(),
+                    "errors": errors,
                 },
             )
         
