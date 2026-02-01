@@ -264,6 +264,10 @@ def models_to_schema_state(models: list[type["Model"]]) -> SchemaState:
     return state
 
 
+# Tabelas internas que devem ser ignoradas
+INTERNAL_TABLES = {"_core_migrations", "sqlite_sequence"}
+
+
 async def get_database_schema_state(conn: "AsyncConnection") -> SchemaState:
     """Extrai estado atual do schema do banco de dados."""
     state = SchemaState()
@@ -274,6 +278,9 @@ async def get_database_schema_state(conn: "AsyncConnection") -> SchemaState:
         tables = {}
         
         for table_name in inspector.get_table_names():
+            # Ignora tabelas internas do sistema
+            if table_name in INTERNAL_TABLES:
+                continue
             columns = {}
             for col in inspector.get_columns(table_name):
                 columns[col["name"]] = ColumnState(
