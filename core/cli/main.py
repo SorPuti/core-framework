@@ -659,6 +659,17 @@ def cmd_run(args: argparse.Namespace) -> int:
     port = args.port or config["port"]
     app_module = args.app or config["app_module"]
     
+    # Adiciona diretório atual ao PYTHONPATH para o Uvicorn encontrar o módulo
+    # Isso é necessário porque o Uvicorn com reload spawna um novo processo
+    cwd = os.getcwd()
+    current_pythonpath = os.environ.get("PYTHONPATH", "")
+    if cwd not in current_pythonpath.split(os.pathsep):
+        os.environ["PYTHONPATH"] = f"{cwd}{os.pathsep}{current_pythonpath}" if current_pythonpath else cwd
+    
+    # Também adiciona ao sys.path atual
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    
     print(info(f"Starting development server at http://{host}:{port}"))
     print(info("Press CTRL+C to stop"))
     print()
@@ -670,6 +681,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             host=host,
             port=port,
             reload=args.reload,
+            reload_dirs=[cwd] if args.reload else None,
             log_level="info",
         )
     except ImportError:
