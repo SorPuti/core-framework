@@ -1408,6 +1408,7 @@ requires-python = ">={python_version}"
 dependencies = [
     "core-framework @ git+https://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@github.com/SorPuti/core-framework.git",
     "python-dotenv>=1.0.0",
+    "asyncpg>=0.29.0",
 ]
 
 [project.optional-dependencies]
