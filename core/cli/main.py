@@ -234,11 +234,25 @@ def cmd_init(args: argparse.Namespace) -> int:
                 skip_venv = True
     
     # Cria estrutura de diretórios
+    # Nova estrutura escalável:
+    # project/
+    # ├── src/
+    # │   ├── apps/           # Apps modulares
+    # │   │   └── users/      # App de exemplo
+    # │   ├── core/           # Configurações centrais
+    # │   └── main.py         # Entry point
+    # ├── migrations/
+    # ├── tests/
+    # └── settings.py         # Configurações do projeto
+    
     print(info("\nCreating project structure..."))
     dirs = [
         project_name,
-        f"{project_name}/app",
-        f"{project_name}/app/api",
+        f"{project_name}/src",
+        f"{project_name}/src/apps",
+        f"{project_name}/src/apps/users",
+        f"{project_name}/src/apps/users/tests",
+        f"{project_name}/src/core",
         f"{project_name}/migrations",
         f"{project_name}/tests",
     ]
@@ -250,15 +264,31 @@ def cmd_init(args: argparse.Namespace) -> int:
     # Cria arquivos
     print(info("\nCreating files..."))
     files = {
-        f"{project_name}/app/__init__.py": '"""Application package."""\n',
-        f"{project_name}/app/models.py": '''"""
-Models da aplicação.
+        # Source package
+        f"{project_name}/src/__init__.py": '"""Source package."""\n',
+        
+        # Apps package
+        f"{project_name}/src/apps/__init__.py": '"""Apps package - módulos da aplicação."""\n',
+        
+        # Users app (exemplo)
+        f"{project_name}/src/apps/users/__init__.py": '''"""
+Users App.
+
+App de exemplo com autenticação e gerenciamento de usuários.
 """
 
-from datetime import datetime
+from src.apps.users.routes import router
+
+__all__ = ["router"]
+''',
+        f"{project_name}/src/apps/users/models.py": '''"""
+Models do app users.
+"""
+
 from sqlalchemy.orm import Mapped
 
 from core import Model, Field
+from core.datetime import DateTime, utcnow
 
 
 class User(Model):
@@ -267,42 +297,30 @@ class User(Model):
     __tablename__ = "users"
     
     id: Mapped[int] = Field.pk()
-    email: Mapped[str] = Field.string(max_length=255, unique=True)
+    email: Mapped[str] = Field.string(max_length=255, unique=True, index=True)
     name: Mapped[str] = Field.string(max_length=100)
     is_active: Mapped[bool] = Field.boolean(default=True)
-    created_at: Mapped[datetime] = Field.datetime(auto_now_add=True)
+    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+    updated_at: Mapped[DateTime | None] = Field.datetime(auto_now=True)
 ''',
-        f"{project_name}/app/schemas.py": '''"""
-Schemas de validação e serialização.
-
-O Core Framework usa Pydantic para validação automática.
-Você pode adicionar validadores customizados usando decorators.
+        f"{project_name}/src/apps/users/schemas.py": '''"""
+Schemas do app users.
 """
 
-from datetime import datetime
 from pydantic import EmailStr, field_validator, model_validator
 
 from core import InputSchema, OutputSchema
+from core.datetime import DateTime
 
 
 class UserInput(InputSchema):
-    """
-    Schema de entrada para usuário.
-    
-    Validações automáticas:
-    - email: Formato de email válido (EmailStr)
-    - name: String não vazia (strip automático)
-    
-    Validações customizadas:
-    - name: Mínimo 2 caracteres
-    """
+    """Schema de entrada para criar usuário."""
     email: EmailStr
     name: str
     
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        """Valida que o nome tem pelo menos 2 caracteres."""
         if len(v.strip()) < 2:
             raise ValueError("Name must be at least 2 characters")
         return v.strip()
@@ -314,10 +332,9 @@ class UserOutput(OutputSchema):
     email: str
     name: str
     is_active: bool
-    created_at: datetime
+    created_at: DateTime
 
 
-# Exemplo de schema com validação cross-field
 class UserUpdateInput(InputSchema):
     """Schema para atualização de usuário."""
     email: EmailStr | None = None
@@ -325,16 +342,12 @@ class UserUpdateInput(InputSchema):
     
     @model_validator(mode="after")
     def validate_at_least_one_field(self):
-        """Garante que pelo menos um campo foi fornecido."""
         if self.email is None and self.name is None:
             raise ValueError("At least one field must be provided")
         return self
 ''',
-        f"{project_name}/app/views.py": '''"""
-Views e ViewSets.
-
-O Core Framework fornece validação automática de unicidade
-e hooks para validação customizada.
+        f"{project_name}/src/apps/users/views.py": '''"""
+Views do app users.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -342,20 +355,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import ModelViewSet, ValidationError
 from core.permissions import AllowAny
 
-from app.models import User
-from app.schemas import UserInput, UserOutput
+from src.apps.users.models import User
+from src.apps.users.schemas import UserInput, UserOutput
 
 
 class UserViewSet(ModelViewSet):
-    """
-    ViewSet para usuários.
-    
-    Recursos de validação:
-    - Unicidade automática: campos com unique=True são validados
-    - Validadores de campo: validate_{field_name}(value, db, instance)
-    - Validação geral: validate(data, db, instance)
-    - Hooks: perform_create_validation, after_create, etc.
-    """
+    """ViewSet para usuários."""
     
     model = User
     input_schema = UserInput
@@ -363,22 +368,13 @@ class UserViewSet(ModelViewSet):
     permission_classes = [AllowAny]
     tags = ["users"]
     
-    # Campos únicos são detectados automaticamente do model,
-    # mas você pode especificar manualmente:
-    # unique_fields = ["email"]
-    
     async def validate_email(
         self,
         value: str,
         db: AsyncSession,
         instance=None,
     ) -> str:
-        """
-        Validação customizada para email.
-        
-        Este método é chamado automaticamente durante create/update.
-        """
-        # Exemplo: bloquear domínios específicos
+        """Validação customizada para email."""
         blocked_domains = ["spam.com", "fake.com"]
         domain = value.split("@")[-1].lower()
         
@@ -389,74 +385,237 @@ class UserViewSet(ModelViewSet):
                 field="email",
             )
         
-        return value.lower()  # Normaliza para lowercase
-    
-    async def validate(
-        self,
-        data: dict,
-        db: AsyncSession,
-        instance=None,
-    ) -> dict:
-        """
-        Validação geral (cross-field).
-        
-        Chamado após validação de campos individuais.
-        """
-        # Exemplo: validação de regra de negócio
-        # if data.get("role") == "admin" and not data.get("verified"):
-        #     raise ValidationError("Admins must be verified", field="role")
-        
-        return data
-    
-    async def after_create(self, obj: User, db: AsyncSession) -> None:
-        """
-        Hook executado após criar usuário.
-        
-        Útil para side effects como:
-        - Enviar email de boas-vindas
-        - Criar registros relacionados
-        - Disparar eventos
-        """
-        # Exemplo: print(f"User {obj.email} created!")
-        pass
+        return value.lower()
 ''',
-        f"{project_name}/app/main.py": '''"""
+        f"{project_name}/src/apps/users/services.py": '''"""
+Services do app users.
+
+Lógica de negócio complexa vai aqui.
+"""
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from src.apps.users.models import User
+
+
+class UserService:
+    """Service para lógica de negócio de usuários."""
+    
+    def __init__(self, db: "AsyncSession"):
+        self.db = db
+    
+    async def get_active_users(self) -> list["User"]:
+        """Retorna apenas usuários ativos."""
+        from src.apps.users.models import User
+        return await User.objects.using(self.db).filter(is_active=True).all()
+''',
+        f"{project_name}/src/apps/users/routes.py": '''"""
+Rotas do app users.
+"""
+
+from core import AutoRouter
+
+from src.apps.users.views import UserViewSet
+
+router = AutoRouter(prefix="/users", tags=["Users"])
+router.register("", UserViewSet, basename="user")
+''',
+        f"{project_name}/src/apps/users/tests/__init__.py": '"""Tests for users app."""\n',
+        f"{project_name}/src/apps/users/tests/test_users.py": '''"""
+Testes do app users.
+"""
+
+import pytest
+from httpx import AsyncClient
+
+
+@pytest.mark.asyncio
+async def test_list_users(client: AsyncClient):
+    """Testa listagem de usuários."""
+    response = await client.get("/api/v1/users/")
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+@pytest.mark.asyncio
+async def test_create_user(client: AsyncClient):
+    """Testa criação de usuário."""
+    response = await client.post(
+        "/api/v1/users/",
+        json={"email": "test@example.com", "name": "Test User"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["email"] == "test@example.com"
+    assert data["name"] == "Test User"
+''',
+        
+        # Core config package
+        f"{project_name}/src/core/__init__.py": '''"""
+Core configuration package.
+
+Configurações centrais da aplicação.
+"""
+
+from src.core.config import settings
+
+__all__ = ["settings"]
+''',
+        f"{project_name}/src/core/config.py": '''"""
+Configurações da aplicação.
+
+Todas as configurações são carregadas de variáveis de ambiente
+ou do arquivo .env.
+"""
+
+from core import Settings
+
+
+class AppSettings(Settings):
+    """
+    Configurações específicas da aplicação.
+    
+    Adicione suas configurações customizadas aqui.
+    Elas serão carregadas automaticamente de variáveis de ambiente.
+    
+    Exemplo:
+        STRIPE_API_KEY=sk_test_xxx -> settings.stripe_api_key
+    """
+    
+    # Suas configurações customizadas
+    # stripe_api_key: str = ""
+    # sendgrid_api_key: str = ""
+    # redis_url: str = "redis://localhost:6379"
+
+
+# Instância global
+settings = AppSettings()
+''',
+        
+        # Main entry point
+        f"{project_name}/src/main.py": '''"""
 Aplicação principal.
+
+Entry point da aplicação FastAPI.
 """
 
 from core import CoreApp, AutoRouter
+from core.datetime import configure_datetime
 
-from app.views import UserViewSet
+from src.core.config import settings
+from src.apps.users import router as users_router
 
 
-# Cria router
-router = AutoRouter(prefix="/api/v1")
-router.register("/users", UserViewSet, basename="user")
+# Configura DateTime para UTC
+configure_datetime(
+    default_timezone=settings.timezone,
+    use_aware_datetimes=settings.use_tz,
+)
+
+# Router principal da API
+api_router = AutoRouter(prefix="/api/v1")
+
+# Inclui routers dos apps
+api_router.include_router(users_router)
 
 # Cria aplicação
 app = CoreApp(
-    title="My API",
+    title=settings.app_name,
     description="API criada com Core Framework",
-    version="1.0.0",
-    routers=[router],
+    version=settings.app_version,
+    debug=settings.debug,
+    routers=[api_router],
 )
 
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to My API", "docs": "/docs"}
+    """Endpoint raiz."""
+    return {
+        "message": f"Welcome to {settings.app_name}",
+        "version": settings.app_version,
+        "docs": "/docs",
+    }
+
+
+@app.get("/health")
+async def health():
+    """Health check."""
+    return {"status": "healthy"}
 ''',
-        f"{project_name}/app/api/__init__.py": '"""API package."""\n',
+        
+        # Root files
         f"{project_name}/migrations/__init__.py": '"""Migrations package."""\n',
         f"{project_name}/tests/__init__.py": '"""Tests package."""\n',
+        f"{project_name}/tests/conftest.py": '''"""
+Configuração de testes.
+"""
+
+import pytest
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
+
+from src.main import app
+
+
+@pytest_asyncio.fixture
+async def client():
+    """Cliente HTTP para testes."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+    ) as client:
+        yield client
+''',
+        f"{project_name}/.env": f'''# Environment variables
+# Copie para .env.local para desenvolvimento
+
+# Application
+APP_NAME="{project_name}"
+APP_VERSION="0.1.0"
+ENVIRONMENT="development"
+DEBUG=true
+SECRET_KEY="change-me-in-production-{project_name}"
+
+# Database
+DATABASE_URL="sqlite+aiosqlite:///./app.db"
+
+# Timezone
+TIMEZONE="UTC"
+USE_TZ=true
+''',
+        f"{project_name}/.env.example": '''# Environment variables example
+# Copy to .env and fill in the values
+
+# Application
+APP_NAME="My App"
+APP_VERSION="0.1.0"
+ENVIRONMENT="development"  # development, staging, production
+DEBUG=false
+SECRET_KEY="your-secret-key-here"
+
+# Database
+DATABASE_URL="sqlite+aiosqlite:///./app.db"
+# DATABASE_URL="postgresql+asyncpg://user:pass@localhost/dbname"
+
+# Timezone
+TIMEZONE="UTC"
+USE_TZ=true
+
+# Auth (optional)
+# AUTH_ACCESS_TOKEN_EXPIRE_MINUTES=30
+# AUTH_REFRESH_TOKEN_EXPIRE_DAYS=7
+''',
         f"{project_name}/core.toml": '''# Core Framework Configuration
 
 [core]
 database_url = "sqlite+aiosqlite:///./app.db"
 migrations_dir = "./migrations"
 app_label = "main"
-models_module = "app.models"
-app_module = "app.main"
+models_module = "src.apps.users.models"
+app_module = "src.main"
 host = "0.0.0.0"
 port = 8000
 ''',
@@ -467,6 +626,7 @@ description = "Project created with Core Framework"
 requires-python = ">={python_version}"
 dependencies = [
     "core-framework @ git+https://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@github.com/SorPuti/core-framework.git",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -474,14 +634,25 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",
     "httpx>=0.26.0",
+    "ruff>=0.1.0",
 ]
 
 [tool.core]
 database_url = "sqlite+aiosqlite:///./app.db"
 migrations_dir = "./migrations"
 app_label = "main"
-models_module = "app.models"
-app_module = "app.main"
+models_module = "src.apps.users.models"
+app_module = "src.main"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = ["E501", "B008"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests", "src"]
 ''',
         f"{project_name}/.python-version": f"{python_version}\n",
         f"{project_name}/.gitignore": '''# Python
@@ -529,6 +700,10 @@ Projeto criado com [Core Framework](https://github.com/SorPuti/core-framework).
 # Ativar ambiente virtual
 source .venv/bin/activate
 
+# Configurar variáveis de ambiente
+cp .env.example .env
+# Edite .env com suas configurações
+
 # Criar migrações
 core makemigrations --name initial
 
@@ -543,16 +718,47 @@ core run
 
 ```
 {project_name}/
-├── app/
-│   ├── __init__.py
-│   ├── models.py      # Models SQLAlchemy
-│   ├── schemas.py     # Schemas Pydantic
-│   ├── views.py       # ViewSets
-│   └── main.py        # Aplicação FastAPI
-├── migrations/        # Arquivos de migração
-├── tests/            # Testes
-├── core.toml         # Configuração do Core Framework
-└── pyproject.toml    # Configuração do projeto
+├── src/
+│   ├── apps/              # Apps modulares
+│   │   └── users/         # App de usuários (exemplo)
+│   │       ├── models.py
+│   │       ├── schemas.py
+│   │       ├── views.py
+│   │       ├── services.py
+│   │       ├── routes.py
+│   │       └── tests/
+│   ├── core/              # Configurações centrais
+│   │   └── config.py      # Settings da aplicação
+│   └── main.py            # Entry point
+├── migrations/            # Arquivos de migração
+├── tests/                 # Testes globais
+├── .env                   # Variáveis de ambiente
+├── core.toml              # Config do Core Framework
+└── pyproject.toml         # Config do projeto
+```
+
+## Criando novos apps
+
+```bash
+# Cria um novo app modular
+core createapp products
+
+# Estrutura criada:
+# src/apps/products/
+# ├── models.py
+# ├── schemas.py
+# ├── views.py
+# ├── services.py
+# ├── routes.py
+# └── tests/
+```
+
+Depois, registre o router no `src/main.py`:
+
+```python
+from src.apps.products import router as products_router
+
+api_router.include_router(products_router)
 ```
 
 ## Comandos úteis
@@ -563,7 +769,29 @@ core makemigrations   # Gerar migrações
 core migrate          # Aplicar migrações
 core shell            # Shell interativo
 core routes           # Listar rotas
+core createapp <name> # Criar novo app
+core check            # Verificar migrações
 ```
+
+## Configuração
+
+Todas as configurações são carregadas de variáveis de ambiente.
+Edite `.env` ou defina variáveis no sistema:
+
+```bash
+# Aplicação
+APP_NAME="{project_name}"
+DEBUG=true
+SECRET_KEY="sua-chave-secreta"
+
+# Banco de dados
+DATABASE_URL="sqlite+aiosqlite:///./app.db"
+
+# Timezone (sempre UTC por padrão)
+TIMEZONE="UTC"
+```
+
+Adicione configurações customizadas em `src/core/config.py`.
 ''',
     }
     
@@ -994,72 +1222,233 @@ def cmd_routes(args: argparse.Namespace) -> int:
 
 
 def cmd_createapp(args: argparse.Namespace) -> int:
-    """Cria um novo app/módulo."""
-    app_name = args.name
+    """
+    Cria um novo app/módulo dentro da estrutura do projeto.
+    
+    Estrutura criada:
+        src/apps/{app_name}/
+        ├── __init__.py
+        ├── models.py
+        ├── schemas.py
+        ├── views.py
+        ├── services.py
+        ├── routes.py
+        └── tests/
+            ├── __init__.py
+            └── test_{app_name}.py
+    """
+    app_name = args.name.lower().replace("-", "_")
+    
+    # Detecta estrutura do projeto
+    # Procura por src/apps/ ou apps/ ou cria em src/apps/
+    cwd = Path.cwd()
+    
+    # Possíveis locais para apps
+    possible_paths = [
+        cwd / "src" / "apps",
+        cwd / "apps",
+        cwd / "src",
+    ]
+    
+    apps_dir = None
+    for path in possible_paths:
+        if path.exists() and path.is_dir():
+            apps_dir = path
+            break
+    
+    # Se não encontrou, cria em src/apps/
+    if apps_dir is None:
+        apps_dir = cwd / "src" / "apps"
+        apps_dir.mkdir(parents=True, exist_ok=True)
+        # Cria __init__.py nos diretórios
+        (cwd / "src" / "__init__.py").write_text('"""Source package."""\n')
+        (apps_dir / "__init__.py").write_text('"""Apps package."""\n')
+        print(info(f"Created apps directory: {apps_dir.relative_to(cwd)}"))
+    
+    app_dir = apps_dir / app_name
+    
+    if app_dir.exists():
+        print(error(f"App '{app_name}' already exists at {app_dir.relative_to(cwd)}"))
+        return 1
     
     print(info(f"Creating app: {app_name}"))
+    print(info(f"Location: {app_dir.relative_to(cwd)}/"))
+    print()
     
-    # Cria estrutura
+    # Calcula o import path
+    try:
+        relative_path = app_dir.relative_to(cwd)
+        import_path = str(relative_path).replace("/", ".").replace("\\", ".")
+    except ValueError:
+        import_path = app_name
+    
+    # Cria estrutura de diretórios
     dirs = [
-        app_name,
-        f"{app_name}/api",
+        app_dir,
+        app_dir / "tests",
     ]
     
     for d in dirs:
-        Path(d).mkdir(parents=True, exist_ok=True)
-        print(f"  Created {d}/")
+        d.mkdir(parents=True, exist_ok=True)
     
+    # Arquivos do app
     files = {
-        f"{app_name}/__init__.py": f'"""{app_name} app."""\n',
-        f"{app_name}/models.py": f'''"""
+        app_dir / "__init__.py": f'''"""
+{app_name.replace("_", " ").title()} App.
+
+Este módulo contém a lógica do app {app_name}.
+"""
+
+from {import_path}.models import *  # noqa: F401, F403
+from {import_path}.views import *  # noqa: F401, F403
+from {import_path}.routes import router  # noqa: F401
+
+__all__ = ["router"]
+''',
+        app_dir / "models.py": f'''"""
 Models do app {app_name}.
+
+Defina seus models SQLAlchemy aqui.
 """
 
 from sqlalchemy.orm import Mapped
+
 from core import Model, Field
+from core.datetime import DateTime
 
 
-# Defina seus models aqui
+# Exemplo de model
+# class {app_name.title().replace("_", "")}(Model):
+#     __tablename__ = "{app_name}s"
+#     
+#     id: Mapped[int] = Field.pk()
+#     name: Mapped[str] = Field.string(max_length=255)
+#     created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+#     updated_at: Mapped[DateTime | None] = Field.datetime(auto_now=True)
 ''',
-        f"{app_name}/schemas.py": f'''"""
-Schemas do app {app_name}.
+        app_dir / "schemas.py": f'''"""
+Schemas Pydantic do app {app_name}.
+
+Defina seus schemas de entrada/saída aqui.
 """
 
+from pydantic import EmailStr
+
 from core import InputSchema, OutputSchema
+from core.datetime import DateTime
 
 
-# Defina seus schemas aqui
+# Exemplo de schemas
+# class {app_name.title().replace("_", "")}Input(InputSchema):
+#     """Schema de entrada para criar/atualizar."""
+#     name: str
+#     email: EmailStr
+#
+#
+# class {app_name.title().replace("_", "")}Output(OutputSchema):
+#     """Schema de saída."""
+#     id: int
+#     name: str
+#     email: str
+#     created_at: DateTime
 ''',
-        f"{app_name}/views.py": f'''"""
-Views do app {app_name}.
+        app_dir / "views.py": f'''"""
+Views/ViewSets do app {app_name}.
+
+Defina seus ViewSets e endpoints aqui.
 """
 
 from core import ModelViewSet
+from core.dependencies import DatabaseSession
+
+# from {import_path}.models import ...
+# from {import_path}.schemas import ...
 
 
-# Defina seus ViewSets aqui
+# Exemplo de ViewSet
+# class {app_name.title().replace("_", "")}ViewSet(ModelViewSet):
+#     """ViewSet para {app_name}."""
+#     
+#     model = {app_name.title().replace("_", "")}
+#     input_schema = {app_name.title().replace("_", "")}Input
+#     output_schema = {app_name.title().replace("_", "")}Output
 ''',
-        f"{app_name}/api/__init__.py": '"""API endpoints."""\n',
-        f"{app_name}/api/routes.py": f'''"""
+        app_dir / "services.py": f'''"""
+Services/Business Logic do app {app_name}.
+
+Coloque aqui a lógica de negócio complexa.
+"""
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
+# Exemplo de service
+# class {app_name.title().replace("_", "")}Service:
+#     """Service para lógica de negócio de {app_name}."""
+#     
+#     def __init__(self, db: "AsyncSession"):
+#         self.db = db
+#     
+#     async def process(self, data: dict) -> dict:
+#         # Sua lógica aqui
+#         return data
+''',
+        app_dir / "routes.py": f'''"""
 Rotas do app {app_name}.
+
+Configure as rotas e registre os ViewSets aqui.
 """
 
 from core import AutoRouter
 
-# from {app_name}.views import ...
+# from {import_path}.views import ...
 
-router = AutoRouter(prefix="/{app_name}")
+router = AutoRouter(prefix="/{app_name.replace("_", "-")}", tags=["{app_name.replace("_", " ").title()}"])
 
-# router.register("/resource", ResourceViewSet)
+# Registre seus ViewSets
+# router.register("", {app_name.title().replace("_", "")}ViewSet, basename="{app_name}")
+
+# Ou adicione rotas customizadas
+# @router.get("/custom")
+# async def custom_endpoint():
+#     return {{"message": "Custom endpoint"}}
+''',
+        app_dir / "tests" / "__init__.py": f'"""Tests for {app_name} app."""\n',
+        app_dir / "tests" / f"test_{app_name}.py": f'''"""
+Testes do app {app_name}.
+"""
+
+import pytest
+from httpx import AsyncClient
+
+
+# Exemplo de teste
+# @pytest.mark.asyncio
+# async def test_list_{app_name}(client: AsyncClient):
+#     response = await client.get("/{app_name.replace("_", "-")}/")
+#     assert response.status_code == 200
 ''',
     }
     
     for filepath, content in files.items():
-        Path(filepath).write_text(content)
-        print(f"  Created {filepath}")
+        filepath.write_text(content)
+        print(f"  📄 {filepath.relative_to(cwd)}")
     
     print()
     print(success(f"✓ App '{app_name}' created successfully!"))
+    print()
+    print(info("Next steps:"))
+    print(f"  1. Edit {app_dir.relative_to(cwd)}/models.py to define your models")
+    print(f"  2. Edit {app_dir.relative_to(cwd)}/schemas.py to define your schemas")
+    print(f"  3. Edit {app_dir.relative_to(cwd)}/views.py to create your ViewSets")
+    print(f"  4. Register the router in your main app:")
+    print()
+    print(f"     from {import_path} import router as {app_name}_router")
+    print(f"     app = CoreApp(routers=[{app_name}_router])")
+    print()
     
     return 0
 
