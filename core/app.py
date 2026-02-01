@@ -245,6 +245,17 @@ class CoreApp:
     def delete(self, path: str, **kwargs: Any) -> Callable:
         """Decorator para rota DELETE."""
         return self.app.delete(path, **kwargs)
+    
+    async def __call__(self, scope, receive, send):
+        """
+        Torna CoreApp callable como ASGI app.
+        
+        Permite usar diretamente com uvicorn:
+            uvicorn main:app --reload
+        
+        Onde app é uma instância de CoreApp.
+        """
+        await self.app(scope, receive, send)
 
 
 def create_app(
