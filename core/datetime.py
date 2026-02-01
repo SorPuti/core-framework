@@ -240,6 +240,7 @@ class DateTime(_datetime):
     - Sempre aware (com timezone)
     - UTC por padrão
     - Métodos de conversão integrados
+    - Compatível com Pydantic
     
     Uso:
         # Criar datetime UTC
@@ -251,6 +252,56 @@ class DateTime(_datetime):
         # Converter para outro timezone
         dt_sp = dt.to_timezone("America/Sao_Paulo")
     """
+    
+    # =========================================================================
+    # Pydantic Support
+    # =========================================================================
+    
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: Any) -> Any:
+        """
+        Define como Pydantic deve validar e serializar DateTime.
+        
+        Aceita:
+        - DateTime
+        - datetime
+        - string ISO 8601
+        - int/float (timestamp)
+        """
+        from pydantic_core import core_schema
+        
+        def validate_datetime(value: Any) -> "DateTime":
+            if isinstance(value, DateTime):
+                return value
+            if isinstance(value, _datetime):
+                return DateTime.from_datetime(value)
+            if isinstance(value, str):
+                return DateTime.from_iso(value)
+            if isinstance(value, (int, float)):
+                return DateTime.from_timestamp(value)
+            raise ValueError(f"Cannot convert {type(value)} to DateTime")
+        
+        def serialize_datetime(value: "DateTime") -> str:
+            return value.isoformat()
+        
+        return core_schema.no_info_plain_validator_function(
+            validate_datetime,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                serialize_datetime,
+                info_arg=False,
+                return_schema=core_schema.str_schema(),
+            ),
+        )
+    
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """Define o schema JSON para OpenAPI."""
+        return {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 datetime string",
+            "example": "2024-01-15T10:30:00+00:00",
+        }
     
     def __new__(
         cls,
