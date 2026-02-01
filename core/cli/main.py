@@ -1713,6 +1713,104 @@ def cmd_check(args: argparse.Namespace) -> int:
     return asyncio.run(run())
 
 
+def cmd_reset_db(args: argparse.Namespace) -> int:
+    """
+    Reset database completely.
+    
+    WARNING: This destroys ALL data including:
+    - All user data
+    - All migrations history
+    - All framework tables
+    
+    Use only in development or when you need a fresh start.
+    """
+    config = load_config()
+    
+    print()
+    print(error("=" * 60))
+    print(error("  WARNING: DATABASE RESET"))
+    print(error("=" * 60))
+    print()
+    print(warning("This will PERMANENTLY DELETE:"))
+    print(warning("  - All tables and data"))
+    print(warning("  - All migration history"))
+    print(warning("  - All users, groups, and permissions"))
+    print()
+    print(info(f"Database: {config['database_url']}"))
+    print()
+    
+    if not args.yes:
+        try:
+            confirm = input(error("Type 'yes' to confirm: "))
+            if confirm.lower() != 'yes':
+                print(info("Aborted."))
+                return 0
+        except (KeyboardInterrupt, EOFError):
+            print()
+            print(info("Aborted."))
+            return 0
+    
+    import asyncio
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy import text, inspect
+    
+    async def reset():
+        engine = create_async_engine(config["database_url"])
+        
+        async with engine.begin() as conn:
+            # Get all tables
+            def get_tables(connection):
+                inspector = inspect(connection)
+                return inspector.get_table_names()
+            
+            tables = await conn.run_sync(get_tables)
+            
+            if not tables:
+                print(info("Database is already empty."))
+                return 0
+            
+            print(info(f"\nDropping {len(tables)} table(s)..."))
+            
+            # Disable foreign key checks for SQLite
+            dialect = engine.dialect.name
+            if dialect == "sqlite":
+                await conn.execute(text("PRAGMA foreign_keys = OFF"))
+            elif dialect == "postgresql":
+                await conn.execute(text("SET session_replication_role = 'replica'"))
+            elif dialect == "mysql":
+                await conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+            
+            # Drop all tables
+            for table in tables:
+                print(f"  Dropping: {table}")
+                try:
+                    await conn.execute(text(f'DROP TABLE IF EXISTS "{table}"'))
+                except Exception as e:
+                    print(warning(f"    Warning: {e}"))
+            
+            # Re-enable foreign key checks
+            if dialect == "sqlite":
+                await conn.execute(text("PRAGMA foreign_keys = ON"))
+            elif dialect == "postgresql":
+                await conn.execute(text("SET session_replication_role = 'origin'"))
+            elif dialect == "mysql":
+                await conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+            
+            await conn.commit()
+        
+        await engine.dispose()
+        
+        print()
+        print(success("Database reset complete."))
+        print()
+        print(info("Next steps:"))
+        print(info("  1. core makemigrations --name initial"))
+        print(info("  2. core migrate"))
+        return 0
+    
+    return asyncio.run(reset())
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Executa servidor de desenvolvimento."""
     config = load_config()
@@ -2194,6 +2292,18 @@ For more information, visit: https://github.com/SorPuti/core-framework
     createapp_parser = subparsers.add_parser("createapp", help="Create a new app/module")
     createapp_parser.add_argument("name", help="App name")
     createapp_parser.set_defaults(func=cmd_createapp)
+    
+    # reset_db
+    resetdb_parser = subparsers.add_parser(
+        "reset_db",
+        help="Reset database completely (DANGEROUS - destroys all data)"
+    )
+    resetdb_parser.add_argument(
+        "-y", "--yes",
+        action="store_true",
+        help="Skip confirmation prompt"
+    )
+    resetdb_parser.set_defaults(func=cmd_reset_db)
     
     # version (também como subcomando)
     version_parser = subparsers.add_parser("version", help="Show version")

@@ -264,8 +264,36 @@ def models_to_schema_state(models: list[type["Model"]]) -> SchemaState:
     return state
 
 
-# Tabelas internas que devem ser ignoradas
-INTERNAL_TABLES = {"_core_migrations", "sqlite_sequence"}
+# Tabelas internas do framework que devem ser ignoradas em migrações
+# Estas tabelas são gerenciadas pelo Core Framework e não devem ser
+# modificadas por makemigrations ou migrate
+INTERNAL_TABLES = {
+    # Sistema de migrações
+    "_core_migrations",
+    
+    # SQLite interno
+    "sqlite_sequence",
+    
+    # Sistema de autenticação (quando usando auth nativo)
+    "auth_users",
+    "auth_groups", 
+    "auth_permissions",
+    "auth_users_groups",
+    "auth_users_permissions",
+    "auth_group_permissions",
+}
+
+# Tabelas que NUNCA podem ser dropadas via migrate
+# Só podem ser removidas via reset_db com confirmação
+PROTECTED_TABLES = {
+    "_core_migrations",
+    "auth_users",
+    "auth_groups",
+    "auth_permissions",
+    "auth_users_groups",
+    "auth_users_permissions", 
+    "auth_group_permissions",
+}
 
 
 async def get_database_schema_state(conn: "AsyncConnection") -> SchemaState:

@@ -69,7 +69,8 @@ class IssueCode(Enum):
 
 
 # Tabelas internas que devem ser ignoradas na análise
-INTERNAL_TABLES = {"_core_migrations", "sqlite_sequence"}
+# Importa tabelas internas do state para manter consistência
+from core.migrations.state import INTERNAL_TABLES, PROTECTED_TABLES
 
 
 @dataclass

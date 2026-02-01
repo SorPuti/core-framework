@@ -40,6 +40,8 @@ from core.migrations.state import (
     ColumnState,
     models_to_schema_state,
     get_database_schema_state,
+    INTERNAL_TABLES,
+    PROTECTED_TABLES,
 )
 
 if TYPE_CHECKING:
@@ -280,7 +282,15 @@ class MigrationEngine:
                     ))
         
         # Remover tabelas (por último para evitar problemas de FK)
+        # NUNCA remove tabelas protegidas do framework
         for table_name in diff.tables_to_drop:
+            if table_name in PROTECTED_TABLES:
+                # Tabelas protegidas não podem ser removidas via migrate
+                # Use 'core reset_db' para resetar o banco completamente
+                continue
+            if table_name in INTERNAL_TABLES:
+                # Tabelas internas são ignoradas
+                continue
             operations.append(DropTable(table_name=table_name))
         
         return operations
@@ -736,6 +746,14 @@ migration = Migration(
                 optimized.append(op)
             
             elif isinstance(op, DropTable):
+                # PROTEÇÃO: Nunca permite drop de tabelas protegidas
+                if op.table_name in PROTECTED_TABLES:
+                    raise RuntimeError(
+                        f"Cannot drop protected table '{op.table_name}'. "
+                        f"Protected tables are managed by Core Framework. "
+                        f"Use 'core reset_db' to completely reset the database."
+                    )
+                
                 if op.table_name in created_tables:
                     # Tabela foi criada e dropada - remove ambas
                     created_tables.remove(op.table_name)
