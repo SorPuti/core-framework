@@ -276,11 +276,15 @@ Users App.
 
 Authentication and user management module using Core Framework's
 built-in AbstractUser, permissions, and JWT authentication.
+
+ViewSets:
+    - UserViewSet: User CRUD operations
+    - AuthViewSet: Authentication (login, register, refresh, me)
 """
 
-from src.apps.users.routes import router
+from src.apps.users.routes import users_router, auth_router
 
-__all__ = ["router"]
+__all__ = ["users_router", "auth_router"]
 ''',
         f"{project_name}/src/apps/users/models.py": '''"""
 User model extending AbstractUser.
