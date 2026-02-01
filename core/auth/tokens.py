@@ -18,7 +18,7 @@ Uso:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from core.auth.base import (
@@ -27,6 +27,7 @@ from core.auth.base import (
     register_token_backend,
     get_auth_config,
 )
+from core.datetime import timezone
 
 
 class JWTBackend(TokenBackend):
@@ -94,13 +95,13 @@ class JWTBackend(TokenBackend):
             else:
                 expires_delta = timedelta(minutes=self.access_token_expire_minutes)
         
-        expire = datetime.utcnow() + expires_delta
+        expire = timezone.add(timezone.now(), seconds=int(expires_delta.total_seconds()))
         
         # Monta payload completo
         to_encode = payload.copy()
         to_encode.update({
             "exp": expire,
-            "iat": datetime.utcnow(),
+            "iat": timezone.now(),
             "type": token_type,
         })
         

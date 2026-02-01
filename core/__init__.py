@@ -22,31 +22,20 @@ from core.dependencies import Depends, get_db, get_current_user
 from core.config import Settings, get_settings
 from core.app import CoreApp
 
-# DateTime - SEMPRE use este em vez de datetime padrão
+# DateTime - SEMPRE use timezone.now() em vez de datetime.now()
 from core.datetime import (
+    # Classe principal - USE ESTA
+    timezone,
+    # Classes de tipo
     DateTime,
     Date,
     Time,
     TimeDelta,
-    Timezone,
     UTC,
-    now,
-    utcnow,
-    today,
+    # Configuração
     configure_datetime,
     get_datetime_config,
     get_timezone,
-    make_aware,
-    make_naive,
-    to_timezone,
-    is_aware,
-    is_naive,
-    format_datetime,
-    format_date,
-    format_time,
-    parse_datetime,
-    parse_date,
-    parse_time,
 )
 
 # Auth - Sistema plugável de autenticação
@@ -139,7 +128,7 @@ from core.validators import (
     FileSizeValidator,
 )
 
-__version__ = "0.2.14"
+__version__ = "0.2.15"
 __all__ = [
     # Models
     "Model",
@@ -172,29 +161,15 @@ __all__ = [
     # App
     "CoreApp",
     # DateTime
+    "timezone",
     "DateTime",
     "Date",
     "Time",
     "TimeDelta",
-    "Timezone",
     "UTC",
-    "now",
-    "utcnow",
-    "today",
     "configure_datetime",
     "get_datetime_config",
     "get_timezone",
-    "make_aware",
-    "make_naive",
-    "to_timezone",
-    "is_aware",
-    "is_naive",
-    "format_datetime",
-    "format_date",
-    "format_time",
-    "parse_datetime",
-    "parse_date",
-    "parse_time",
     # Auth - Config
     "AuthConfig",
     "configure_auth",

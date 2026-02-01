@@ -22,7 +22,6 @@ Uso:
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, TYPE_CHECKING
 
 from core.auth.base import (
@@ -34,6 +33,7 @@ from core.auth.base import (
     get_password_hasher,
     get_token_backend,
 )
+from core.datetime import timezone
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -136,7 +136,7 @@ class ModelBackend(AuthBackend):
         
         # Atualiza last_login
         if hasattr(user, "last_login"):
-            user.last_login = datetime.utcnow()
+            user.last_login = timezone.now()
             await user.save(db)
         
         return user

@@ -9,16 +9,23 @@ Este módulo garante:
 - Configuração centralizada de timezone
 - Compatibilidade com diferentes fusos
 
-Uso:
-    from core.datetime import now, utcnow, today, DateTime, Date, Time
+Uso simplificado (recomendado):
+    from core import timezone
     
     # Sempre retorna UTC
-    current = now()
+    current = timezone.now()
+    today = timezone.today()
     
     # Converter para timezone do usuário
-    user_time = to_timezone(current, "America/Sao_Paulo")
+    user_time = timezone.localtime(current, "America/Sao_Paulo")
     
-    # Criar datetime aware
+    # Verificações
+    if timezone.is_past(some_date):
+        ...
+
+Uso alternativo:
+    from core.datetime import DateTime, UTC
+    
     dt = DateTime(2024, 1, 15, 10, 30, tzinfo=UTC)
 """
 
@@ -737,3 +744,380 @@ def start_of_year(dt: _datetime) -> DateTime:
 def end_of_year(dt: _datetime) -> DateTime:
     """Retorna fim do ano."""
     return DateTime(dt.year, 12, 31, 23, 59, 59, 999999, tzinfo=dt.tzinfo)
+
+
+# =============================================================================
+# Classe timezone - API simplificada (estilo Django)
+# =============================================================================
+
+class timezone:
+    """
+    API simplificada para operações de data/hora.
+    
+    Todos os métodos retornam datetime em UTC por padrão.
+    
+    Uso:
+        from core import timezone
+        
+        # Obter data/hora atual (UTC)
+        now = timezone.now()
+        today = timezone.today()
+        
+        # Converter para outro timezone
+        local = timezone.localtime(now, "America/Sao_Paulo")
+        
+        # Verificações
+        if timezone.is_past(some_date):
+            ...
+        
+        # Formatação
+        formatted = timezone.format(now, "%Y-%m-%d %H:%M")
+        
+        # Parsing
+        dt = timezone.parse("2024-01-15T10:30:00Z")
+    """
+    
+    # Constante UTC
+    utc = UTC
+    
+    # =========================================================================
+    # Obter data/hora
+    # =========================================================================
+    
+    @staticmethod
+    def now(tz: _timezone | str | None = None) -> DateTime:
+        """
+        Retorna datetime atual em UTC (ou timezone especificado).
+        
+        Args:
+            tz: Timezone opcional (padrão: UTC)
+            
+        Returns:
+            DateTime atual
+            
+        Exemplo:
+            current = timezone.now()
+            current_sp = timezone.now("America/Sao_Paulo")
+        """
+        return now(tz)
+    
+    @staticmethod
+    def today(tz: _timezone | str | None = None) -> Date:
+        """
+        Retorna data atual.
+        
+        Args:
+            tz: Timezone para determinar a data
+            
+        Returns:
+            Data atual
+        """
+        return today(tz)
+    
+    @staticmethod
+    def utcnow() -> DateTime:
+        """Retorna datetime atual em UTC."""
+        return utcnow()
+    
+    # =========================================================================
+    # Conversão de timezone
+    # =========================================================================
+    
+    @staticmethod
+    def localtime(dt: _datetime, tz: _timezone | str | None = None) -> DateTime:
+        """
+        Converte datetime para timezone local/especificado.
+        
+        Args:
+            dt: Datetime a converter
+            tz: Timezone de destino
+            
+        Returns:
+            DateTime convertido
+            
+        Exemplo:
+            utc_time = timezone.now()
+            local_time = timezone.localtime(utc_time, "America/Sao_Paulo")
+        """
+        if tz is None:
+            tz = _config.default_timezone
+        return to_timezone(dt, tz)
+    
+    @staticmethod
+    def activate(tz: _timezone | str) -> None:
+        """
+        Define o timezone padrão.
+        
+        Args:
+            tz: Timezone a usar como padrão
+        """
+        _config.default_timezone = tz if isinstance(tz, _timezone) else get_timezone(tz)
+    
+    @staticmethod
+    def deactivate() -> None:
+        """Reseta timezone para UTC."""
+        _config.default_timezone = UTC
+    
+    @staticmethod
+    def get_current_timezone() -> _timezone:
+        """Retorna timezone atual configurado."""
+        return _config.default_timezone
+    
+    @staticmethod
+    def make_aware(dt: _datetime, tz: _timezone | str | None = None) -> DateTime:
+        """
+        Torna um datetime naive em aware.
+        
+        Args:
+            dt: Datetime naive
+            tz: Timezone a aplicar (padrão: UTC)
+        """
+        return make_aware(dt, tz)
+    
+    @staticmethod
+    def make_naive(dt: _datetime, tz: _timezone | str | None = None) -> _datetime:
+        """
+        Remove timezone de um datetime.
+        
+        Args:
+            dt: Datetime aware
+            tz: Timezone para converter antes de remover
+        """
+        return make_naive(dt, tz)
+    
+    @staticmethod
+    def is_aware(dt: _datetime) -> bool:
+        """Verifica se datetime tem timezone."""
+        return is_aware(dt)
+    
+    @staticmethod
+    def is_naive(dt: _datetime) -> bool:
+        """Verifica se datetime não tem timezone."""
+        return is_naive(dt)
+    
+    # =========================================================================
+    # Verificações
+    # =========================================================================
+    
+    @staticmethod
+    def is_past(dt: _datetime) -> bool:
+        """Verifica se datetime está no passado."""
+        return is_past(dt)
+    
+    @staticmethod
+    def is_future(dt: _datetime) -> bool:
+        """Verifica se datetime está no futuro."""
+        return is_future(dt)
+    
+    @staticmethod
+    def is_today(dt: _datetime) -> bool:
+        """Verifica se datetime é hoje."""
+        return is_today(dt)
+    
+    @staticmethod
+    def is_yesterday(dt: _datetime) -> bool:
+        """Verifica se datetime é ontem."""
+        return is_yesterday(dt)
+    
+    @staticmethod
+    def is_tomorrow(dt: _datetime) -> bool:
+        """Verifica se datetime é amanhã."""
+        return is_tomorrow(dt)
+    
+    # =========================================================================
+    # Formatação e Parsing
+    # =========================================================================
+    
+    @staticmethod
+    def format(
+        dt: _datetime,
+        fmt: str | None = None,
+        tz: _timezone | str | None = None,
+    ) -> str:
+        """
+        Formata datetime como string.
+        
+        Args:
+            dt: Datetime a formatar
+            fmt: Formato (padrão: ISO 8601)
+            tz: Timezone para converter antes de formatar
+        """
+        return format_datetime(dt, fmt, tz)
+    
+    @staticmethod
+    def parse(
+        value: str,
+        fmt: str | None = None,
+        tz: _timezone | str | None = None,
+    ) -> DateTime:
+        """
+        Parse string para DateTime.
+        
+        Args:
+            value: String a parsear
+            fmt: Formato (tenta ISO 8601 se None)
+            tz: Timezone a aplicar se não presente
+        """
+        return parse_datetime(value, fmt, tz)
+    
+    # =========================================================================
+    # Cálculos
+    # =========================================================================
+    
+    @staticmethod
+    def add(
+        dt: _datetime,
+        days: int = 0,
+        hours: int = 0,
+        minutes: int = 0,
+        seconds: int = 0,
+    ) -> DateTime:
+        """
+        Adiciona tempo a um datetime.
+        
+        Args:
+            dt: Datetime base
+            days: Dias a adicionar
+            hours: Horas a adicionar
+            minutes: Minutos a adicionar
+            seconds: Segundos a adicionar
+            
+        Returns:
+            Novo DateTime
+            
+        Exemplo:
+            future = timezone.add(timezone.now(), days=7, hours=2)
+        """
+        result = dt + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+        return DateTime.from_datetime(result)
+    
+    @staticmethod
+    def subtract(
+        dt: _datetime,
+        days: int = 0,
+        hours: int = 0,
+        minutes: int = 0,
+        seconds: int = 0,
+    ) -> DateTime:
+        """
+        Subtrai tempo de um datetime.
+        
+        Args:
+            dt: Datetime base
+            days: Dias a subtrair
+            hours: Horas a subtrair
+            minutes: Minutos a subtrair
+            seconds: Segundos a subtrair
+        """
+        result = dt - timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+        return DateTime.from_datetime(result)
+    
+    @staticmethod
+    def diff(dt1: _datetime, dt2: _datetime, unit: str = "seconds") -> float:
+        """
+        Calcula diferença entre dois datetimes.
+        
+        Args:
+            dt1: Primeiro datetime
+            dt2: Segundo datetime
+            unit: Unidade ("seconds", "minutes", "hours", "days")
+            
+        Returns:
+            Diferença na unidade especificada
+        """
+        seconds = diff_seconds(dt1, dt2)
+        
+        if unit == "minutes":
+            return seconds / 60
+        elif unit == "hours":
+            return seconds / 3600
+        elif unit == "days":
+            return seconds / 86400
+        
+        return seconds
+    
+    # =========================================================================
+    # Ranges
+    # =========================================================================
+    
+    @staticmethod
+    def start_of_day(dt: _datetime | None = None) -> DateTime:
+        """Retorna início do dia (00:00:00)."""
+        if dt is None:
+            dt = now()
+        return start_of_day(dt)
+    
+    @staticmethod
+    def end_of_day(dt: _datetime | None = None) -> DateTime:
+        """Retorna fim do dia (23:59:59.999999)."""
+        if dt is None:
+            dt = now()
+        return end_of_day(dt)
+    
+    @staticmethod
+    def start_of_month(dt: _datetime | None = None) -> DateTime:
+        """Retorna início do mês."""
+        if dt is None:
+            dt = now()
+        return start_of_month(dt)
+    
+    @staticmethod
+    def end_of_month(dt: _datetime | None = None) -> DateTime:
+        """Retorna fim do mês."""
+        if dt is None:
+            dt = now()
+        return end_of_month(dt)
+    
+    @staticmethod
+    def start_of_year(dt: _datetime | None = None) -> DateTime:
+        """Retorna início do ano."""
+        if dt is None:
+            dt = now()
+        return start_of_year(dt)
+    
+    @staticmethod
+    def end_of_year(dt: _datetime | None = None) -> DateTime:
+        """Retorna fim do ano."""
+        if dt is None:
+            dt = now()
+        return end_of_year(dt)
+    
+    # =========================================================================
+    # Criação
+    # =========================================================================
+    
+    @staticmethod
+    def datetime(
+        year: int,
+        month: int,
+        day: int,
+        hour: int = 0,
+        minute: int = 0,
+        second: int = 0,
+        microsecond: int = 0,
+        tz: _timezone | str | None = None,
+    ) -> DateTime:
+        """
+        Cria um DateTime.
+        
+        Args:
+            year, month, day: Data
+            hour, minute, second, microsecond: Hora
+            tz: Timezone (padrão: UTC)
+        """
+        if tz is None:
+            tz = UTC
+        elif isinstance(tz, str):
+            tz = get_timezone(tz)
+        
+        return DateTime(year, month, day, hour, minute, second, microsecond, tzinfo=tz)
+    
+    @staticmethod
+    def from_timestamp(ts: float, tz: _timezone | str | None = None) -> DateTime:
+        """Cria DateTime a partir de Unix timestamp."""
+        return DateTime.from_timestamp(ts, tz)
+    
+    @staticmethod
+    def from_iso(iso_string: str) -> DateTime:
+        """Cria DateTime a partir de string ISO 8601."""
+        return DateTime.from_iso(iso_string)

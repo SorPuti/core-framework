@@ -12,15 +12,16 @@ Características:
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, ClassVar, Self, TYPE_CHECKING
 from collections.abc import Sequence
 
 from pydantic import BaseModel as PydanticBaseModel, ConfigDict
-from sqlalchemy import MetaData, Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey
+from sqlalchemy import MetaData, Column, Integer, String, Boolean, DateTime as SADateTime, Float, Text, ForeignKey
 from sqlalchemy import select, update, delete, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+
+from core.datetime import timezone, DateTime
 
 if TYPE_CHECKING:
     from core.querysets import QuerySet
@@ -127,17 +128,21 @@ class Field:
         auto_now: bool = False,
         auto_now_add: bool = False,
         index: bool = False,
-    ) -> Mapped[datetime]:
-        """Campo datetime."""
+    ) -> Mapped[DateTime]:
+        """
+        Campo datetime.
+        
+        Sempre usa UTC via timezone.now().
+        """
         actual_default = default
         if auto_now_add:
-            actual_default = datetime.utcnow
+            actual_default = timezone.now
         
         return mapped_column(
-            DateTime,
+            SADateTime(timezone=True),
             nullable=nullable,
             default=actual_default,
-            onupdate=datetime.utcnow if auto_now else None,
+            onupdate=timezone.now if auto_now else None,
             index=index,
         )
     

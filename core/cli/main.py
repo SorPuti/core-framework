@@ -288,7 +288,7 @@ Models do app users.
 from sqlalchemy.orm import Mapped
 
 from core import Model, Field
-from core.datetime import DateTime, utcnow
+from core import timezone, DateTime
 
 
 class User(Model):
@@ -310,7 +310,7 @@ Schemas do app users.
 from pydantic import EmailStr, field_validator, model_validator
 
 from core import InputSchema, OutputSchema
-from core.datetime import DateTime
+from core import timezone, DateTime
 
 
 class UserInput(InputSchema):
@@ -1314,7 +1314,7 @@ Defina seus models SQLAlchemy aqui.
 from sqlalchemy.orm import Mapped
 
 from core import Model, Field
-from core.datetime import DateTime
+from core import timezone, DateTime
 
 
 # Exemplo de model
@@ -1335,7 +1335,7 @@ Defina seus schemas de entrada/saída aqui.
 from pydantic import EmailStr
 
 from core import InputSchema, OutputSchema
-from core.datetime import DateTime
+from core import timezone, DateTime
 
 
 # Exemplo de schemas

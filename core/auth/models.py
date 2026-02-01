@@ -26,7 +26,6 @@ Uso:
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, ClassVar, TYPE_CHECKING
 
 from sqlalchemy import Table, Column, Integer, ForeignKey
@@ -34,6 +33,7 @@ from sqlalchemy.orm import Mapped, relationship, declared_attr
 
 from core.models import Model, Field
 from core.auth.base import get_password_hasher, get_auth_config
+from core.datetime import timezone
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -522,7 +522,7 @@ class AbstractUser(Model):
             return None
         
         # Atualiza last_login
-        user.last_login = datetime.utcnow()
+        user.last_login = timezone.now()
         
         # Rehash se necessário
         if user.password_needs_rehash():
