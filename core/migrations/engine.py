@@ -260,6 +260,11 @@ class MigrationEngine:
         # Alterar colunas
         for table_name, alterations in diff.columns_to_alter.items():
             for old_col, new_col in alterations:
+                # Ignora alterações em colunas de chave primária
+                # (PKs não devem ter nullable alterado)
+                if old_col.primary_key or new_col.primary_key:
+                    continue
+                
                 col_diff = old_col.diff(new_col)
                 if col_diff:
                     operations.append(AlterColumn(
