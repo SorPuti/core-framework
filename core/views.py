@@ -131,7 +131,6 @@ class APIView:
         async def endpoint(
             request: Request,
             db: AsyncSession = Depends(get_db),
-            **kwargs: Any,
         ) -> Any:
             method = request.method.lower()
             handler = getattr(view, method, None)
@@ -140,7 +139,7 @@ class APIView:
                 raise HTTPException(status_code=405, detail="Method not allowed")
             
             await view.check_permissions(request, method)
-            return await handler(request, db=db, **kwargs)
+            return await handler(request, db=db)
         
         return path, endpoint, {"methods": methods, "tags": cls.tags, **route_kwargs}
 
