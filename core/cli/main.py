@@ -2442,6 +2442,397 @@ from httpx import AsyncClient
 
 
 # ============================================================
+# Enterprise Commands (Messaging & Tasks)
+# ============================================================
+
+def cmd_worker(args: argparse.Namespace) -> int:
+    """Start background task worker."""
+    print()
+    print(bold("Starting Task Worker"))
+    print("=" * 50)
+    
+    queues = args.queues or ["default"]
+    concurrency = args.concurrency or 4
+    
+    print(info(f"Queues: {', '.join(queues)}"))
+    print(info(f"Concurrency: {concurrency}"))
+    print()
+    
+    # Add current directory to path
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    os.environ["PYTHONPATH"] = cwd
+    
+    # Import and discover tasks
+    try:
+        # Try to import app to register tasks
+        config = load_config()
+        app_module = config.get("app_module", "src.main")
+        try:
+            importlib.import_module(app_module)
+        except ImportError:
+            pass
+        
+        # Also try to import tasks module
+        try:
+            importlib.import_module("src.tasks")
+        except ImportError:
+            pass
+    except Exception as e:
+        print(warning(f"Warning: Could not import app module: {e}"))
+    
+    # Run worker
+    from core.tasks.worker import run_worker
+    
+    try:
+        asyncio.run(run_worker(queues=queues, concurrency=concurrency))
+    except KeyboardInterrupt:
+        print()
+        print(info("Worker stopped."))
+    
+    return 0
+
+
+def cmd_scheduler(args: argparse.Namespace) -> int:
+    """Start periodic task scheduler."""
+    print()
+    print(bold("Starting Task Scheduler"))
+    print("=" * 50)
+    print()
+    
+    # Add current directory to path
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    os.environ["PYTHONPATH"] = cwd
+    
+    # Import and discover tasks
+    try:
+        config = load_config()
+        app_module = config.get("app_module", "src.main")
+        try:
+            importlib.import_module(app_module)
+        except ImportError:
+            pass
+        
+        try:
+            importlib.import_module("src.tasks")
+        except ImportError:
+            pass
+    except Exception as e:
+        print(warning(f"Warning: Could not import app module: {e}"))
+    
+    # Run scheduler
+    from core.tasks.scheduler import run_scheduler
+    
+    try:
+        asyncio.run(run_scheduler())
+    except KeyboardInterrupt:
+        print()
+        print(info("Scheduler stopped."))
+    
+    return 0
+
+
+def cmd_consumer(args: argparse.Namespace) -> int:
+    """Start event consumer."""
+    print()
+    print(bold("Starting Event Consumer"))
+    print("=" * 50)
+    
+    group_id = args.group
+    topics = args.topics or []
+    
+    print(info(f"Group ID: {group_id}"))
+    print(info(f"Topics: {', '.join(topics) if topics else 'auto-detect'}"))
+    print()
+    
+    # Add current directory to path
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    os.environ["PYTHONPATH"] = cwd
+    
+    # Import app to register consumers
+    try:
+        config = load_config()
+        app_module = config.get("app_module", "src.main")
+        try:
+            importlib.import_module(app_module)
+        except ImportError:
+            pass
+        
+        try:
+            importlib.import_module("src.consumers")
+        except ImportError:
+            pass
+    except Exception as e:
+        print(warning(f"Warning: Could not import app module: {e}"))
+    
+    async def run_consumer():
+        from core.messaging.kafka import KafkaConsumer
+        from core.messaging.registry import get_consumer, get_consumers
+        
+        # Get consumer class if registered
+        try:
+            consumer_class = get_consumer(group_id)
+            topics_to_use = topics or getattr(consumer_class, "_topics", [])
+        except ValueError:
+            if not topics:
+                print(error(f"Consumer '{group_id}' not found and no topics specified."))
+                return
+            topics_to_use = topics
+        
+        consumer = KafkaConsumer(group_id=group_id, topics=topics_to_use)
+        await consumer.start()
+        
+        print(success(f"Consumer started, listening on: {topics_to_use}"))
+        print(info("Press Ctrl+C to stop"))
+        
+        # Wait forever
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await consumer.stop()
+    
+    try:
+        asyncio.run(run_consumer())
+    except KeyboardInterrupt:
+        print()
+        print(info("Consumer stopped."))
+    
+    return 0
+
+
+def cmd_topics_list(args: argparse.Namespace) -> int:
+    """List Kafka topics."""
+    print()
+    print(bold("Kafka Topics"))
+    print("=" * 50)
+    
+    async def list_topics():
+        from core.messaging.kafka import KafkaAdmin
+        
+        admin = KafkaAdmin()
+        await admin.connect()
+        
+        topics = await admin.list_topics()
+        
+        if not topics:
+            print(info("No topics found."))
+        else:
+            for topic in sorted(topics):
+                print(f"  - {topic}")
+        
+        await admin.close()
+    
+    try:
+        asyncio.run(list_topics())
+    except Exception as e:
+        print(error(f"Error: {e}"))
+        return 1
+    
+    return 0
+
+
+def cmd_topics_create(args: argparse.Namespace) -> int:
+    """Create a Kafka topic."""
+    print()
+    print(bold(f"Creating Topic: {args.name}"))
+    print("=" * 50)
+    
+    async def create_topic():
+        from core.messaging.kafka import KafkaAdmin
+        
+        admin = KafkaAdmin()
+        await admin.connect()
+        
+        created = await admin.create_topic(
+            name=args.name,
+            partitions=args.partitions,
+            replication_factor=args.replication,
+        )
+        
+        if created:
+            print(success(f"Topic '{args.name}' created successfully."))
+            print(info(f"  Partitions: {args.partitions}"))
+            print(info(f"  Replication: {args.replication}"))
+        else:
+            print(warning(f"Topic '{args.name}' already exists."))
+        
+        await admin.close()
+    
+    try:
+        asyncio.run(create_topic())
+    except Exception as e:
+        print(error(f"Error: {e}"))
+        return 1
+    
+    return 0
+
+
+def cmd_topics_delete(args: argparse.Namespace) -> int:
+    """Delete a Kafka topic."""
+    if not args.yes:
+        print()
+        print(warning(f"This will delete topic '{args.name}' and all its data."))
+        confirm = input("Are you sure? (y/N): ")
+        if confirm.lower() != "y":
+            print(info("Aborted."))
+            return 0
+    
+    print()
+    print(bold(f"Deleting Topic: {args.name}"))
+    
+    async def delete_topic():
+        from core.messaging.kafka import KafkaAdmin
+        
+        admin = KafkaAdmin()
+        await admin.connect()
+        
+        deleted = await admin.delete_topic(args.name)
+        
+        if deleted:
+            print(success(f"Topic '{args.name}' deleted."))
+        else:
+            print(warning(f"Topic '{args.name}' not found."))
+        
+        await admin.close()
+    
+    try:
+        asyncio.run(delete_topic())
+    except Exception as e:
+        print(error(f"Error: {e}"))
+        return 1
+    
+    return 0
+
+
+def cmd_deploy(args: argparse.Namespace) -> int:
+    """Generate deployment files."""
+    print()
+    print(bold("Generating Deployment Files"))
+    print("=" * 50)
+    
+    output_dir = Path(args.output or ".")
+    target = args.target
+    
+    from core.deployment import generate_docker, generate_pm2, generate_kubernetes
+    
+    if target in ("docker", "all"):
+        generate_docker(output_dir)
+        print(success("  Generated: docker-compose.yml"))
+        print(success("  Generated: Dockerfile"))
+    
+    if target in ("pm2", "all"):
+        generate_pm2(output_dir)
+        print(success("  Generated: ecosystem.config.js"))
+    
+    if target in ("k8s", "all"):
+        generate_kubernetes(output_dir)
+        print(success("  Generated: k8s/"))
+    
+    print()
+    print(success("Deployment files generated successfully!"))
+    
+    if target == "docker" or target == "all":
+        print()
+        print(info("To start with Docker:"))
+        print("  docker-compose up -d")
+    
+    if target == "pm2" or target == "all":
+        print()
+        print(info("To start with PM2:"))
+        print("  pm2 start ecosystem.config.js")
+    
+    if target == "k8s" or target == "all":
+        print()
+        print(info("To deploy to Kubernetes:"))
+        print("  kubectl apply -f k8s/")
+    
+    return 0
+
+
+def cmd_tasks(args: argparse.Namespace) -> int:
+    """List registered tasks."""
+    print()
+    print(bold("Registered Tasks"))
+    print("=" * 50)
+    
+    # Add current directory to path
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    
+    # Import app to register tasks
+    try:
+        config = load_config()
+        app_module = config.get("app_module", "src.main")
+        try:
+            importlib.import_module(app_module)
+        except ImportError:
+            pass
+        
+        try:
+            importlib.import_module("src.tasks")
+        except ImportError:
+            pass
+    except Exception:
+        pass
+    
+    from core.tasks.registry import list_tasks
+    
+    tasks = list_tasks()
+    
+    if not tasks:
+        print(info("No tasks registered."))
+        print()
+        print(info("To register tasks, use @task or @periodic_task decorators:"))
+        print()
+        print("  from core.tasks import task, periodic_task")
+        print()
+        print("  @task(queue='emails')")
+        print("  async def send_email(to, subject, body):")
+        print("      ...")
+        print()
+        print("  @periodic_task(cron='0 0 * * *')")
+        print("  async def daily_cleanup():")
+        print("      ...")
+        return 0
+    
+    # Group by type
+    regular_tasks = [t for t in tasks if t["type"] == "task"]
+    periodic_tasks = [t for t in tasks if t["type"] == "periodic"]
+    
+    if regular_tasks:
+        print()
+        print(bold("Background Tasks:"))
+        for task in regular_tasks:
+            print(f"  {task['name']}")
+            print(f"    Queue: {task['queue']}, Retry: {task['retry']}, Timeout: {task['timeout']}s")
+    
+    if periodic_tasks:
+        print()
+        print(bold("Periodic Tasks:"))
+        for task in periodic_tasks:
+            schedule = task.get("cron") or f"every {task.get('interval')}s"
+            status = "enabled" if task.get("enabled") else "disabled"
+            print(f"  {task['name']} ({status})")
+            print(f"    Schedule: {schedule}, Queue: {task['queue']}")
+            if task.get("last_run"):
+                print(f"    Last run: {task['last_run']}")
+            if task.get("next_run"):
+                print(f"    Next run: {task['next_run']}")
+    
+    print()
+    return 0
+
+
+# ============================================================
 # Parser principal
 # ============================================================
 
@@ -2547,6 +2938,97 @@ For more information, visit: https://github.com/SorPuti/core-framework
     # version (também como subcomando)
     version_parser = subparsers.add_parser("version", help="Show version")
     version_parser.set_defaults(func=cmd_version)
+    
+    # ============================================================
+    # Enterprise Commands (Messaging & Tasks)
+    # ============================================================
+    
+    # worker
+    worker_parser = subparsers.add_parser(
+        "worker",
+        help="Start background task worker"
+    )
+    worker_parser.add_argument(
+        "-q", "--queue",
+        action="append",
+        dest="queues",
+        help="Queue(s) to consume from (can be repeated)"
+    )
+    worker_parser.add_argument(
+        "-c", "--concurrency",
+        type=int,
+        help="Number of concurrent tasks (default: 4)"
+    )
+    worker_parser.set_defaults(func=cmd_worker)
+    
+    # scheduler
+    scheduler_parser = subparsers.add_parser(
+        "scheduler",
+        help="Start periodic task scheduler"
+    )
+    scheduler_parser.set_defaults(func=cmd_scheduler)
+    
+    # consumer
+    consumer_parser = subparsers.add_parser(
+        "consumer",
+        help="Start event consumer"
+    )
+    consumer_parser.add_argument(
+        "-g", "--group",
+        required=True,
+        help="Consumer group ID"
+    )
+    consumer_parser.add_argument(
+        "-t", "--topic",
+        action="append",
+        dest="topics",
+        help="Topic(s) to subscribe to (can be repeated)"
+    )
+    consumer_parser.set_defaults(func=cmd_consumer)
+    
+    # topics
+    topics_parser = subparsers.add_parser(
+        "topics",
+        help="Manage Kafka topics"
+    )
+    topics_subparsers = topics_parser.add_subparsers(dest="topics_command")
+    
+    topics_list = topics_subparsers.add_parser("list", help="List all topics")
+    topics_list.set_defaults(func=cmd_topics_list)
+    
+    topics_create = topics_subparsers.add_parser("create", help="Create a topic")
+    topics_create.add_argument("name", help="Topic name")
+    topics_create.add_argument("-p", "--partitions", type=int, default=1, help="Number of partitions")
+    topics_create.add_argument("-r", "--replication", type=int, default=1, help="Replication factor")
+    topics_create.set_defaults(func=cmd_topics_create)
+    
+    topics_delete = topics_subparsers.add_parser("delete", help="Delete a topic")
+    topics_delete.add_argument("name", help="Topic name")
+    topics_delete.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
+    topics_delete.set_defaults(func=cmd_topics_delete)
+    
+    # deploy
+    deploy_parser = subparsers.add_parser(
+        "deploy",
+        help="Generate deployment files"
+    )
+    deploy_parser.add_argument(
+        "target",
+        choices=["docker", "pm2", "k8s", "all"],
+        help="Deployment target"
+    )
+    deploy_parser.add_argument(
+        "-o", "--output",
+        help="Output directory (default: current directory)"
+    )
+    deploy_parser.set_defaults(func=cmd_deploy)
+    
+    # tasks
+    tasks_parser = subparsers.add_parser(
+        "tasks",
+        help="List registered tasks"
+    )
+    tasks_parser.set_defaults(func=cmd_tasks)
     
     return parser
 

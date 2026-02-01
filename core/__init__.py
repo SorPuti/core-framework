@@ -1,16 +1,21 @@
 """
 Core Framework - Django-inspired, FastAPI-powered.
 
-Um framework minimalista de alta performance que combina:
-- Produtividade do Django
-- Performance do FastAPI
-- Controle total do desenvolvedor
+A minimalist high-performance framework that combines:
+- Django's productivity
+- FastAPI's performance
+- Full developer control
 
-Princípios:
-- Zero abstrações desnecessárias
-- Async por padrão
-- Tipagem forte (mypy friendly)
+Principles:
+- Zero unnecessary abstractions
+- Async by default
+- Strong typing (mypy friendly)
 - Performance first
+
+Enterprise Features (v0.3.0+):
+- Messaging: Kafka, Redis Streams, RabbitMQ
+- Background Tasks: @task, @periodic_task
+- Deployment: Docker, PM2, Kubernetes generators
 """
 
 from core.models import Model, Field
@@ -128,7 +133,7 @@ from core.validators import (
     FileSizeValidator,
 )
 
-__version__ = "0.2.32"
+__version__ = "0.3.0"
 __all__ = [
     # Models
     "Model",
@@ -250,4 +255,31 @@ __all__ = [
     "ChoiceValidator",
     "FileExtensionValidator",
     "FileSizeValidator",
+    # Messaging (Enterprise)
+    "event",
+    "consumer",
+    "on_event",
+    "publish_event",
+    # Tasks (Enterprise)
+    "task",
+    "periodic_task",
 ]
+
+
+# =============================================================================
+# Enterprise Features (Lazy imports to avoid requiring optional dependencies)
+# =============================================================================
+
+def __getattr__(name: str):
+    """Lazy import for enterprise features."""
+    # Messaging decorators
+    if name in ("event", "consumer", "on_event", "publish_event"):
+        from core.messaging.decorators import event, consumer, on_event, publish_event
+        return locals()[name]
+    
+    # Task decorators
+    if name in ("task", "periodic_task"):
+        from core.tasks.decorators import task, periodic_task
+        return locals()[name]
+    
+    raise AttributeError(f"module 'core' has no attribute '{name}'")

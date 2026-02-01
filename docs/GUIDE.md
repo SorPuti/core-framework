@@ -17,6 +17,13 @@ Python framework inspired by Django, built on FastAPI. High performance, low cou
 11. [Permissions](#permissions)
 12. [Database](#database)
 13. [Migrations](#migrations)
+14. [Enterprise Features](#enterprise-features-v030)
+15. [Messaging System](#messaging-system)
+16. [Background Tasks](#background-tasks)
+17. [Deployment](#deployment)
+18. [Custom Message Brokers](#custom-message-brokers)
+19. [Architecture Example](#architecture-example)
+20. [Best Practices](#best-practices)
 
 ---
 
@@ -1631,3 +1638,521 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 4
 - API: http://localhost:8000
 - Documentation: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+
+---
+
+## Enterprise Features (v0.3.0+)
+
+Core Framework includes enterprise-grade features for scaling applications:
+
+- **Messaging**: Kafka, Redis Streams, RabbitMQ
+- **Background Tasks**: @task, @periodic_task decorators
+- **Deployment**: Docker, PM2, Kubernetes generators
+
+### Installation
+
+```bash
+# Install with messaging support
+pip install "core-framework[messaging]"
+
+# Or specific brokers
+pip install "core-framework[kafka]"
+pip install "core-framework[redis]"
+pip install "core-framework[rabbitmq]"
+
+# Full enterprise package
+pip install "core-framework[enterprise]"
+```
+
+---
+
+## Messaging System
+
+The messaging system provides event-driven architecture with plug-and-play brokers.
+
+### Configuration
+
+```env
+# .env
+MESSAGE_BROKER=kafka
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+
+# Or Redis
+MESSAGE_BROKER=redis
+REDIS_URL=redis://localhost:6379/0
+
+# Or RabbitMQ
+MESSAGE_BROKER=rabbitmq
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+```
+
+### Event Decorator
+
+Automatically emit events after ViewSet actions:
+
+```python
+from core import ModelViewSet, action
+from core.messaging import event
+
+class UserViewSet(ModelViewSet):
+    model = User
+    
+    @action(methods=["POST"], detail=False)
+    @event("user.created", topic="user-events")
+    async def register(self, request, db, **kwargs):
+        body = await request.json()
+        user = await User.create_user(
+            email=body["email"],
+            password=body["password"],
+            db=db,
+        )
+        return UserOutput.model_validate(user).model_dump()
+        # Event automatically emitted with return value as data
+```
+
+### Consumer Decorator
+
+Define event consumers with DRF-style decorators:
+
+```python
+from core.messaging import consumer, on_event
+
+@consumer("order-service", topics=["user-events", "payment-events"])
+class OrderEventsConsumer:
+    
+    @on_event("user.created")
+    async def handle_user_created(self, event, db):
+        """Create welcome order when user is created."""
+        await Order.objects.create(
+            user_id=event.data["id"],
+            type="welcome",
+            status="pending",
+            db=db,
+        )
+    
+    @on_event("payment.completed")
+    async def handle_payment_completed(self, event, db):
+        """Mark order as paid."""
+        await Order.objects.filter(
+            id=event.data["order_id"]
+        ).update(status="paid", db=db)
+```
+
+### Manual Event Publishing
+
+```python
+from core.messaging import publish_event
+
+# Publish event directly
+await publish_event(
+    "user.updated",
+    data={"id": 1, "email": "new@example.com"},
+    topic="user-events",
+)
+```
+
+### CLI Commands
+
+```bash
+# Start event consumer
+core consumer --group order-service --topic user-events
+
+# Manage Kafka topics
+core topics list
+core topics create user-events --partitions 3
+core topics delete old-events
+```
+
+---
+
+## Background Tasks
+
+The task system provides background job processing integrated with the messaging system.
+
+### Task Decorator
+
+Define background tasks:
+
+```python
+from core.tasks import task
+
+@task(queue="emails", retry=3, timeout=300)
+async def send_email(to: str, subject: str, body: str):
+    """Send email in background."""
+    await EmailService.send(to, subject, body)
+
+# Execute immediately (blocking)
+await send_email("user@example.com", "Hello", "World")
+
+# Schedule for background execution
+task_id = await send_email.delay("user@example.com", "Hello", "World")
+
+# Schedule with delay
+task_id = await send_email.apply_async(
+    args=("user@example.com", "Hello", "World"),
+    countdown=60,  # Execute after 60 seconds
+)
+```
+
+### Periodic Task Decorator
+
+Define scheduled/periodic tasks:
+
+```python
+from core.tasks import periodic_task
+
+# Cron expression
+@periodic_task(cron="0 0 * * *")  # Every day at midnight
+async def daily_cleanup():
+    """Clean up expired sessions."""
+    await Session.objects.filter(expired=True).delete()
+
+# Interval
+@periodic_task(interval=300)  # Every 5 minutes
+async def sync_external_data():
+    """Sync data from external API."""
+    await ExternalAPI.sync()
+
+# Weekly report
+@periodic_task(cron="0 9 * * 1")  # Every Monday at 9 AM
+async def weekly_report():
+    """Generate weekly report."""
+    await ReportService.generate_weekly()
+```
+
+### Cron Expression Format
+
+```
+# ┌───────────── minute (0 - 59)
+# │ ┌───────────── hour (0 - 23)
+# │ │ ┌───────────── day of month (1 - 31)
+# │ │ │ ┌───────────── month (1 - 12)
+# │ │ │ │ ┌───────────── day of week (0 - 6) (Sunday = 0)
+# │ │ │ │ │
+# * * * * *
+
+Examples:
+  "0 0 * * *"     # Every day at midnight
+  "*/5 * * * *"   # Every 5 minutes
+  "0 9 * * 1"     # Every Monday at 9 AM
+  "0 0 1 * *"     # First day of every month
+  "0 */2 * * *"   # Every 2 hours
+```
+
+### CLI Commands
+
+```bash
+# Start task worker
+core worker --queue default --concurrency 4
+
+# Start multiple queues
+core worker --queue default --queue emails --queue reports
+
+# Start task scheduler (for periodic tasks)
+core scheduler
+
+# List registered tasks
+core tasks
+```
+
+### Task Configuration
+
+```env
+# .env
+TASK_DEFAULT_QUEUE=default
+TASK_WORKER_CONCURRENCY=4
+TASK_DEFAULT_RETRY=3
+TASK_DEFAULT_TIMEOUT=300
+```
+
+---
+
+## Deployment
+
+Generate deployment files for different environments.
+
+### Docker
+
+```bash
+# Generate Docker files
+core deploy docker
+
+# Generated files:
+#   - docker-compose.yml
+#   - Dockerfile
+#   - .dockerignore
+```
+
+Start with Docker:
+
+```bash
+docker-compose up -d
+
+# Scale workers
+docker-compose up -d --scale worker=4
+```
+
+### PM2
+
+```bash
+# Generate PM2 ecosystem file
+core deploy pm2
+
+# Generated: ecosystem.config.js
+```
+
+Start with PM2:
+
+```bash
+pm2 start ecosystem.config.js
+pm2 status
+pm2 logs
+```
+
+### Kubernetes
+
+```bash
+# Generate Kubernetes manifests
+core deploy k8s
+
+# Generated files in k8s/:
+#   - namespace.yaml
+#   - configmap.yaml
+#   - secrets.yaml
+#   - api-deployment.yaml
+#   - api-service.yaml
+#   - worker-deployment.yaml
+#   - scheduler-deployment.yaml
+#   - ingress.yaml
+#   - hpa.yaml
+#   - kustomization.yaml
+```
+
+Deploy to Kubernetes:
+
+```bash
+kubectl apply -f k8s/
+
+# Or with kustomize
+kubectl apply -k k8s/
+```
+
+### All Deployment Files
+
+```bash
+# Generate all deployment files at once
+core deploy all
+```
+
+---
+
+## Custom Message Brokers
+
+### Using Redis Streams
+
+```python
+from core.messaging.redis import RedisBroker, RedisProducer
+
+# Configure
+broker = RedisBroker(redis_url="redis://localhost:6379/0")
+await broker.connect()
+
+# Publish
+await broker.publish("events", {"type": "test"})
+
+# Subscribe
+async def handler(message):
+    print(f"Received: {message}")
+
+await broker.subscribe(["events"], "my-group", handler)
+```
+
+### Using RabbitMQ
+
+```python
+from core.messaging.rabbitmq import RabbitMQBroker
+
+broker = RabbitMQBroker(url="amqp://guest:guest@localhost:5672/")
+await broker.connect()
+
+# Publish with routing key
+await broker.publish("user.created", {"id": 1})
+
+# Subscribe with pattern
+await broker.subscribe(["user.*"], "order-service", handler)
+```
+
+### Custom Broker Implementation
+
+```python
+from core.messaging.base import MessageBroker
+
+class CustomBroker(MessageBroker):
+    name = "custom"
+    
+    async def connect(self) -> None:
+        # Connect to your broker
+        pass
+    
+    async def disconnect(self) -> None:
+        # Disconnect
+        pass
+    
+    async def publish(self, topic, message, key=None, headers=None) -> None:
+        # Publish message
+        pass
+    
+    async def subscribe(self, topics, group_id, handler) -> None:
+        # Subscribe to topics
+        pass
+    
+    async def create_topic(self, topic, partitions=1, replication_factor=1) -> None:
+        # Create topic
+        pass
+    
+    async def delete_topic(self, topic) -> None:
+        # Delete topic
+        pass
+    
+    async def list_topics(self) -> list[str]:
+        # List topics
+        return []
+```
+
+---
+
+## Architecture Example
+
+Complete microservices architecture with Core Framework:
+
+```
+                    +------------------+
+                    |   Load Balancer  |
+                    +--------+---------+
+                             |
+              +--------------+--------------+
+              |              |              |
+     +--------v----+  +------v------+  +----v--------+
+     |  API Pod 1  |  |  API Pod 2  |  |  API Pod 3  |
+     +------+------+  +------+------+  +------+------+
+            |                |                |
+            +----------------+----------------+
+                             |
+                    +--------v--------+
+                    |     Kafka       |
+                    +--------+--------+
+                             |
+         +-------------------+-------------------+
+         |                   |                   |
++--------v--------+ +--------v--------+ +--------v--------+
+|  Worker Pod 1   | |  Worker Pod 2   | |  Scheduler Pod  |
++-----------------+ +-----------------+ +-----------------+
+         |                   |                   |
+         +-------------------+-------------------+
+                             |
+                    +--------v--------+
+                    |   PostgreSQL    |
+                    +-----------------+
+```
+
+### Service Communication
+
+```python
+# User Service (API 1)
+@consumer("user-service", topics=["order-events"])
+class OrderEventsConsumer:
+    @on_event("order.created")
+    async def handle_order_created(self, event, db):
+        # Update user's order count
+        await User.objects.filter(
+            id=event.data["user_id"]
+        ).update(order_count=User.order_count + 1, db=db)
+
+# Order Service (API 2)
+class OrderViewSet(ModelViewSet):
+    model = Order
+    
+    @action(methods=["POST"], detail=False)
+    @event("order.created", topic="order-events")
+    async def create_order(self, request, db, **kwargs):
+        # Create order and emit event
+        order = await Order.objects.create(...)
+        return OrderOutput.model_validate(order).model_dump()
+```
+
+---
+
+## Best Practices
+
+### 1. Event Naming
+
+Use dot notation for event names:
+
+```python
+# Good
+@event("user.created")
+@event("order.payment.completed")
+@event("notification.email.sent")
+
+# Bad
+@event("userCreated")
+@event("ORDER_CREATED")
+```
+
+### 2. Idempotent Handlers
+
+Make event handlers idempotent:
+
+```python
+@on_event("payment.completed")
+async def handle_payment(self, event, db):
+    # Check if already processed
+    existing = await Order.objects.filter(
+        id=event.data["order_id"],
+        payment_processed=True,
+    ).first(db=db)
+    
+    if existing:
+        return  # Already processed
+    
+    # Process payment
+    await Order.objects.filter(
+        id=event.data["order_id"]
+    ).update(payment_processed=True, db=db)
+```
+
+### 3. Error Handling
+
+Use retry and dead letter queues:
+
+```python
+@task(queue="emails", retry=3, retry_delay=60)
+async def send_email(to: str, subject: str, body: str):
+    try:
+        await EmailService.send(to, subject, body)
+    except TemporaryError:
+        raise  # Will retry
+    except PermanentError:
+        # Log and don't retry
+        logger.error(f"Failed to send email to {to}")
+```
+
+### 4. Monitoring
+
+Use structured logging:
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+@on_event("user.created")
+async def handle_user_created(self, event, db):
+    logger.info(
+        "Processing user.created event",
+        extra={
+            "event_id": event.id,
+            "user_id": event.data["id"],
+        }
+    )
+```
