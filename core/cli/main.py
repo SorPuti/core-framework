@@ -763,7 +763,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     """Analisa migrações pendentes sem aplicar."""
     config = load_config()
     
-    print(info("🔍 Analyzing pending migrations...\n"))
+    print(info("Checking pending migrations..."))
     
     from core.migrations.engine import MigrationEngine
     from core.migrations.analyzer import (
@@ -790,6 +790,7 @@ def cmd_check(args: argparse.Namespace) -> int:
             migration_files = engine._get_migration_files()
             
             total_issues = []
+            pending_count = 0
             
             for file_path in migration_files:
                 migration_name = file_path.stem
@@ -797,6 +798,7 @@ def cmd_check(args: argparse.Namespace) -> int:
                 if (engine.app_label, migration_name) in applied_set:
                     continue
                 
+                pending_count += 1
                 migration = engine._load_migration(file_path)
                 result = await analyzer.analyze(
                     migration.operations,
@@ -804,11 +806,15 @@ def cmd_check(args: argparse.Namespace) -> int:
                     migration_name,
                 )
                 
-                print(format_analysis_report(result))
+                print(format_analysis_report(result, verbose=getattr(args, 'verbose', False)))
                 total_issues.extend(result.issues)
             
+            if pending_count == 0:
+                print("  No pending migrations.")
+                return 0
+            
             if not total_issues:
-                print(success("✅ All pending migrations look safe!"))
+                print(success("\nAll migrations OK."))
                 return 0
             
             # Resumo final
@@ -816,22 +822,13 @@ def cmd_check(args: argparse.Namespace) -> int:
             critical = sum(1 for i in total_issues if i.severity == Severity.CRITICAL)
             warnings = sum(1 for i in total_issues if i.severity == Severity.WARNING)
             
-            print("\n" + "=" * 60)
-            print("SUMMARY")
-            print("=" * 60)
-            
-            if critical:
-                print(error(f"🚨 {critical} CRITICAL issue(s) - will cause data loss!"))
-            if errors:
-                print(error(f"❌ {errors} ERROR(s) - migration will fail!"))
-            if warnings:
-                print(warning(f"⚠️  {warnings} WARNING(s) - may cause problems"))
-            
+            print()
             if errors or critical:
-                print(error("\n❌ Fix the issues above before running 'core migrate'"))
+                print(error(f"Blocked: {errors + critical} error(s) must be fixed."))
                 return 1
             
-            print(warning("\n⚠️  Review warnings before running 'core migrate'"))
+            if warnings:
+                print(warning(f"Ready with {warnings} warning(s). Review before migrating."))
             return 0
     
     return asyncio.run(run())
@@ -1126,6 +1123,7 @@ For more information, visit: https://github.com/SorPuti/core-framework
     
     # check
     check_parser = subparsers.add_parser("check", help="Analyze pending migrations for potential issues")
+    check_parser.add_argument("-v", "--verbose", action="store_true", help="Show all warnings")
     check_parser.set_defaults(func=cmd_check)
     
     # rollback

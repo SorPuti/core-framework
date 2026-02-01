@@ -471,8 +471,9 @@ migration = Migration(
             if check and not fake:
                 analyzer = MigrationAnalyzer(dialect=self.dialect)
                 all_issues = []
+                all_results = []
                 
-                print("\n🔍 Analyzing migrations before applying...\n")
+                print("\nChecking migrations...")
                 
                 for file_path, migration_name in pending_migrations:
                     migration = self._load_migration(file_path)
@@ -481,10 +482,8 @@ migration = Migration(
                         conn,
                         migration_name,
                     )
-                    
-                    if result.issues:
-                        all_issues.extend(result.issues)
-                        print(format_analysis_report(result))
+                    all_results.append(result)
+                    all_issues.extend(result.issues)
                 
                 # Verifica se pode prosseguir
                 has_errors = any(
@@ -496,57 +495,57 @@ migration = Migration(
                     for i in all_issues
                 )
                 
+                # Mostra resultados
+                for result in all_results:
+                    print(format_analysis_report(result))
+                
                 if has_errors:
-                    print("\n❌ Migration has ERRORS that will cause failure!")
-                    print("   Please fix the issues above before proceeding.")
-                    print("\n   Options:")
-                    print("   1. Edit the migration file to fix the issues")
-                    print("   2. Run with --no-check to skip analysis (not recommended)")
-                    print("   3. Run with --fake to mark as applied without executing")
+                    print("\nBlocked: Fix the errors above before migrating.")
+                    print("Options:")
+                    print("  1. Edit the migration file to fix the issues")
+                    print("  2. Use --no-check to skip (not recommended)")
+                    print("  3. Use --fake to mark as applied without executing")
                     return []
                 
                 if has_warnings and interactive:
-                    print("\n⚠️  Migration has WARNINGS that may cause problems.")
                     try:
-                        response = input("\n   Do you want to proceed? [y/N]: ").strip().lower()
+                        response = input("\nProceed with warnings? [y/N]: ").strip().lower()
                         if response not in ("y", "yes"):
-                            print("   Migration cancelled.")
+                            print("Cancelled.")
                             return []
                     except (EOFError, KeyboardInterrupt):
-                        print("\n   Migration cancelled.")
+                        print("\nCancelled.")
                         return []
                 
-                if all_issues:
-                    print("\n" + "=" * 60)
-                    print("Proceeding with migration...")
-                    print("=" * 60 + "\n")
+                if all_issues and not has_errors:
+                    print()  # Linha em branco antes de aplicar
             
             # Aplica migrações
+            print("\nApplying migrations...")
             for file_path, migration_name in pending_migrations:
                 migration = self._load_migration(file_path)
                 
                 if dry_run:
-                    print(f"Would apply: {migration_name}")
+                    print(f"  {migration_name} (dry-run)")
                     for op in migration.operations:
-                        print(f"  - {op.describe()}")
+                        print(f"    - {op.describe()}")
                     applied.append(migration_name)
                     continue
                 
-                print(f"Applying {migration_name}...")
+                print(f"  {migration_name}...", end=" ", flush=True)
                 
                 if not fake:
                     for op in migration.operations:
-                        print(f"  - {op.describe()}")
                         await op.forward(conn, self.dialect)
                 
                 await self._mark_migration_applied(conn, self.app_label, migration_name)
                 await conn.commit()
                 
                 applied.append(migration_name)
-                print(f"  ✓ OK")
+                print("OK")
         
         if applied:
-            print(f"\n✅ Successfully applied {len(applied)} migration(s).")
+            print(f"\nDone. Applied {len(applied)} migration(s).")
         
         return applied
     

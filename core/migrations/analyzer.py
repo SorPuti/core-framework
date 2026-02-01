@@ -68,6 +68,10 @@ class IssueCode(Enum):
     SQLITE_ALTER_LIMITATION = "W008"
 
 
+# Tabelas internas que devem ser ignoradas na análise
+INTERNAL_TABLES = {"_core_migrations", "sqlite_sequence"}
+
+
 @dataclass
 class MigrationIssue:
     """Representa um problema detectado em uma migração."""
@@ -82,23 +86,19 @@ class MigrationIssue:
     context: dict[str, Any] = field(default_factory=dict)
     
     def __str__(self) -> str:
-        icon = {
-            Severity.INFO: "ℹ️",
-            Severity.WARNING: "⚠️",
-            Severity.ERROR: "❌",
-            Severity.CRITICAL: "🚨",
+        prefix = {
+            Severity.INFO: "INFO",
+            Severity.WARNING: "WARN",
+            Severity.ERROR: "ERROR",
+            Severity.CRITICAL: "CRITICAL",
         }[self.severity]
         
         lines = [
-            f"{icon} [{self.code.value}] {self.message}",
-            f"   Operation: {self.operation_description}",
+            f"  [{prefix}] {self.message}",
         ]
         
         if self.suggestion:
-            lines.append(f"   💡 Suggestion: {self.suggestion}")
-        
-        if self.auto_fix:
-            lines.append(f"   🔧 Auto-fix available")
+            lines.append(f"          -> {self.suggestion}")
         
         return "\n".join(lines)
 
@@ -149,18 +149,16 @@ class AnalysisResult:
         
         parts = []
         if counts[Severity.CRITICAL]:
-            parts.append(f"🚨 {counts[Severity.CRITICAL]} critical")
+            parts.append(f"{counts[Severity.CRITICAL]} critical")
         if counts[Severity.ERROR]:
-            parts.append(f"❌ {counts[Severity.ERROR]} errors")
+            parts.append(f"{counts[Severity.ERROR]} error(s)")
         if counts[Severity.WARNING]:
-            parts.append(f"⚠️ {counts[Severity.WARNING]} warnings")
-        if counts[Severity.INFO]:
-            parts.append(f"ℹ️ {counts[Severity.INFO]} info")
+            parts.append(f"{counts[Severity.WARNING]} warning(s)")
         
         if not parts:
-            return "✅ No issues found"
+            return "OK"
         
-        return " | ".join(parts)
+        return ", ".join(parts)
 
 
 class MigrationAnalyzer:
@@ -405,6 +403,11 @@ class MigrationAnalyzer:
         issues = []
         table_name = op.table_name
         op_desc = op.describe()
+        
+        # Ignora tabelas internas do sistema
+        if table_name in INTERNAL_TABLES:
+            return issues
+        
         row_count = result.table_row_counts.get(table_name, 0)
         
         # Crítico: Tabela com dados
@@ -677,40 +680,27 @@ AlterColumn(
 """
 
 
-def format_analysis_report(result: AnalysisResult) -> str:
+def format_analysis_report(result: AnalysisResult, verbose: bool = False) -> str:
     """Formata relatório de análise para exibição."""
-    lines = [
-        "=" * 60,
-        f"Migration Analysis: {result.migration_name}",
-        "=" * 60,
-        "",
-        result.summary(),
-        "",
-    ]
+    if not result.issues:
+        return f"  {result.migration_name}: OK"
     
-    if result.table_row_counts:
-        lines.append("📊 Table Statistics:")
-        for table, count in sorted(result.table_row_counts.items()):
-            if count >= 0:
-                lines.append(f"   {table}: {count:,} rows")
-            else:
-                lines.append(f"   {table}: (error reading)")
-        lines.append("")
+    lines = [f"  {result.migration_name}: {result.summary()}"]
     
-    if result.issues:
-        # Agrupa por severidade
-        for severity in [Severity.CRITICAL, Severity.ERROR, Severity.WARNING, Severity.INFO]:
-            issues = result.get_issues_by_severity(severity)
-            if issues:
-                lines.append(f"{severity.value.upper()} ({len(issues)}):")
-                lines.append("-" * 40)
-                for issue in issues:
-                    lines.append(str(issue))
-                    lines.append("")
-    else:
-        lines.append("✅ No issues found - migration looks safe!")
+    # Mostra apenas erros e críticos por padrão, warnings se verbose
+    for severity in [Severity.CRITICAL, Severity.ERROR]:
+        issues = result.get_issues_by_severity(severity)
+        for issue in issues:
+            lines.append(str(issue))
     
-    lines.append("=" * 60)
+    # Warnings apenas se verbose ou se não há erros
+    if verbose or not result.has_errors:
+        warnings = result.get_issues_by_severity(Severity.WARNING)
+        for issue in warnings:
+            lines.append(str(issue))
+    elif result.has_warnings:
+        warn_count = len(result.get_issues_by_severity(Severity.WARNING))
+        lines.append(f"          + {warn_count} warning(s) (use --verbose to see)")
     
     return "\n".join(lines)
 
