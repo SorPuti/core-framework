@@ -8,16 +8,18 @@ Características:
 - Integração nativa com FastAPI
 - Permissões por view/action
 - Serialização automática
+- Validação de unicidade automática
 """
 
 from __future__ import annotations
 
 from typing import Any, ClassVar, Generic, TypeVar, get_type_hints
-from collections.abc import Sequence
+from collections.abc import Sequence, Callable, Awaitable
 
 from fastapi import APIRouter, Request, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import inspect
 
 from core.dependencies import get_db, DatabaseSession
 from core.permissions import Permission, AllowAny, check_permissions
@@ -29,6 +31,13 @@ from core.serializers import (
     PaginatedResponse,
 )
 from core.querysets import DoesNotExist
+from core.validators import (
+    ValidationError,
+    UniqueValidationError,
+    MultipleValidationErrors,
+    UniqueValidator,
+    AsyncValidator,
+)
 
 # Type vars
 ModelT = TypeVar("ModelT")
@@ -148,6 +157,16 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
             serializer_class = UserSerializer
             permission_classes = [IsAuthenticated]
             
+            # Campos únicos para validação automática
+            unique_fields = ["email", "username"]
+            
+            # Validadores customizados assíncronos
+            async def validate_email(self, value, db, instance=None):
+                # Validação customizada
+                if value.endswith("@spam.com"):
+                    raise ValidationError("Email domain not allowed", field="email")
+                return value
+            
             # Customizar queryset
             def get_queryset(self, db: AsyncSession):
                 return User.objects.using(db).filter(is_active=True)
@@ -173,6 +192,14 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
     
     # Tags para OpenAPI
     tags: ClassVar[list[str]] = []
+    
+    # Validação de unicidade automática
+    # Lista de campos que devem ser únicos
+    unique_fields: ClassVar[list[str]] = []
+    
+    # Validadores assíncronos customizados por campo
+    # Formato: {"field_name": [validator1, validator2]}
+    field_validators: ClassVar[dict[str, list[AsyncValidator]]] = {}
     
     def __init__(self) -> None:
         self.action: str | None = None
@@ -260,6 +287,183 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
             return self.serializer_class.output_schema
         raise NotImplementedError("Define output_schema or serializer_class")
     
+    def get_unique_fields(self) -> list[str]:
+        """
+        Retorna lista de campos únicos para validação.
+        
+        Por padrão, detecta automaticamente do model se não definido.
+        """
+        if self.unique_fields:
+            return self.unique_fields
+        
+        # Detecta automaticamente do model
+        unique = []
+        if hasattr(self.model, "__table__"):
+            for column in self.model.__table__.columns:
+                if column.unique and not column.primary_key:
+                    unique.append(column.name)
+        return unique
+    
+    async def validate_unique_fields(
+        self,
+        data: dict[str, Any],
+        db: AsyncSession,
+        instance: ModelT | None = None,
+    ) -> None:
+        """
+        Valida unicidade dos campos antes de salvar.
+        
+        Args:
+            data: Dados a validar
+            db: Sessão do banco
+            instance: Instância existente (para updates)
+        
+        Raises:
+            UniqueValidationError: Se campo único já existe
+            MultipleValidationErrors: Se múltiplos campos violam unicidade
+        """
+        errors = []
+        unique_fields = self.get_unique_fields()
+        
+        for field_name in unique_fields:
+            if field_name not in data:
+                continue
+            
+            value = data[field_name]
+            if value is None:
+                continue
+            
+            # Verifica se já existe
+            queryset = self.get_queryset(db).filter(**{field_name: value})
+            
+            # Exclui o registro atual se for update
+            if instance is not None:
+                pk = getattr(instance, self.lookup_field, None)
+                if pk is not None:
+                    queryset = queryset.exclude(**{self.lookup_field: pk})
+            
+            exists = await queryset.exists()
+            
+            if exists:
+                errors.append(UniqueValidationError(
+                    field=field_name,
+                    value=value,
+                    message=f"A record with this {field_name} already exists.",
+                ))
+        
+        if len(errors) == 1:
+            raise errors[0]
+        elif len(errors) > 1:
+            raise MultipleValidationErrors(errors)
+    
+    async def validate_field(
+        self,
+        field_name: str,
+        value: Any,
+        db: AsyncSession,
+        instance: ModelT | None = None,
+    ) -> Any:
+        """
+        Executa validadores customizados para um campo.
+        
+        Procura por método validate_{field_name} no ViewSet.
+        """
+        # Método customizado no ViewSet
+        method_name = f"validate_{field_name}"
+        if hasattr(self, method_name):
+            method = getattr(self, method_name)
+            result = method(value, db, instance=instance)
+            if hasattr(result, "__await__"):
+                value = await result
+            else:
+                value = result
+        
+        # Validadores registrados
+        if field_name in self.field_validators:
+            for validator in self.field_validators[field_name]:
+                value = await validator(value, db)
+        
+        return value
+    
+    async def validate_data(
+        self,
+        data: dict[str, Any],
+        db: AsyncSession,
+        instance: ModelT | None = None,
+    ) -> dict[str, Any]:
+        """
+        Executa todas as validações nos dados.
+        
+        1. Valida unicidade
+        2. Executa validadores de campo
+        3. Executa validate() geral
+        
+        Args:
+            data: Dados validados pelo Pydantic
+            db: Sessão do banco
+            instance: Instância existente (para updates)
+        
+        Returns:
+            Dados validados (possivelmente modificados)
+        """
+        errors = []
+        
+        # 1. Valida unicidade
+        try:
+            await self.validate_unique_fields(data, db, instance)
+        except (UniqueValidationError, MultipleValidationErrors) as e:
+            if isinstance(e, MultipleValidationErrors):
+                errors.extend(e.errors)
+            else:
+                errors.append(e)
+        
+        # 2. Valida cada campo
+        validated_data = {}
+        for field_name, value in data.items():
+            try:
+                validated_data[field_name] = await self.validate_field(
+                    field_name, value, db, instance
+                )
+            except ValidationError as e:
+                errors.append(e)
+        
+        # 3. Validação geral
+        try:
+            validated_data = await self.validate(validated_data, db, instance)
+        except ValidationError as e:
+            errors.append(e)
+        except MultipleValidationErrors as e:
+            errors.extend(e.errors)
+        
+        if errors:
+            if len(errors) == 1:
+                raise errors[0]
+            raise MultipleValidationErrors(errors)
+        
+        return validated_data
+    
+    async def validate(
+        self,
+        data: dict[str, Any],
+        db: AsyncSession,
+        instance: ModelT | None = None,
+    ) -> dict[str, Any]:
+        """
+        Hook para validação customizada geral.
+        
+        Sobrescreva para adicionar validações cross-field.
+        
+        Exemplo:
+            async def validate(self, data, db, instance=None):
+                if data.get("start_date") > data.get("end_date"):
+                    raise ValidationError(
+                        "Start date must be before end date",
+                        field="start_date"
+                    )
+                return data
+        """
+        return data
+    
     # Actions CRUD
     async def list(
         self,
@@ -315,14 +519,46 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         """Cria um novo objeto."""
         await self.check_permissions(request, "create")
         
+        # 1. Valida com Pydantic
         input_schema = self.get_input_schema()
-        validated_data = input_schema.model_validate(data)
+        pydantic_validated = input_schema.model_validate(data)
+        data_dict = pydantic_validated.model_dump()
         
-        obj = self.model(**validated_data.model_dump())
+        # 2. Valida unicidade e regras de negócio
+        validated_data = await self.validate_data(data_dict, db, instance=None)
+        
+        # 3. Hook antes de criar
+        validated_data = await self.perform_create_validation(validated_data, db)
+        
+        # 4. Cria o objeto
+        obj = self.model(**validated_data)
         await obj.save(db)
+        
+        # 5. Hook após criar
+        await self.after_create(obj, db)
         
         output_schema = self.get_output_schema()
         return output_schema.model_validate(obj).model_dump()
+    
+    async def perform_create_validation(
+        self,
+        data: dict[str, Any],
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """
+        Hook para validação adicional antes de criar.
+        
+        Sobrescreva para adicionar lógica customizada.
+        """
+        return data
+    
+    async def after_create(self, obj: ModelT, db: AsyncSession) -> None:
+        """
+        Hook executado após criar o objeto.
+        
+        Útil para side effects como enviar emails, criar logs, etc.
+        """
+        pass
     
     async def update(
         self,
@@ -338,17 +574,62 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         obj = await self.get_object(db, **kwargs)
         await self.check_object_permissions(request, obj, "update")
         
+        # 1. Valida com Pydantic
         input_schema = self.get_input_schema()
-        validated_data = input_schema.model_validate(data)
         
-        update_data = validated_data.model_dump(exclude_unset=partial)
-        for field, value in update_data.items():
+        # Para partial update, mescla com dados existentes
+        if partial:
+            # Pega dados atuais do objeto
+            current_data = {}
+            for field in input_schema.model_fields:
+                if hasattr(obj, field):
+                    current_data[field] = getattr(obj, field)
+            # Mescla com novos dados
+            merged_data = {**current_data, **data}
+            pydantic_validated = input_schema.model_validate(merged_data)
+            data_dict = {k: v for k, v in pydantic_validated.model_dump().items() if k in data}
+        else:
+            pydantic_validated = input_schema.model_validate(data)
+            data_dict = pydantic_validated.model_dump()
+        
+        # 2. Valida unicidade e regras de negócio
+        validated_data = await self.validate_data(data_dict, db, instance=obj)
+        
+        # 3. Hook antes de atualizar
+        validated_data = await self.perform_update_validation(validated_data, obj, db)
+        
+        # 4. Atualiza o objeto
+        for field, value in validated_data.items():
             setattr(obj, field, value)
         
         await obj.save(db)
         
+        # 5. Hook após atualizar
+        await self.after_update(obj, db)
+        
         output_schema = self.get_output_schema()
         return output_schema.model_validate(obj).model_dump()
+    
+    async def perform_update_validation(
+        self,
+        data: dict[str, Any],
+        instance: ModelT,
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """
+        Hook para validação adicional antes de atualizar.
+        
+        Sobrescreva para adicionar lógica customizada.
+        """
+        return data
+    
+    async def after_update(self, obj: ModelT, db: AsyncSession) -> None:
+        """
+        Hook executado após atualizar o objeto.
+        
+        Útil para side effects como invalidar cache, criar logs, etc.
+        """
+        pass
     
     async def partial_update(
         self,

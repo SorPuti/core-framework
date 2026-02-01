@@ -163,10 +163,16 @@ class CoreApp:
     ) -> None:
         """Configura handlers de exceção."""
         from pydantic import ValidationError
+        from sqlalchemy.exc import IntegrityError, DataError, OperationalError
+        from core.validators import (
+            ValidationError as CoreValidationError,
+            MultipleValidationErrors,
+            UniqueValidationError,
+        )
         
         # Handler para erros de validação Pydantic
         @self.app.exception_handler(ValidationError)
-        async def validation_exception_handler(
+        async def pydantic_validation_handler(
             request: Request,
             exc: ValidationError,
         ) -> JSONResponse:
@@ -174,7 +180,161 @@ class CoreApp:
                 status_code=422,
                 content={
                     "detail": "Validation error",
+                    "code": "validation_error",
                     "errors": exc.errors(),
+                },
+            )
+        
+        # Handler para erros de validação do Core
+        @self.app.exception_handler(CoreValidationError)
+        async def core_validation_handler(
+            request: Request,
+            exc: CoreValidationError,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": exc.message,
+                    "code": exc.code,
+                    "field": exc.field,
+                    "errors": [exc.to_dict()],
+                },
+            )
+        
+        # Handler para múltiplos erros de validação
+        @self.app.exception_handler(MultipleValidationErrors)
+        async def multiple_validation_handler(
+            request: Request,
+            exc: MultipleValidationErrors,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=422,
+                content=exc.to_dict(),
+            )
+        
+        # Handler para erros de unicidade
+        @self.app.exception_handler(UniqueValidationError)
+        async def unique_validation_handler(
+            request: Request,
+            exc: UniqueValidationError,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=409,  # Conflict
+                content={
+                    "detail": exc.message,
+                    "code": "unique_constraint",
+                    "field": exc.field,
+                    "value": exc.value,
+                },
+            )
+        
+        # Handler para IntegrityError do SQLAlchemy (UNIQUE, FK, etc.)
+        @self.app.exception_handler(IntegrityError)
+        async def integrity_error_handler(
+            request: Request,
+            exc: IntegrityError,
+        ) -> JSONResponse:
+            error_msg = str(exc.orig) if exc.orig else str(exc)
+            
+            # Detecta tipo de erro
+            if "UNIQUE constraint failed" in error_msg:
+                # Extrai nome do campo
+                field_match = error_msg.split("UNIQUE constraint failed:")[-1].strip()
+                field_name = field_match.split(".")[-1] if "." in field_match else field_match
+                
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "detail": f"A record with this {field_name} already exists.",
+                        "code": "unique_constraint",
+                        "field": field_name,
+                    },
+                )
+            
+            elif "FOREIGN KEY constraint failed" in error_msg:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "detail": "Referenced record does not exist.",
+                        "code": "foreign_key_constraint",
+                    },
+                )
+            
+            elif "NOT NULL constraint failed" in error_msg:
+                field_match = error_msg.split("NOT NULL constraint failed:")[-1].strip()
+                field_name = field_match.split(".")[-1] if "." in field_match else field_match
+                
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "detail": f"Field '{field_name}' is required.",
+                        "code": "required_field",
+                        "field": field_name,
+                    },
+                )
+            
+            elif "duplicate key" in error_msg.lower():
+                # PostgreSQL
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "detail": "A record with this value already exists.",
+                        "code": "unique_constraint",
+                    },
+                )
+            
+            # Erro genérico de integridade
+            if self.settings.debug:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "detail": "Database integrity error.",
+                        "code": "integrity_error",
+                        "debug_info": error_msg,
+                    },
+                )
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": "Database integrity error. Please check your data.",
+                    "code": "integrity_error",
+                },
+            )
+        
+        # Handler para DataError (dados inválidos para o tipo da coluna)
+        @self.app.exception_handler(DataError)
+        async def data_error_handler(
+            request: Request,
+            exc: DataError,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": "Invalid data format for database field.",
+                    "code": "data_error",
+                },
+            )
+        
+        # Handler para OperationalError (conexão, timeout, etc.)
+        @self.app.exception_handler(OperationalError)
+        async def operational_error_handler(
+            request: Request,
+            exc: OperationalError,
+        ) -> JSONResponse:
+            if self.settings.debug:
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "detail": "Database operation failed.",
+                        "code": "database_error",
+                        "debug_info": str(exc),
+                    },
+                )
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": "Service temporarily unavailable. Please try again.",
+                    "code": "service_unavailable",
                 },
             )
         
@@ -185,16 +345,22 @@ class CoreApp:
             exc: Exception,
         ) -> JSONResponse:
             if self.settings.debug:
+                import traceback
                 return JSONResponse(
                     status_code=500,
                     content={
                         "detail": str(exc),
+                        "code": "internal_error",
                         "type": type(exc).__name__,
+                        "traceback": traceback.format_exc(),
                     },
                 )
             return JSONResponse(
                 status_code=500,
-                content={"detail": "Internal server error"},
+                content={
+                    "detail": "Internal server error",
+                    "code": "internal_error",
+                },
             )
         
         # Handlers customizados

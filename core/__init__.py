@@ -32,7 +32,33 @@ from core.migrations import (
     Migration,
 )
 
-__version__ = "0.2.0"
+# Validators
+from core.validators import (
+    ValidationError,
+    UniqueValidationError,
+    MultipleValidationErrors,
+    UniqueValidator,
+    UniqueTogetherValidator,
+    ExistsValidator,
+    RegexValidator,
+    EmailValidator,
+    URLValidator,
+    SlugValidator,
+    PhoneValidator,
+    CPFValidator,
+    CNPJValidator,
+    MinLengthValidator,
+    MaxLengthValidator,
+    MinValueValidator,
+    MaxValueValidator,
+    RangeValidator,
+    PasswordValidator,
+    ChoiceValidator,
+    FileExtensionValidator,
+    FileSizeValidator,
+)
+
+__version__ = "0.2.7"
 __all__ = [
     # Models
     "Model",
@@ -68,4 +94,27 @@ __all__ = [
     "rollback",
     "MigrationEngine",
     "Migration",
+    # Validators
+    "ValidationError",
+    "UniqueValidationError",
+    "MultipleValidationErrors",
+    "UniqueValidator",
+    "UniqueTogetherValidator",
+    "ExistsValidator",
+    "RegexValidator",
+    "EmailValidator",
+    "URLValidator",
+    "SlugValidator",
+    "PhoneValidator",
+    "CPFValidator",
+    "CNPJValidator",
+    "MinLengthValidator",
+    "MaxLengthValidator",
+    "MinValueValidator",
+    "MaxValueValidator",
+    "RangeValidator",
+    "PasswordValidator",
+    "ChoiceValidator",
+    "FileExtensionValidator",
+    "FileSizeValidator",
 ]

@@ -274,18 +274,38 @@ class User(Model):
 ''',
         f"{project_name}/app/schemas.py": '''"""
 Schemas de validação e serialização.
+
+O Core Framework usa Pydantic para validação automática.
+Você pode adicionar validadores customizados usando decorators.
 """
 
 from datetime import datetime
-from pydantic import EmailStr
+from pydantic import EmailStr, field_validator, model_validator
 
 from core import InputSchema, OutputSchema
 
 
 class UserInput(InputSchema):
-    """Schema de entrada para usuário."""
+    """
+    Schema de entrada para usuário.
+    
+    Validações automáticas:
+    - email: Formato de email válido (EmailStr)
+    - name: String não vazia (strip automático)
+    
+    Validações customizadas:
+    - name: Mínimo 2 caracteres
+    """
     email: EmailStr
     name: str
+    
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Valida que o nome tem pelo menos 2 caracteres."""
+        if len(v.strip()) < 2:
+            raise ValueError("Name must be at least 2 characters")
+        return v.strip()
 
 
 class UserOutput(OutputSchema):
@@ -295,12 +315,31 @@ class UserOutput(OutputSchema):
     name: str
     is_active: bool
     created_at: datetime
+
+
+# Exemplo de schema com validação cross-field
+class UserUpdateInput(InputSchema):
+    """Schema para atualização de usuário."""
+    email: EmailStr | None = None
+    name: str | None = None
+    
+    @model_validator(mode="after")
+    def validate_at_least_one_field(self):
+        """Garante que pelo menos um campo foi fornecido."""
+        if self.email is None and self.name is None:
+            raise ValueError("At least one field must be provided")
+        return self
 ''',
         f"{project_name}/app/views.py": '''"""
 Views e ViewSets.
+
+O Core Framework fornece validação automática de unicidade
+e hooks para validação customizada.
 """
 
-from core import ModelViewSet
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from core import ModelViewSet, ValidationError
 from core.permissions import AllowAny
 
 from app.models import User
@@ -308,13 +347,78 @@ from app.schemas import UserInput, UserOutput
 
 
 class UserViewSet(ModelViewSet):
-    """ViewSet para usuários."""
+    """
+    ViewSet para usuários.
+    
+    Recursos de validação:
+    - Unicidade automática: campos com unique=True são validados
+    - Validadores de campo: validate_{field_name}(value, db, instance)
+    - Validação geral: validate(data, db, instance)
+    - Hooks: perform_create_validation, after_create, etc.
+    """
     
     model = User
     input_schema = UserInput
     output_schema = UserOutput
     permission_classes = [AllowAny]
     tags = ["users"]
+    
+    # Campos únicos são detectados automaticamente do model,
+    # mas você pode especificar manualmente:
+    # unique_fields = ["email"]
+    
+    async def validate_email(
+        self,
+        value: str,
+        db: AsyncSession,
+        instance=None,
+    ) -> str:
+        """
+        Validação customizada para email.
+        
+        Este método é chamado automaticamente durante create/update.
+        """
+        # Exemplo: bloquear domínios específicos
+        blocked_domains = ["spam.com", "fake.com"]
+        domain = value.split("@")[-1].lower()
+        
+        if domain in blocked_domains:
+            raise ValidationError(
+                message=f"Email domain '{domain}' is not allowed",
+                code="blocked_domain",
+                field="email",
+            )
+        
+        return value.lower()  # Normaliza para lowercase
+    
+    async def validate(
+        self,
+        data: dict,
+        db: AsyncSession,
+        instance=None,
+    ) -> dict:
+        """
+        Validação geral (cross-field).
+        
+        Chamado após validação de campos individuais.
+        """
+        # Exemplo: validação de regra de negócio
+        # if data.get("role") == "admin" and not data.get("verified"):
+        #     raise ValidationError("Admins must be verified", field="role")
+        
+        return data
+    
+    async def after_create(self, obj: User, db: AsyncSession) -> None:
+        """
+        Hook executado após criar usuário.
+        
+        Útil para side effects como:
+        - Enviar email de boas-vindas
+        - Criar registros relacionados
+        - Disparar eventos
+        """
+        # Exemplo: print(f"User {obj.email} created!")
+        pass
 ''',
         f"{project_name}/app/main.py": '''"""
 Aplicação principal.
