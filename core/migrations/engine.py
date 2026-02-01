@@ -18,6 +18,7 @@ from datetime import datetime as stdlib_datetime, timezone as stdlib_timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from core import timezone
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
