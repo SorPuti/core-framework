@@ -317,6 +317,29 @@ class AutoRouter:
         """Registra uma APIView."""
         self.router.register_view(path, view_class, **kwargs)
     
+    def include_router(
+        self,
+        router: "AutoRouter | Router",
+        prefix: str = "",
+        tags: list[str] | None = None,
+    ) -> None:
+        """
+        Inclui outro router neste router.
+        
+        Args:
+            router: Router a incluir (AutoRouter ou Router)
+            prefix: Prefixo adicional para as rotas
+            tags: Tags adicionais para OpenAPI
+        """
+        # Se for AutoRouter, pega o router interno
+        if isinstance(router, AutoRouter):
+            inner_router = router.router
+        else:
+            inner_router = router
+        
+        # Inclui no router interno
+        self.router.include_router(inner_router, prefix=prefix, tags=tags or [])
+    
     @property
     def urls(self) -> list[dict[str, Any]]:
         """Retorna lista de URLs registradas."""

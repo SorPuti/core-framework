@@ -128,7 +128,7 @@ class MigrationEngine:
         """Marca uma migração como aplicada."""
         await conn.execute(
             text(f'INSERT INTO "{MIGRATIONS_TABLE}" (app, name, applied_at) VALUES (:app, :name, :applied_at)'),
-            {"app": app, "name": name, "applied_at": timezone.now()},
+            {"app": app, "name": name, "applied_at": timezone.now().replace(tzinfo=None)},
         )
     
     async def _unmark_migration_applied(
