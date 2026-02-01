@@ -228,11 +228,12 @@ COPY README.md* .
 # Copy source code (needed for local package install)
 COPY src/ ./src/
 
-# Install dependencies - configure git and install in same RUN to preserve config
+# Install dependencies
+# Convert SSH URLs to HTTPS with token in pyproject.toml, then install
 RUN if [ -n "$GITHUB_TOKEN" ]; then \\
+        sed -i "s|ssh://git@github.com/|https://${GITHUB_TOKEN}@github.com/|g" pyproject.toml; \\
+        sed -i "s|git@github.com:|https://${GITHUB_TOKEN}@github.com/|g" pyproject.toml; \\
         git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \\
-        git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; \\
-        git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:"; \\
     fi && \\
     uv pip install --system .
 
