@@ -271,6 +271,10 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
+# Set Python to run unbuffered for proper logging in Docker
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \\
     curl \\
