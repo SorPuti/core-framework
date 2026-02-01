@@ -209,13 +209,21 @@ def model_to_table_state(model_class: type["Model"]) -> TableState:
     
     columns = {}
     for col in table.columns:
+        # SQLAlchemy autoincrement pode ser True, False, ou "auto"
+        # Convertemos para bool: True se for True ou "auto" com primary_key
+        auto_inc = col.autoincrement
+        if auto_inc == "auto":
+            auto_inc = col.primary_key  # "auto" significa autoincrement se for PK
+        else:
+            auto_inc = bool(auto_inc)
+        
         columns[col.name] = ColumnState(
             name=col.name,
             type=get_sqlalchemy_type_string(col.type),
             nullable=col.nullable,
             default=col.default.arg if col.default is not None else None,
             primary_key=col.primary_key,
-            autoincrement=col.autoincrement if col.autoincrement else False,
+            autoincrement=auto_inc,
             unique=col.unique if col.unique else False,
             index=col.index if col.index else False,
         )
