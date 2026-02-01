@@ -14,13 +14,12 @@ import importlib
 import importlib.util
 import os
 import re
+from datetime import datetime as stdlib_datetime, timezone as stdlib_timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
-
-from core.datetime import timezone
 
 from core.migrations.migration import Migration
 from core.migrations.operations import (
@@ -128,7 +127,7 @@ class MigrationEngine:
         """Marca uma migração como aplicada."""
         await conn.execute(
             text(f'INSERT INTO "{MIGRATIONS_TABLE}" (app, name, applied_at) VALUES (:app, :name, :applied_at)'),
-            {"app": app, "name": name, "applied_at": timezone.now().replace(tzinfo=None)},
+            {"app": app, "name": name, "applied_at": stdlib_datetime.now(stdlib_timezone.utc).replace(tzinfo=None)},
         )
     
     async def _unmark_migration_applied(
