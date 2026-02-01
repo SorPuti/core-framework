@@ -166,13 +166,75 @@ def cmd_version(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_init(args: argparse.Namespace) -> int:
-    """Inicializa um novo projeto."""
-    project_name = args.name or "myproject"
+def check_uv_installed() -> bool:
+    """Verifica se uv está instalado."""
+    import shutil
+    return shutil.which("uv") is not None
+
+
+def install_uv() -> bool:
+    """Instala uv se não estiver instalado."""
+    import subprocess
     
-    print(info(f"Initializing new Core Framework project: {project_name}"))
+    print(info("Installing uv package manager..."))
+    
+    try:
+        # Tenta instalar via curl (método oficial)
+        result = subprocess.run(
+            ["curl", "-LsSf", "https://astral.sh/uv/install.sh"],
+            capture_output=True,
+            text=True,
+        )
+        
+        if result.returncode == 0:
+            # Executa o script de instalação
+            install_result = subprocess.run(
+                ["sh", "-c", result.stdout],
+                capture_output=True,
+                text=True,
+            )
+            
+            if install_result.returncode == 0:
+                print(success("  ✓ uv installed successfully"))
+                return True
+        
+        # Fallback: tenta via pip
+        print(info("  Trying pip install..."))
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "uv"],
+            check=True,
+            capture_output=True,
+        )
+        print(success("  ✓ uv installed via pip"))
+        return True
+        
+    except Exception as e:
+        print(error(f"  Failed to install uv: {e}"))
+        print(info("  Please install manually: curl -LsSf https://astral.sh/uv/install.sh | sh"))
+        return False
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Inicializa um novo projeto com uv."""
+    import subprocess
+    
+    project_name = args.name or "myproject"
+    python_version = args.python or "3.12"
+    skip_venv = args.no_venv
+    
+    print(bold(f"\n🚀 Core Framework - Project Initialization\n"))
+    print(info(f"Creating project: {project_name}"))
+    
+    # Verifica/instala uv
+    if not skip_venv:
+        if not check_uv_installed():
+            print(warning("uv not found."))
+            if not install_uv():
+                print(warning("Continuing without uv..."))
+                skip_venv = True
     
     # Cria estrutura de diretórios
+    print(info("\nCreating project structure..."))
     dirs = [
         project_name,
         f"{project_name}/app",
@@ -183,9 +245,10 @@ def cmd_init(args: argparse.Namespace) -> int:
     
     for d in dirs:
         Path(d).mkdir(parents=True, exist_ok=True)
-        print(f"  Created {d}/")
+        print(f"  📁 {d}/")
     
     # Cria arquivos
+    print(info("\nCreating files..."))
     files = {
         f"{project_name}/app/__init__.py": '"""Application package."""\n',
         f"{project_name}/app/models.py": '''"""
@@ -282,7 +345,7 @@ async def root():
         f"{project_name}/app/api/__init__.py": '"""API package."""\n',
         f"{project_name}/migrations/__init__.py": '"""Migrations package."""\n',
         f"{project_name}/tests/__init__.py": '"""Tests package."""\n',
-        f"{project_name}/core.toml": f'''# Core Framework Configuration
+        f"{project_name}/core.toml": '''# Core Framework Configuration
 
 [core]
 database_url = "sqlite+aiosqlite:///./app.db"
@@ -293,13 +356,30 @@ app_module = "app.main"
 host = "0.0.0.0"
 port = 8000
 ''',
-        f"{project_name}/requirements.txt": '''# Core Framework
-core-framework @ git+https://github.com/SorPuti/core-framework.git
+        f"{project_name}/pyproject.toml": f'''[project]
+name = "{project_name}"
+version = "0.1.0"
+description = "Project created with Core Framework"
+requires-python = ">={python_version}"
+dependencies = [
+    "core-framework @ git+https://github.com/SorPuti/core-framework.git",
+]
 
-# Optional: for production
-# uvicorn[standard]
-# gunicorn
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.26.0",
+]
+
+[tool.core]
+database_url = "sqlite+aiosqlite:///./app.db"
+migrations_dir = "./migrations"
+app_label = "main"
+models_module = "app.models"
+app_module = "app.main"
 ''',
+        f"{project_name}/.python-version": f"{python_version}\n",
         f"{project_name}/.gitignore": '''# Python
 __pycache__/
 *.py[cod]
@@ -315,6 +395,9 @@ dist/
 .venv/
 venv/
 ENV/
+
+# uv
+uv.lock
 
 # Database
 *.db
@@ -332,21 +415,128 @@ ENV/
 # Logs
 *.log
 ''',
+        f"{project_name}/README.md": f'''# {project_name}
+
+Projeto criado com [Core Framework](https://github.com/SorPuti/core-framework).
+
+## Setup
+
+```bash
+# Ativar ambiente virtual
+source .venv/bin/activate
+
+# Criar migrações
+core makemigrations --name initial
+
+# Aplicar migrações
+core migrate
+
+# Executar servidor
+core run
+```
+
+## Estrutura
+
+```
+{project_name}/
+├── app/
+│   ├── __init__.py
+│   ├── models.py      # Models SQLAlchemy
+│   ├── schemas.py     # Schemas Pydantic
+│   ├── views.py       # ViewSets
+│   └── main.py        # Aplicação FastAPI
+├── migrations/        # Arquivos de migração
+├── tests/            # Testes
+├── core.toml         # Configuração do Core Framework
+└── pyproject.toml    # Configuração do projeto
+```
+
+## Comandos úteis
+
+```bash
+core run              # Servidor de desenvolvimento
+core makemigrations   # Gerar migrações
+core migrate          # Aplicar migrações
+core shell            # Shell interativo
+core routes           # Listar rotas
+```
+''',
     }
     
     for filepath, content in files.items():
         Path(filepath).write_text(content)
-        print(f"  Created {filepath}")
+        print(f"  📄 {filepath}")
+    
+    # Configura ambiente virtual com uv
+    if not skip_venv:
+        print(info("\nSetting up virtual environment with uv..."))
+        
+        project_path = Path(project_name).absolute()
+        
+        try:
+            # Inicializa projeto uv
+            subprocess.run(
+                ["uv", "venv", "--python", python_version],
+                cwd=project_path,
+                check=True,
+                capture_output=True,
+            )
+            print(success("  ✓ Virtual environment created (.venv)"))
+            
+            # Instala dependências
+            print(info("  Installing dependencies..."))
+            subprocess.run(
+                ["uv", "sync"],
+                cwd=project_path,
+                check=True,
+                capture_output=True,
+            )
+            print(success("  ✓ Dependencies installed"))
+            
+        except subprocess.CalledProcessError as e:
+            print(warning(f"  Warning: {e}"))
+            print(info("  You can manually run: cd {project_name} && uv sync"))
+        except FileNotFoundError:
+            print(warning("  uv not found in PATH after installation"))
+            print(info("  Please restart your terminal and run: cd {project_name} && uv sync"))
+    
+    # Mensagem final
+    print()
+    print(success("=" * 50))
+    print(success(f"✓ Project '{project_name}' created successfully!"))
+    print(success("=" * 50))
+    print()
+    
+    # Instruções
+    print(bold("Next steps:\n"))
+    print(f"  {info('1.')} cd {project_name}")
+    
+    if not skip_venv:
+        print(f"  {info('2.')} source .venv/bin/activate")
+        print(f"  {info('3.')} core makemigrations --name initial")
+        print(f"  {info('4.')} core migrate")
+        print(f"  {info('5.')} core run")
+    else:
+        print(f"  {info('2.')} uv sync  # ou pip install -e .")
+        print(f"  {info('3.')} source .venv/bin/activate")
+        print(f"  {info('4.')} core makemigrations --name initial")
+        print(f"  {info('5.')} core migrate")
+        print(f"  {info('6.')} core run")
     
     print()
-    print(success("✓ Project initialized successfully!"))
+    print(f"  Then open: {bold('http://localhost:8000/docs')}")
     print()
-    print("Next steps:")
-    print(f"  cd {project_name}")
-    print("  pip install -r requirements.txt")
-    print("  core makemigrations --name initial")
-    print("  core migrate")
-    print("  core run")
+    
+    # Gera script de ativação
+    activate_script = f"{project_name}/activate.sh"
+    Path(activate_script).write_text(f'''#!/bin/bash
+# Ativa o ambiente virtual do projeto {project_name}
+cd "$(dirname "$0")"
+source .venv/bin/activate
+echo "✓ Virtual environment activated for {project_name}"
+echo "  Run 'core run' to start the server"
+''')
+    os.chmod(activate_script, 0o755)
     
     return 0
 
@@ -710,8 +900,10 @@ For more information, visit: https://github.com/SorPuti/core-framework
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # init
-    init_parser = subparsers.add_parser("init", help="Initialize a new project")
-    init_parser.add_argument("name", nargs="?", help="Project name")
+    init_parser = subparsers.add_parser("init", help="Initialize a new project with uv")
+    init_parser.add_argument("name", nargs="?", help="Project name (default: myproject)")
+    init_parser.add_argument("--python", "-p", default="3.12", help="Python version (default: 3.12)")
+    init_parser.add_argument("--no-venv", action="store_true", help="Skip virtual environment setup")
     init_parser.set_defaults(func=cmd_init)
     
     # makemigrations
