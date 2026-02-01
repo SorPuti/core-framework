@@ -446,6 +446,23 @@ class CoreApp:
         """Decorator para rota DELETE."""
         return self.app.delete(path, **kwargs)
     
+    def add_api_route(
+        self,
+        path: str,
+        endpoint: Callable,
+        methods: list[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Add an API route directly.
+        
+        Useful for adding routes from APIView classes.
+        
+        Example:
+            app.add_api_route("/health", HealthView.as_route("/health")[1], methods=["GET"])
+        """
+        self.app.add_api_route(path, endpoint, methods=methods, **kwargs)
+    
     async def __call__(self, scope, receive, send):
         """
         Torna CoreApp callable como ASGI app.
