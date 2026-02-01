@@ -1715,12 +1715,16 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 def cmd_reset_db(args: argparse.Namespace) -> int:
     """
-    Reset database completely.
+    Reset database completely and recreate framework tables.
     
     WARNING: This destroys ALL data including:
     - All user data
     - All migrations history
     - All framework tables
+    
+    After reset, it recreates:
+    - Framework tables (auth_permissions, auth_groups, etc.)
+    - Migrations tracking table
     
     Use only in development or when you need a fresh start.
     """
@@ -1765,36 +1769,85 @@ def cmd_reset_db(args: argparse.Namespace) -> int:
             
             tables = await conn.run_sync(get_tables)
             
-            if not tables:
-                print(info("Database is already empty."))
-                return 0
+            if tables:
+                print(info(f"\nDropping {len(tables)} table(s)..."))
+                
+                # Disable foreign key checks for SQLite
+                dialect = engine.dialect.name
+                if dialect == "sqlite":
+                    await conn.execute(text("PRAGMA foreign_keys = OFF"))
+                elif dialect == "postgresql":
+                    await conn.execute(text("SET session_replication_role = 'replica'"))
+                elif dialect == "mysql":
+                    await conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+                
+                # Drop all tables
+                for table in tables:
+                    print(f"  Dropping: {table}")
+                    try:
+                        await conn.execute(text(f'DROP TABLE IF EXISTS "{table}"'))
+                    except Exception as e:
+                        print(warning(f"    Warning: {e}"))
+                
+                # Re-enable foreign key checks
+                if dialect == "sqlite":
+                    await conn.execute(text("PRAGMA foreign_keys = ON"))
+                elif dialect == "postgresql":
+                    await conn.execute(text("SET session_replication_role = 'origin'"))
+                elif dialect == "mysql":
+                    await conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+            else:
+                print(info("\nDatabase is already empty."))
             
-            print(info(f"\nDropping {len(tables)} table(s)..."))
+            # Recreate framework tables
+            print(info("\nRecreating framework tables..."))
             
-            # Disable foreign key checks for SQLite
-            dialect = engine.dialect.name
-            if dialect == "sqlite":
-                await conn.execute(text("PRAGMA foreign_keys = OFF"))
-            elif dialect == "postgresql":
-                await conn.execute(text("SET session_replication_role = 'replica'"))
-            elif dialect == "mysql":
-                await conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+            # Create migrations table
+            print("  Creating: _core_migrations")
+            await conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS "_core_migrations" (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    app VARCHAR(255) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(app, name)
+                )
+            '''))
             
-            # Drop all tables
-            for table in tables:
-                print(f"  Dropping: {table}")
-                try:
-                    await conn.execute(text(f'DROP TABLE IF EXISTS "{table}"'))
-                except Exception as e:
-                    print(warning(f"    Warning: {e}"))
+            # Create auth_permissions table
+            print("  Creating: auth_permissions")
+            await conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS "auth_permissions" (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    codename VARCHAR(100) NOT NULL UNIQUE,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT
+                )
+            '''))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS "ix_auth_permissions_codename" ON "auth_permissions" (codename)'))
             
-            # Re-enable foreign key checks
-            if dialect == "sqlite":
-                await conn.execute(text("PRAGMA foreign_keys = ON"))
-            elif dialect == "postgresql":
-                await conn.execute(text("SET session_replication_role = 'origin'"))
-            elif dialect == "mysql":
-                await conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+            # Create auth_groups table
+            print("  Creating: auth_groups")
+            await conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS "auth_groups" (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(150) NOT NULL UNIQUE,
+                    description TEXT
+                )
+            '''))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS "ix_auth_groups_name" ON "auth_groups" (name)'))
+            
+            # Create auth_group_permissions table (many-to-many)
+            print("  Creating: auth_group_permissions")
+            await conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS "auth_group_permissions" (
+                    group_id INTEGER NOT NULL,
+                    permission_id INTEGER NOT NULL,
+                    PRIMARY KEY (group_id, permission_id),
+                    FOREIGN KEY (group_id) REFERENCES "auth_groups" (id) ON DELETE CASCADE,
+                    FOREIGN KEY (permission_id) REFERENCES "auth_permissions" (id) ON DELETE CASCADE
+                )
+            '''))
             
             await conn.commit()
         
@@ -1802,10 +1855,12 @@ def cmd_reset_db(args: argparse.Namespace) -> int:
         
         print()
         print(success("Database reset complete."))
+        print(success("Framework tables recreated."))
         print()
         print(info("Next steps:"))
         print(info("  1. core makemigrations --name initial"))
         print(info("  2. core migrate"))
+        print(info("  3. core run"))
         return 0
     
     return asyncio.run(reset())

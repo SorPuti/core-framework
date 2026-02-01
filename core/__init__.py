@@ -128,7 +128,7 @@ from core.validators import (
     FileSizeValidator,
 )
 
-__version__ = "0.2.27"
+__version__ = "0.2.28"
 __all__ = [
     # Models
     "Model",
