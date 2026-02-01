@@ -363,7 +363,7 @@ class Model(Base, metaclass=ModelMeta):
             email: Mapped[str] = Field.string(max_length=255, unique=True)
             name: Mapped[str] = Field.string(max_length=100)
             is_active: Mapped[bool] = Field.boolean(default=True)
-            created_at: Mapped[datetime] = Field.datetime(auto_now_add=True)
+            created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
     """
     
     __abstract__ = True

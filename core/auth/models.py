@@ -33,7 +33,7 @@ from sqlalchemy.orm import Mapped, relationship, declared_attr
 
 from core.models import Model, Field
 from core.auth.base import get_password_hasher, get_auth_config
-from core.datetime import timezone
+from core.datetime import timezone, DateTime
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -366,8 +366,8 @@ class AbstractUser(Model):
     is_superuser: Mapped[bool] = Field.boolean(default=False)
     
     # Timestamps
-    date_joined: Mapped[datetime] = Field.datetime(auto_now_add=True)
-    last_login: Mapped[datetime | None] = Field.datetime(nullable=True)
+    date_joined: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+    last_login: Mapped[DateTime | None] = Field.datetime(nullable=True)
     
     # Configuração
     USERNAME_FIELD: ClassVar[str] = "email"
