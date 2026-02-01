@@ -79,7 +79,7 @@ class TaskWorker:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, self._handle_signal)
         
-        # Start consumer
+        # Start consumer with retry
         from core.messaging.kafka import KafkaConsumer
         
         topics = [f"tasks.{q}" for q in self._queues]
@@ -92,7 +92,24 @@ class TaskWorker:
         if self._db_session_factory:
             self._consumer.set_db_session_factory(self._db_session_factory)
         
-        await self._consumer.start()
+        # Retry connection with exponential backoff
+        max_retries = 10
+        retry_delay = 2
+        for attempt in range(max_retries):
+            try:
+                await self._consumer.start()
+                break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        f"Failed to connect to Kafka (attempt {attempt + 1}/{max_retries}): {e}. "
+                        f"Retrying in {retry_delay}s..."
+                    )
+                    await asyncio.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, 30)  # Max 30s delay
+                else:
+                    logger.error(f"Failed to connect to Kafka after {max_retries} attempts")
+                    raise
         
         logger.info(
             f"Worker started: queues={self._queues}, concurrency={self._concurrency}"

@@ -171,9 +171,23 @@ def generate_docker(output_dir: Path) -> None:
     restart: unless-stopped
 
   # ==========================================================================
-  # Optional: Kafka UI
+  # Monitoring & Logging Tools
   # ==========================================================================
   
+  # Dozzle - Real-time Docker log viewer
+  dozzle:
+    image: amir20/dozzle:latest
+    ports:
+      - "9999:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOZZLE_LEVEL: info
+      DOZZLE_TAILSIZE: 300
+      DOZZLE_FILTER: "status=running"
+    restart: unless-stopped
+  
+  # Kafka UI - Kafka management interface
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     ports:
