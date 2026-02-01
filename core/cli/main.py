@@ -1799,42 +1799,80 @@ def cmd_reset_db(args: argparse.Namespace) -> int:
             else:
                 print(info("\nDatabase is already empty."))
             
-            # Recreate framework tables
-            print(info("\nRecreating framework tables..."))
-            
+        # Create new connection for creating tables (outside transaction for SQLite)
+        await engine.dispose()
+        
+        # Recreate framework tables
+        print(info("\nRecreating framework tables..."))
+        
+        engine = create_async_engine(config["database_url"])
+        dialect = engine.dialect.name
+        
+        async with engine.begin() as conn:
             # Create migrations table
             print("  Creating: _core_migrations")
-            await conn.execute(text('''
-                CREATE TABLE IF NOT EXISTS "_core_migrations" (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    app VARCHAR(255) NOT NULL,
-                    name VARCHAR(255) NOT NULL,
-                    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(app, name)
-                )
-            '''))
+            if dialect == "sqlite":
+                await conn.execute(text('''
+                    CREATE TABLE IF NOT EXISTS "_core_migrations" (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        app VARCHAR(255) NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(app, name)
+                    )
+                '''))
+            else:
+                # PostgreSQL / MySQL
+                await conn.execute(text('''
+                    CREATE TABLE IF NOT EXISTS "_core_migrations" (
+                        id SERIAL PRIMARY KEY,
+                        app VARCHAR(255) NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(app, name)
+                    )
+                '''))
             
             # Create auth_permissions table
             print("  Creating: auth_permissions")
-            await conn.execute(text('''
-                CREATE TABLE IF NOT EXISTS "auth_permissions" (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    codename VARCHAR(100) NOT NULL UNIQUE,
-                    name VARCHAR(255) NOT NULL,
-                    description TEXT
-                )
-            '''))
+            if dialect == "sqlite":
+                await conn.execute(text('''
+                    CREATE TABLE IF NOT EXISTS "auth_permissions" (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        codename VARCHAR(100) NOT NULL UNIQUE,
+                        name VARCHAR(255) NOT NULL,
+                        description TEXT
+                    )
+                '''))
+            else:
+                await conn.execute(text('''
+                    CREATE TABLE IF NOT EXISTS "auth_permissions" (
+                        id SERIAL PRIMARY KEY,
+                        codename VARCHAR(100) NOT NULL UNIQUE,
+                        name VARCHAR(255) NOT NULL,
+                        description TEXT
+                    )
+                '''))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS "ix_auth_permissions_codename" ON "auth_permissions" (codename)'))
             
             # Create auth_groups table
             print("  Creating: auth_groups")
-            await conn.execute(text('''
-                CREATE TABLE IF NOT EXISTS "auth_groups" (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name VARCHAR(150) NOT NULL UNIQUE,
-                    description TEXT
-                )
-            '''))
+            if dialect == "sqlite":
+                await conn.execute(text('''
+                    CREATE TABLE IF NOT EXISTS "auth_groups" (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name VARCHAR(150) NOT NULL UNIQUE,
+                        description TEXT
+                    )
+                '''))
+            else:
+                await conn.execute(text('''
+                    CREATE TABLE IF NOT EXISTS "auth_groups" (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(150) NOT NULL UNIQUE,
+                        description TEXT
+                    )
+                '''))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS "ix_auth_groups_name" ON "auth_groups" (name)'))
             
             # Create auth_group_permissions table (many-to-many)
@@ -1848,14 +1886,30 @@ def cmd_reset_db(args: argparse.Namespace) -> int:
                     FOREIGN KEY (permission_id) REFERENCES "auth_permissions" (id) ON DELETE CASCADE
                 )
             '''))
-            
-            await conn.commit()
+        
+        # Verify tables were created
+        print(info("\nVerifying tables..."))
+        
+        async with engine.connect() as conn:
+            created_tables = await conn.run_sync(get_tables)
+        
+        expected_tables = ["_core_migrations", "auth_permissions", "auth_groups", "auth_group_permissions"]
+        missing_tables = [t for t in expected_tables if t not in created_tables]
+        
+        if missing_tables:
+            print(error(f"\nERROR: Failed to create tables: {', '.join(missing_tables)}"))
+            print(error("Please check database permissions and try again."))
+            await engine.dispose()
+            return 1
+        
+        print(success(f"  Verified: {len(expected_tables)} framework tables created"))
+        for table in expected_tables:
+            print(success(f"    ✓ {table}"))
         
         await engine.dispose()
         
         print()
         print(success("Database reset complete."))
-        print(success("Framework tables recreated."))
         print()
         print(info("Next steps:"))
         print(info("  1. core makemigrations --name initial"))
