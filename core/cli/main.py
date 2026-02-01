@@ -1163,8 +1163,6 @@ app = CoreApp(
     description="API built with Core Framework - Django-inspired, FastAPI-powered",
     version=settings.app_version,
     debug=settings.debug,
-    docs_url=settings.docs_url,
-    redoc_url=settings.redoc_url,
     routers=[api_router],
 )
 
