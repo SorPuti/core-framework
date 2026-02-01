@@ -369,7 +369,6 @@ Defines Pydantic schemas for:
     - User registration (UserRegisterInput)
     - User login (LoginInput)
     - User profile output (UserOutput)
-    - User update (UserUpdateInput)
     - Token response (TokenResponse)
 """
 
@@ -380,7 +379,13 @@ from core.datetime import DateTime
 
 
 class UserRegisterInput(InputSchema):
-    """Schema for user registration."""
+    """
+    Schema for user registration.
+    
+    Validates:
+        - Email format
+        - Password strength (min 8 chars, uppercase, lowercase, digit)
+    """
     
     email: EmailStr
     password: str
@@ -410,7 +415,11 @@ class LoginInput(InputSchema):
 
 
 class UserOutput(OutputSchema):
-    """Schema for user response (excludes sensitive data)."""
+    """
+    Schema for user response.
+    
+    Excludes sensitive data like password_hash.
+    """
     
     id: int
     email: str
@@ -424,32 +433,12 @@ class UserOutput(OutputSchema):
     last_login: DateTime | None
 
 
-class UserUpdateInput(InputSchema):
-    """Schema for updating user profile."""
-    
-    first_name: str | None = None
-    last_name: str | None = None
-    phone: str | None = None
-    avatar_url: str | None = None
-
-
-class ChangePasswordInput(InputSchema):
-    """Schema for changing password."""
-    
-    current_password: str
-    new_password: str
-    
-    @field_validator("new_password")
-    @classmethod
-    def validate_new_password(cls, v: str) -> str:
-        """Validate new password strength."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        return v
-
-
 class TokenResponse(OutputSchema):
-    """Schema for authentication token response."""
+    """
+    Schema for authentication token response.
+    
+    Contains JWT access and refresh tokens.
+    """
     
     access_token: str
     refresh_token: str
@@ -466,32 +455,27 @@ class RefreshTokenInput(InputSchema):
 User views with authentication endpoints.
 
 Provides:
-    - UserViewSet: CRUD operations for users (admin)
-    - AuthViewSet: Login, register, token refresh
-    - ProfileView: Current user profile management
+    - UserViewSet: CRUD operations for users
+    - Authentication functions: login, register, token refresh
 """
 
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import ModelViewSet
-from core.views import action
-from core.permissions import AllowAny, IsAuthenticated
+from core.permissions import AllowAny
 from core.auth import (
     create_access_token,
     create_refresh_token,
     verify_token,
-    login_required,
 )
 
 from src.apps.users.models import User
 from src.apps.users.schemas import (
     UserRegisterInput,
     UserOutput,
-    UserUpdateInput,
     LoginInput,
     TokenResponse,
-    ChangePasswordInput,
     RefreshTokenInput,
 )
 from src.api.config import settings
@@ -499,11 +483,11 @@ from src.api.config import settings
 
 class UserViewSet(ModelViewSet):
     """
-    ViewSet for user management (admin operations).
+    ViewSet for user management.
     
     Endpoints:
         GET    /users/          - List all users
-        POST   /users/          - Create user (admin)
+        POST   /users/          - Create user
         GET    /users/{id}      - Get user details
         PUT    /users/{id}      - Update user
         PATCH  /users/{id}      - Partial update
@@ -513,7 +497,7 @@ class UserViewSet(ModelViewSet):
     model = User
     input_schema = UserRegisterInput
     output_schema = UserOutput
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # Change to [IsAuthenticated] for protected routes
     tags = ["Users"]
     
     # Auto-detect unique fields from model
@@ -526,156 +510,103 @@ class UserViewSet(ModelViewSet):
         return data
 
 
-class AuthViewSet:
+async def register_user(db: AsyncSession, data: UserRegisterInput) -> UserOutput:
     """
-    Authentication endpoints.
+    Register a new user.
     
-    Provides login, registration, and token management.
+    Args:
+        db: Database session
+        data: User registration data
+        
+    Returns:
+        Created user data
+        
+    Raises:
+        HTTPException: If email already exists
     """
-    
-    @staticmethod
-    async def register(
-        request: Request,
-        db: AsyncSession,
-        data: UserRegisterInput,
-    ) -> UserOutput:
-        """
-        Register a new user.
-        
-        POST /auth/register
-        """
-        # Check if email already exists
-        existing = await User.get_by_email(data.email, db)
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail="Email already registered",
-            )
-        
-        # Create user
-        user = await User.create_user(
-            email=data.email,
-            password=data.password,
-            db=db,
-            first_name=data.first_name,
-            last_name=data.last_name,
-        )
-        
-        return UserOutput.model_validate(user)
-    
-    @staticmethod
-    async def login(
-        request: Request,
-        db: AsyncSession,
-        data: LoginInput,
-    ) -> TokenResponse:
-        """
-        Authenticate user and return tokens.
-        
-        POST /auth/login
-        """
-        user = await User.authenticate(data.email, data.password, db)
-        
-        if not user:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid email or password",
-            )
-        
-        # Generate tokens
-        access_token = create_access_token({"sub": str(user.id), "email": user.email})
-        refresh_token = create_refresh_token({"sub": str(user.id)})
-        
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_in=settings.auth_access_token_expire_minutes * 60,
+    # Check if email already exists
+    existing = await User.get_by_email(data.email, db)
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered",
         )
     
-    @staticmethod
-    async def refresh(
-        request: Request,
-        data: RefreshTokenInput,
-    ) -> TokenResponse:
-        """
-        Refresh access token using refresh token.
+    # Create user
+    user = await User.create_user(
+        email=data.email,
+        password=data.password,
+        db=db,
+        first_name=data.first_name,
+        last_name=data.last_name,
+    )
+    
+    return UserOutput.model_validate(user)
+
+
+async def login_user(db: AsyncSession, data: LoginInput) -> TokenResponse:
+    """
+    Authenticate user and return tokens.
+    
+    Args:
+        db: Database session
+        data: Login credentials
         
-        POST /auth/refresh
-        """
-        payload = verify_token(data.refresh_token, token_type="refresh")
+    Returns:
+        Access and refresh tokens
         
-        if not payload:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid or expired refresh token",
-            )
-        
-        # Generate new tokens
-        access_token = create_access_token({"sub": payload["sub"]})
-        refresh_token = create_refresh_token({"sub": payload["sub"]})
-        
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_in=settings.auth_access_token_expire_minutes * 60,
+    Raises:
+        HTTPException: If credentials are invalid
+    """
+    user = await User.authenticate(data.email, data.password, db)
+    
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password",
         )
     
-    @staticmethod
-    @login_required
-    async def me(request: Request, db: AsyncSession) -> UserOutput:
-        """
-        Get current authenticated user profile.
-        
-        GET /auth/me
-        """
-        user = request.state.user
-        return UserOutput.model_validate(user)
+    # Generate tokens
+    access_token = create_access_token({"sub": str(user.id), "email": user.email})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
     
-    @staticmethod
-    @login_required
-    async def update_profile(
-        request: Request,
-        db: AsyncSession,
-        data: UserUpdateInput,
-    ) -> UserOutput:
-        """
-        Update current user profile.
-        
-        PATCH /auth/me
-        """
-        user = request.state.user
-        
-        update_data = data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(user, field, value)
-        
-        await user.save(db)
-        return UserOutput.model_validate(user)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.auth_access_token_expire_minutes * 60,
+    )
+
+
+async def refresh_tokens(data: RefreshTokenInput) -> TokenResponse:
+    """
+    Refresh access token using refresh token.
     
-    @staticmethod
-    @login_required
-    async def change_password(
-        request: Request,
-        db: AsyncSession,
-        data: ChangePasswordInput,
-    ) -> dict:
-        """
-        Change current user password.
+    Args:
+        data: Refresh token data
         
-        POST /auth/change-password
-        """
-        user = request.state.user
+    Returns:
+        New access and refresh tokens
         
-        if not user.check_password(data.current_password):
-            raise HTTPException(
-                status_code=400,
-                detail="Current password is incorrect",
-            )
-        
-        user.set_password(data.new_password)
-        await user.save(db)
-        
-        return {"message": "Password changed successfully"}
+    Raises:
+        HTTPException: If refresh token is invalid
+    """
+    payload = verify_token(data.refresh_token, token_type="refresh")
+    
+    if not payload:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired refresh token",
+        )
+    
+    # Generate new tokens
+    access_token = create_access_token({"sub": payload["sub"]})
+    refresh_token = create_refresh_token({"sub": payload["sub"]})
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.auth_access_token_expire_minutes * 60,
+    )
 ''',
         f"{project_name}/src/apps/users/services.py": '''"""
 User business logic services.
@@ -741,6 +672,20 @@ class UserService:
 User routes configuration.
 
 Defines all routes for user management and authentication.
+
+Routes:
+    Users (CRUD):
+        GET    /api/v1/users/          - List all users
+        POST   /api/v1/users/          - Create user
+        GET    /api/v1/users/{id}      - Get user by ID
+        PUT    /api/v1/users/{id}      - Update user
+        PATCH  /api/v1/users/{id}      - Partial update
+        DELETE /api/v1/users/{id}      - Delete user
+    
+    Authentication:
+        POST   /api/v1/auth/register   - Register new user
+        POST   /api/v1/auth/login      - Login and get tokens
+        POST   /api/v1/auth/refresh    - Refresh access token
 """
 
 from fastapi import Depends, Body
@@ -749,12 +694,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import AutoRouter
 from core.dependencies import get_db
 
-from src.apps.users.views import UserViewSet, AuthViewSet
+from src.apps.users.views import (
+    UserViewSet,
+    register_user,
+    login_user,
+    refresh_tokens,
+)
 from src.apps.users.schemas import (
     UserRegisterInput,
+    UserOutput,
     LoginInput,
-    UserUpdateInput,
-    ChangePasswordInput,
+    TokenResponse,
     RefreshTokenInput,
 )
 
@@ -768,63 +718,46 @@ router.register("", UserViewSet, basename="user")
 auth_router = AutoRouter(prefix="/auth", tags=["Authentication"])
 
 
-@auth_router.router.post("/register", status_code=201)
+@auth_router.router.post(
+    "/register",
+    status_code=201,
+    response_model=UserOutput,
+    summary="Register new user",
+    description="Create a new user account with email and password.",
+)
 async def register(
     data: UserRegisterInput = Body(...),
     db: AsyncSession = Depends(get_db),
-):
+) -> UserOutput:
     """Register a new user account."""
-    from fastapi import Request
-    return await AuthViewSet.register(Request(scope={"type": "http"}), db, data)
+    return await register_user(db, data)
 
 
-@auth_router.router.post("/login")
+@auth_router.router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="User login",
+    description="Authenticate with email and password to get access tokens.",
+)
 async def login(
     data: LoginInput = Body(...),
     db: AsyncSession = Depends(get_db),
-):
+) -> TokenResponse:
     """Authenticate and get access tokens."""
-    from fastapi import Request
-    return await AuthViewSet.login(Request(scope={"type": "http"}), db, data)
+    return await login_user(db, data)
 
 
-@auth_router.router.post("/refresh")
-async def refresh_token(
+@auth_router.router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    summary="Refresh token",
+    description="Get new access token using refresh token.",
+)
+async def refresh(
     data: RefreshTokenInput = Body(...),
-):
+) -> TokenResponse:
     """Refresh access token using refresh token."""
-    from fastapi import Request
-    return await AuthViewSet.refresh(Request(scope={"type": "http"}), data)
-
-
-@auth_router.router.get("/me")
-async def get_current_user(
-    db: AsyncSession = Depends(get_db),
-):
-    """Get current authenticated user profile."""
-    from fastapi import Request
-    # Note: In production, inject user from auth middleware
-    return {"message": "Implement auth middleware to get current user"}
-
-
-@auth_router.router.patch("/me")
-async def update_current_user(
-    data: UserUpdateInput = Body(...),
-    db: AsyncSession = Depends(get_db),
-):
-    """Update current user profile."""
-    from fastapi import Request
-    return {"message": "Implement auth middleware to update current user"}
-
-
-@auth_router.router.post("/change-password")
-async def change_password(
-    data: ChangePasswordInput = Body(...),
-    db: AsyncSession = Depends(get_db),
-):
-    """Change current user password."""
-    from fastapi import Request
-    return {"message": "Implement auth middleware to change password"}
+    return await refresh_tokens(data)
 ''',
         f"{project_name}/src/apps/users/tests/__init__.py": '"""Tests for users app."""\n',
         f"{project_name}/src/apps/users/tests/test_users.py": '''"""
