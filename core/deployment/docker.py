@@ -202,7 +202,8 @@ networks:
     
     # Dockerfile
     dockerfile = '''# Build stage
-FROM python:3.12-slim AS builder
+# Use Python 3.13 for compatibility with modern projects
+FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
@@ -238,7 +239,7 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then \\
     uv pip install --system .
 
 # Production stage
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
@@ -248,7 +249,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
