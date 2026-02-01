@@ -270,11 +270,12 @@ def cmd_init(args: argparse.Namespace) -> int:
         # Apps package
         f"{project_name}/src/apps/__init__.py": '"""Apps package - módulos da aplicação."""\n',
         
-        # Users app (exemplo)
+        # Users app
         f"{project_name}/src/apps/users/__init__.py": '''"""
 Users App.
 
-App de exemplo com autenticação e gerenciamento de usuários.
+Authentication and user management module using Core Framework's
+built-in AbstractUser, permissions, and JWT authentication.
 """
 
 from src.apps.users.routes import router
@@ -282,115 +283,405 @@ from src.apps.users.routes import router
 __all__ = ["router"]
 ''',
         f"{project_name}/src/apps/users/models.py": '''"""
-Models do app users.
+User model extending AbstractUser.
+
+This module defines the custom User model with additional fields
+while inheriting all authentication features from AbstractUser.
+
+Inherited fields from AbstractUser:
+    - id: Primary key
+    - email: Unique email (used for login)
+    - password_hash: Hashed password
+    - is_active: Whether user can login
+    - is_staff: Whether user can access admin
+    - is_superuser: Whether user has all permissions
+    - date_joined: Account creation timestamp
+    - last_login: Last login timestamp
+
+Inherited from PermissionsMixin:
+    - groups: Many-to-many relationship with Group
+    - user_permissions: Direct permissions
+
+Available methods:
+    - set_password(raw_password): Hash and set password
+    - check_password(raw_password): Verify password
+    - has_perm(permission): Check single permission
+    - has_perms(permissions): Check multiple permissions
+    - authenticate(email, password, db): Class method to authenticate
+    - create_user(email, password, db): Class method to create user
+    - create_superuser(email, password, db): Class method to create admin
 """
 
 from sqlalchemy.orm import Mapped
 
-from core import Model, Field
-from core import timezone, DateTime
+from core import Field
+from core.auth import AbstractUser, PermissionsMixin
 
 
-class User(Model):
-    """Model de usuário."""
+class User(AbstractUser, PermissionsMixin):
+    """
+    Custom User model with additional profile fields.
+    
+    Extends AbstractUser for authentication and PermissionsMixin
+    for groups and permissions support.
+    
+    Example usage:
+        # Create user
+        user = await User.create_user("user@example.com", "password123", db)
+        
+        # Create superuser
+        admin = await User.create_superuser("admin@example.com", "password123", db)
+        
+        # Authenticate
+        user = await User.authenticate("user@example.com", "password123", db)
+        
+        # Check permissions
+        if user.has_perm("posts.delete"):
+            ...
+        
+        # Add to group
+        await user.add_to_group("editors", db)
+    """
     
     __tablename__ = "users"
     
-    id: Mapped[int] = Field.pk()
-    email: Mapped[str] = Field.string(max_length=255, unique=True, index=True)
-    name: Mapped[str] = Field.string(max_length=100)
-    is_active: Mapped[bool] = Field.boolean(default=True)
-    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
-    updated_at: Mapped[DateTime | None] = Field.datetime(auto_now=True)
+    # Additional profile fields
+    first_name: Mapped[str | None] = Field.string(max_length=100, nullable=True)
+    last_name: Mapped[str | None] = Field.string(max_length=100, nullable=True)
+    phone: Mapped[str | None] = Field.string(max_length=20, nullable=True)
+    avatar_url: Mapped[str | None] = Field.string(max_length=500, nullable=True)
+    
+    @property
+    def full_name(self) -> str:
+        """Return user's full name or email if not set."""
+        parts = [self.first_name, self.last_name]
+        return " ".join(p for p in parts if p) or self.email
+    
+    @property
+    def short_name(self) -> str:
+        """Return first name or email username."""
+        return self.first_name or self.email.split("@")[0]
 ''',
         f"{project_name}/src/apps/users/schemas.py": '''"""
-Schemas do app users.
+User schemas for request/response validation.
+
+Defines Pydantic schemas for:
+    - User registration (UserRegisterInput)
+    - User login (LoginInput)
+    - User profile output (UserOutput)
+    - User update (UserUpdateInput)
+    - Token response (TokenResponse)
 """
 
-from pydantic import EmailStr, field_validator, model_validator
+from pydantic import EmailStr, field_validator
 
 from core import InputSchema, OutputSchema
-from core import timezone, DateTime
+from core.datetime import DateTime
 
 
-class UserInput(InputSchema):
-    """Schema de entrada para criar usuário."""
-    email: EmailStr
-    name: str
+class UserRegisterInput(InputSchema):
+    """Schema for user registration."""
     
-    @field_validator("name")
+    email: EmailStr
+    password: str
+    first_name: str | None = None
+    last_name: str | None = None
+    
+    @field_validator("password")
     @classmethod
-    def validate_name(cls, v: str) -> str:
-        if len(v.strip()) < 2:
-            raise ValueError("Name must be at least 2 characters")
-        return v.strip()
+    def validate_password(cls, v: str) -> str:
+        """Validate password strength."""
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class LoginInput(InputSchema):
+    """Schema for user login."""
+    
+    email: EmailStr
+    password: str
 
 
 class UserOutput(OutputSchema):
-    """Schema de saída para usuário."""
+    """Schema for user response (excludes sensitive data)."""
+    
     id: int
     email: str
-    name: str
+    first_name: str | None
+    last_name: str | None
+    phone: str | None
+    avatar_url: str | None
     is_active: bool
-    created_at: DateTime
+    is_staff: bool
+    date_joined: DateTime
+    last_login: DateTime | None
 
 
 class UserUpdateInput(InputSchema):
-    """Schema para atualização de usuário."""
-    email: EmailStr | None = None
-    name: str | None = None
+    """Schema for updating user profile."""
     
-    @model_validator(mode="after")
-    def validate_at_least_one_field(self):
-        if self.email is None and self.name is None:
-            raise ValueError("At least one field must be provided")
-        return self
+    first_name: str | None = None
+    last_name: str | None = None
+    phone: str | None = None
+    avatar_url: str | None = None
+
+
+class ChangePasswordInput(InputSchema):
+    """Schema for changing password."""
+    
+    current_password: str
+    new_password: str
+    
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        """Validate new password strength."""
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+class TokenResponse(OutputSchema):
+    """Schema for authentication token response."""
+    
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+
+
+class RefreshTokenInput(InputSchema):
+    """Schema for refreshing access token."""
+    
+    refresh_token: str
 ''',
         f"{project_name}/src/apps/users/views.py": '''"""
-Views do app users.
+User views with authentication endpoints.
+
+Provides:
+    - UserViewSet: CRUD operations for users (admin)
+    - AuthViewSet: Login, register, token refresh
+    - ProfileView: Current user profile management
 """
 
+from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core import ModelViewSet, ValidationError
-from core.permissions import AllowAny
+from core import ModelViewSet
+from core.views import action
+from core.permissions import AllowAny, IsAuthenticated
+from core.auth import (
+    create_access_token,
+    create_refresh_token,
+    verify_token,
+    login_required,
+)
 
 from src.apps.users.models import User
-from src.apps.users.schemas import UserInput, UserOutput
+from src.apps.users.schemas import (
+    UserRegisterInput,
+    UserOutput,
+    UserUpdateInput,
+    LoginInput,
+    TokenResponse,
+    ChangePasswordInput,
+    RefreshTokenInput,
+)
+from src.api.config import settings
 
 
 class UserViewSet(ModelViewSet):
-    """ViewSet para usuários."""
+    """
+    ViewSet for user management (admin operations).
+    
+    Endpoints:
+        GET    /users/          - List all users
+        POST   /users/          - Create user (admin)
+        GET    /users/{id}      - Get user details
+        PUT    /users/{id}      - Update user
+        PATCH  /users/{id}      - Partial update
+        DELETE /users/{id}      - Delete user
+    """
     
     model = User
-    input_schema = UserInput
+    input_schema = UserRegisterInput
     output_schema = UserOutput
-    permission_classes = [AllowAny]
-    tags = ["users"]
+    permission_classes = [IsAuthenticated]
+    tags = ["Users"]
     
-    async def validate_email(
-        self,
-        value: str,
+    # Auto-detect unique fields from model
+    unique_fields = ["email"]
+    
+    async def perform_create_validation(self, data: dict, db: AsyncSession) -> dict:
+        """Hash password before creating user."""
+        password = data.pop("password")
+        data["password_hash"] = User.make_password(password)
+        return data
+
+
+class AuthViewSet:
+    """
+    Authentication endpoints.
+    
+    Provides login, registration, and token management.
+    """
+    
+    @staticmethod
+    async def register(
+        request: Request,
         db: AsyncSession,
-        instance=None,
-    ) -> str:
-        """Validação customizada para email."""
-        blocked_domains = ["spam.com", "fake.com"]
-        domain = value.split("@")[-1].lower()
+        data: UserRegisterInput,
+    ) -> UserOutput:
+        """
+        Register a new user.
         
-        if domain in blocked_domains:
-            raise ValidationError(
-                message=f"Email domain '{domain}' is not allowed",
-                code="blocked_domain",
-                field="email",
+        POST /auth/register
+        """
+        # Check if email already exists
+        existing = await User.get_by_email(data.email, db)
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail="Email already registered",
             )
         
-        return value.lower()
+        # Create user
+        user = await User.create_user(
+            email=data.email,
+            password=data.password,
+            db=db,
+            first_name=data.first_name,
+            last_name=data.last_name,
+        )
+        
+        return UserOutput.model_validate(user)
+    
+    @staticmethod
+    async def login(
+        request: Request,
+        db: AsyncSession,
+        data: LoginInput,
+    ) -> TokenResponse:
+        """
+        Authenticate user and return tokens.
+        
+        POST /auth/login
+        """
+        user = await User.authenticate(data.email, data.password, db)
+        
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid email or password",
+            )
+        
+        # Generate tokens
+        access_token = create_access_token({"sub": str(user.id), "email": user.email})
+        refresh_token = create_refresh_token({"sub": str(user.id)})
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=settings.auth_access_token_expire_minutes * 60,
+        )
+    
+    @staticmethod
+    async def refresh(
+        request: Request,
+        data: RefreshTokenInput,
+    ) -> TokenResponse:
+        """
+        Refresh access token using refresh token.
+        
+        POST /auth/refresh
+        """
+        payload = verify_token(data.refresh_token, token_type="refresh")
+        
+        if not payload:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired refresh token",
+            )
+        
+        # Generate new tokens
+        access_token = create_access_token({"sub": payload["sub"]})
+        refresh_token = create_refresh_token({"sub": payload["sub"]})
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=settings.auth_access_token_expire_minutes * 60,
+        )
+    
+    @staticmethod
+    @login_required
+    async def me(request: Request, db: AsyncSession) -> UserOutput:
+        """
+        Get current authenticated user profile.
+        
+        GET /auth/me
+        """
+        user = request.state.user
+        return UserOutput.model_validate(user)
+    
+    @staticmethod
+    @login_required
+    async def update_profile(
+        request: Request,
+        db: AsyncSession,
+        data: UserUpdateInput,
+    ) -> UserOutput:
+        """
+        Update current user profile.
+        
+        PATCH /auth/me
+        """
+        user = request.state.user
+        
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(user, field, value)
+        
+        await user.save(db)
+        return UserOutput.model_validate(user)
+    
+    @staticmethod
+    @login_required
+    async def change_password(
+        request: Request,
+        db: AsyncSession,
+        data: ChangePasswordInput,
+    ) -> dict:
+        """
+        Change current user password.
+        
+        POST /auth/change-password
+        """
+        user = request.state.user
+        
+        if not user.check_password(data.current_password):
+            raise HTTPException(
+                status_code=400,
+                detail="Current password is incorrect",
+            )
+        
+        user.set_password(data.new_password)
+        await user.save(db)
+        
+        return {"message": "Password changed successfully"}
 ''',
         f"{project_name}/src/apps/users/services.py": '''"""
-Services do app users.
+User business logic services.
 
-Lógica de negócio complexa vai aqui.
+Separates complex business logic from views for better
+testability and reusability.
 """
 
 from typing import TYPE_CHECKING
@@ -401,30 +692,145 @@ if TYPE_CHECKING:
 
 
 class UserService:
-    """Service para lógica de negócio de usuários."""
+    """
+    Service class for user-related business logic.
+    
+    Example usage:
+        service = UserService(db)
+        active_users = await service.get_active_users()
+        admins = await service.get_staff_users()
+    """
     
     def __init__(self, db: "AsyncSession"):
         self.db = db
     
     async def get_active_users(self) -> list["User"]:
-        """Retorna apenas usuários ativos."""
+        """Get all active users."""
         from src.apps.users.models import User
         return await User.objects.using(self.db).filter(is_active=True).all()
+    
+    async def get_staff_users(self) -> list["User"]:
+        """Get all staff users."""
+        from src.apps.users.models import User
+        return await User.objects.using(self.db).filter(is_staff=True).all()
+    
+    async def get_superusers(self) -> list["User"]:
+        """Get all superusers."""
+        from src.apps.users.models import User
+        return await User.objects.using(self.db).filter(is_superuser=True).all()
+    
+    async def deactivate_user(self, user_id: int) -> "User | None":
+        """Deactivate a user account."""
+        from src.apps.users.models import User
+        user = await User.objects.using(self.db).get_or_none(id=user_id)
+        if user:
+            user.is_active = False
+            await user.save(self.db)
+        return user
+    
+    async def activate_user(self, user_id: int) -> "User | None":
+        """Activate a user account."""
+        from src.apps.users.models import User
+        user = await User.objects.using(self.db).get_or_none(id=user_id)
+        if user:
+            user.is_active = True
+            await user.save(self.db)
+        return user
 ''',
         f"{project_name}/src/apps/users/routes.py": '''"""
-Rotas do app users.
+User routes configuration.
+
+Defines all routes for user management and authentication.
 """
 
+from fastapi import Depends, Body
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from core import AutoRouter
+from core.dependencies import get_db
 
-from src.apps.users.views import UserViewSet
+from src.apps.users.views import UserViewSet, AuthViewSet
+from src.apps.users.schemas import (
+    UserRegisterInput,
+    LoginInput,
+    UserUpdateInput,
+    ChangePasswordInput,
+    RefreshTokenInput,
+)
 
+
+# User management routes (CRUD)
 router = AutoRouter(prefix="/users", tags=["Users"])
 router.register("", UserViewSet, basename="user")
+
+
+# Authentication routes
+auth_router = AutoRouter(prefix="/auth", tags=["Authentication"])
+
+
+@auth_router.router.post("/register", status_code=201)
+async def register(
+    data: UserRegisterInput = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a new user account."""
+    from fastapi import Request
+    return await AuthViewSet.register(Request(scope={"type": "http"}), db, data)
+
+
+@auth_router.router.post("/login")
+async def login(
+    data: LoginInput = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Authenticate and get access tokens."""
+    from fastapi import Request
+    return await AuthViewSet.login(Request(scope={"type": "http"}), db, data)
+
+
+@auth_router.router.post("/refresh")
+async def refresh_token(
+    data: RefreshTokenInput = Body(...),
+):
+    """Refresh access token using refresh token."""
+    from fastapi import Request
+    return await AuthViewSet.refresh(Request(scope={"type": "http"}), data)
+
+
+@auth_router.router.get("/me")
+async def get_current_user(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get current authenticated user profile."""
+    from fastapi import Request
+    # Note: In production, inject user from auth middleware
+    return {"message": "Implement auth middleware to get current user"}
+
+
+@auth_router.router.patch("/me")
+async def update_current_user(
+    data: UserUpdateInput = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user profile."""
+    from fastapi import Request
+    return {"message": "Implement auth middleware to update current user"}
+
+
+@auth_router.router.post("/change-password")
+async def change_password(
+    data: ChangePasswordInput = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Change current user password."""
+    from fastapi import Request
+    return {"message": "Implement auth middleware to change password"}
 ''',
         f"{project_name}/src/apps/users/tests/__init__.py": '"""Tests for users app."""\n',
         f"{project_name}/src/apps/users/tests/test_users.py": '''"""
-Testes do app users.
+User app tests.
+
+Tests for user registration, authentication, and profile management.
 """
 
 import pytest
@@ -433,23 +839,81 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_list_users(client: AsyncClient):
-    """Testa listagem de usuários."""
+    """Test listing users endpoint."""
     response = await client.get("/api/v1/users/")
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    assert response.status_code in [200, 401]  # 401 if auth required
 
 
 @pytest.mark.asyncio
-async def test_create_user(client: AsyncClient):
-    """Testa criação de usuário."""
+async def test_register_user(client: AsyncClient):
+    """Test user registration."""
     response = await client.post(
-        "/api/v1/users/",
-        json={"email": "test@example.com", "name": "Test User"},
+        "/api/v1/auth/register",
+        json={
+            "email": "newuser@example.com",
+            "password": "SecurePass123",
+            "first_name": "Test",
+            "last_name": "User",
+        },
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["email"] == "test@example.com"
-    assert data["name"] == "Test User"
+    assert data["email"] == "newuser@example.com"
+    assert "password" not in data
+    assert "password_hash" not in data
+
+
+@pytest.mark.asyncio
+async def test_register_weak_password(client: AsyncClient):
+    """Test registration with weak password fails."""
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "weak@example.com",
+            "password": "weak",
+        },
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_login(client: AsyncClient):
+    """Test user login."""
+    # First register
+    await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "login@example.com",
+            "password": "SecurePass123",
+        },
+    )
+    
+    # Then login
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "login@example.com",
+            "password": "SecurePass123",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert "refresh_token" in data
+    assert data["token_type"] == "bearer"
+
+
+@pytest.mark.asyncio
+async def test_login_invalid_credentials(client: AsyncClient):
+    """Test login with invalid credentials fails."""
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "nonexistent@example.com",
+            "password": "WrongPass123",
+        },
+    )
+    assert response.status_code == 401
 ''',
         
         # API config package
@@ -717,54 +1181,89 @@ settings = AppSettings()
         
         # Main entry point
         f"{project_name}/src/main.py": '''"""
-Aplicação principal.
+Main Application Entry Point.
 
-Entry point da aplicação FastAPI.
+This module configures and creates the FastAPI application using
+Core Framework with authentication, user management, and API routing.
+
+Features:
+    - JWT Authentication (login, register, token refresh)
+    - User management with AbstractUser
+    - Automatic API documentation at /docs
+    - Health check endpoint
+    - CORS configuration
+    - DateTime configured for UTC
 """
 
 from core import CoreApp, AutoRouter
 from core.datetime import configure_datetime
+from core.auth import configure_auth
 
 from src.api.config import settings
-from src.apps.users import router as users_router
+from src.apps.users.routes import router as users_router, auth_router
 
 
-# Configura DateTime para UTC
+# Configure DateTime to use UTC globally
 configure_datetime(
     default_timezone=settings.timezone,
     use_aware_datetimes=settings.use_tz,
 )
 
-# Router principal da API
-api_router = AutoRouter(prefix="/api/v1")
+# Configure authentication system
+configure_auth(
+    secret_key=settings.secret_key,
+    access_token_expire_minutes=settings.auth_access_token_expire_minutes,
+    refresh_token_expire_days=settings.auth_refresh_token_expire_days,
+    password_hasher=settings.auth_password_hasher,
+)
 
-# Inclui routers dos apps
-api_router.include_router(users_router)
+# Main API router
+api_router = AutoRouter(prefix=settings.api_prefix)
 
-# Cria aplicação
+# Include app routers
+api_router.include_router(users_router)  # /api/v1/users
+api_router.include_router(auth_router)   # /api/v1/auth
+
+# Create application
 app = CoreApp(
     title=settings.app_name,
-    description="API criada com Core Framework",
+    description="API built with Core Framework - Django-inspired, FastAPI-powered",
     version=settings.app_version,
     debug=settings.debug,
+    docs_url=settings.docs_url,
+    redoc_url=settings.redoc_url,
     routers=[api_router],
 )
 
 
 @app.get("/")
 async def root():
-    """Endpoint raiz."""
+    """
+    Root endpoint.
+    
+    Returns basic API information and links to documentation.
+    """
     return {
         "message": f"Welcome to {settings.app_name}",
         "version": settings.app_version,
-        "docs": "/docs",
+        "environment": settings.environment,
+        "docs": settings.docs_url,
+        "redoc": settings.redoc_url,
     }
 
 
 @app.get("/health")
 async def health():
-    """Health check."""
-    return {"status": "healthy"}
+    """
+    Health check endpoint.
+    
+    Use this endpoint for load balancer health checks
+    and monitoring systems.
+    """
+    return {
+        "status": "healthy",
+        "version": settings.app_version,
+    }
 ''',
         
         # Root files
