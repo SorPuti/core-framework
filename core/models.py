@@ -231,6 +231,18 @@ class Manager[T: "Model"]:
         qs = QuerySet(self._model_class, self._session)
         return qs.order_by(*fields)
     
+    def limit(self, value: int) -> "QuerySet[T]":
+        """Limita o número de resultados."""
+        from core.querysets import QuerySet
+        qs = QuerySet(self._model_class, self._session)
+        return qs.limit(value)
+    
+    def offset(self, value: int) -> "QuerySet[T]":
+        """Define o offset dos resultados."""
+        from core.querysets import QuerySet
+        qs = QuerySet(self._model_class, self._session)
+        return qs.offset(value)
+    
     async def all(self) -> Sequence[T]:
         """Retorna todos os registros."""
         from core.querysets import QuerySet

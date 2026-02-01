@@ -162,6 +162,22 @@ class CoreApp:
         custom_handlers: dict[type, Callable] | None = None,
     ) -> None:
         """Configura handlers de exceção."""
+        from pydantic import ValidationError
+        
+        # Handler para erros de validação Pydantic
+        @self.app.exception_handler(ValidationError)
+        async def validation_exception_handler(
+            request: Request,
+            exc: ValidationError,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": "Validation error",
+                    "errors": exc.errors(),
+                },
+            )
+        
         # Handler padrão para exceções não tratadas
         @self.app.exception_handler(Exception)
         async def generic_exception_handler(

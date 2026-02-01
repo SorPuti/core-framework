@@ -208,7 +208,8 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         
         Sobrescreva para customizar filtros.
         """
-        return self.model.objects.using(db)
+        from core.querysets import QuerySet
+        return QuerySet(self.model, db)
     
     async def get_object(self, db: AsyncSession, **kwargs: Any) -> ModelT:
         """
