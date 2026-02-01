@@ -73,10 +73,18 @@ def generate_docker(output_dir: Path) -> None:
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
     depends_on:
-      - kafka
-      - db
-      - redis
+      kafka:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       replicas: 2
 
@@ -93,8 +101,14 @@ def generate_docker(output_dir: Path) -> None:
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ==========================================================================
   # Infrastructure Services

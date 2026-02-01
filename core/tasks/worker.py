@@ -83,32 +83,46 @@ class TaskWorker:
         from core.messaging.kafka import KafkaConsumer
         
         topics = [f"tasks.{q}" for q in self._queues]
-        self._consumer = KafkaConsumer(
-            group_id=f"worker-{'-'.join(self._queues)}",
-            topics=topics,
-            message_handler=self._handle_message,
-        )
-        
-        if self._db_session_factory:
-            self._consumer.set_db_session_factory(self._db_session_factory)
         
         # Retry connection with exponential backoff
-        max_retries = 10
+        max_retries = 30  # More retries for slow Kafka startup
         retry_delay = 2
+        last_error = None
+        
         for attempt in range(max_retries):
             try:
+                # Create new consumer for each attempt
+                self._consumer = KafkaConsumer(
+                    group_id=f"worker-{'-'.join(self._queues)}",
+                    topics=topics,
+                    message_handler=self._handle_message,
+                )
+                
+                if self._db_session_factory:
+                    self._consumer.set_db_session_factory(self._db_session_factory)
+                
                 await self._consumer.start()
+                logger.info(f"Successfully connected to Kafka on attempt {attempt + 1}")
                 break
             except Exception as e:
+                last_error = e
+                # Try to clean up failed consumer
+                if self._consumer:
+                    try:
+                        await self._consumer.stop()
+                    except Exception:
+                        pass
+                    self._consumer = None
+                
                 if attempt < max_retries - 1:
                     logger.warning(
                         f"Failed to connect to Kafka (attempt {attempt + 1}/{max_retries}): {e}. "
                         f"Retrying in {retry_delay}s..."
                     )
                     await asyncio.sleep(retry_delay)
-                    retry_delay = min(retry_delay * 2, 30)  # Max 30s delay
+                    retry_delay = min(retry_delay * 2, 60)  # Max 60s delay
                 else:
-                    logger.error(f"Failed to connect to Kafka after {max_retries} attempts")
+                    logger.error(f"Failed to connect to Kafka after {max_retries} attempts: {last_error}")
                     raise
         
         logger.info(
