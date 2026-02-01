@@ -1,6 +1,6 @@
 [project]
 name = "core-framework"
-version = "0.2.5"
+version = "0.2.6"
 description = "Core Framework - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.12"
 readme = "README.md"
@@ -25,7 +25,7 @@ classifiers = [
 
 dependencies = [
     "fastapi>=0.109.0",
-    "pydantic>=2.5.0",
+    "pydantic[email]>=2.5.0",
     "pydantic-settings>=2.1.0",
     "sqlalchemy>=2.0.25",
     "aiosqlite>=0.19.0",

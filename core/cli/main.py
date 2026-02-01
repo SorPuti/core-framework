@@ -362,7 +362,7 @@ version = "0.1.0"
 description = "Project created with Core Framework"
 requires-python = ">={python_version}"
 dependencies = [
-    "core-framework @ git+https://github.com/SorPuti/core-framework.git",
+    "core-framework @ git+https://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@github.com/SorPuti/core-framework.git",
 ]
 
 [project.optional-dependencies]
