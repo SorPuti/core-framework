@@ -418,6 +418,8 @@ migration = Migration(
         target: str | None = None,
         fake: bool = False,
         dry_run: bool = False,
+        check: bool = True,
+        interactive: bool = True,
     ) -> list[str]:
         """
         Aplica migrações pendentes.
@@ -426,10 +428,18 @@ migration = Migration(
             target: Nome da migração alvo (aplica até ela)
             fake: Se True, marca como aplicada sem executar
             dry_run: Se True, apenas mostra o que seria executado
+            check: Se True, analisa migrações antes de aplicar
+            interactive: Se True, pergunta antes de prosseguir com problemas
             
         Returns:
             Lista de migrações aplicadas
         """
+        from core.migrations.analyzer import (
+            MigrationAnalyzer,
+            format_analysis_report,
+            Severity,
+        )
+        
         applied = []
         
         async with self._engine.connect() as conn:
@@ -440,6 +450,8 @@ migration = Migration(
             
             migration_files = self._get_migration_files()
             
+            # Coleta migrações pendentes
+            pending_migrations = []
             for file_path in migration_files:
                 migration_name = file_path.stem
                 
@@ -449,6 +461,68 @@ migration = Migration(
                 if target and migration_name > target:
                     break
                 
+                pending_migrations.append((file_path, migration_name))
+            
+            if not pending_migrations:
+                print("No migrations to apply.")
+                return applied
+            
+            # Analisa todas as migrações pendentes
+            if check and not fake:
+                analyzer = MigrationAnalyzer(dialect=self.dialect)
+                all_issues = []
+                
+                print("\n🔍 Analyzing migrations before applying...\n")
+                
+                for file_path, migration_name in pending_migrations:
+                    migration = self._load_migration(file_path)
+                    result = await analyzer.analyze(
+                        migration.operations,
+                        conn,
+                        migration_name,
+                    )
+                    
+                    if result.issues:
+                        all_issues.extend(result.issues)
+                        print(format_analysis_report(result))
+                
+                # Verifica se pode prosseguir
+                has_errors = any(
+                    i.severity in (Severity.ERROR, Severity.CRITICAL)
+                    for i in all_issues
+                )
+                has_warnings = any(
+                    i.severity == Severity.WARNING
+                    for i in all_issues
+                )
+                
+                if has_errors:
+                    print("\n❌ Migration has ERRORS that will cause failure!")
+                    print("   Please fix the issues above before proceeding.")
+                    print("\n   Options:")
+                    print("   1. Edit the migration file to fix the issues")
+                    print("   2. Run with --no-check to skip analysis (not recommended)")
+                    print("   3. Run with --fake to mark as applied without executing")
+                    return []
+                
+                if has_warnings and interactive:
+                    print("\n⚠️  Migration has WARNINGS that may cause problems.")
+                    try:
+                        response = input("\n   Do you want to proceed? [y/N]: ").strip().lower()
+                        if response not in ("y", "yes"):
+                            print("   Migration cancelled.")
+                            return []
+                    except (EOFError, KeyboardInterrupt):
+                        print("\n   Migration cancelled.")
+                        return []
+                
+                if all_issues:
+                    print("\n" + "=" * 60)
+                    print("Proceeding with migration...")
+                    print("=" * 60 + "\n")
+            
+            # Aplica migrações
+            for file_path, migration_name in pending_migrations:
                 migration = self._load_migration(file_path)
                 
                 if dry_run:
@@ -469,10 +543,10 @@ migration = Migration(
                 await conn.commit()
                 
                 applied.append(migration_name)
-                print(f"  OK")
+                print(f"  ✓ OK")
         
-        if not applied:
-            print("No migrations to apply.")
+        if applied:
+            print(f"\n✅ Successfully applied {len(applied)} migration(s).")
         
         return applied
     

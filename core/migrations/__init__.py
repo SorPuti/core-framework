@@ -6,11 +6,12 @@ Características:
 - migrate: Aplica migrações pendentes
 - showmigrations: Lista status das migrações
 - rollback: Reverte migrações
+- check: Analisa migrações antes de aplicar (detecta problemas)
 - Suporte a operações: CreateTable, DropTable, AddColumn, DropColumn, AlterColumn, CreateIndex, etc.
 - Detecção automática de mudanças
 - Migrações reversíveis
 - Suporte a migrações de dados (RunPython)
-- Zero downtime migrations (quando possível)
+- Análise pré-produção para evitar erros
 """
 
 from core.migrations.engine import MigrationEngine
@@ -35,6 +36,14 @@ from core.migrations.cli import (
     migrate,
     showmigrations,
     rollback,
+)
+from core.migrations.analyzer import (
+    MigrationAnalyzer,
+    MigrationIssue,
+    AnalysisResult,
+    Severity,
+    IssueCode,
+    analyze_migration,
 )
 
 __all__ = [
@@ -61,4 +70,11 @@ __all__ = [
     "migrate",
     "showmigrations",
     "rollback",
+    # Analyzer
+    "MigrationAnalyzer",
+    "MigrationIssue",
+    "AnalysisResult",
+    "Severity",
+    "IssueCode",
+    "analyze_migration",
 ]

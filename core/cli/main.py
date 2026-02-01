@@ -692,16 +692,20 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     
     print(info("Applying migrations..."))
     
-    from core.migrations import migrate
+    from core.migrations.engine import MigrationEngine
     
     async def run():
-        return await migrate(
+        engine = MigrationEngine(
             database_url=config["database_url"],
             migrations_dir=config["migrations_dir"],
             app_label=config["app_label"],
+        )
+        return await engine.migrate(
             target=args.target,
             fake=args.fake,
             dry_run=args.dry_run,
+            check=not args.no_check,
+            interactive=not args.yes,
         )
     
     applied = asyncio.run(run())
@@ -753,6 +757,84 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         print(success(f"✓ Rolled back {len(reverted)} migration(s)"))
     
     return 0
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    """Analisa migrações pendentes sem aplicar."""
+    config = load_config()
+    
+    print(info("🔍 Analyzing pending migrations...\n"))
+    
+    from core.migrations.engine import MigrationEngine
+    from core.migrations.analyzer import (
+        MigrationAnalyzer,
+        format_analysis_report,
+        Severity,
+    )
+    
+    async def run():
+        engine = MigrationEngine(
+            database_url=config["database_url"],
+            migrations_dir=config["migrations_dir"],
+            app_label=config["app_label"],
+        )
+        
+        analyzer = MigrationAnalyzer(dialect=engine.dialect)
+        
+        async with engine._engine.connect() as conn:
+            await engine._ensure_migrations_table(conn)
+            
+            applied_migrations = await engine._get_applied_migrations(conn)
+            applied_set = {(app, name) for app, name in applied_migrations}
+            
+            migration_files = engine._get_migration_files()
+            
+            total_issues = []
+            
+            for file_path in migration_files:
+                migration_name = file_path.stem
+                
+                if (engine.app_label, migration_name) in applied_set:
+                    continue
+                
+                migration = engine._load_migration(file_path)
+                result = await analyzer.analyze(
+                    migration.operations,
+                    conn,
+                    migration_name,
+                )
+                
+                print(format_analysis_report(result))
+                total_issues.extend(result.issues)
+            
+            if not total_issues:
+                print(success("✅ All pending migrations look safe!"))
+                return 0
+            
+            # Resumo final
+            errors = sum(1 for i in total_issues if i.severity == Severity.ERROR)
+            critical = sum(1 for i in total_issues if i.severity == Severity.CRITICAL)
+            warnings = sum(1 for i in total_issues if i.severity == Severity.WARNING)
+            
+            print("\n" + "=" * 60)
+            print("SUMMARY")
+            print("=" * 60)
+            
+            if critical:
+                print(error(f"🚨 {critical} CRITICAL issue(s) - will cause data loss!"))
+            if errors:
+                print(error(f"❌ {errors} ERROR(s) - migration will fail!"))
+            if warnings:
+                print(warning(f"⚠️  {warnings} WARNING(s) - may cause problems"))
+            
+            if errors or critical:
+                print(error("\n❌ Fix the issues above before running 'core migrate'"))
+                return 1
+            
+            print(warning("\n⚠️  Review warnings before running 'core migrate'"))
+            return 0
+    
+    return asyncio.run(run())
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -1034,11 +1116,17 @@ For more information, visit: https://github.com/SorPuti/core-framework
     migrate_parser.add_argument("-t", "--target", help="Target migration name")
     migrate_parser.add_argument("--fake", action="store_true", help="Mark as applied without running")
     migrate_parser.add_argument("--dry-run", action="store_true", help="Show what would be applied")
+    migrate_parser.add_argument("--no-check", action="store_true", help="Skip pre-migration analysis (not recommended)")
+    migrate_parser.add_argument("-y", "--yes", action="store_true", help="Auto-confirm warnings (non-interactive)")
     migrate_parser.set_defaults(func=cmd_migrate)
     
     # showmigrations
     show_parser = subparsers.add_parser("showmigrations", help="Show migration status")
     show_parser.set_defaults(func=cmd_showmigrations)
+    
+    # check
+    check_parser = subparsers.add_parser("check", help="Analyze pending migrations for potential issues")
+    check_parser.set_defaults(func=cmd_check)
     
     # rollback
     rollback_parser = subparsers.add_parser("rollback", help="Rollback migrations")
