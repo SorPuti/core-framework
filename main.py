@@ -1,0 +1,21 @@
+"""
+Core Framework - Ponto de entrada principal.
+
+Execute com:
+    python main.py
+
+Ou com uvicorn:
+    uvicorn main:app --reload
+"""
+
+from example.app import app
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )
