@@ -25,9 +25,7 @@ def generate_docker(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # docker-compose.yml
-    docker_compose = '''version: "3.8"
-
-services:
+    docker_compose = '''services:
   # ==========================================================================
   # Application Services
   # ==========================================================================
@@ -36,6 +34,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     ports:
       - "8000:8000"
     environment:
@@ -64,6 +64,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     command: core worker --queue default --concurrency 4
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/app
@@ -82,6 +84,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     command: core scheduler
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/app
@@ -198,25 +202,44 @@ networks:
     
     # Dockerfile
     dockerfile = '''# Build stage
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
+
+# Build argument for GitHub token (for private repos)
+# Pass with: docker build --build-arg GITHUB_TOKEN=xxx
+ARG GITHUB_TOKEN=""
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \\
     build-essential \\
     curl \\
+    git \\
     && rm -rf /var/lib/apt/lists/*
+
+# Configure git for private repos if token provided
+RUN if [ -n "$GITHUB_TOKEN" ]; then \\
+    git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \\
+    fi
 
 # Install uv for faster package installation
 RUN pip install uv
 
-# Copy dependency files
+# Copy dependency files first (for better caching)
 COPY pyproject.toml .
 COPY uv.lock* .
+COPY README.md* .
 
-# Install dependencies
-RUN uv pip install --system -e .
+# Copy source code (needed for local package install)
+COPY src/ ./src/
+
+# Install dependencies from pyproject.toml
+RUN --mount=type=secret,id=github_token \\
+    if [ -f /run/secrets/github_token ]; then \\
+        export GITHUB_TOKEN=$(cat /run/secrets/github_token); \\
+        git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \\
+    fi && \\
+    uv pip install --system .
 
 # Production stage
 FROM python:3.12-slim
