@@ -137,9 +137,23 @@ class CreateTable(Operation):
         return f"Create table '{self.table_name}'"
     
     def to_code(self) -> str:
+        def serialize_default(val):
+            """Serializa valor default para código Python válido."""
+            if val is None:
+                return "None"
+            if callable(val):
+                # Funções como datetime.utcnow não podem ser serializadas
+                # Usamos None e deixamos o banco lidar com o default
+                return "None"
+            if isinstance(val, str):
+                return f"'{val}'"
+            if isinstance(val, bool):
+                return str(val)
+            return repr(val)
+        
         cols = ",\n            ".join(
             f"ColumnDef(name='{c.name}', type='{c.type}', nullable={c.nullable}, "
-            f"default={repr(c.default)}, primary_key={c.primary_key}, "
+            f"default={serialize_default(c.default)}, primary_key={c.primary_key}, "
             f"autoincrement={c.autoincrement}, unique={c.unique})"
             for c in self.columns
         )
@@ -208,11 +222,21 @@ class AddColumn(Operation):
     
     def to_code(self) -> str:
         c = self.column
+        # Serializa default de forma segura
+        default_val = "None"
+        if c.default is not None and not callable(c.default):
+            if isinstance(c.default, str):
+                default_val = f"'{c.default}'"
+            elif isinstance(c.default, bool):
+                default_val = str(c.default)
+            else:
+                default_val = repr(c.default)
+        
         return f"""AddColumn(
         table_name='{self.table_name}',
         column=ColumnDef(
             name='{c.name}', type='{c.type}', nullable={c.nullable},
-            default={repr(c.default)}, primary_key={c.primary_key},
+            default={default_val}, primary_key={c.primary_key},
             autoincrement={c.autoincrement}, unique={c.unique}
         ),
     )"""
