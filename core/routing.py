@@ -119,7 +119,6 @@ class Router(APIRouter):
             request: Request,
             db: AsyncSession = Depends(get_db),
             _user: Any = Depends(get_optional_user),
-            **kwargs: Any,
         ) -> dict[str, Any]:
             vs = viewset_class()
             # Extrai o parâmetro de path
