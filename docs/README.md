@@ -29,6 +29,15 @@
 | [18 Dependencies](18-dependencies.md) | Dependency injection, get_db, get_current_user |
 | [19 Views](19-views.md) | APIView, ViewSet, ModelViewSet, ReadOnlyModelViewSet |
 
+## Enterprise Features (v0.4.0+)
+
+| Guide | Descricao |
+|-------|-----------|
+| [20 Advanced Fields](20-fields.md) | UUID7 time-sortable, JSON, campos otimizados |
+| [21 Multi-Tenancy](21-tenancy.md) | Isolamento por workspace/organization |
+| [22 Read/Write Replicas](22-replicas.md) | Separacao de leitura e escrita |
+| [23 Soft Delete](23-soft-delete.md) | Exclusao logica com restauracao |
+
 ## API Reference
 
 | Document | Descricao |

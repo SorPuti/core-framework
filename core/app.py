@@ -2,11 +2,15 @@
 Bootstrap do Framework - Aplicação principal.
 
 Características:
-- Configuração centralizada
+- Configuração centralizada via Settings
 - Lifecycle management (startup/shutdown)
 - Middleware integrado
 - CORS configurável
 - Documentação automática
+- Auto-configuração de features enterprise:
+  - Multi-tenancy
+  - Read/Write replicas
+  - Soft delete
 """
 
 from __future__ import annotations
@@ -92,6 +96,10 @@ class CoreApp:
         # Configura CORS
         self._setup_cors()
         
+        # Configura middleware de tenancy se habilitado
+        if self.settings.tenancy_enabled:
+            self._setup_tenancy_middleware()
+        
         # Adiciona middlewares customizados
         if middlewares:
             for middleware_class, middleware_kwargs in middlewares:
@@ -118,17 +126,36 @@ class CoreApp:
     
     async def _startup(self) -> None:
         """Executa tarefas de startup."""
-        # Inicializa o banco de dados
-        await init_database(
-            database_url=self.settings.database_url,
-            echo=self.settings.database_echo,
-            pool_size=self.settings.database_pool_size,
-            max_overflow=self.settings.database_max_overflow,
-        )
+        # Verifica se deve usar replicas
+        if self.settings.has_read_replica:
+            # Inicializa com read/write replicas
+            from core.database import init_replicas
+            
+            await init_replicas(
+                write_url=self.settings.database_url,
+                read_url=self.settings.database_read_url,
+                echo=self.settings.database_echo,
+                pool_size=self.settings.database_pool_size,
+                max_overflow=self.settings.database_max_overflow,
+                pool_recycle=self.settings.database_pool_recycle,
+            )
+        else:
+            # Inicializa banco de dados padrão
+            await init_database(
+                database_url=self.settings.database_url,
+                echo=self.settings.database_echo,
+                pool_size=self.settings.database_pool_size,
+                max_overflow=self.settings.database_max_overflow,
+            )
         
         # Cria tabelas se configurado
         if self._auto_create_tables:
             await create_tables()
+        
+        # Configura tenancy se habilitado
+        if self.settings.tenancy_enabled:
+            from core.tenancy import set_tenant_field
+            set_tenant_field(self.settings.tenancy_field)
         
         # Executa callbacks customizados
         for callback in self._on_startup:
@@ -144,8 +171,12 @@ class CoreApp:
             if hasattr(result, "__await__"):
                 await result
         
-        # Fecha conexão com o banco
-        await close_database()
+        # Fecha conexões
+        if self.settings.has_read_replica:
+            from core.database import close_replicas
+            await close_replicas()
+        else:
+            await close_database()
     
     def _setup_cors(self) -> None:
         """Configura CORS."""
@@ -155,6 +186,17 @@ class CoreApp:
             allow_credentials=self.settings.cors_allow_credentials,
             allow_methods=["*"],
             allow_headers=["*"],
+        )
+    
+    def _setup_tenancy_middleware(self) -> None:
+        """Configura middleware de multi-tenancy."""
+        from core.tenancy import TenantMiddleware
+        
+        self.app.add_middleware(
+            TenantMiddleware,
+            user_tenant_attr=self.settings.tenancy_user_attribute,
+            tenant_field=self.settings.tenancy_field,
+            require_tenant=self.settings.tenancy_require,
         )
     
     def _setup_exception_handlers(

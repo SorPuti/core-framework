@@ -249,8 +249,84 @@ class Settings(BaseSettings):
     )
     
     # =========================================================================
+    # Database Replicas (Enterprise)
+    # =========================================================================
+    
+    database_read_url: str | None = PydanticField(
+        default=None,
+        description="URL do banco de leitura (replica). Se None, usa database_url para tudo",
+    )
+    database_read_pool_size: int | None = PydanticField(
+        default=None,
+        description="Pool size para replica (default: 2x do write)",
+    )
+    database_read_max_overflow: int | None = PydanticField(
+        default=None,
+        description="Max overflow para replica (default: 2x do write)",
+    )
+    
+    # =========================================================================
+    # Multi-Tenancy (Enterprise)
+    # =========================================================================
+    
+    tenancy_enabled: bool = PydanticField(
+        default=False,
+        description="Habilita multi-tenancy automático",
+    )
+    tenancy_field: str = PydanticField(
+        default="workspace_id",
+        description="Nome do campo de tenant nos models",
+    )
+    tenancy_user_attribute: str = PydanticField(
+        default="workspace_id",
+        description="Atributo do usuário que contém o tenant ID",
+    )
+    tenancy_header: str = PydanticField(
+        default="X-Tenant-ID",
+        description="Header HTTP para tenant ID (fallback)",
+    )
+    tenancy_require: bool = PydanticField(
+        default=False,
+        description="Se True, rejeita requests sem tenant",
+    )
+    
+    # =========================================================================
+    # Soft Delete (Enterprise)
+    # =========================================================================
+    
+    soft_delete_field: str = PydanticField(
+        default="deleted_at",
+        description="Nome do campo de soft delete",
+    )
+    soft_delete_cascade: bool = PydanticField(
+        default=False,
+        description="Se True, soft delete em cascata para relacionamentos",
+    )
+    soft_delete_auto_filter: bool = PydanticField(
+        default=True,
+        description="Se True, filtra deletados automaticamente em queries",
+    )
+    
+    # =========================================================================
+    # UUID (Enterprise)
+    # =========================================================================
+    
+    uuid_version: Literal["uuid4", "uuid7"] = PydanticField(
+        default="uuid7",
+        description="Versão de UUID padrão (uuid7 é time-sortable, melhor para PKs)",
+    )
+    
+    # =========================================================================
     # Helpers
     # =========================================================================
+    
+    @property
+    def has_read_replica(self) -> bool:
+        """Verifica se replica de leitura está configurada."""
+        return (
+            self.database_read_url is not None 
+            and self.database_read_url != self.database_url
+        )
     
     @property
     def is_development(self) -> bool:

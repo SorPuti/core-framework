@@ -2,6 +2,7 @@
 Interface de linha de comando para migrações.
 
 Funções que podem ser chamadas diretamente ou via CLI.
+Todas as funções usam settings automaticamente se parâmetros não forem fornecidos.
 """
 
 from __future__ import annotations
@@ -17,9 +18,30 @@ if TYPE_CHECKING:
     from core.models import Model
 
 
+def _get_database_url(database_url: str | None = None) -> str:
+    """
+    Obtém URL do banco de dados.
+    
+    Prioridade:
+    1. Parâmetro fornecido
+    2. Settings (database_url - sempre usa primary para migrations)
+    3. Default SQLite
+    """
+    if database_url is not None:
+        return database_url
+    
+    try:
+        from core.config import get_settings
+        settings = get_settings()
+        # Migrations sempre usam o primary (write), nunca replica
+        return settings.database_url
+    except Exception:
+        return "sqlite+aiosqlite:///./app.db"
+
+
 async def makemigrations(
     models: list[type["Model"]],
-    database_url: str = "sqlite+aiosqlite:///./app.db",
+    database_url: str | None = None,
     migrations_dir: str | Path = "./migrations",
     app_label: str = "main",
     name: str | None = None,
@@ -31,9 +53,12 @@ async def makemigrations(
     
     Equivalente ao `python manage.py makemigrations` do Django.
     
+    Se database_url não for fornecido, usa settings.database_url automaticamente.
+    Migrations sempre usam o banco primary (nunca replica).
+    
     Args:
         models: Lista de classes Model para verificar
-        database_url: URL de conexão do banco de dados
+        database_url: URL de conexão (default: settings.database_url)
         migrations_dir: Diretório para salvar migrações
         app_label: Label do app (usado para namespacing)
         name: Nome descritivo da migração
@@ -47,13 +72,17 @@ async def makemigrations(
         from core.migrations import makemigrations
         from myapp.models import User, Post
         
+        # Usa settings automaticamente
+        await makemigrations(models=[User, Post], name="add_user_avatar")
+        
+        # Ou especifica URL manualmente
         await makemigrations(
             models=[User, Post],
-            name="add_user_avatar",
+            database_url="postgresql+asyncpg://...",
         )
     """
     engine = MigrationEngine(
-        database_url=database_url,
+        database_url=_get_database_url(database_url),
         migrations_dir=migrations_dir,
         app_label=app_label,
     )
@@ -67,7 +96,7 @@ async def makemigrations(
 
 
 async def migrate(
-    database_url: str = "sqlite+aiosqlite:///./app.db",
+    database_url: str | None = None,
     migrations_dir: str | Path = "./migrations",
     app_label: str = "main",
     target: str | None = None,
@@ -79,8 +108,11 @@ async def migrate(
     
     Equivalente ao `python manage.py migrate` do Django.
     
+    Se database_url não for fornecido, usa settings.database_url automaticamente.
+    Migrations sempre usam o banco primary (nunca replica).
+    
     Args:
-        database_url: URL de conexão do banco de dados
+        database_url: URL de conexão (default: settings.database_url)
         migrations_dir: Diretório das migrações
         app_label: Label do app
         target: Nome da migração alvo (aplica até ela)
@@ -93,7 +125,7 @@ async def migrate(
     Exemplo:
         from core.migrations import migrate
         
-        # Aplica todas as migrações pendentes
+        # Usa settings automaticamente
         await migrate()
         
         # Aplica até uma migração específica
@@ -103,7 +135,7 @@ async def migrate(
         await migrate(fake=True)
     """
     engine = MigrationEngine(
-        database_url=database_url,
+        database_url=_get_database_url(database_url),
         migrations_dir=migrations_dir,
         app_label=app_label,
     )
@@ -116,7 +148,7 @@ async def migrate(
 
 
 async def showmigrations(
-    database_url: str = "sqlite+aiosqlite:///./app.db",
+    database_url: str | None = None,
     migrations_dir: str | Path = "./migrations",
     app_label: str = "main",
 ) -> dict[str, list[tuple[str, bool]]]:
@@ -125,8 +157,10 @@ async def showmigrations(
     
     Equivalente ao `python manage.py showmigrations` do Django.
     
+    Se database_url não for fornecido, usa settings.database_url automaticamente.
+    
     Args:
-        database_url: URL de conexão do banco de dados
+        database_url: URL de conexão (default: settings.database_url)
         migrations_dir: Diretório das migrações
         app_label: Label do app
         
@@ -136,6 +170,7 @@ async def showmigrations(
     Exemplo:
         from core.migrations import showmigrations
         
+        # Usa settings automaticamente
         status = await showmigrations()
         # Output:
         # main:
@@ -144,7 +179,7 @@ async def showmigrations(
         #   [ ] 0003_add_posts
     """
     engine = MigrationEngine(
-        database_url=database_url,
+        database_url=_get_database_url(database_url),
         migrations_dir=migrations_dir,
         app_label=app_label,
     )
@@ -153,7 +188,7 @@ async def showmigrations(
 
 
 async def rollback(
-    database_url: str = "sqlite+aiosqlite:///./app.db",
+    database_url: str | None = None,
     migrations_dir: str | Path = "./migrations",
     app_label: str = "main",
     target: str | None = None,
@@ -165,8 +200,11 @@ async def rollback(
     
     Equivalente ao `python manage.py migrate app_name zero` do Django.
     
+    Se database_url não for fornecido, usa settings.database_url automaticamente.
+    Migrations sempre usam o banco primary (nunca replica).
+    
     Args:
-        database_url: URL de conexão do banco de dados
+        database_url: URL de conexão (default: settings.database_url)
         migrations_dir: Diretório das migrações
         app_label: Label do app
         target: Nome da migração alvo (reverte até ela, exclusive)
@@ -179,7 +217,7 @@ async def rollback(
     Exemplo:
         from core.migrations import rollback
         
-        # Reverte última migração
+        # Usa settings automaticamente
         await rollback()
         
         # Reverte até uma migração específica
@@ -189,7 +227,7 @@ async def rollback(
         await rollback(target="zero")
     """
     engine = MigrationEngine(
-        database_url=database_url,
+        database_url=_get_database_url(database_url),
         migrations_dir=migrations_dir,
         app_label=app_label,
     )
@@ -208,7 +246,7 @@ async def rollback(
 async def squash(
     start: str,
     end: str,
-    database_url: str = "sqlite+aiosqlite:///./app.db",
+    database_url: str | None = None,
     migrations_dir: str | Path = "./migrations",
     app_label: str = "main",
     name: str | None = None,
@@ -218,10 +256,12 @@ async def squash(
     
     Equivalente ao `python manage.py squashmigrations` do Django.
     
+    Se database_url não for fornecido, usa settings.database_url automaticamente.
+    
     Args:
         start: Nome da primeira migração
         end: Nome da última migração
-        database_url: URL de conexão do banco de dados
+        database_url: URL de conexão (default: settings.database_url)
         migrations_dir: Diretório das migrações
         app_label: Label do app
         name: Nome da migração combinada
@@ -232,6 +272,7 @@ async def squash(
     Exemplo:
         from core.migrations import squash
         
+        # Usa settings automaticamente
         await squash(
             start="0001_initial",
             end="0010_final_changes",
@@ -239,7 +280,7 @@ async def squash(
         )
     """
     engine = MigrationEngine(
-        database_url=database_url,
+        database_url=_get_database_url(database_url),
         migrations_dir=migrations_dir,
         app_label=app_label,
     )

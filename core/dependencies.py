@@ -81,6 +81,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency que fornece uma sessão de banco de dados.
     
+    Adapta-se automaticamente à configuração:
+    - Se replicas configuradas: retorna sessão de escrita (primary)
+    - Se banco único: retorna sessão padrão
+    
+    Para operações de leitura em ambiente com replicas,
+    use get_db_replicas() que fornece db.read e db.write separados.
+    
     Uso:
         @router.get("/users")
         async def list_users(db: AsyncSession = Depends(get_db)):
@@ -89,9 +96,23 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     
     A sessão é automaticamente fechada após a requisição.
     """
-    from core.models import get_session
+    # Verifica se replicas estão configuradas
+    try:
+        from core.config import get_settings
+        settings = get_settings()
+        has_replicas = settings.has_read_replica
+    except Exception:
+        has_replicas = False
     
-    session = await get_session()
+    if has_replicas:
+        # Usa sistema de replicas - retorna sessão de escrita
+        from core.database import get_write_session
+        session = await get_write_session()
+    else:
+        # Usa sistema padrão
+        from core.models import get_session
+        session = await get_session()
+    
     try:
         yield session
         await session.commit()
@@ -100,6 +121,39 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         raise
     finally:
         await session.close()
+
+
+async def get_db_auto() -> AsyncGenerator[Any, None]:
+    """
+    Dependency inteligente que retorna o tipo correto de sessão.
+    
+    - Se replicas configuradas: retorna DatabaseSession (com .read e .write)
+    - Se banco único: retorna AsyncSession
+    
+    Isso permite código que funciona em ambos os cenários:
+    
+    Uso:
+        @router.get("/users")
+        async def list_users(db = Depends(get_db_auto)):
+            # Funciona com ou sem replicas
+            session = db.read if hasattr(db, 'read') else db
+            users = await User.objects.using(session).all()
+            return users
+    """
+    try:
+        from core.config import get_settings
+        settings = get_settings()
+        has_replicas = settings.has_read_replica
+    except Exception:
+        has_replicas = False
+    
+    if has_replicas:
+        from core.database import get_db_replicas
+        async for db in get_db_replicas():
+            yield db
+    else:
+        async for db in get_db():
+            yield db
 
 
 async def get_current_user(

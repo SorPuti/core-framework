@@ -477,3 +477,250 @@ class Min:
     
     def label(self, name: str):
         return func.min(self.field).label(name)
+
+
+# =============================================================================
+# Soft Delete QuerySet
+# =============================================================================
+
+def _get_soft_delete_field() -> str:
+    """Return soft delete field name from settings."""
+    try:
+        from core.config import get_settings
+        return get_settings().soft_delete_field
+    except Exception:
+        return "deleted_at"
+
+
+class SoftDeleteQuerySet[T: "Model"](QuerySet[T]):
+    """
+    QuerySet that filters deleted records automatically.
+
+    Excludes records where deleted_at is not NULL by default.
+    """
+    # users = await User.objects.using(db).all()  # Only active
+    # users = await User.objects.using(db).with_deleted().all()  # All
+
+    def __init__(
+        self,
+        model_class: type[T],
+        session: AsyncSession | None = None,
+        deleted_field: str | None = None,
+    ) -> None:
+        """
+        Initialize with model and optional field override.
+
+        Uses settings.soft_delete_field if not specified.
+        """
+        super().__init__(model_class, session)
+        self._deleted_field = deleted_field or _get_soft_delete_field()
+        self._include_deleted = False
+        self._only_deleted = False
+
+    def _clone(self) -> "SoftDeleteQuerySet[T]":
+        """Create copy preserving soft delete configuration."""
+        qs = SoftDeleteQuerySet(
+            self._model_class,
+            self._session,
+            self._deleted_field,
+        )
+        qs._filters = self._filters.copy()
+        qs._excludes = self._excludes.copy()
+        qs._order_by = self._order_by.copy()
+        qs._limit_value = self._limit_value
+        qs._offset_value = self._offset_value
+        qs._select_related = self._select_related.copy()
+        qs._prefetch_related = self._prefetch_related.copy()
+        qs._include_deleted = self._include_deleted
+        qs._only_deleted = self._only_deleted
+        return qs
+
+    def _build_query(self) -> Select:
+        """Build query with soft delete filter applied."""
+        stmt = super()._build_query()
+
+        deleted_col = getattr(self._model_class, self._deleted_field, None)
+
+        if deleted_col is not None:
+            if self._only_deleted:
+                stmt = stmt.where(deleted_col.is_not(None))
+            elif not self._include_deleted:
+                stmt = stmt.where(deleted_col.is_(None))
+
+        return stmt
+
+    def with_deleted(self) -> "SoftDeleteQuerySet[T]":
+        """
+        Include deleted records in results.
+
+        Returns QuerySet with both active and deleted records.
+        """
+        # users = await User.objects.using(db).with_deleted().all()
+        qs = self._clone()
+        qs._include_deleted = True
+        qs._only_deleted = False
+        return qs
+
+    def only_deleted(self) -> "SoftDeleteQuerySet[T]":
+        """
+        Return only deleted records.
+
+        Filters to records where deleted_at is not NULL.
+        """
+        # deleted = await User.objects.using(db).only_deleted().all()
+        qs = self._clone()
+        qs._include_deleted = True
+        qs._only_deleted = True
+        return qs
+
+    def active(self) -> "SoftDeleteQuerySet[T]":
+        """
+        Return only active records explicitly.
+
+        Default behavior, useful for code clarity.
+        """
+        # active = await User.objects.using(db).active().all()
+        qs = self._clone()
+        qs._include_deleted = False
+        qs._only_deleted = False
+        return qs
+
+
+# =============================================================================
+# Tenant-Aware QuerySet
+# =============================================================================
+
+def _get_tenant_field() -> str:
+    """Return tenant field name from settings."""
+    try:
+        from core.config import get_settings
+        return get_settings().tenancy_field
+    except Exception:
+        return "workspace_id"
+
+
+class TenantQuerySet[T: "Model"](QuerySet[T]):
+    """
+    QuerySet with multi-tenancy filtering support.
+
+    Adds for_tenant() method for automatic tenant filtering.
+    """
+    # domains = await Domain.objects.using(db).for_tenant().all()
+
+    def __init__(
+        self,
+        model_class: type[T],
+        session: AsyncSession | None = None,
+        tenant_field: str | None = None,
+    ) -> None:
+        """
+        Initialize with model and optional field override.
+
+        Uses settings.tenancy_field if not specified.
+        """
+        super().__init__(model_class, session)
+        self._tenant_field = tenant_field or _get_tenant_field()
+
+    def _clone(self) -> "TenantQuerySet[T]":
+        """Create copy preserving tenant configuration."""
+        qs = TenantQuerySet(
+            self._model_class,
+            self._session,
+            self._tenant_field,
+        )
+        qs._filters = self._filters.copy()
+        qs._excludes = self._excludes.copy()
+        qs._order_by = self._order_by.copy()
+        qs._limit_value = self._limit_value
+        qs._offset_value = self._offset_value
+        qs._select_related = self._select_related.copy()
+        qs._prefetch_related = self._prefetch_related.copy()
+        return qs
+
+    def for_tenant(
+        self,
+        tenant_id: Any | None = None,
+        tenant_field: str | None = None,
+    ) -> "TenantQuerySet[T]":
+        """
+        Filter by current or specified tenant.
+
+        Uses context tenant if tenant_id not provided.
+        """
+        # items = await Item.objects.using(db).for_tenant().all()
+        from core.tenancy import get_tenant, require_tenant
+
+        field = tenant_field or self._tenant_field
+
+        if tenant_id is None:
+            tenant_id = require_tenant()
+
+        return self.filter(**{field: tenant_id})
+
+
+# =============================================================================
+# Combined QuerySet (Soft Delete + Tenant)
+# =============================================================================
+
+class TenantSoftDeleteQuerySet[T: "Model"](SoftDeleteQuerySet[T]):
+    """
+    QuerySet combining soft delete and multi-tenancy.
+
+    Inherits soft delete filtering and adds tenant support.
+    """
+    # items = await Item.objects.using(db).for_tenant().all()
+    # items = await Item.objects.using(db).for_tenant().with_deleted().all()
+
+    def __init__(
+        self,
+        model_class: type[T],
+        session: AsyncSession | None = None,
+        deleted_field: str | None = None,
+        tenant_field: str | None = None,
+    ) -> None:
+        """
+        Initialize with model and optional field overrides.
+
+        Uses settings for field names if not specified.
+        """
+        super().__init__(model_class, session, deleted_field)
+        self._tenant_field = tenant_field or _get_tenant_field()
+
+    def _clone(self) -> "TenantSoftDeleteQuerySet[T]":
+        """Create copy preserving all configuration."""
+        qs = TenantSoftDeleteQuerySet(
+            self._model_class,
+            self._session,
+            self._deleted_field,
+            self._tenant_field,
+        )
+        qs._filters = self._filters.copy()
+        qs._excludes = self._excludes.copy()
+        qs._order_by = self._order_by.copy()
+        qs._limit_value = self._limit_value
+        qs._offset_value = self._offset_value
+        qs._select_related = self._select_related.copy()
+        qs._prefetch_related = self._prefetch_related.copy()
+        qs._include_deleted = self._include_deleted
+        qs._only_deleted = self._only_deleted
+        return qs
+
+    def for_tenant(
+        self,
+        tenant_id: Any | None = None,
+        tenant_field: str | None = None,
+    ) -> "TenantSoftDeleteQuerySet[T]":
+        """
+        Filter by current or specified tenant.
+
+        Uses context tenant if tenant_id not provided.
+        """
+        # items = await Item.objects.using(db).for_tenant().all()
+        from core.tenancy import require_tenant
+
+        field = tenant_field or self._tenant_field
+
+        if tenant_id is None:
+            tenant_id = require_tenant()
+
+        return self.filter(**{field: tenant_id})

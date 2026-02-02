@@ -8,6 +8,10 @@ Características:
 - Query API fluente via Manager
 - Async por padrão
 - Zero magia obscura
+
+Features Avançadas (opcionais):
+- SoftDeleteMixin: Soft delete com deleted_at
+- SoftDeleteManager: Manager que filtra deletados automaticamente
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from core.datetime import timezone, DateTime
 
 if TYPE_CHECKING:
-    from core.querysets import QuerySet
+    from core.querysets import QuerySet, SoftDeleteQuerySet
 
 # Convenção de nomes para constraints (evita problemas de migração)
 convention = {
@@ -513,3 +517,321 @@ async def close_database() -> None:
         await _engine.dispose()
         _engine = None
         _session_factory = None
+
+
+# =============================================================================
+# Soft Delete Mixin
+# =============================================================================
+
+class SoftDeleteMixin:
+    """
+    Mixin para soft delete (exclusão lógica).
+    
+    Adiciona campo deleted_at e métodos para soft delete/restore.
+    Não deleta fisicamente o registro, apenas marca como deletado.
+    
+    Características:
+    - Campo deleted_at (NULL = ativo, timestamp = deletado)
+    - Método soft_delete() para marcar como deletado
+    - Método restore() para restaurar
+    - Propriedade is_deleted para verificar status
+    
+    Uso:
+        class User(Model, SoftDeleteMixin):
+            __tablename__ = "users"
+            objects = SoftDeleteManager["User"]()  # Manager especial
+            
+            id: Mapped[int] = Field.pk()
+            name: Mapped[str] = Field.string(max_length=100)
+        
+        # Soft delete
+        await user.soft_delete(session)
+        
+        # Verificar
+        if user.is_deleted:
+            ...
+        
+        # Restaurar
+        await user.restore(session)
+    
+    Nota:
+        Use SoftDeleteManager para filtrar deletados automaticamente.
+        O Manager padrão NÃO filtra deletados.
+    """
+    
+    deleted_at: Mapped[DateTime | None] = mapped_column(
+        SADateTime(timezone=True),
+        nullable=True,
+        default=None,
+        index=True,
+    )
+    
+    @property
+    def is_deleted(self) -> bool:
+        """
+        Verifica se o registro está deletado.
+        
+        Returns:
+            True se deleted_at não é None
+        """
+        return self.deleted_at is not None
+    
+    @property
+    def is_active(self) -> bool:
+        """
+        Verifica se o registro está ativo (não deletado).
+        
+        Returns:
+            True se deleted_at é None
+        """
+        return self.deleted_at is None
+    
+    async def soft_delete(self, session: AsyncSession) -> Self:
+        """
+        Marca o registro como deletado.
+        
+        Define deleted_at com timestamp atual.
+        
+        Args:
+            session: Sessão do banco de dados
+            
+        Returns:
+            A própria instância
+            
+        Exemplo:
+            await user.soft_delete(session)
+        """
+        self.deleted_at = timezone.now()
+        session.add(self)
+        await session.flush()
+        return self
+    
+    async def restore(self, session: AsyncSession) -> Self:
+        """
+        Restaura um registro deletado.
+        
+        Define deleted_at como None.
+        
+        Args:
+            session: Sessão do banco de dados
+            
+        Returns:
+            A própria instância
+            
+        Exemplo:
+            await user.restore(session)
+        """
+        self.deleted_at = None
+        session.add(self)
+        await session.flush()
+        return self
+    
+    async def hard_delete(self, session: AsyncSession) -> None:
+        """
+        Deleta o registro permanentemente.
+        
+        Use com cuidado - não pode ser desfeito.
+        
+        Args:
+            session: Sessão do banco de dados
+        """
+        await session.delete(self)
+        await session.flush()
+
+
+class SoftDeleteManager[T: "Model"](Manager[T]):
+    """
+    Manager que filtra registros deletados automaticamente.
+    
+    Todas as queries excluem registros com deleted_at preenchido.
+    Use with_deleted() para incluir deletados.
+    Use only_deleted() para retornar apenas deletados.
+    
+    O nome do campo de soft delete pode ser configurado via:
+    - Parâmetro deleted_field no construtor
+    - settings.soft_delete_field (usado automaticamente se não especificado)
+    
+    Uso:
+        class User(Model, SoftDeleteMixin):
+            __tablename__ = "users"
+            objects = SoftDeleteManager["User"]()
+        
+        # Retorna apenas ativos (deleted_at IS NULL)
+        users = await User.objects.using(db).all()
+        
+        # Inclui deletados
+        all_users = await User.objects.using(db).with_deleted().all()
+        
+        # Apenas deletados
+        deleted = await User.objects.using(db).only_deleted().all()
+    """
+    
+    def __init__(
+        self,
+        model_class: type[T] | None = None,
+        deleted_field: str | None = None,
+    ) -> None:
+        # model_class pode ser None quando usado com type hint
+        if model_class is not None:
+            super().__init__(model_class)
+        
+        # Usa settings se deleted_field não especificado
+        if deleted_field is None:
+            try:
+                from core.config import get_settings
+                deleted_field = get_settings().soft_delete_field
+            except Exception:
+                deleted_field = "deleted_at"
+        
+        self._deleted_field = deleted_field
+    
+    def _create_queryset(self) -> "SoftDeleteQuerySet[T]":
+        """Cria SoftDeleteQuerySet em vez de QuerySet normal."""
+        from core.querysets import SoftDeleteQuerySet
+        return SoftDeleteQuerySet(
+            self._model_class,
+            self._session,
+            self._deleted_field,
+        )
+    
+    def filter(self, **kwargs: Any) -> "SoftDeleteQuerySet[T]":
+        """Filtra registros (exclui deletados por padrão)."""
+        qs = self._create_queryset()
+        return qs.filter(**kwargs)
+    
+    def exclude(self, **kwargs: Any) -> "SoftDeleteQuerySet[T]":
+        """Exclui registros por condições."""
+        qs = self._create_queryset()
+        return qs.exclude(**kwargs)
+    
+    def order_by(self, *fields: str) -> "SoftDeleteQuerySet[T]":
+        """Ordena resultados."""
+        qs = self._create_queryset()
+        return qs.order_by(*fields)
+    
+    def limit(self, value: int) -> "SoftDeleteQuerySet[T]":
+        """Limita o número de resultados."""
+        qs = self._create_queryset()
+        return qs.limit(value)
+    
+    def offset(self, value: int) -> "SoftDeleteQuerySet[T]":
+        """Define o offset dos resultados."""
+        qs = self._create_queryset()
+        return qs.offset(value)
+    
+    async def all(self) -> Sequence[T]:
+        """Retorna todos os registros ativos."""
+        qs = self._create_queryset()
+        return await qs.all()
+    
+    async def get(self, **kwargs: Any) -> T:
+        """Retorna um único registro ativo."""
+        qs = self._create_queryset()
+        return await qs.filter(**kwargs).get()
+    
+    async def get_or_none(self, **kwargs: Any) -> T | None:
+        """Retorna um único registro ativo ou None."""
+        qs = self._create_queryset()
+        return await qs.filter(**kwargs).first()
+    
+    async def first(self) -> T | None:
+        """Retorna o primeiro registro ativo."""
+        qs = self._create_queryset()
+        return await qs.first()
+    
+    async def count(self) -> int:
+        """Conta registros ativos."""
+        qs = self._create_queryset()
+        return await qs.count()
+    
+    async def exists(self, **kwargs: Any) -> bool:
+        """Verifica se existem registros ativos."""
+        qs = self._create_queryset()
+        if kwargs:
+            qs = qs.filter(**kwargs)
+        return await qs.exists()
+    
+    def with_deleted(self) -> "SoftDeleteQuerySet[T]":
+        """
+        Retorna QuerySet que inclui registros deletados.
+        
+        Returns:
+            SoftDeleteQuerySet com include_deleted=True
+        """
+        qs = self._create_queryset()
+        return qs.with_deleted()
+    
+    def only_deleted(self) -> "SoftDeleteQuerySet[T]":
+        """
+        Retorna QuerySet apenas com registros deletados.
+        
+        Returns:
+            SoftDeleteQuerySet com only_deleted=True
+        """
+        qs = self._create_queryset()
+        return qs.only_deleted()
+    
+    def active(self) -> "SoftDeleteQuerySet[T]":
+        """
+        Retorna QuerySet apenas com registros ativos.
+        
+        Este é o comportamento padrão, mas torna o código mais explícito.
+        
+        Returns:
+            SoftDeleteQuerySet filtrando apenas ativos
+        """
+        return self._create_queryset()
+    
+    async def soft_delete_by(self, **filters: Any) -> int:
+        """
+        Soft delete em massa por filtros.
+        
+        Args:
+            **filters: Condições de filtro
+            
+        Returns:
+            Número de registros afetados
+            
+        Exemplo:
+            # Soft delete todos os usuários inativos
+            count = await User.objects.using(db).soft_delete_by(is_active=False)
+        """
+        session = self._get_session()
+        stmt = update(self._model_class).values(deleted_at=timezone.now())
+        
+        for key, value in filters.items():
+            stmt = stmt.where(getattr(self._model_class, key) == value)
+        
+        # Não afeta registros já deletados
+        deleted_col = getattr(self._model_class, self._deleted_field)
+        stmt = stmt.where(deleted_col.is_(None))
+        
+        result = await session.execute(stmt)
+        return result.rowcount
+    
+    async def restore_by(self, **filters: Any) -> int:
+        """
+        Restaura registros em massa por filtros.
+        
+        Args:
+            **filters: Condições de filtro
+            
+        Returns:
+            Número de registros restaurados
+            
+        Exemplo:
+            # Restaura todos os usuários deletados de um workspace
+            count = await User.objects.using(db).restore_by(workspace_id=ws_id)
+        """
+        session = self._get_session()
+        stmt = update(self._model_class).values(deleted_at=None)
+        
+        for key, value in filters.items():
+            stmt = stmt.where(getattr(self._model_class, key) == value)
+        
+        # Só afeta registros deletados
+        deleted_col = getattr(self._model_class, self._deleted_field)
+        stmt = stmt.where(deleted_col.is_not(None))
+        
+        result = await session.execute(stmt)
+        return result.rowcount

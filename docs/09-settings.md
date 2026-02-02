@@ -260,6 +260,221 @@ Ordem de precedencia (maior para menor):
 
 Isso permite sobrescrever valores do .env em runtime sem modificar arquivos.
 
+## Enterprise Features (v0.4.0+)
+
+As features enterprise sao configuradas automaticamente via Settings. Basta definir os valores e o CoreApp configura tudo.
+
+### Database Replicas
+
+Separa leituras (SELECT) das escritas (INSERT/UPDATE/DELETE) para escalar horizontalmente.
+
+```env
+# .env
+DATABASE_URL=postgresql+asyncpg://user:pass@primary:5432/db
+DATABASE_READ_URL=postgresql+asyncpg://user:pass@replica:5432/db
+
+# Opcional - pool da replica (default: 2x do write)
+DATABASE_READ_POOL_SIZE=10
+DATABASE_READ_MAX_OVERFLOW=20
+```
+
+```python
+# config.py - nada a fazer, Settings ja tem os campos
+class AppSettings(Settings):
+    pass  # database_read_url ja existe na classe base
+
+# O CoreApp detecta database_read_url e configura automaticamente
+# Sem database_read_url, usa database_url para tudo
+```
+
+| Campo | Tipo | Default | Descricao |
+|-------|------|---------|-----------|
+| `database_read_url` | str \| None | None | URL da replica de leitura |
+| `database_read_pool_size` | int \| None | None | Pool size da replica (2x write se None) |
+| `database_read_max_overflow` | int \| None | None | Max overflow da replica (2x write se None) |
+
+### Multi-Tenancy
+
+Filtra queries automaticamente por tenant (workspace/organization).
+
+```env
+# .env
+TENANCY_ENABLED=true
+TENANCY_FIELD=workspace_id
+TENANCY_USER_ATTRIBUTE=workspace_id
+TENANCY_HEADER=X-Tenant-ID
+TENANCY_REQUIRE=false
+```
+
+```python
+# config.py
+class AppSettings(Settings):
+    pass  # Campos ja existem na classe base
+
+# O CoreApp adiciona TenantMiddleware automaticamente quando tenancy_enabled=true
+```
+
+| Campo | Tipo | Default | Descricao |
+|-------|------|---------|-----------|
+| `tenancy_enabled` | bool | False | Habilita multi-tenancy |
+| `tenancy_field` | str | "workspace_id" | Campo de tenant nos models |
+| `tenancy_user_attribute` | str | "workspace_id" | Atributo do usuario com tenant ID |
+| `tenancy_header` | str | "X-Tenant-ID" | Header HTTP para tenant (fallback) |
+| `tenancy_require` | bool | False | Rejeita requests sem tenant |
+
+**Uso no codigo:**
+
+```python
+from core.tenancy import TenantMixin, for_tenant
+
+class Domain(Model, TenantMixin):
+    __tablename__ = "domains"
+    # workspace_id ja vem do TenantMixin
+    # Nome do campo vem de settings.tenancy_field
+
+# Queries filtram automaticamente
+domains = await for_tenant(Domain.objects.using(db)).all()
+```
+
+### Soft Delete
+
+Exclusao logica - marca registros como deletados em vez de remover.
+
+```env
+# .env
+SOFT_DELETE_FIELD=deleted_at
+SOFT_DELETE_CASCADE=false
+SOFT_DELETE_AUTO_FILTER=true
+```
+
+| Campo | Tipo | Default | Descricao |
+|-------|------|---------|-----------|
+| `soft_delete_field` | str | "deleted_at" | Nome do campo de soft delete |
+| `soft_delete_cascade` | bool | False | Soft delete em cascata |
+| `soft_delete_auto_filter` | bool | True | Filtra deletados automaticamente |
+
+**Uso no codigo:**
+
+```python
+from core import Model, SoftDeleteMixin, SoftDeleteManager
+
+class User(Model, SoftDeleteMixin):
+    __tablename__ = "users"
+    objects = SoftDeleteManager["User"]()
+    # deleted_at ja vem do SoftDeleteMixin
+    # Nome do campo vem de settings.soft_delete_field
+
+# Queries filtram deletados automaticamente
+users = await User.objects.using(db).all()  # So ativos
+```
+
+### UUID
+
+Configura versao padrao de UUID para primary keys.
+
+```env
+# .env
+UUID_VERSION=uuid7
+```
+
+| Campo | Tipo | Default | Descricao |
+|-------|------|---------|-----------|
+| `uuid_version` | "uuid4" \| "uuid7" | "uuid7" | Versao de UUID padrao |
+
+**UUID7 vs UUID4:**
+- UUID7: Time-sortable, melhor para indices B-tree, recomendado para PKs
+- UUID4: Random, use quando nao precisa de ordenacao temporal
+
+```python
+from core.fields import AdvancedField
+
+class User(Model):
+    # Usa settings.uuid_version automaticamente
+    id: Mapped[UUID] = AdvancedField.uuid_pk()
+```
+
+## Exemplo Completo de .env
+
+```env
+# =============================================================================
+# Aplicacao
+# =============================================================================
+APP_NAME=My SaaS API
+APP_VERSION=1.0.0
+ENVIRONMENT=production
+DEBUG=false
+SECRET_KEY=sua-chave-secreta-muito-longa-e-segura
+
+# =============================================================================
+# Database - Primary (escrita)
+# =============================================================================
+DATABASE_URL=postgresql+asyncpg://user:pass@primary.db.com:5432/mydb
+DATABASE_ECHO=false
+DATABASE_POOL_SIZE=5
+DATABASE_MAX_OVERFLOW=10
+DATABASE_POOL_RECYCLE=3600
+
+# =============================================================================
+# Database - Replica (leitura) - OPCIONAL
+# =============================================================================
+DATABASE_READ_URL=postgresql+asyncpg://user:pass@replica.db.com:5432/mydb
+# DATABASE_READ_POOL_SIZE=10  # Default: 2x do write
+# DATABASE_READ_MAX_OVERFLOW=20  # Default: 2x do write
+
+# =============================================================================
+# Multi-Tenancy - OPCIONAL
+# =============================================================================
+TENANCY_ENABLED=true
+TENANCY_FIELD=workspace_id
+TENANCY_USER_ATTRIBUTE=workspace_id
+TENANCY_REQUIRE=false
+
+# =============================================================================
+# Soft Delete - OPCIONAL
+# =============================================================================
+SOFT_DELETE_FIELD=deleted_at
+SOFT_DELETE_AUTO_FILTER=true
+
+# =============================================================================
+# UUID - OPCIONAL
+# =============================================================================
+UUID_VERSION=uuid7
+
+# =============================================================================
+# Auth
+# =============================================================================
+AUTH_ACCESS_TOKEN_EXPIRE_MINUTES=30
+AUTH_REFRESH_TOKEN_EXPIRE_DAYS=7
+AUTH_PASSWORD_HASHER=argon2
+
+# =============================================================================
+# API
+# =============================================================================
+API_PREFIX=/api/v1
+HOST=0.0.0.0
+PORT=8000
+
+# =============================================================================
+# Timezone
+# =============================================================================
+TIMEZONE=UTC
+```
+
+## Verificar Configuracao
+
+```python
+from src.api.config import settings
+
+# Verificar se replica esta configurada
+print(f"Replica: {settings.has_read_replica}")
+
+# Verificar se tenancy esta habilitado
+print(f"Tenancy: {settings.tenancy_enabled}")
+
+# Ver todas as configuracoes (cuidado com secrets!)
+print(settings.model_dump())
+```
+
 ---
 
 Proximo: [Migrations](10-migrations.md) - Sistema de migracoes de banco de dados.

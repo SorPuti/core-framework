@@ -18,7 +18,7 @@ Enterprise Features (v0.3.0+):
 - Deployment: Docker, PM2, Kubernetes generators
 """
 
-from core.models import Model, Field
+from core.models import Model, Field, SoftDeleteMixin, SoftDeleteManager
 from core.serializers import InputSchema, OutputSchema, Serializer
 from core.views import APIView, ViewSet, ModelViewSet, action
 from core.routing import Router, AutoRouter
@@ -26,6 +26,46 @@ from core.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsO
 from core.dependencies import Depends, get_db, get_current_user
 from core.config import Settings, get_settings
 from core.app import CoreApp
+
+# Advanced Fields (UUID7, JSON, etc.)
+from core.fields import (
+    uuid7,
+    uuid7_str,
+    AdvancedField,
+)
+
+# Multi-Tenancy
+from core.tenancy import (
+    set_tenant,
+    get_tenant,
+    require_tenant,
+    clear_tenant,
+    TenantMixin,
+    FlexibleTenantMixin,
+    TenantMiddleware,
+    tenant_context,
+    get_tenant_dependency,
+)
+
+# Database Replicas
+from core.database import (
+    DatabaseSession,
+    init_replicas,
+    close_replicas,
+    get_db_replicas,
+    get_write_db,
+    get_read_db,
+    DBSession,
+    WriteSession,
+    ReadSession,
+)
+
+# Advanced QuerySets
+from core.querysets import (
+    SoftDeleteQuerySet,
+    TenantQuerySet,
+    TenantSoftDeleteQuerySet,
+)
 
 # DateTime - SEMPRE use timezone.now() em vez de datetime.now()
 from core.datetime import (
@@ -133,11 +173,13 @@ from core.validators import (
     FileSizeValidator,
 )
 
-__version__ = "0.3.19"
+__version__ = "0.4.0"
 __all__ = [
     # Models
     "Model",
     "Field",
+    "SoftDeleteMixin",
+    "SoftDeleteManager",
     # Serializers
     "InputSchema",
     "OutputSchema",
@@ -166,6 +208,34 @@ __all__ = [
     "get_settings",
     # App
     "CoreApp",
+    # Advanced Fields
+    "uuid7",
+    "uuid7_str",
+    "AdvancedField",
+    # Multi-Tenancy
+    "set_tenant",
+    "get_tenant",
+    "require_tenant",
+    "clear_tenant",
+    "TenantMixin",
+    "FlexibleTenantMixin",
+    "TenantMiddleware",
+    "tenant_context",
+    "get_tenant_dependency",
+    # Database Replicas
+    "DatabaseSession",
+    "init_replicas",
+    "close_replicas",
+    "get_db_replicas",
+    "get_write_db",
+    "get_read_db",
+    "DBSession",
+    "WriteSession",
+    "ReadSession",
+    # Advanced QuerySets
+    "SoftDeleteQuerySet",
+    "TenantQuerySet",
+    "TenantSoftDeleteQuerySet",
     # DateTime
     "timezone",
     "DateTime",
