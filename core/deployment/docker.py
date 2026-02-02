@@ -115,7 +115,7 @@ def generate_docker(output_dir: Path) -> None:
   # ==========================================================================
   
   db:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
