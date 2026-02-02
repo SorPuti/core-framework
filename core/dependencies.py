@@ -195,8 +195,9 @@ async def get_optional_user(
     
     try:
         return await get_current_user(request, credentials, db)
-    except HTTPException:
+    except (HTTPException, RuntimeError):
         request.state.user = None
+        request.state.db = db
         return None
 
 
