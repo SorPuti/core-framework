@@ -253,6 +253,9 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
                 detail=f"Missing lookup parameter: {lookup_kwarg}",
             )
         
+        # Converte lookup_value para o tipo correto baseado no campo do modelo
+        lookup_value = self._convert_lookup_value(lookup_value)
+        
         try:
             obj = await self.get_queryset(db).filter(
                 **{self.lookup_field: lookup_value}
@@ -263,6 +266,19 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
                 status_code=404,
                 detail=f"{self.model.__name__} not found",
             )
+    
+    def _convert_lookup_value(self, value: Any) -> Any:
+        """
+        Converte o valor de lookup para o tipo correto do campo.
+        
+        Por padrão, tenta converter para int se o lookup_field for 'id'.
+        """
+        if self.lookup_field == "id" and isinstance(value, str):
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                pass
+        return value
     
     def get_serializer(self) -> Serializer:
         """Retorna instância do serializer."""
