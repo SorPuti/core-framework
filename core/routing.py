@@ -199,21 +199,23 @@ class Router(APIRouter):
             for http_method in action_methods:
                 route_name = f"{basename}-{name}"
                 
-                async def action_endpoint(
-                    request: Request,
-                    db: AsyncSession = Depends(get_db),
-                    data: dict[str, Any] | None = Body(None),
-                    _method: Callable = method,
-                ) -> Any:
-                    vs = viewset_class()
-                    path_params = request.path_params
-                    if data is not None:
-                        return await _method(vs, request, db, data=data, **path_params)
-                    return await _method(vs, request, db, **path_params)
+                # Captura method em closure para evitar late binding
+                def make_action_endpoint(action_method: Callable) -> Callable:
+                    async def action_endpoint(
+                        request: Request,
+                        db: AsyncSession = Depends(get_db),
+                        data: dict[str, Any] | None = Body(None),
+                    ) -> Any:
+                        vs = viewset_class()
+                        path_params = request.path_params
+                        if data is not None:
+                            return await action_method(vs, request, db, data=data, **path_params)
+                        return await action_method(vs, request, db, **path_params)
+                    return action_endpoint
                 
                 self.add_api_route(
                     path,
-                    action_endpoint,
+                    make_action_endpoint(method),
                     methods=[http_method],
                     tags=tags,
                     name=route_name,
