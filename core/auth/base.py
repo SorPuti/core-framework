@@ -522,6 +522,30 @@ def configure_auth(config: AuthConfig | None = None, **kwargs) -> AuthConfig:
     _default_token_backend = config.token_backend
     _default_permission_backend = config.permission_backend
     
+    # Configura dependencies para autenticação automática
+    from core.dependencies import configure_auth as configure_deps
+    from core.auth.tokens import verify_token
+    
+    # Cria user_loader que usa o modelo configurado
+    async def default_user_loader(user_id: str):
+        if config.user_model is None:
+            return None
+        from core.models import get_session
+        session = await get_session()
+        try:
+            return await config.user_model.objects.using(session).filter(id=int(user_id)).first()
+        finally:
+            await session.close()
+    
+    # Cria token_decoder usando verify_token
+    def default_token_decoder(token: str) -> dict:
+        payload = verify_token(token, token_type="access")
+        if payload is None:
+            raise ValueError("Invalid token")
+        return payload
+    
+    configure_deps(default_user_loader, default_token_decoder)
+    
     return config
 
 
