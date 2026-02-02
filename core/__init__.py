@@ -18,7 +18,7 @@ Enterprise Features (v0.3.0+):
 - Deployment: Docker, PM2, Kubernetes generators
 """
 
-from core.models import Model, Field, SoftDeleteMixin, SoftDeleteManager
+from core.models import Model, Field, SoftDeleteMixin, SoftDeleteManager, TenantSoftDeleteManager
 from core.serializers import InputSchema, OutputSchema, Serializer
 from core.views import APIView, ViewSet, ModelViewSet, action
 from core.routing import Router, AutoRouter
@@ -31,6 +31,7 @@ from core.app import CoreApp
 from core.fields import (
     uuid7,
     uuid7_str,
+    AdaptiveJSON,
     AdvancedField,
 )
 
@@ -173,13 +174,14 @@ from core.validators import (
     FileSizeValidator,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = [
     # Models
     "Model",
     "Field",
     "SoftDeleteMixin",
     "SoftDeleteManager",
+    "TenantSoftDeleteManager",
     # Serializers
     "InputSchema",
     "OutputSchema",
@@ -211,6 +213,7 @@ __all__ = [
     # Advanced Fields
     "uuid7",
     "uuid7_str",
+    "AdaptiveJSON",
     "AdvancedField",
     # Multi-Tenancy
     "set_tenant",

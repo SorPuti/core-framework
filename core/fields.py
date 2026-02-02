@@ -11,13 +11,42 @@ import uuid as uuid_module
 from typing import Any, TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Uuid, String, Text
+from sqlalchemy import Uuid, String, Text, TypeDecorator, JSON
 from sqlalchemy.orm import mapped_column, Mapped
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import JSON
 
 if TYPE_CHECKING:
-    pass
+    from sqlalchemy.engine import Dialect
+
+
+# =============================================================================
+# Adaptive JSON Type
+# =============================================================================
+
+class AdaptiveJSON(TypeDecorator):
+    """
+    JSON type that automatically uses JSONB on PostgreSQL and JSON on others.
+    
+    This allows models to be written once and work across all databases:
+    - PostgreSQL: Uses JSONB (supports indexing, GIN indexes, better performance)
+    - SQLite: Uses standard JSON
+    - MySQL: Uses standard JSON
+    - Others: Uses standard JSON
+    
+    Example:
+        class Settings(Model):
+            data: Mapped[dict] = AdvancedField.json_field(default={})
+        
+        # Works on SQLite (dev), PostgreSQL (prod), MySQL, etc.
+    """
+    impl = JSON
+    cache_ok = True
+    
+    def load_dialect_impl(self, dialect: "Dialect"):
+        """Select the appropriate type based on database dialect."""
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(JSONB())
+        return dialect.type_descriptor(JSON())
 
 
 # =============================================================================
@@ -152,12 +181,28 @@ class AdvancedField:
         *,
         nullable: bool = False,
         default: dict | list | None = None,
-        use_jsonb: bool = True,
     ) -> Mapped[dict | list]:
         """
-        Create JSON/JSONB column.
-
-        Uses JSONB on PostgreSQL for indexing support.
+        Create JSON column with automatic dialect detection.
+        
+        Automatically selects the best JSON type for each database:
+        - PostgreSQL: Uses JSONB (supports indexing, GIN indexes, better performance)
+        - SQLite: Uses standard JSON
+        - MySQL: Uses standard JSON
+        - Others: Uses standard JSON
+        
+        The model is written once and works on any database without changes.
+        
+        Args:
+            nullable: Whether the field can be NULL (default: False)
+            default: Default value - dict or list (default: {} for non-nullable)
+        
+        Example:
+            class UserSettings(Model):
+                preferences: Mapped[dict] = AdvancedField.json_field(default={})
+                tags: Mapped[list] = AdvancedField.json_field(default=[])
+            
+            # Works on SQLite (dev/tests), PostgreSQL (production), etc.
         """
         # settings: Mapped[dict] = AdvancedField.json_field(default={})
 
@@ -166,10 +211,8 @@ class AdvancedField:
                 return {} if not nullable else None
             return default.copy() if isinstance(default, (dict, list)) else default
 
-        column_type = JSONB if use_jsonb else JSON
-
         return mapped_column(
-            column_type,
+            AdaptiveJSON,
             nullable=nullable,
             default=default_factory,
         )
@@ -202,8 +245,32 @@ class AdvancedField:
     ) -> Mapped[str]:
         """
         Create URL-friendly slug column.
-
-        Configured with unique and index by default.
+        
+        A slug is a short label for something, containing only letters,
+        numbers, underscores or hyphens. They are generally used in URLs.
+        
+        Note: This field does NOT auto-generate slugs from other fields.
+        You must generate the slug value yourself (e.g., using python-slugify).
+        
+        Args:
+            max_length: Maximum length of the slug (default: 255)
+            nullable: Whether the field can be NULL (default: False)
+            unique: Whether values must be unique (default: True)
+            index: Whether to create a database index (default: True)
+        
+        Example:
+            from slugify import slugify
+            
+            class Post(Model):
+                __tablename__ = "posts"
+                
+                id: Mapped[int] = Field.pk()
+                title: Mapped[str] = Field.string(max_length=200)
+                slug: Mapped[str] = AdvancedField.slug()
+                
+                async def before_save(self):
+                    if not self.slug:
+                        self.slug = slugify(self.title)
         """
         # slug: Mapped[str] = AdvancedField.slug()
         return mapped_column(
@@ -242,5 +309,6 @@ class AdvancedField:
 __all__ = [
     "uuid7",
     "uuid7_str",
+    "AdaptiveJSON",
     "AdvancedField",
 ]

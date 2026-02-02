@@ -112,27 +112,144 @@ def load_config() -> dict[str, Any]:
     return config
 
 
-def discover_models(models_module: str) -> list[type]:
-    """Descobre models em um módulo."""
-    try:
-        module = importlib.import_module(models_module)
-    except ImportError as e:
-        print(error(f"Cannot import models module '{models_module}': {e}"))
-        print(info("Tip: Make sure the module exists and is in your PYTHONPATH"))
-        return []
+MODELS_CACHE_FILE = ".core_models_cache.json"
+
+
+def _get_project_root() -> Path:
+    """Find project root (where pyproject.toml or core.toml is)."""
+    cwd = Path.cwd()
+    for parent in [cwd] + list(cwd.parents):
+        if (parent / "pyproject.toml").exists() or (parent / "core.toml").exists():
+            return parent
+    return cwd
+
+
+def _scan_for_models(root_dir: Path) -> list[str]:
+    """
+    Recursively scan for Python files containing Model subclasses.
     
+    Looks for patterns like 'class X(Model)' or 'from core.models import Model'.
+    """
+    model_modules = []
+    
+    for py_file in root_dir.rglob("*.py"):
+        # Skip common non-model directories
+        if any(part in py_file.parts for part in [
+            "__pycache__", ".venv", "venv", "node_modules", 
+            "migrations", ".git", "tests", "test", "site-packages"
+        ]):
+            continue
+        
+        try:
+            content = py_file.read_text()
+            # Quick heuristic: file likely contains models
+            if "from core.models import" in content or "from core import Model" in content:
+                if "(Model)" in content or "(Model," in content:
+                    # Convert path to module
+                    rel_path = py_file.relative_to(root_dir)
+                    module = str(rel_path.with_suffix("")).replace(os.sep, ".")
+                    model_modules.append(module)
+        except Exception:
+            continue
+    
+    return model_modules
+
+
+def _load_models_cache(cache_file: Path) -> dict | None:
+    """Load cached model modules if valid."""
+    import json
+    from datetime import datetime
+    
+    if not cache_file.exists():
+        return None
+    
+    try:
+        data = json.loads(cache_file.read_text())
+        # Cache is valid for 1 hour
+        cache_time = datetime.fromisoformat(data["timestamp"])
+        if (datetime.now() - cache_time).seconds > 3600:
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _save_models_cache(cache_file: Path, modules: list[str]) -> None:
+    """Save discovered modules to cache."""
+    import json
+    from datetime import datetime
+    
+    data = {
+        "timestamp": datetime.now().isoformat(),
+        "modules": modules,
+    }
+    cache_file.write_text(json.dumps(data, indent=2))
+
+
+def discover_models(models_module: str | list[str] | None = None, rescan: bool = False) -> list[type]:
+    """
+    Discover all Model subclasses in the project.
+    
+    Strategy:
+    1. If models_module provided (string or list), use it directly
+    2. Otherwise, check cache file
+    3. If no cache or rescan=True, scan project recursively and cache results
+    
+    Args:
+        models_module: Explicit module(s) to import. Can be string or list.
+                      If None, auto-discovers models in the project.
+        rescan: If True, ignores cache and rescans the project.
+    
+    Returns:
+        List of Model classes ready for migrations.
+    """
     from core.models import Model
     
+    root_dir = _get_project_root()
+    cache_file = root_dir / MODELS_CACHE_FILE
+    
+    # Determine which modules to check
+    if models_module:
+        # Explicit config - use it
+        if isinstance(models_module, str):
+            modules_to_check = [models_module]
+        else:
+            modules_to_check = list(models_module)
+    else:
+        # Try cache first (unless rescan requested)
+        cache = None if rescan else _load_models_cache(cache_file)
+        if cache:
+            modules_to_check = cache["modules"]
+            print(info(f"Using cached model discovery ({len(modules_to_check)} modules)"))
+        else:
+            # Full scan
+            print(info("Scanning project for models..."))
+            modules_to_check = _scan_for_models(root_dir)
+            if modules_to_check:
+                _save_models_cache(cache_file, modules_to_check)
+                print(success(f"Found {len(modules_to_check)} model modules, cached for future runs"))
+            else:
+                print(warning("No model modules found. Make sure your models inherit from core.models.Model"))
+    
+    # Import and collect Model classes
     models = []
-    for name in dir(module):
-        obj = getattr(module, name)
-        if (
-            isinstance(obj, type)
-            and issubclass(obj, Model)
-            and obj is not Model
-            and hasattr(obj, "__table__")
-        ):
-            models.append(obj)
+    for module_path in modules_to_check:
+        try:
+            module = importlib.import_module(module_path)
+            for name in dir(module):
+                obj = getattr(module, name)
+                if (
+                    isinstance(obj, type)
+                    and issubclass(obj, Model)
+                    and obj is not Model
+                    and hasattr(obj, "__table__")
+                ):
+                    # Avoid duplicates (same model imported in multiple places)
+                    if obj not in models:
+                        models.append(obj)
+        except ImportError as e:
+            print(warning(f"Cannot import '{module_path}': {e}"))
+            continue
     
     return models
 
@@ -1674,12 +1791,20 @@ def cmd_makemigrations(args: argparse.Namespace) -> int:
     # Adiciona diretório atual ao path
     sys.path.insert(0, os.getcwd())
     
-    # Descobre models
-    models = discover_models(config["models_module"])
+    # Descobre models - usa config se definido, senão auto-descobre
+    models_module = config.get("models_module")
+    rescan = getattr(args, "rescan", False)
+    
+    # Se models_module não está definido ou é o default, usa auto-descoberta
+    if not models_module or models_module == "app.models":
+        models = discover_models(models_module=None, rescan=rescan)
+    else:
+        models = discover_models(models_module=models_module, rescan=rescan)
     
     if not models and not args.empty:
         print(warning("No models found."))
-        print(info(f"Tip: Check if '{config['models_module']}' exists and contains Model classes"))
+        print(info("Tip: Make sure your models inherit from core.models.Model"))
+        print(info("     Or set 'models_module' in core.toml/pyproject.toml"))
         return 1
     
     print(f"  Found {len(models)} model(s): {', '.join(m.__name__ for m in models)}")
@@ -2887,6 +3012,7 @@ For more information, visit: https://github.com/SorPuti/core-framework
     make_parser.add_argument("-n", "--name", help="Migration name")
     make_parser.add_argument("--empty", action="store_true", help="Create empty migration")
     make_parser.add_argument("--dry-run", action="store_true", help="Show what would be generated")
+    make_parser.add_argument("--rescan", action="store_true", help="Rescan project for models (ignore cache)")
     make_parser.set_defaults(func=cmd_makemigrations)
     
     # migrate

@@ -1,6 +1,6 @@
 [project]
 name = "core-framework"
-eversion = "0.4.0"
+version = "0.5.0"
 description = "Core Framework - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.12"
 readme = "README.md"

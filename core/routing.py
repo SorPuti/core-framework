@@ -51,19 +51,26 @@ class Router(APIRouter):
         """
         Registra um ViewSet com rotas REST automáticas.
         
-        Gera as seguintes rotas:
-        - GET {prefix}/ -> list
-        - POST {prefix}/ -> create
-        - GET {prefix}/{id} -> retrieve
-        - PUT {prefix}/{id} -> update
-        - PATCH {prefix}/{id} -> partial_update
-        - DELETE {prefix}/{id} -> destroy
+        Gera as seguintes rotas (na ordem correta para evitar conflitos):
+        1. GET {prefix}/ -> list
+        2. POST {prefix}/ -> create
+        3. Custom actions com detail=False (ex: /users/types)
+        4. GET {prefix}/{id} -> retrieve
+        5. PUT {prefix}/{id} -> update
+        6. PATCH {prefix}/{id} -> partial_update
+        7. DELETE {prefix}/{id} -> destroy
+        8. Custom actions com detail=True (ex: /users/{id}/activate)
         
         Args:
             prefix: Prefixo da URL (ex: "/users")
             viewset_class: Classe do ViewSet
             basename: Nome base para as rotas (default: nome do model)
             tags: Tags para OpenAPI
+        
+        Note:
+            Actions detail=False são registradas ANTES das rotas {id} para
+            evitar conflitos onde /users/types seria interpretado como /users/{id}
+            com id="types".
         """
         viewset = viewset_class()
         basename = basename or getattr(viewset_class, "model", None).__name__.lower()
@@ -75,7 +82,7 @@ class Router(APIRouter):
         # Normaliza o prefixo
         prefix = prefix.rstrip("/")
         
-        # Rota de lista (GET) e criação (POST)
+        # 1. Rota de lista (GET)
         @self.get(
             f"{prefix}/",
             tags=tags,
@@ -92,6 +99,7 @@ class Router(APIRouter):
             vs = viewset_class()
             return await vs.list(request, db, page=page, page_size=page_size)
         
+        # 2. Rota de criação (POST)
         @self.post(
             f"{prefix}/",
             tags=tags,
@@ -108,7 +116,14 @@ class Router(APIRouter):
             vs = viewset_class()
             return await vs.create(request, db, data)
         
-        # Rota de detalhe (GET), atualização (PUT, PATCH) e deleção (DELETE)
+        # 3. Actions detail=False (ANTES das rotas {id} para evitar conflitos)
+        # Ex: /users/types deve ser registrada antes de /users/{id}
+        self._register_custom_actions(
+            prefix, viewset_class, basename, tags, lookup_url_kwarg,
+            detail_filter=False  # Só registra detail=False
+        )
+        
+        # 4. Rota de detalhe (GET)
         @self.get(
             f"{prefix}/{{{lookup_url_kwarg}}}",
             tags=tags,
@@ -125,6 +140,7 @@ class Router(APIRouter):
             path_params = request.path_params
             return await vs.retrieve(request, db, **path_params)
         
+        # 5. Rota de atualização (PUT)
         @self.put(
             f"{prefix}/{{{lookup_url_kwarg}}}",
             tags=tags,
@@ -141,6 +157,7 @@ class Router(APIRouter):
             path_params = request.path_params
             return await vs.update(request, db, data, **path_params)
         
+        # 6. Rota de atualização parcial (PATCH)
         @self.patch(
             f"{prefix}/{{{lookup_url_kwarg}}}",
             tags=tags,
@@ -157,6 +174,7 @@ class Router(APIRouter):
             path_params = request.path_params
             return await vs.partial_update(request, db, data, **path_params)
         
+        # 7. Rota de deleção (DELETE)
         @self.delete(
             f"{prefix}/{{{lookup_url_kwarg}}}",
             tags=tags,
@@ -172,8 +190,12 @@ class Router(APIRouter):
             path_params = request.path_params
             return await vs.destroy(request, db, **path_params)
         
-        # Registra actions customizadas
-        self._register_custom_actions(prefix, viewset_class, basename, tags, lookup_url_kwarg)
+        # 8. Actions detail=True (DEPOIS das rotas {id})
+        # Ex: /users/{id}/activate
+        self._register_custom_actions(
+            prefix, viewset_class, basename, tags, lookup_url_kwarg,
+            detail_filter=True  # Só registra detail=True
+        )
         
         # Guarda referência
         self._viewsets.append((prefix, viewset_class))
@@ -185,8 +207,22 @@ class Router(APIRouter):
         basename: str,
         tags: list[str],
         lookup_url_kwarg: str,
+        detail_filter: bool | None = None,
     ) -> None:
-        """Registra actions customizadas decoradas com @action."""
+        """
+        Registra actions customizadas decoradas com @action.
+        
+        Args:
+            prefix: Prefixo da URL
+            viewset_class: Classe do ViewSet
+            basename: Nome base para as rotas
+            tags: Tags para OpenAPI
+            lookup_url_kwarg: Nome do parâmetro de URL para lookup
+            detail_filter: Se especificado, filtra actions por detail:
+                          - True: só registra actions com detail=True
+                          - False: só registra actions com detail=False
+                          - None: registra todas as actions
+        """
         for name, method in inspect.getmembers(viewset_class, predicate=inspect.isfunction):
             if not getattr(method, "is_action", False):
                 continue
@@ -194,6 +230,10 @@ class Router(APIRouter):
             action_methods = method.methods
             detail = method.detail
             url_path = method.url_path
+            
+            # Filtra por detail se especificado
+            if detail_filter is not None and detail != detail_filter:
+                continue
             
             if detail:
                 path = f"{prefix}/{{{lookup_url_kwarg}}}/{url_path}"
