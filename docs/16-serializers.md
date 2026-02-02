@@ -1,6 +1,6 @@
 # Serializers e Schemas
 
-Validacao e transformacao de dados.
+Sistema de validacao e transformacao de dados baseado em Pydantic. Define a estrutura de dados aceitos (entrada) e retornados (saida) pela API.
 
 ## Estrutura de Arquivos
 
@@ -9,17 +9,17 @@ Validacao e transformacao de dados.
   /src
     /apps
       /users
-        schemas.py         # Input/Output schemas
-        models.py
-        views.py
+        schemas.py         # Definicoes de Input/Output
+        models.py          # Models SQLAlchemy
+        views.py           # ViewSets que usam os schemas
 ```
 
 ## InputSchema vs OutputSchema
 
-| Tipo | Uso |
-|------|-----|
-| `InputSchema` | Dados recebidos (POST, PUT, PATCH) |
-| `OutputSchema` | Dados retornados (GET, respostas) |
+| Tipo | Uso | Quando Executado |
+|------|-----|------------------|
+| `InputSchema` | Valida dados recebidos (POST, PUT, PATCH) | Antes de processar request |
+| `OutputSchema` | Formata dados retornados | Antes de enviar response |
 
 ## Criar Schemas
 
@@ -29,22 +29,31 @@ from core import InputSchema, OutputSchema
 from datetime import datetime
 
 class UserInput(InputSchema):
-    """Dados para criar/atualizar usuario."""
-    email: str
-    password: str
-    name: str
-    phone: str | None = None
+    """
+    Define campos aceitos em create/update.
+    
+    Campos obrigatorios nao tem valor padrao.
+    Campos opcionais tem valor padrao (None ou outro).
+    """
+    email: str              # Obrigatorio
+    password: str           # Obrigatorio
+    name: str               # Obrigatorio
+    phone: str | None = None  # Opcional
 
 class UserOutput(OutputSchema):
-    """Dados retornados do usuario."""
+    """
+    Define campos retornados nas respostas.
+    
+    IMPORTANTE: Nao inclua campos sensiveis como password_hash.
+    Apenas campos listados aqui aparecem na resposta.
+    """
     id: int
     email: str
     name: str
     phone: str | None
     is_active: bool
     created_at: datetime
-    
-    # NAO inclui password!
+    # password_hash NAO incluido - nunca expor hash de senha
 ```
 
 ## Usar no ViewSet
@@ -57,41 +66,59 @@ from .schemas import UserInput, UserOutput
 
 class UserViewSet(ModelViewSet):
     model = User
+    
+    # Schema para validar dados de entrada
     input_schema = UserInput
+    
+    # Schema para formatar dados de saida
     output_schema = UserOutput
 ```
 
+**Comportamento**: O framework automaticamente valida request body contra `input_schema` e serializa response com `output_schema`.
+
 ## Schemas Diferentes por Acao
+
+Para casos onde create e update precisam de campos diferentes.
 
 ```python
 class UserViewSet(ModelViewSet):
     model = User
-    input_schema = UserInput
-    output_schema = UserOutput
+    input_schema = UserInput      # Fallback
+    output_schema = UserOutput    # Fallback
     
-    # Schemas especificos
     def get_input_schema(self):
+        """
+        Retorna schema de entrada baseado na acao atual.
+        
+        self.action contem: "list", "create", "retrieve",
+        "update", "partial_update", "destroy", ou nome de custom action
+        """
         action = getattr(self, "action", None)
         
         if action == "create":
-            return UserCreateInput  # Com password
+            return UserCreateInput  # Com password obrigatorio
         elif action == "update":
             return UserUpdateInput  # Sem password
         
         return self.input_schema
     
     def get_output_schema(self):
+        """
+        Retorna schema de saida baseado na acao atual.
+        """
         action = getattr(self, "action", None)
         
         if action == "list":
-            return UserListOutput  # Resumido
+            return UserListOutput    # Campos resumidos
         elif action == "retrieve":
-            return UserDetailOutput  # Completo
+            return UserDetailOutput  # Campos completos
         
         return self.output_schema
 ```
 
 ## Validacao no Schema
+
+Validacao sincrona executada antes do ViewSet processar.
 
 ```python
 from core import InputSchema
@@ -106,9 +133,15 @@ class UserInput(InputSchema):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v):
+        """
+        Validacao de campo individual.
+        
+        Executado para cada campo antes de criar instancia.
+        Pode transformar o valor (ex: lowercase).
+        """
         if "@" not in v:
             raise ValueError("Email invalido")
-        return v.lower()
+        return v.lower()  # Normaliza para lowercase
     
     @field_validator("age")
     @classmethod
@@ -119,12 +152,22 @@ class UserInput(InputSchema):
     
     @model_validator(mode="after")
     def validate_passwords(self):
+        """
+        Validacao cross-field.
+        
+        Executado apos todos os field_validators.
+        Tem acesso a todos os campos via self.
+        """
         if self.password != self.password_confirm:
             raise ValueError("Senhas nao conferem")
         return self
 ```
 
+**Ordem de execucao**: `field_validator` para cada campo -> `model_validator`
+
 ## Campos Computados
+
+Campos calculados a partir de outros campos.
 
 ```python
 from core import OutputSchema
@@ -138,13 +181,19 @@ class UserOutput(OutputSchema):
     @computed_field
     @property
     def full_name(self) -> str:
+        """
+        Campo calculado - nao existe no model.
+        
+        Aparece na resposta JSON como campo normal.
+        """
         return f"{self.first_name} {self.last_name}"
 ```
 
 ## Nested Schemas
 
+Para relacionamentos e objetos aninhados.
+
 ```python
-# schemas.py
 class AddressOutput(OutputSchema):
     street: str
     city: str
@@ -153,26 +202,28 @@ class AddressOutput(OutputSchema):
 class UserOutput(OutputSchema):
     id: int
     name: str
+    # Objeto aninhado - requer que User tenha relacionamento address
     address: AddressOutput | None
 ```
 
-## Lista de Schemas
+## Lista de Objetos
 
 ```python
-class OrderOutput(OutputSchema):
-    id: int
-    total: float
-    items: list[OrderItemOutput]
-
 class OrderItemOutput(OutputSchema):
     product_id: int
     quantity: int
     price: float
+
+class OrderOutput(OutputSchema):
+    id: int
+    total: float
+    # Lista de objetos aninhados
+    items: list[OrderItemOutput]
 ```
 
-## Serializer (Alternativa)
+## Serializer (Casos Complexos)
 
-Para casos mais complexos, use Serializer:
+Para transformacoes que precisam de logica assincrona ou acesso ao banco.
 
 ```python
 # src/apps/users/serializers.py
@@ -184,19 +235,29 @@ class UserSerializer(Serializer):
     output_schema = UserOutput
     
     async def to_representation(self, instance, db=None):
-        """Customiza serializacao."""
+        """
+        Customiza serializacao (model -> dict).
+        
+        Chamado ao retornar dados.
+        Pode adicionar campos calculados que precisam de queries.
+        """
         data = await super().to_representation(instance, db)
         
-        # Adiciona campos extras
+        # Adiciona campo que requer query ao banco
         data["posts_count"] = await instance.posts.count()
         
         return data
     
     async def to_internal_value(self, data, db=None):
-        """Customiza deserializacao."""
+        """
+        Customiza deserializacao (dict -> dados para model).
+        
+        Chamado ao receber dados.
+        Pode transformar dados antes de salvar.
+        """
         data = await super().to_internal_value(data, db)
         
-        # Transforma dados
+        # Normaliza email
         if "email" in data:
             data["email"] = data["email"].lower()
         
@@ -208,14 +269,21 @@ class UserSerializer(Serializer):
 ```python
 class UserViewSet(ModelViewSet):
     model = User
+    # serializer_class substitui input_schema/output_schema
     serializer_class = UserSerializer
 ```
 
-## Campos Opcionais para Update
+## Campos Opcionais para PATCH
+
+Em PATCH, apenas campos enviados devem ser atualizados.
 
 ```python
 class UserUpdateInput(InputSchema):
-    """Todos os campos opcionais para PATCH."""
+    """
+    Todos os campos opcionais para suportar PATCH.
+    
+    Campos nao enviados permanecem com valor atual.
+    """
     email: str | None = None
     name: str | None = None
     phone: str | None = None
@@ -223,45 +291,42 @@ class UserUpdateInput(InputSchema):
 
 ## Excluir Campos do Model
 
+OutputSchema define explicitamente quais campos aparecem na resposta.
+
 ```python
 class UserOutput(OutputSchema):
     id: int
     email: str
     name: str
-    # password_hash NAO incluido
-    # is_superuser NAO incluido
+    # Campos do model NAO listados aqui NAO aparecem:
+    # - password_hash
+    # - is_superuser
+    # - internal_notes
     
     class Config:
-        from_attributes = True  # Permite criar de ORM model
+        # Permite criar schema a partir de instancia ORM
+        from_attributes = True
 ```
 
-## Transformar Model em Schema
+## Transformar Model em Schema Manualmente
 
 ```python
-# No ViewSet
+# Em custom actions ou logica customizada
 user = await User.objects.using(db).get(id=1)
+
+# model_validate() cria instancia do schema a partir do model
+# model_dump() converte para dict (JSON-serializavel)
 output = UserOutput.model_validate(user)
 return output.model_dump()
 
-# Ou diretamente
+# Forma compacta
 return UserOutput.model_validate(user).model_dump()
-```
 
-## Lista de Models
-
-```python
+# Para lista de models
 users = await User.objects.using(db).all()
 return [UserOutput.model_validate(u).model_dump() for u in users]
 ```
 
-## Resumo
+---
 
-1. Crie `schemas.py` em cada app
-2. Use `InputSchema` para dados de entrada
-3. Use `OutputSchema` para dados de saida
-4. Configure no ViewSet com `input_schema` e `output_schema`
-5. Use `@field_validator` para validacao de campo
-6. Use `@model_validator` para validacao cross-field
-7. Use `Serializer` para casos complexos
-
-Next: [DateTime](17-datetime.md)
+Proximo: [DateTime](17-datetime.md) - Manipulacao de datas e timezones.
