@@ -19,7 +19,7 @@ import inspect
 from fastapi import APIRouter, Request, Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.dependencies import get_db
+from core.dependencies import get_db, get_optional_user
 
 if TYPE_CHECKING:
     from core.views import ViewSet, APIView
@@ -85,6 +85,7 @@ class Router(APIRouter):
         async def list_route(
             request: Request,
             db: AsyncSession = Depends(get_db),
+            _user: Any = Depends(get_optional_user),
             page: int = 1,
             page_size: int = viewset_class.page_size,
         ) -> dict[str, Any]:
@@ -102,6 +103,7 @@ class Router(APIRouter):
             request: Request,
             data: dict[str, Any] = Body(...),
             db: AsyncSession = Depends(get_db),
+            _user: Any = Depends(get_optional_user),
         ) -> dict[str, Any]:
             vs = viewset_class()
             return await vs.create(request, db, data)
@@ -116,6 +118,7 @@ class Router(APIRouter):
         async def retrieve_route(
             request: Request,
             db: AsyncSession = Depends(get_db),
+            _user: Any = Depends(get_optional_user),
             **kwargs: Any,
         ) -> dict[str, Any]:
             vs = viewset_class()
@@ -133,6 +136,7 @@ class Router(APIRouter):
             request: Request,
             data: dict[str, Any] = Body(...),
             db: AsyncSession = Depends(get_db),
+            _user: Any = Depends(get_optional_user),
         ) -> dict[str, Any]:
             vs = viewset_class()
             path_params = request.path_params
@@ -148,6 +152,7 @@ class Router(APIRouter):
             request: Request,
             data: dict[str, Any] = Body(...),
             db: AsyncSession = Depends(get_db),
+            _user: Any = Depends(get_optional_user),
         ) -> dict[str, Any]:
             vs = viewset_class()
             path_params = request.path_params
@@ -162,6 +167,7 @@ class Router(APIRouter):
         async def destroy_route(
             request: Request,
             db: AsyncSession = Depends(get_db),
+            _user: Any = Depends(get_optional_user),
         ) -> dict[str, Any]:
             vs = viewset_class()
             path_params = request.path_params
@@ -204,6 +210,7 @@ class Router(APIRouter):
                     async def action_endpoint(
                         request: Request,
                         db: AsyncSession = Depends(get_db),
+                        _user: Any = Depends(get_optional_user),
                         data: dict[str, Any] | None = Body(None),
                     ) -> Any:
                         vs = viewset_class()
@@ -245,6 +252,7 @@ class Router(APIRouter):
         async def endpoint(
             request: Request,
             db: AsyncSession = Depends(get_db),
+            _user: Any = Depends(get_optional_user),
         ) -> Any:
             method = request.method.lower()
             handler = getattr(view, method, None)
