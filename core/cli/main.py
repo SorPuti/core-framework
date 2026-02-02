@@ -513,7 +513,6 @@ from core.auth import (
     create_access_token,
     create_refresh_token,
     verify_token,
-    login_required,
 )
 
 from src.apps.users.models import User
@@ -647,13 +646,13 @@ class AuthViewSet(ModelViewSet):
         data = UserRegisterInput.model_validate(body)
         
         # Check if email exists
-        existing = await User.get_by_email(data.email, db)
+        existing = await User.get_by_email(str(data.email), db)
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         
         # Create user
         user = await User.create_user(
-            email=data.email,
+            email=str(data.email),
             password=data.password,
             db=db,
             first_name=data.first_name,
@@ -681,13 +680,13 @@ class AuthViewSet(ModelViewSet):
         data = LoginInput.model_validate(body)
         
         # Authenticate
-        user = await User.authenticate(data.email, data.password, db)
+        user = await User.authenticate(str(data.email), data.password, db)
         if not user:
             raise HTTPException(status_code=401, detail="Invalid email or password")
         
-        # Generate tokens
-        access_token = create_access_token({"sub": str(user.id), "email": user.email})
-        refresh_token = create_refresh_token({"sub": str(user.id)})
+        # Generate tokens using new API
+        access_token = create_access_token(user_id=user.id, extra_claims={"email": user.email})
+        refresh_token = create_refresh_token(user_id=user.id)
         
         return TokenResponse(
             access_token=access_token,
@@ -714,9 +713,9 @@ class AuthViewSet(ModelViewSet):
         if not payload:
             raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
         
-        # Generate new tokens
-        access_token = create_access_token({"sub": payload["sub"]})
-        refresh_token = create_refresh_token({"sub": payload["sub"]})
+        # Generate new tokens using new API
+        access_token = create_access_token(user_id=payload["sub"])
+        refresh_token = create_refresh_token(user_id=payload["sub"])
         
         return TokenResponse(
             access_token=access_token,
@@ -734,8 +733,13 @@ class AuthViewSet(ModelViewSet):
         Returns:
             Current user data
         """
-        # Get user from token
-        user = await login_required(request, db)
+        # User is available via request.state.user (populated by auth middleware)
+        # permission_classes=[IsAuthenticated] ensures user is authenticated
+        user = request.state.user
+        
+        if user is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
         return UserOutput.model_validate(user).model_dump()
     
     @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
@@ -755,8 +759,12 @@ class AuthViewSet(ModelViewSet):
         body = await request.json()
         data = ChangePasswordInput.model_validate(body)
         
-        # Get current user
-        user = await login_required(request, db)
+        # User is available via request.state.user (populated by auth middleware)
+        # permission_classes=[IsAuthenticated] ensures user is authenticated
+        user = request.state.user
+        
+        if user is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         
         # Verify current password
         if not user.check_password(data.current_password):
@@ -1244,6 +1252,7 @@ from core.permissions import AllowAny
 
 from src.api.config import settings
 from src.apps.users.routes import users_router, auth_router
+from src.apps.users.models import User
 
 
 # Configure DateTime to use UTC globally
@@ -1258,6 +1267,7 @@ configure_auth(
     access_token_expire_minutes=settings.auth_access_token_expire_minutes,
     refresh_token_expire_days=settings.auth_refresh_token_expire_days,
     password_hasher=settings.auth_password_hasher,
+    user_model=User,
 )
 
 
