@@ -29,10 +29,37 @@ Python framework inspired by Django, built on FastAPI. High performance, low cou
 
 ## Installation
 
-```bash
-# Global CLI installation
-pipx install "core-framework @ git+https://TOKEN@github.com/user/core-framework.git"
+### Global (CLI available anywhere)
 
+```bash
+# Recommended: pipx installs in isolated environment
+pipx install core-framework
+
+# Alternative: pip global (Debian/Ubuntu)
+pip install core-framework --break-system-packages
+
+# Alternative: pip user directory
+pip install core-framework --user
+```
+
+### Local (per project)
+
+```bash
+# Create virtualenv
+python -m venv .venv
+source .venv/bin/activate
+
+# Install
+pip install core-framework
+
+# With optional extras
+pip install "core-framework[postgres]"
+pip install "core-framework[enterprise]"
+```
+
+### Create Project
+
+```bash
 # Create new project
 core init my-project --python 3.13
 

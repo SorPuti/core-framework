@@ -47,8 +47,9 @@
 ## Quick Start
 
 ```bash
-# Instalar CLI
-pipx install "core-framework @ git+https://TOKEN@github.com/user/core-framework.git"
+# Instalar CLI (global)
+pipx install core-framework
+# ou: pip install core-framework --user
 
 # Criar projeto
 core init my-api

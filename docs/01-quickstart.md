@@ -4,12 +4,41 @@ Este guia cobre a criacao de uma API funcional do zero. O objetivo e demonstrar 
 
 ## Instalacao
 
-O framework e distribuido via Git. A instalacao via `pipx` disponibiliza o CLI globalmente, permitindo criar projetos em qualquer diretorio.
+O framework esta disponivel no PyPI. Escolha entre instalacao global (CLI disponivel em qualquer diretorio) ou local (por projeto).
+
+### Global (recomendado para CLI)
 
 ```bash
-# pipx instala em ambiente isolado, evitando conflitos de dependencias
-# Substitua TOKEN pelo seu token de acesso ao repositorio
-pipx install "core-framework @ git+https://TOKEN@github.com/user/core-framework.git"
+# pipx instala em ambiente isolado, evitando conflitos
+pipx install core-framework
+
+# Alternativa: pip global (Debian/Ubuntu)
+pip install core-framework --break-system-packages
+
+# Alternativa: pip no diretorio do usuario
+pip install core-framework --user
+```
+
+Apos instalacao global, o comando `core` fica disponivel em qualquer diretorio:
+
+```bash
+core --help
+core startproject meu_projeto
+```
+
+### Local (por projeto)
+
+```bash
+# Criar virtualenv
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+
+# Instalar
+pip install core-framework
+
+# Com extras opcionais
+pip install "core-framework[postgres]"      # PostgreSQL
+pip install "core-framework[enterprise]"    # Todas as features
 ```
 
 **Requisito**: Python 3.12 ou superior. O framework utiliza features de tipagem modernas que nao existem em versoes anteriores.

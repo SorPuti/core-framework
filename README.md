@@ -132,16 +132,53 @@ O framework usa apenas bibliotecas estaveis e bem mantidas:
 
 ## Instalacao
 
+### Global (CLI disponivel em qualquer diretorio)
+
 ```bash
-# Via pip (quando publicado)
+# Recomendado: pipx instala em ambiente isolado
+pipx install core-framework
+
+# Alternativa: pip global (requer --break-system-packages no Debian/Ubuntu)
+pip install core-framework --break-system-packages
+
+# Alternativa: pip no diretorio do usuario
+pip install core-framework --user
+```
+
+Apos instalacao global, o comando `core` fica disponivel:
+
+```bash
+core --help
+core startproject meu_projeto
+```
+
+### Local (por projeto)
+
+```bash
+# Criar e ativar virtualenv
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
+
+# Instalar no projeto
 pip install core-framework
 
-# Via git (desenvolvimento)
-pip install "core-framework @ git+https://github.com/user/core-framework.git"
-
-# Com extras
+# Com extras opcionais
 pip install "core-framework[postgres,kafka]"
+pip install "core-framework[enterprise]"  # Todas as features
 ```
+
+### Extras disponiveis
+
+| Extra | Dependencias |
+|-------|--------------|
+| `postgres` | asyncpg, psycopg |
+| `mysql` | aiomysql |
+| `kafka` | aiokafka |
+| `redis` | redis |
+| `rabbitmq` | aio-pika |
+| `messaging` | kafka + redis + rabbitmq + croniter |
+| `enterprise` | messaging + postgres |
 
 ## Quick Start
 
