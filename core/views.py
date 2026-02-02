@@ -271,14 +271,96 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         """
         Converte o valor de lookup para o tipo correto do campo.
         
-        Por padrão, tenta converter para int se o lookup_field for 'id'.
+        Detecta automaticamente o tipo do campo no modelo e converte
+        o valor de string (vindo da URL) para o tipo apropriado.
+        
+        Tipos suportados:
+        - Integer (int, Integer, BigInteger, SmallInteger)
+        - UUID (uuid.UUID, UUID)
+        - String (str, String, Text) - sem conversão
+        
+        Raises:
+            HTTPException 400: Se o valor não puder ser convertido
         """
-        if self.lookup_field == "id" and isinstance(value, str):
+        import uuid
+        from sqlalchemy import Integer, BigInteger, SmallInteger, String, Text
+        from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+        
+        # Se não for string, retorna como está
+        if not isinstance(value, str):
+            return value
+        
+        # Tenta obter o tipo do campo do modelo
+        field_type = self._get_lookup_field_type()
+        
+        if field_type is None:
+            # Fallback: tenta int se for campo 'id'
+            if self.lookup_field == "id":
+                try:
+                    return int(value)
+                except (ValueError, TypeError):
+                    self._raise_invalid_lookup_error(value, "integer")
+            return value
+        
+        # Converte baseado no tipo do campo
+        type_name = type(field_type).__name__
+        
+        # Tipos inteiros
+        if isinstance(field_type, (Integer, BigInteger, SmallInteger)) or type_name in ('Integer', 'BigInteger', 'SmallInteger'):
             try:
                 return int(value)
             except (ValueError, TypeError):
-                pass
+                self._raise_invalid_lookup_error(value, "integer")
+        
+        # UUID
+        if type_name in ('UUID', 'GUID') or isinstance(field_type, PG_UUID):
+            try:
+                return uuid.UUID(value)
+            except (ValueError, TypeError):
+                self._raise_invalid_lookup_error(value, "UUID")
+        
+        # String - sem conversão necessária
+        if isinstance(field_type, (String, Text)) or type_name in ('String', 'Text', 'VARCHAR'):
+            return value
+        
+        # Tipo desconhecido - retorna como está
         return value
+    
+    def _get_lookup_field_type(self) -> Any:
+        """
+        Obtém o tipo SQLAlchemy do campo de lookup.
+        
+        Returns:
+            Tipo do campo ou None se não encontrado
+        """
+        try:
+            # Obtém a coluna do modelo
+            mapper = inspect(self.model)
+            if self.lookup_field in mapper.columns:
+                column = mapper.columns[self.lookup_field]
+                return column.type
+        except Exception:
+            pass
+        return None
+    
+    def _raise_invalid_lookup_error(self, value: Any, expected_type: str) -> None:
+        """
+        Levanta erro padronizado para valor de lookup inválido.
+        
+        Args:
+            value: Valor recebido
+            expected_type: Tipo esperado (para mensagem de erro)
+        """
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_lookup_value",
+                "message": f"Invalid {self.lookup_field} format. Expected {expected_type}.",
+                "field": self.lookup_field,
+                "value": str(value),
+                "expected_type": expected_type,
+            }
+        )
     
     def get_serializer(self) -> Serializer:
         """Retorna instância do serializer."""
