@@ -83,12 +83,12 @@ class Order(Model):
     status: Mapped[str] = mapped_column(default="pending")
 ```
 
-### ViewSet with Event Publishing
+### ViewSet with Auto-Publish Events
 
 ```python
 # orders-api/src/apps/orders/views.py
 from core import ModelViewSet, action
-from core.messaging import get_producer
+from core.messaging import event
 from .models import Order
 from .schemas import OrderInput, OrderOutput
 
@@ -98,34 +98,34 @@ class OrderViewSet(ModelViewSet):
     output_schema = OrderOutput
     tags = ["Orders"]
     
+    @event("orders.created", topic="order-events", key_field="order_id")
     async def perform_create(self, data: dict, db) -> Order:
+        """Auto-publishes orders.created after save."""
         order = await super().perform_create(data, db)
-        
-        # Publish to Kafka
-        producer = get_producer()
-        await producer.send("orders.created", {
+        # Return dict with all data needed in event
+        return {
             "order_id": order.id,
             "user_id": order.user_id,
             "user_email": order.user_email,
             "total": str(order.total),
-        })
-        
-        return order
+        }
     
     @action(methods=["POST"], detail=True)
+    @event("orders.completed", topic="order-events", key_field="order_id")
     async def complete(self, request, db, **kwargs):
+        """Auto-publishes orders.completed on success."""
         order = await self.get_object(db, **kwargs)
         order.status = "completed"
         await order.save(db)
         
-        producer = get_producer()
-        await producer.send("orders.completed", {
+        return {
             "order_id": order.id,
             "user_email": order.user_email,
-        })
-        
-        return {"status": "completed"}
+            "status": "completed",
+        }
 ```
+
+Event is published automatically after response is sent to client.
 
 ### Main
 
@@ -194,43 +194,60 @@ class Notification(Model):
     sent_at: Mapped[DateTime | None] = mapped_column(default=None)
 ```
 
-### Message Handlers
+### Event Handlers (Class-Based)
 
 ```python
 # notifications-api/src/apps/notifications/handlers.py
-from core.messaging import message_handler
-from core.models import get_session
+from core.messaging import consumer, on_event
+from core.messaging.base import Event
 from .models import Notification
+
+@consumer("notifications-service", topics=["order-events"])
+class OrderNotificationsConsumer:
+    
+    @on_event("orders.created")
+    async def on_order_created(self, event: Event, db):
+        """Send order confirmation email."""
+        data = event.data
+        notification = Notification(
+            user_email=data["user_email"],
+            subject="Order Received",
+            body=f"Your order #{data['order_id']} has been received. Total: ${data['total']}",
+        )
+        await notification.save(db)
+        await self.send_email(notification)
+    
+    @on_event("orders.completed")
+    async def on_order_completed(self, event: Event, db):
+        """Send order completion email."""
+        data = event.data
+        notification = Notification(
+            user_email=data["user_email"],
+            subject="Order Completed",
+            body=f"Your order #{data['order_id']} has been completed and shipped.",
+        )
+        await notification.save(db)
+        await self.send_email(notification)
+    
+    async def send_email(self, notification: Notification):
+        from core.datetime import DateTime
+        notification.sent_at = DateTime.now()
+        # await email_client.send(...)
+```
+
+Alternative: Function-based handlers
+
+```python
+from core.messaging import message_handler
 
 @message_handler(topic="orders.created")
 async def on_order_created(message: dict, db):
-    """Send order confirmation email."""
     notification = Notification(
         user_email=message["user_email"],
         subject="Order Received",
-        body=f"Your order #{message['order_id']} has been received. Total: ${message['total']}",
+        body=f"Your order #{message['order_id']} received.",
     )
     await notification.save(db)
-    
-    # Send actual email
-    await send_email(notification)
-
-@message_handler(topic="orders.completed")
-async def on_order_completed(message: dict, db):
-    """Send order completion email."""
-    notification = Notification(
-        user_email=message["user_email"],
-        subject="Order Completed",
-        body=f"Your order #{message['order_id']} has been completed and shipped.",
-    )
-    await notification.save(db)
-    await send_email(notification)
-
-async def send_email(notification: Notification):
-    # Email sending logic
-    from core.datetime import DateTime
-    notification.sent_at = DateTime.now()
-    # await email_client.send(...)
 ```
 
 ### Main

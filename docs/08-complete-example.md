@@ -180,7 +180,7 @@ class ProductViewSet(ModelViewSet):
 # src/apps/orders/views.py
 from core import ModelViewSet, action
 from core.permissions import IsAuthenticated
-from core.messaging import get_producer
+from core.messaging import event
 from decimal import Decimal
 from .models import Order, OrderItem
 from .schemas import OrderInput, OrderOutput
@@ -200,7 +200,9 @@ class OrderViewSet(ModelViewSet):
             return qs.filter(user_id=user.id)
         return qs
     
-    async def perform_create(self, data: dict, db) -> Order:
+    @event("orders.created", topic="order-events", key_field="order_id")
+    async def perform_create(self, data: dict, db) -> dict:
+        """Auto-publishes orders.created after save."""
         user = self.request.state.user
         items_data = data.pop("items", [])
         
@@ -225,16 +227,13 @@ class OrderViewSet(ModelViewSet):
         order.total = total
         await order.save(db)
         
-        # Publish event
-        producer = get_producer()
-        await producer.send("orders.created", {
+        # Return dict - auto-published as event data
+        return {
             "order_id": order.id,
             "user_id": user.id,
             "user_email": user.email,
             "total": str(total),
-        })
-        
-        return order
+        }
     
     @action(methods=["POST"], detail=True)
     async def pay(self, request, db, **kwargs):
@@ -284,25 +283,30 @@ async def process_payment(order_id: int):
             raise Exception("Payment failed")
 ```
 
-## Message Handlers
+## Event Handlers
 
 ```python
 # src/apps/orders/handlers.py
-from core.messaging import message_handler
+from core.messaging import consumer, on_event
+from core.messaging.base import Event
 
-@message_handler(topic="orders.paid")
-async def on_order_paid(message: dict, db):
-    """Update inventory after payment."""
-    from .models import Order, OrderItem
-    from src.apps.products.models import Product
+@consumer("inventory-service", topics=["order-events"])
+class InventoryConsumer:
     
-    order = await Order.objects.using(db).get(id=message["order_id"])
-    items = await OrderItem.objects.using(db).filter(order_id=order.id).all()
-    
-    for item in items:
-        product = await Product.objects.using(db).get(id=item.product_id)
-        product.stock -= item.quantity
-        await product.save(db)
+    @on_event("orders.paid")
+    async def on_order_paid(self, event: Event, db):
+        """Update inventory after payment."""
+        from .models import Order, OrderItem
+        from src.apps.products.models import Product
+        
+        order_id = event.data["order_id"]
+        order = await Order.objects.using(db).get(id=order_id)
+        items = await OrderItem.objects.using(db).filter(order_id=order.id).all()
+        
+        for item in items:
+            product = await Product.objects.using(db).get(id=item.product_id)
+            product.stock -= item.quantity
+            await product.save(db)
 ```
 
 ## Routes

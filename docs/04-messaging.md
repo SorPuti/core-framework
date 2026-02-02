@@ -24,9 +24,53 @@ RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 REDIS_URL=redis://localhost:6379/0
 ```
 
-## Producer
+## @event Decorator (Auto-Publish)
 
-Send messages to topics.
+Emit events automatically after ViewSet actions succeed.
+
+```python
+from core import ModelViewSet, action
+from core.messaging import event
+
+class UserViewSet(ModelViewSet):
+    model = User
+    
+    @action(methods=["POST"], detail=False)
+    @event("user.created", topic="user-events", key_field="id")
+    async def register(self, request, db, **kwargs):
+        """POST /users/register - auto-publishes event on success."""
+        body = await request.json()
+        user = await User.create_user(
+            email=body["email"],
+            password=body["password"],
+            db=db,
+        )
+        return {"id": user.id, "email": user.email}
+```
+
+When `register()` succeeds, event is published automatically:
+
+```json
+{
+  "name": "user.created",
+  "data": {"id": 1, "email": "user@example.com"},
+  "timestamp": "2026-02-01T12:00:00Z",
+  "source": "my-service"
+}
+```
+
+### @event Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| event_name | str | Event name (e.g., "user.created") |
+| topic | str | Target topic (uses default if None) |
+| key_field | str | Field from result to use as message key |
+| include_result | bool | Include function result in event data |
+
+## Manual Producer
+
+For cases where you need more control.
 
 ```python
 from core.messaging import get_producer
@@ -43,9 +87,60 @@ async def send_order_created(order_id: int, user_id: int):
     )
 ```
 
-## Consumer
+## publish_event Helper
 
-Process messages from topics.
+Direct event publishing without decorator.
+
+```python
+from core.messaging import publish_event
+
+async def notify_user_updated(user_id: int, email: str):
+    await publish_event(
+        event_name="user.updated",
+        data={"id": user_id, "email": email},
+        topic="user-events",
+    )
+```
+
+## @consumer + @on_event (Class-Based)
+
+Group related event handlers in a class.
+
+```python
+from core.messaging import consumer, on_event
+from core.messaging.base import Event
+
+@consumer("order-service", topics=["user-events", "payment-events"])
+class OrderEventsConsumer:
+    
+    @on_event("user.created")
+    async def handle_user_created(self, event: Event, db):
+        """Create welcome order for new user."""
+        await Order.create_welcome_order(
+            user_id=event.data["id"],
+            db=db,
+        )
+    
+    @on_event("payment.completed")
+    async def handle_payment_completed(self, event: Event, db):
+        """Mark order as paid."""
+        await Order.mark_paid(
+            order_id=event.data["order_id"],
+            db=db,
+        )
+```
+
+### @consumer Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| group_id | str | Consumer group ID (for load balancing) |
+| topics | list[str] | Topics to subscribe to |
+| auto_start | bool | Auto-start when worker runs |
+
+## @message_handler (Function-Based)
+
+Simpler approach for single handlers.
 
 ```python
 from core.messaging import message_handler
@@ -55,7 +150,6 @@ async def handle_order_created(message: dict, db):
     """Process new order."""
     order_id = message["order_id"]
     
-    # Send confirmation email
     await send_email(
         to=message["user_email"],
         subject="Order Confirmed",
@@ -63,7 +157,7 @@ async def handle_order_created(message: dict, db):
     )
 ```
 
-## Consumer with Retry
+## Handler with Retry
 
 ```python
 @message_handler(
@@ -104,7 +198,34 @@ core consumer --topic orders.created --topic orders.updated
 core consumer
 ```
 
-## Producer in ViewSet
+## Complete ViewSet Example
+
+Using `@event` for auto-publish (recommended):
+
+```python
+from core import ModelViewSet, action
+from core.messaging import event
+
+class OrderViewSet(ModelViewSet):
+    model = Order
+    
+    @event("order.created", topic="order-events", key_field="id")
+    async def perform_create(self, data: dict, db) -> Order:
+        """Auto-publishes order.created after save."""
+        order = await super().perform_create(data, db)
+        return order
+    
+    @action(methods=["POST"], detail=True)
+    @event("order.completed", topic="order-events", key_field="id")
+    async def complete(self, request, db, **kwargs):
+        """POST /orders/{id}/complete - auto-publishes on success."""
+        order = await self.get_object(db, **kwargs)
+        order.status = "completed"
+        await order.save(db)
+        return {"id": order.id, "status": order.status}
+```
+
+Using manual producer (more control):
 
 ```python
 from core import ModelViewSet
@@ -116,12 +237,13 @@ class OrderViewSet(ModelViewSet):
     async def perform_create(self, data: dict, db) -> Order:
         order = await super().perform_create(data, db)
         
-        # Publish event
+        # Manual publish with custom data
         producer = get_producer()
         await producer.send("orders.created", {
             "order_id": order.id,
             "user_id": order.user_id,
             "total": float(order.total),
+            "items_count": len(order.items),
         })
         
         return order
@@ -144,18 +266,14 @@ async def handle_order(message: OrderCreatedEvent, db):
     print(f"Order {message.order_id} total: {message.total}")
 ```
 
-## Manual Consumer
+## Summary
 
-```python
-from core.messaging.kafka import KafkaConsumer
-
-async def run_custom_consumer():
-    consumer = KafkaConsumer(
-        group_id="my-service",
-        topics=["orders.created"],
-        message_handler=process_message,
-    )
-    await consumer.start()
-```
+| Approach | Use Case |
+|----------|----------|
+| `@event` | Auto-publish after action success |
+| `publish_event()` | Direct publish anywhere |
+| `get_producer()` | Full control over message |
+| `@consumer` + `@on_event` | Class-based handlers |
+| `@message_handler` | Simple function handlers |
 
 Next: [Multi-Service Architecture](05-multi-service.md)
