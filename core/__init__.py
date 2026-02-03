@@ -180,6 +180,23 @@ from core.relations import (
     AssociationTable,
 )
 
+# Choices - Django-style enums with value and label
+from core.choices import (
+    Choices,
+    TextChoices,
+    IntegerChoices,
+    # Common choices
+    CommonStatus,
+    PublishStatus,
+    OrderStatus,
+    PaymentStatus,
+    TaskPriority,
+    Weekday,
+    Month,
+    Gender,
+    Visibility,
+)
+
 # Exceptions - Centralized exception classes
 from core.exceptions import (
     # Base
@@ -224,7 +241,7 @@ from core.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 __all__ = [
     # Models
     "Model",
@@ -381,6 +398,19 @@ __all__ = [
     # Relations
     "Rel",
     "AssociationTable",
+    # Choices
+    "Choices",
+    "TextChoices",
+    "IntegerChoices",
+    "CommonStatus",
+    "PublishStatus",
+    "OrderStatus",
+    "PaymentStatus",
+    "TaskPriority",
+    "Weekday",
+    "Month",
+    "Gender",
+    "Visibility",
     # Exceptions - Base
     "CoreException",
     # Exceptions - Validation

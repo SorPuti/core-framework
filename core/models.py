@@ -201,6 +201,71 @@ class Field:
             primary_key=True,
             autoincrement=True,
         )
+    
+    @staticmethod
+    def choice(
+        choices_class: type,
+        *,
+        default: Any = None,
+        nullable: bool = False,
+        index: bool = False,
+    ) -> Mapped[Any]:
+        """
+        Campo para enums com TextChoices ou IntegerChoices.
+        
+        Armazena o valor do enum no banco e permite comparação direta.
+        
+        Args:
+            choices_class: Classe TextChoices ou IntegerChoices
+            default: Valor default (pode ser o enum member ou o valor)
+            nullable: Se o campo pode ser NULL
+            index: Se deve criar índice
+        
+        Example:
+            from core.choices import TextChoices, IntegerChoices
+            
+            class Status(TextChoices):
+                DRAFT = "draft", "Draft"
+                PUBLISHED = "published", "Published"
+            
+            class Priority(IntegerChoices):
+                LOW = 1, "Low"
+                HIGH = 3, "High"
+            
+            class Post(Model):
+                status: Mapped[str] = Field.choice(Status, default=Status.DRAFT)
+                priority: Mapped[int] = Field.choice(Priority, default=Priority.LOW)
+            
+            # Usage
+            post = Post(status=Status.PUBLISHED, priority=Priority.HIGH)
+            post.status == "published"  # True
+            post.status == Status.PUBLISHED  # True
+            
+            # Get label
+            Status.get_label(post.status)  # "Published"
+        """
+        from core.choices import TextChoices, IntegerChoices
+        
+        # Determine column type based on choices class
+        if issubclass(choices_class, str):
+            # TextChoices - use String with max_length from choices
+            max_length = choices_class.max_length + 10  # Add buffer
+            column_type = String(max(max_length, 50))  # Minimum 50
+        else:
+            # IntegerChoices - use Integer
+            column_type = Integer
+        
+        # Handle default value
+        actual_default = default
+        if default is not None and hasattr(default, "value"):
+            actual_default = default.value
+        
+        return mapped_column(
+            column_type,
+            nullable=nullable,
+            default=actual_default,
+            index=index,
+        )
 
 
 class Manager[T: "Model"]:
