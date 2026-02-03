@@ -42,6 +42,7 @@ from core.auth.base import (
     register_permission_backend,
     # Config
     AuthConfig,
+    AuthConfigurationError,
     configure_auth,
     get_auth_config,
 )
@@ -93,6 +94,22 @@ from core.auth.decorators import (
     login_required,
 )
 
+# Schemas
+from core.auth.schemas import (
+    BaseRegisterInput,
+    BaseLoginInput,
+    RefreshTokenInput,
+    ChangePasswordInput,
+    TokenResponse,
+    BaseUserOutput,
+    MessageResponse,
+)
+
+# Views
+from core.auth.views import (
+    CoreAuthViewSet,
+)
+
 __all__ = [
     # Base
     "AuthBackend",
@@ -110,6 +127,7 @@ __all__ = [
     "register_permission_backend",
     # Config
     "AuthConfig",
+    "AuthConfigurationError",
     "configure_auth",
     "get_auth_config",
     # Hashers
@@ -144,4 +162,14 @@ __all__ = [
     "require_staff",
     "require_active",
     "login_required",
+    # Schemas
+    "BaseRegisterInput",
+    "BaseLoginInput",
+    "RefreshTokenInput",
+    "ChangePasswordInput",
+    "TokenResponse",
+    "BaseUserOutput",
+    "MessageResponse",
+    # Views
+    "CoreAuthViewSet",
 ]

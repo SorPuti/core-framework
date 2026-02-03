@@ -73,7 +73,19 @@ class Router(APIRouter):
             com id="types".
         """
         viewset = viewset_class()
-        basename = basename or getattr(viewset_class, "model", None).__name__.lower()
+        
+        # Infer basename from model or class name
+        if basename is None:
+            model = getattr(viewset_class, "model", None)
+            if model is not None:
+                # Use model's tablename or class name
+                basename = getattr(model, "__tablename__", None) or model.__name__.lower()
+            else:
+                # Fallback: infer from ViewSet class name
+                # UserViewSet -> user, EventViewSet -> event
+                class_name = viewset_class.__name__
+                basename = class_name.lower().replace("viewset", "").replace("view", "") or "api"
+        
         tags = tags or viewset_class.tags or [basename]
         
         lookup_field = viewset_class.lookup_field

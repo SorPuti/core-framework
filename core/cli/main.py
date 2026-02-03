@@ -3000,12 +3000,19 @@ For more information, visit: https://github.com/SorPuti/core-framework
     
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
-    # init
+    # init (also aliased as startproject)
     init_parser = subparsers.add_parser("init", help="Initialize a new project with uv")
     init_parser.add_argument("name", nargs="?", help="Project name (default: myproject)")
     init_parser.add_argument("--python", "-p", default="3.12", help="Python version (default: 3.12)")
     init_parser.add_argument("--no-venv", action="store_true", help="Skip virtual environment setup")
     init_parser.set_defaults(func=cmd_init)
+    
+    # startproject (alias for init - Django-style command)
+    startproject_parser = subparsers.add_parser("startproject", help="Create a new project (alias for init)")
+    startproject_parser.add_argument("name", nargs="?", help="Project name (default: myproject)")
+    startproject_parser.add_argument("--python", "-p", default="3.12", help="Python version (default: 3.12)")
+    startproject_parser.add_argument("--no-venv", action="store_true", help="Skip virtual environment setup")
+    startproject_parser.set_defaults(func=cmd_init)
     
     # makemigrations
     make_parser = subparsers.add_parser("makemigrations", help="Generate migration files")
@@ -3061,6 +3068,11 @@ For more information, visit: https://github.com/SorPuti/core-framework
     createapp_parser = subparsers.add_parser("createapp", help="Create a new app/module")
     createapp_parser.add_argument("name", help="App name")
     createapp_parser.set_defaults(func=cmd_createapp)
+    
+    # startapp (alias for createapp - Django-style command)
+    startapp_parser = subparsers.add_parser("startapp", help="Create a new app (alias for createapp)")
+    startapp_parser.add_argument("name", help="App name")
+    startapp_parser.set_defaults(func=cmd_createapp)
     
     # reset_db
     resetdb_parser = subparsers.add_parser(

@@ -51,15 +51,47 @@ if TYPE_CHECKING:
 # Tabela para rastrear migrações aplicadas
 MIGRATIONS_TABLE = "_core_migrations"
 
-CREATE_MIGRATIONS_TABLE_SQL = f"""
-CREATE TABLE IF NOT EXISTS "{MIGRATIONS_TABLE}" (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app VARCHAR(255) NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(app, name)
-)
-"""
+
+def _get_migrations_table_sql(dialect: str) -> str:
+    """
+    Returns dialect-specific SQL for creating migrations table.
+    
+    Args:
+        dialect: Database dialect (sqlite, postgresql, mysql)
+    
+    Returns:
+        CREATE TABLE SQL statement appropriate for the dialect
+    """
+    if dialect == "postgresql":
+        return f"""
+            CREATE TABLE IF NOT EXISTS "{MIGRATIONS_TABLE}" (
+                id SERIAL PRIMARY KEY,
+                app VARCHAR(255) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(app, name)
+            )
+        """
+    elif dialect == "mysql":
+        return f"""
+            CREATE TABLE IF NOT EXISTS `{MIGRATIONS_TABLE}` (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                app VARCHAR(255) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(app, name)
+            )
+        """
+    else:  # sqlite and others
+        return f"""
+            CREATE TABLE IF NOT EXISTS "{MIGRATIONS_TABLE}" (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                app VARCHAR(255) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(app, name)
+            )
+        """
 
 
 class MigrationEngine:
@@ -109,7 +141,8 @@ class MigrationEngine:
     
     async def _ensure_migrations_table(self, conn: AsyncConnection) -> None:
         """Garante que a tabela de migrações existe."""
-        await conn.execute(text(CREATE_MIGRATIONS_TABLE_SQL))
+        sql = _get_migrations_table_sql(self.dialect)
+        await conn.execute(text(sql))
         await conn.commit()
     
     async def _get_applied_migrations(self, conn: AsyncConnection) -> list[tuple[str, str]]:

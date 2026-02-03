@@ -490,6 +490,36 @@ class AuthConfig:
 _auth_config: AuthConfig | None = None
 
 
+class AuthConfigurationError(Exception):
+    """Raised when auth configuration is invalid or missing dependencies."""
+    pass
+
+
+def _check_hasher_dependencies(hasher_name: str) -> None:
+    """
+    Check if required dependencies for a password hasher are installed.
+    
+    Raises:
+        AuthConfigurationError: If required package is not installed
+    """
+    dependency_map = {
+        "bcrypt": ("bcrypt", "pip install bcrypt"),
+        "argon2": ("argon2-cffi", "pip install argon2-cffi"),
+        "scrypt": ("scrypt", "pip install scrypt"),
+    }
+    
+    if hasher_name in dependency_map:
+        package_name, install_cmd = dependency_map[hasher_name]
+        try:
+            __import__(package_name.replace("-", "_"))
+        except ImportError:
+            raise AuthConfigurationError(
+                f"Password hasher '{hasher_name}' requires the '{package_name}' package.\n"
+                f"Install with: {install_cmd}\n"
+                f"Or use password_hasher='pbkdf2' (default, no extra dependencies)"
+            )
+
+
 def configure_auth(config: AuthConfig | None = None, **kwargs) -> AuthConfig:
     """
     Configura o sistema de autenticação.
@@ -501,18 +531,27 @@ def configure_auth(config: AuthConfig | None = None, **kwargs) -> AuthConfig:
     Returns:
         Configuração aplicada
         
+    Raises:
+        AuthConfigurationError: If password hasher requires missing dependency
+        
     Exemplo:
         # Com objeto
         configure_auth(AuthConfig(secret_key="..."))
         
         # Com kwargs
         configure_auth(secret_key="...", access_token_expire_minutes=60)
+        
+        # Com bcrypt (requer: pip install bcrypt)
+        configure_auth(password_hasher="bcrypt")
     """
     global _auth_config, _default_auth_backend, _default_password_hasher
     global _default_token_backend, _default_permission_backend
     
     if config is None:
         config = AuthConfig(**kwargs)
+    
+    # Check hasher dependencies before configuring
+    _check_hasher_dependencies(config.password_hasher)
     
     _auth_config = config
     

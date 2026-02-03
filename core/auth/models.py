@@ -718,27 +718,31 @@ class User(AbstractUser, PermissionsMixin):
     """
     Modelo de usuário completo com grupos e permissões.
     
-    Pronto para usar ou herdar para adicionar campos extras.
+    IMPORTANTE: Este modelo usa __tablename__ = "_core_users" para evitar
+    conflitos com modelos User definidos pelo desenvolvedor. Se você precisa
+    de um modelo User customizado, herde de AbstractUser em vez de usar este.
     
     Exemplo:
-        # Criar usuário
+        # Usar o User do core diretamente
+        from core.auth import User
         user = await User.create_user("user@example.com", "password123", db)
         
-        # Criar superusuário
-        admin = await User.create_superuser("admin@example.com", "password123", db)
+        # OU criar seu próprio User (recomendado para projetos reais)
+        from core.auth import AbstractUser, PermissionsMixin
         
-        # Verificar permissão
-        if user.has_perm("posts.delete"):
-            ...
-        
-        # Adicionar a grupo
-        await user.add_to_group("editors", db)
-        
-        # Autenticar
-        user = await User.authenticate("user@example.com", "password123", db)
+        class User(AbstractUser, PermissionsMixin):
+            __tablename__ = "users"
+            # seus campos customizados
+            phone: Mapped[str | None] = Field.string(max_length=20, nullable=True)
+    
+    Métodos disponíveis:
+        - create_user(email, password, db) - Cria usuário normal
+        - create_superuser(email, password, db) - Cria superusuário
+        - authenticate(email, password, db) - Autentica usuário
+        - get_by_email(email, db) - Busca por email
     """
     
-    __tablename__ = "auth_users"
+    __tablename__ = "_core_users"  # Prefixo _ para evitar conflito com User do projeto
     
     # Campos adicionais opcionais
     first_name: Mapped[str | None] = Field.string(max_length=150, nullable=True)
