@@ -276,6 +276,63 @@ class Producer(ABC):
         for message in messages:
             await self.send(topic, message)
     
+    async def send_fire_and_forget(
+        self,
+        topic: str,
+        message: dict[str, Any],
+        key: str | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        """
+        Send a message without waiting for broker acknowledgment.
+        
+        This is the fastest method for high-throughput scenarios.
+        Default implementation calls send() - override for optimization.
+        
+        Args:
+            topic: Topic name
+            message: Message payload
+            key: Optional message key
+            headers: Optional headers
+        """
+        await self.send(topic, message, key, headers)
+    
+    async def send_batch_fire_and_forget(
+        self,
+        topic: str,
+        messages: list[dict[str, Any]],
+    ) -> int:
+        """
+        Send multiple messages without waiting for acknowledgment.
+        
+        Default implementation calls send_fire_and_forget for each.
+        Override for batch optimization.
+        
+        Args:
+            topic: Topic name
+            messages: List of message payloads
+        
+        Returns:
+            Number of messages queued
+        """
+        for message in messages:
+            await self.send_fire_and_forget(topic, message)
+        return len(messages)
+    
+    async def flush(self, timeout: float | None = None) -> int:
+        """
+        Flush all pending messages.
+        
+        Override in implementations that support buffering.
+        
+        Args:
+            timeout: Max seconds to wait
+        
+        Returns:
+            Number of messages still in queue (0 = all delivered)
+        """
+        return 0
+    
     @abstractmethod
     async def start(self) -> None:
         """Start the producer."""

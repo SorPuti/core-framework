@@ -276,6 +276,68 @@ class ConfluentProducer(Producer):
         
         self._producer.poll(0)
     
+    async def send_fire_and_forget(
+        self,
+        topic: str,
+        message: dict[str, Any],
+        key: str | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        """
+        Send a message without waiting for broker acknowledgment.
+        
+        This is the fastest method for high-throughput scenarios.
+        Messages are batched internally by librdkafka and sent efficiently.
+        
+        Use this when:
+        - You need maximum throughput (>10k msg/sec)
+        - Message ordering per partition is sufficient
+        - You can tolerate rare message loss on broker failure
+        
+        Args:
+            topic: Topic name
+            message: Message payload (dict)
+            key: Optional message key for partitioning
+            headers: Optional message headers
+        
+        Example:
+            # High-throughput event streaming
+            for event in events:
+                await producer.send_fire_and_forget("events", event)
+            
+            # Flush at end of batch if needed
+            await producer.flush()
+        """
+        await self.send(topic, message, key, headers, wait=False)
+    
+    async def send_batch_fire_and_forget(
+        self,
+        topic: str,
+        messages: list[dict[str, Any]],
+    ) -> int:
+        """
+        Send multiple messages without waiting for acknowledgment.
+        
+        This is the fastest method for bulk message sending.
+        Returns immediately after queueing all messages.
+        
+        Args:
+            topic: Topic name
+            messages: List of message payloads
+        
+        Returns:
+            Number of messages queued
+        
+        Example:
+            # Send 10k events in ~100ms
+            count = await producer.send_batch_fire_and_forget("events", events)
+            print(f"Queued {count} events")
+            
+            # Optional: ensure delivery at end of request
+            await producer.flush()
+        """
+        return await self.send_batch(topic, messages, wait=False)
+    
     async def send_event(
         self,
         topic: str,
