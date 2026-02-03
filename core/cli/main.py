@@ -13,7 +13,16 @@ Comandos:
     run             Executa servidor de desenvolvimento
     shell           Abre shell interativo async
     routes          Lista rotas registradas
+    test            Executa testes com ambiente isolado
     version         Mostra versão do framework
+
+Comando test:
+    core test                       # Roda todos os testes em tests/
+    core test tests/test_auth.py    # Roda arquivo específico
+    core test -v                    # Saída verbosa
+    core test --cov                 # Com cobertura de código
+    core test -k "test_login"       # Filtrar por keyword
+    core test -m unit               # Apenas testes unitários
 """
 
 from __future__ import annotations
@@ -470,6 +479,112 @@ def cmd_version(args: argparse.Namespace) -> int:
     from core import __version__
     print(f"Core Framework {bold(__version__)}")
     return 0
+
+
+def cmd_test(args: argparse.Namespace) -> int:
+    """
+    Run tests with auto-discovery and isolated environment.
+    
+    This command:
+    - Automatically sets up an isolated test environment
+    - Initializes database with in-memory SQLite
+    - Configures auth, settings, and middleware
+    - Runs pytest with appropriate options
+    - Supports coverage reporting
+    
+    Usage:
+        core test                    # Run all tests in tests/
+        core test tests/test_auth.py # Run specific file
+        core test -v                 # Verbose output
+        core test --cov              # With coverage
+        core test -k "test_login"    # Filter by keyword
+        core test -m unit            # Only unit tests
+    """
+    import subprocess
+    import shutil
+    
+    # Check if pytest is installed
+    pytest_path = shutil.which("pytest")
+    if not pytest_path:
+        print(error("pytest not installed. Install with:"))
+        print(info("  pip install pytest pytest-asyncio"))
+        return 1
+    
+    print(bold("🧪 Core Framework Test Runner"))
+    print()
+    
+    # Build pytest command
+    cmd = ["python", "-m", "pytest"]
+    
+    # Add test path
+    cmd.append(args.path)
+    
+    # Verbose
+    if args.verbose:
+        cmd.append("-v")
+    
+    # Keyword filter
+    if args.keyword:
+        cmd.extend(["-k", args.keyword])
+    
+    # Exit on first failure
+    if args.exitfirst:
+        cmd.append("-x")
+    
+    # Marker filter
+    if args.marker:
+        cmd.extend(["-m", args.marker])
+    
+    # No header
+    if args.no_header:
+        cmd.append("--no-header")
+    
+    # Coverage
+    if args.cov:
+        # Check if pytest-cov is installed
+        if not shutil.which("pytest-cov") and not _check_pytest_cov():
+            print(warning("pytest-cov not installed. Install with:"))
+            print(info("  pip install pytest-cov"))
+            print()
+        
+        cmd.append(f"--cov={args.cov}")
+        cmd.append(f"--cov-report={args.cov_report}")
+    
+    # Always use asyncio mode auto
+    cmd.extend(["--asyncio-mode=auto"])
+    
+    # Show short traceback
+    cmd.append("--tb=short")
+    
+    print(info(f"Running: {' '.join(cmd)}"))
+    print()
+    
+    # Set environment variables for isolated testing
+    env = os.environ.copy()
+    env["TESTING"] = "true"
+    env["DEBUG"] = "true"
+    env.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+    env.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
+    
+    # Run pytest
+    try:
+        result = subprocess.run(cmd, env=env)
+        return result.returncode
+    except KeyboardInterrupt:
+        print(warning("\nTests interrupted"))
+        return 130
+    except Exception as e:
+        print(error(f"Error running tests: {e}"))
+        return 1
+
+
+def _check_pytest_cov() -> bool:
+    """Check if pytest-cov is installed as a module."""
+    try:
+        import pytest_cov
+        return True
+    except ImportError:
+        return False
 
 
 def check_uv_installed() -> bool:
@@ -3746,6 +3861,54 @@ For more information, visit: https://github.com/SorPuti/core-framework
         help="List registered tasks"
     )
     tasks_parser.set_defaults(func=cmd_tasks)
+    
+    # test
+    test_parser = subparsers.add_parser(
+        "test",
+        help="Run tests with auto-discovery and isolated environment"
+    )
+    test_parser.add_argument(
+        "path",
+        nargs="?",
+        default="tests",
+        help="Test path or file (default: tests)"
+    )
+    test_parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Verbose output"
+    )
+    test_parser.add_argument(
+        "-k", "--keyword",
+        help="Only run tests matching keyword expression"
+    )
+    test_parser.add_argument(
+        "-x", "--exitfirst",
+        action="store_true",
+        help="Exit on first failure"
+    )
+    test_parser.add_argument(
+        "--cov",
+        nargs="?",
+        const=".",
+        help="Enable coverage (optionally specify source)"
+    )
+    test_parser.add_argument(
+        "--cov-report",
+        choices=["term", "html", "xml", "json"],
+        default="term",
+        help="Coverage report format"
+    )
+    test_parser.add_argument(
+        "-m", "--marker",
+        help="Only run tests with this marker (e.g., 'unit', 'integration')"
+    )
+    test_parser.add_argument(
+        "--no-header",
+        action="store_true",
+        help="Disable pytest header"
+    )
+    test_parser.set_defaults(func=cmd_test)
     
     return parser
 

@@ -10,6 +10,8 @@ Comandos disponíveis:
 - core run: Executa o servidor de desenvolvimento
 - core shell: Abre shell interativo
 - core routes: Lista rotas registradas
+- core test: Executa testes com ambiente isolado
+- core version: Mostra versão do framework
 """
 
 from core.cli.main import cli, main
