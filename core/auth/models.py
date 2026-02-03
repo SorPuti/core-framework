@@ -714,35 +714,37 @@ class PermissionsMixin:
 # User Model (pronto para usar)
 # =============================================================================
 
-class User(AbstractUser, PermissionsMixin):
+class CoreUser(AbstractUser, PermissionsMixin):
     """
-    Modelo de usuário completo com grupos e permissões.
+    Modelo de usuário do Core Framework.
     
-    IMPORTANTE: Este modelo usa __tablename__ = "_core_users" para evitar
-    conflitos com modelos User definidos pelo desenvolvedor. Se você precisa
-    de um modelo User customizado, herde de AbstractUser em vez de usar este.
+    IMPORTANTE: Esta classe foi renomeada de 'User' para 'CoreUser' na v0.9.2
+    para evitar conflitos no SQLAlchemy registry quando o projeto define seu
+    próprio modelo User.
     
-    Exemplo:
-        # Usar o User do core diretamente
-        from core.auth import User
-        user = await User.create_user("user@example.com", "password123", db)
-        
-        # OU criar seu próprio User (recomendado para projetos reais)
+    Para projetos reais, SEMPRE crie seu próprio User:
+    
         from core.auth import AbstractUser, PermissionsMixin
         
         class User(AbstractUser, PermissionsMixin):
             __tablename__ = "users"
-            # seus campos customizados
+            
+            # Seus campos customizados
             phone: Mapped[str | None] = Field.string(max_length=20, nullable=True)
     
-    Métodos disponíveis:
+    Se você precisa de um User rápido para testes/protótipos:
+    
+        from core.auth import CoreUser
+        user = await CoreUser.create_user("user@example.com", "password123", db)
+    
+    Métodos disponíveis (herdados de AbstractUser):
         - create_user(email, password, db) - Cria usuário normal
         - create_superuser(email, password, db) - Cria superusuário
         - authenticate(email, password, db) - Autentica usuário
         - get_by_email(email, db) - Busca por email
     """
     
-    __tablename__ = "_core_users"  # Prefixo _ para evitar conflito com User do projeto
+    __tablename__ = "_core_users"
     
     # Campos adicionais opcionais
     first_name: Mapped[str | None] = Field.string(max_length=150, nullable=True)
@@ -758,3 +760,22 @@ class User(AbstractUser, PermissionsMixin):
     def short_name(self) -> str:
         """Retorna primeiro nome ou email."""
         return self.first_name or self.email.split("@")[0]
+
+
+# Alias para compatibilidade (DEPRECATED - será removido em v1.0)
+# Use CoreUser ou crie seu próprio User herdando de AbstractUser
+import warnings
+
+def _get_deprecated_user():
+    """Returns CoreUser with deprecation warning."""
+    warnings.warn(
+        "Importing 'User' from core.auth is deprecated and will be removed in v1.0. "
+        "Create your own User class inheriting from AbstractUser, or use CoreUser directly.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return CoreUser
+
+# For backwards compatibility, User is an alias to CoreUser
+# But projects should define their own User class
+User = CoreUser
