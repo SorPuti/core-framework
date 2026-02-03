@@ -65,6 +65,193 @@ def bold(text: str) -> str:
     return color(text, Colors.BOLD)
 
 
+# =============================================================================
+# Connection Health Checks
+# =============================================================================
+
+def check_database_connection(database_url: str) -> bool:
+    """
+    Check if database is accessible.
+    
+    Args:
+        database_url: Database connection URL
+    
+    Returns:
+        True if connection successful, False otherwise (prints error message)
+    """
+    import asyncio
+    from urllib.parse import urlparse
+    
+    parsed = urlparse(database_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 5432
+    
+    async def check():
+        try:
+            # Quick socket check first
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            result = sock.connect_ex((host, port))
+            sock.close()
+            
+            if result != 0:
+                return False, "connection_refused"
+            
+            # Try actual database connection
+            from sqlalchemy.ext.asyncio import create_async_engine
+            from sqlalchemy import text
+            
+            engine = create_async_engine(database_url, pool_pre_ping=True)
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            await engine.dispose()
+            return True, None
+            
+        except socket.gaierror:
+            return False, "dns_error"
+        except Exception as e:
+            error_str = str(e).lower()
+            if "authentication" in error_str or "password" in error_str:
+                return False, "auth_error"
+            return False, "connection_refused"
+    
+    success, error_type = asyncio.run(check())
+    
+    if not success:
+        print()
+        print(error("✗ Database Connection Failed"))
+        print()
+        print(f"  URL: {database_url}")
+        print(f"  Host: {host}:{port}")
+        print()
+        
+        if error_type == "dns_error":
+            print(error("  Could not resolve hostname."))
+            print()
+            print("  Solutions:")
+            print("    1. Check if the hostname is correct")
+            print("    2. If using Docker, ensure the database container is running")
+            print("    3. Try using IP address (127.0.0.1) instead of hostname")
+        elif error_type == "auth_error":
+            print(error("  Authentication failed."))
+            print()
+            print("  Solutions:")
+            print("    1. Check username and password in DATABASE_URL")
+            print("    2. Verify the user has access to the database")
+        else:
+            print(error("  Could not connect to the database server."))
+            print()
+            print("  Solutions:")
+            print("    1. Start your database: docker compose up -d db")
+            print("    2. Check if PostgreSQL/MySQL is running")
+            print("    3. Verify DATABASE_URL in .env file")
+            print("    4. Check firewall/network settings")
+        print()
+        return False
+    
+    return True
+
+
+def check_kafka_connection(bootstrap_servers: str = None) -> bool:
+    """
+    Check if Kafka is accessible.
+    
+    Args:
+        bootstrap_servers: Kafka bootstrap servers (uses config if None)
+    
+    Returns:
+        True if connection successful, False otherwise (prints error message)
+    """
+    from core.messaging.config import get_messaging_settings
+    
+    settings = get_messaging_settings()
+    servers = bootstrap_servers or settings.kafka_bootstrap_servers
+    kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
+    
+    # Parse first server for socket check
+    first_server = servers.split(",")[0]
+    if ":" in first_server:
+        host, port_str = first_server.rsplit(":", 1)
+        port = int(port_str)
+    else:
+        host = first_server
+        port = 9092
+    
+    # Quick socket check
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(3)
+    
+    try:
+        result = sock.connect_ex((host, port))
+        sock.close()
+        
+        if result != 0:
+            raise ConnectionRefusedError()
+        
+        return True
+        
+    except socket.gaierror:
+        print()
+        print(error("✗ Kafka Connection Failed"))
+        print()
+        print(f"  Servers: {servers}")
+        print()
+        print(error("  Could not resolve hostname."))
+        print()
+        print("  Solutions:")
+        print("    1. Check KAFKA_BOOTSTRAP_SERVERS in .env")
+        print("    2. If using Docker, ensure Kafka container is running")
+        print("    3. Try using IP address instead of hostname")
+        print()
+        return False
+        
+    except (ConnectionRefusedError, OSError):
+        print()
+        print(error("✗ Kafka Connection Failed"))
+        print()
+        print(f"  Servers: {servers}")
+        print(f"  Backend: {kafka_backend}")
+        print()
+        print(error("  Could not connect to Kafka broker."))
+        print()
+        print("  Solutions:")
+        print("    1. Start Kafka: docker compose up -d kafka zookeeper")
+        print("    2. Check KAFKA_BOOTSTRAP_SERVERS in .env")
+        print("    3. Verify Kafka is accessible at the configured address")
+        print("    4. Check if the port is correct (default: 9092)")
+        print()
+        return False
+
+
+def check_required_package(package_name: str, install_cmd: str = None) -> bool:
+    """
+    Check if a required package is installed.
+    
+    Args:
+        package_name: Name of the package to check
+        install_cmd: Install command to show (defaults to pip install package_name)
+    
+    Returns:
+        True if installed, False otherwise (prints error message)
+    """
+    try:
+        __import__(package_name.replace("-", "_"))
+        return True
+    except ImportError:
+        print()
+        print(error(f"✗ Missing Dependency: {package_name}"))
+        print()
+        print(f"  Install with: {install_cmd or f'pip install {package_name}'}")
+        print()
+        return False
+
+
+# =============================================================================
+# Configuração padrão
+# =============================================================================
+
 # Configuração padrão
 DEFAULT_CONFIG = {
     "database_url": "sqlite+aiosqlite:///./app.db",
@@ -72,6 +259,7 @@ DEFAULT_CONFIG = {
     "app_label": "main",
     "models_module": "app.models",
     "workers_module": None,  # Auto-discover if not set
+    "tasks_module": None,  # Auto-discover if not set
     "app_module": "app.main",
     "host": "0.0.0.0",
     "port": 8000,
@@ -1836,6 +2024,10 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     """Aplica migrações pendentes."""
     config = load_config()
     
+    # Check database connection first
+    if not check_database_connection(config["database_url"]):
+        return 1
+    
     print(info("Applying migrations..."))
     
     from core.migrations.engine import MigrationEngine
@@ -1866,6 +2058,10 @@ def cmd_showmigrations(args: argparse.Namespace) -> int:
     """Mostra status das migrações."""
     config = load_config()
     
+    # Check database connection first
+    if not check_database_connection(config["database_url"]):
+        return 1
+    
     from core.migrations import showmigrations
     
     async def run():
@@ -1882,6 +2078,10 @@ def cmd_showmigrations(args: argparse.Namespace) -> int:
 def cmd_rollback(args: argparse.Namespace) -> int:
     """Reverte migrações."""
     config = load_config()
+    
+    # Check database connection first
+    if not check_database_connection(config["database_url"]):
+        return 1
     
     print(info("Rolling back migrations..."))
     
@@ -1908,6 +2108,10 @@ def cmd_rollback(args: argparse.Namespace) -> int:
 def cmd_check(args: argparse.Namespace) -> int:
     """Analisa migrações pendentes sem aplicar."""
     config = load_config()
+    
+    # Check database connection first
+    if not check_database_connection(config["database_url"]):
+        return 1
     
     print(info("Checking pending migrations..."))
     
@@ -1996,6 +2200,10 @@ def cmd_reset_db(args: argparse.Namespace) -> int:
     Use only in development or when you need a fresh start.
     """
     config = load_config()
+    
+    # Check database connection first
+    if not check_database_connection(config["database_url"]):
+        return 1
     
     print()
     print(error("=" * 60))
@@ -2747,6 +2955,10 @@ def cmd_consumer(args: argparse.Namespace) -> int:
 
 def cmd_runworker(args: argparse.Namespace) -> int:
     """Run a message worker."""
+    # Check Kafka connection first
+    if not check_kafka_connection():
+        return 1
+    
     print()
     print(bold("Starting Message Worker"))
     print("=" * 50)
@@ -2785,9 +2997,23 @@ def cmd_runworker(args: argparse.Namespace) -> int:
             print(info("No workers registered. Define workers with @worker decorator or Worker class."))
         return 1
     
+    # Get topic name - handle both string and class
+    input_topic = worker_config.input_topic
+    if hasattr(input_topic, 'name'):
+        input_topic = input_topic.name
+    elif hasattr(input_topic, '__name__'):
+        input_topic = input_topic.__name__
+    
+    output_topic = worker_config.output_topic
+    if output_topic:
+        if hasattr(output_topic, 'name'):
+            output_topic = output_topic.name
+        elif hasattr(output_topic, '__name__'):
+            output_topic = output_topic.__name__
+    
     print(info(f"Worker: {worker_name}"))
-    print(info(f"Input topic: {worker_config.input_topic}"))
-    print(info(f"Output topic: {worker_config.output_topic or 'None'}"))
+    print(info(f"Input topic: {input_topic}"))
+    print(info(f"Output topic: {output_topic or 'None'}"))
     print(info(f"Concurrency: {worker_config.concurrency}"))
     print()
     
@@ -2921,10 +3147,24 @@ def cmd_workers_list(args: argparse.Namespace) -> int:
         return 0
     
     for name, config in workers.items():
+        # Get topic name - handle both string and class
+        input_topic = config.input_topic
+        if hasattr(input_topic, 'name'):
+            input_topic = input_topic.name
+        elif hasattr(input_topic, '__name__'):
+            input_topic = input_topic.__name__
+        
+        output_topic = config.output_topic
+        if output_topic:
+            if hasattr(output_topic, 'name'):
+                output_topic = output_topic.name
+            elif hasattr(output_topic, '__name__'):
+                output_topic = output_topic.__name__
+        
         print()
         print(f"  {bold(name)}")
-        print(f"    Input:  {config.input_topic}")
-        print(f"    Output: {config.output_topic or '-'}")
+        print(f"    Input:  {input_topic}")
+        print(f"    Output: {output_topic or '-'}")
         print(f"    Concurrency: {config.concurrency}")
         print(f"    Retries: {config.retry_policy.max_retries}")
     
@@ -2936,37 +3176,79 @@ def cmd_workers_list(args: argparse.Namespace) -> int:
 
 def cmd_topics_list(args: argparse.Namespace) -> int:
     """List Kafka topics."""
+    # Check Kafka connection first
+    if not check_kafka_connection():
+        return 1
+    
     print()
     print(bold("Kafka Topics"))
     print("=" * 50)
     
     async def list_topics():
-        from core.messaging.kafka import KafkaAdmin
+        from core.messaging.config import get_messaging_settings
         
-        admin = KafkaAdmin()
-        await admin.connect()
+        settings = get_messaging_settings()
+        kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
         
-        topics = await admin.list_topics()
+        if kafka_backend == "confluent":
+            if not check_required_package("confluent_kafka", "pip install confluent-kafka"):
+                return
+            
+            from confluent_kafka.admin import AdminClient
+            
+            config = {"bootstrap.servers": settings.kafka_bootstrap_servers}
+            
+            # Add security config if needed
+            if settings.kafka_security_protocol != "PLAINTEXT":
+                config.update({
+                    "security.protocol": settings.kafka_security_protocol,
+                    "sasl.mechanism": settings.kafka_sasl_mechanism or "",
+                    "sasl.username": settings.kafka_sasl_username or "",
+                    "sasl.password": settings.kafka_sasl_password or "",
+                })
+            
+            admin = AdminClient(config)
+            metadata = admin.list_topics(timeout=10)
+            topics = list(metadata.topics.keys())
+        else:
+            if not check_required_package("aiokafka", "pip install aiokafka"):
+                return
+            
+            from core.messaging.kafka import KafkaAdmin
+            
+            admin = KafkaAdmin()
+            await admin.connect()
+            topics = await admin.list_topics()
+            await admin.close()
         
         if not topics:
             print(info("No topics found."))
         else:
-            for topic in sorted(topics):
-                print(f"  - {topic}")
-        
-        await admin.close()
+            # Filter internal topics
+            user_topics = [t for t in sorted(topics) if not t.startswith("_")]
+            internal_topics = [t for t in sorted(topics) if t.startswith("_")]
+            
+            if user_topics:
+                print()
+                for topic in user_topics:
+                    print(f"  {topic}")
+            
+            if internal_topics:
+                print()
+                print(info("Internal topics:"))
+                for topic in internal_topics:
+                    print(f"  {topic}")
     
-    try:
-        asyncio.run(list_topics())
-    except Exception as e:
-        print(error(f"Error: {e}"))
-        return 1
-    
+    asyncio.run(list_topics())
     return 0
 
 
 def cmd_topics_create(args: argparse.Namespace) -> int:
     """Create a Kafka topic."""
+    # Check Kafka connection first
+    if not check_kafka_connection():
+        return 1
+    
     print()
     print(bold(f"Creating Topic: {args.name}"))
     print("=" * 50)
@@ -2992,17 +3274,16 @@ def cmd_topics_create(args: argparse.Namespace) -> int:
         
         await admin.close()
     
-    try:
-        asyncio.run(create_topic())
-    except Exception as e:
-        print(error(f"Error: {e}"))
-        return 1
-    
+    asyncio.run(create_topic())
     return 0
 
 
 def cmd_topics_delete(args: argparse.Namespace) -> int:
     """Delete a Kafka topic."""
+    # Check Kafka connection first
+    if not check_kafka_connection():
+        return 1
+    
     if not args.yes:
         print()
         print(warning(f"This will delete topic '{args.name}' and all its data."))
@@ -3029,12 +3310,7 @@ def cmd_topics_delete(args: argparse.Namespace) -> int:
         
         await admin.close()
     
-    try:
-        asyncio.run(delete_topic())
-    except Exception as e:
-        print(error(f"Error: {e}"))
-        return 1
-    
+    asyncio.run(delete_topic())
     return 0
 
 
@@ -3085,32 +3361,101 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     return 0
 
 
+def _discover_and_import_tasks() -> list[str]:
+    """
+    Auto-discover and import task modules.
+    
+    Searches for:
+    1. Modules defined in core.toml tasks_module
+    2. Common patterns: tasks.py, */tasks.py, src/*/tasks.py
+    3. App main module (to trigger imports)
+    
+    Returns:
+        List of imported module names
+    """
+    imported = []
+    cwd = os.getcwd()
+    
+    # Add current directory to path
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    os.environ["PYTHONPATH"] = cwd
+    
+    config = load_config()
+    
+    # 1. Try tasks_module from config
+    tasks_module = config.get("tasks_module")
+    if tasks_module:
+        try:
+            importlib.import_module(tasks_module)
+            imported.append(tasks_module)
+        except ImportError as e:
+            print(warning(f"Could not import tasks_module '{tasks_module}': {e}"))
+    
+    # 2. Try app main module (may import tasks)
+    app_module = config.get("app_module", "src.main")
+    try:
+        importlib.import_module(app_module)
+        imported.append(app_module)
+    except ImportError:
+        pass
+    
+    # 3. Auto-discover tasks.py files
+    patterns = [
+        "tasks.py",
+        "*/tasks.py",
+        "src/tasks.py",
+        "src/*/tasks.py",
+        "src/**/tasks.py",
+        "app/tasks.py",
+        "app/*/tasks.py",
+        "src/apps/*/tasks.py",
+    ]
+    
+    for pattern in patterns:
+        for path in Path(cwd).glob(pattern):
+            if path.is_file():
+                # Convert path to module name
+                relative = path.relative_to(cwd)
+                module_name = str(relative).replace("/", ".").replace("\\", ".").replace(".py", "")
+                
+                if module_name not in imported:
+                    try:
+                        importlib.import_module(module_name)
+                        imported.append(module_name)
+                    except ImportError:
+                        pass
+                    except Exception as e:
+                        print(warning(f"Error importing {module_name}: {e}"))
+    
+    # 4. Try common module names
+    common_modules = [
+        "tasks",
+        "src.tasks",
+        "app.tasks",
+        "src.background.tasks",
+        "src.apps.tasks",
+    ]
+    
+    for module_name in common_modules:
+        if module_name not in imported:
+            try:
+                importlib.import_module(module_name)
+                imported.append(module_name)
+            except ImportError:
+                pass
+    
+    return imported
+
+
 def cmd_tasks(args: argparse.Namespace) -> int:
     """List registered tasks."""
     print()
     print(bold("Registered Tasks"))
     print("=" * 50)
     
-    # Add current directory to path
-    cwd = os.getcwd()
-    if cwd not in sys.path:
-        sys.path.insert(0, cwd)
-    
-    # Import app to register tasks
-    try:
-        config = load_config()
-        app_module = config.get("app_module", "src.main")
-        try:
-            importlib.import_module(app_module)
-        except ImportError:
-            pass
-        
-        try:
-            importlib.import_module("src.tasks")
-        except ImportError:
-            pass
-    except Exception:
-        pass
+    # Auto-discover and import tasks
+    imported = _discover_and_import_tasks()
     
     from core.tasks.registry import list_tasks
     
@@ -3119,8 +3464,14 @@ def cmd_tasks(args: argparse.Namespace) -> int:
     if not tasks:
         print(info("No tasks registered."))
         print()
-        print(info("To register tasks, use @task or @periodic_task decorators:"))
+        print("Tasks are auto-discovered from:")
+        print("  - tasks_module in core.toml")
+        print("  - tasks.py files in project")
+        print("  - src/*/tasks.py patterns")
         print()
+        print("Example task definition:")
+        print()
+        print("  # src/tasks.py")
         print("  from core.tasks import task, periodic_task")
         print()
         print("  @task(queue='emails')")
@@ -3130,6 +3481,9 @@ def cmd_tasks(args: argparse.Namespace) -> int:
         print("  @periodic_task(cron='0 0 * * *')")
         print("  async def daily_cleanup():")
         print("      ...")
+        print()
+        if imported:
+            print(info(f"Modules searched: {', '.join(imported)}"))
         return 0
     
     # Group by type
@@ -3157,6 +3511,8 @@ def cmd_tasks(args: argparse.Namespace) -> int:
                 print(f"    Next run: {task['next_run']}")
     
     print()
+    if imported:
+        print(info(f"Discovered from: {', '.join(imported)}"))
     return 0
 
 
