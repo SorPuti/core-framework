@@ -71,6 +71,7 @@ DEFAULT_CONFIG = {
     "migrations_dir": "./migrations",
     "app_label": "main",
     "models_module": "app.models",
+    "workers_module": None,  # Auto-discover if not set
     "app_module": "app.main",
     "host": "0.0.0.0",
     "port": 8000,
@@ -2752,29 +2753,8 @@ def cmd_runworker(args: argparse.Namespace) -> int:
     
     worker_name = args.name
     
-    # Add current directory to path
-    cwd = os.getcwd()
-    if cwd not in sys.path:
-        sys.path.insert(0, cwd)
-    os.environ["PYTHONPATH"] = cwd
-    
-    # Import app to register workers
-    try:
-        config = load_config()
-        app_module = config.get("app_module", "src.main")
-        try:
-            importlib.import_module(app_module)
-        except ImportError:
-            pass
-        
-        # Try to import workers module
-        for module_name in ["src.workers", "workers", "src.messaging.workers"]:
-            try:
-                importlib.import_module(module_name)
-            except ImportError:
-                pass
-    except Exception as e:
-        print(warning(f"Warning: Could not import app module: {e}"))
+    # Auto-discover and import workers
+    imported = _discover_and_import_workers()
     
     from core.messaging.workers import get_worker, list_workers, run_worker, run_all_workers
     
@@ -2820,34 +2800,100 @@ def cmd_runworker(args: argparse.Namespace) -> int:
     return 0
 
 
+def _discover_and_import_workers() -> list[str]:
+    """
+    Auto-discover and import worker modules.
+    
+    Searches for:
+    1. Modules defined in core.toml workers_module
+    2. Common patterns: workers.py, */workers.py, src/*/workers.py
+    3. App main module (to trigger imports)
+    
+    Returns:
+        List of imported module names
+    """
+    imported = []
+    cwd = os.getcwd()
+    
+    # Add current directory to path
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    os.environ["PYTHONPATH"] = cwd
+    
+    config = load_config()
+    
+    # 1. Try workers_module from config
+    workers_module = config.get("workers_module")
+    if workers_module:
+        try:
+            importlib.import_module(workers_module)
+            imported.append(workers_module)
+        except ImportError as e:
+            print(warning(f"Could not import workers_module '{workers_module}': {e}"))
+    
+    # 2. Try app main module (may import workers)
+    app_module = config.get("app_module", "src.main")
+    try:
+        importlib.import_module(app_module)
+        imported.append(app_module)
+    except ImportError:
+        pass
+    
+    # 3. Auto-discover workers.py files
+    patterns = [
+        "workers.py",
+        "*/workers.py",
+        "src/workers.py",
+        "src/*/workers.py",
+        "src/**/workers.py",
+        "app/workers.py",
+        "app/*/workers.py",
+    ]
+    
+    for pattern in patterns:
+        for path in Path(cwd).glob(pattern):
+            if path.is_file():
+                # Convert path to module name
+                relative = path.relative_to(cwd)
+                module_name = str(relative).replace("/", ".").replace("\\", ".").replace(".py", "")
+                
+                if module_name not in imported:
+                    try:
+                        importlib.import_module(module_name)
+                        imported.append(module_name)
+                    except ImportError:
+                        pass
+                    except Exception as e:
+                        print(warning(f"Error importing {module_name}: {e}"))
+    
+    # 4. Try common module names
+    common_modules = [
+        "workers",
+        "src.workers",
+        "app.workers",
+        "src.messaging.workers",
+        "src.apps.workers",
+    ]
+    
+    for module_name in common_modules:
+        if module_name not in imported:
+            try:
+                importlib.import_module(module_name)
+                imported.append(module_name)
+            except ImportError:
+                pass
+    
+    return imported
+
+
 def cmd_workers_list(args: argparse.Namespace) -> int:
     """List registered message workers."""
     print()
     print(bold("Registered Message Workers"))
     print("=" * 50)
     
-    # Add current directory to path
-    cwd = os.getcwd()
-    if cwd not in sys.path:
-        sys.path.insert(0, cwd)
-    os.environ["PYTHONPATH"] = cwd
-    
-    # Import app to register workers
-    try:
-        config = load_config()
-        app_module = config.get("app_module", "src.main")
-        try:
-            importlib.import_module(app_module)
-        except ImportError:
-            pass
-        
-        for module_name in ["src.workers", "workers", "src.messaging.workers"]:
-            try:
-                importlib.import_module(module_name)
-            except ImportError:
-                pass
-    except Exception:
-        pass
+    # Auto-discover and import workers
+    imported = _discover_and_import_workers()
     
     from core.messaging.workers import get_all_workers
     
@@ -2856,11 +2902,22 @@ def cmd_workers_list(args: argparse.Namespace) -> int:
     if not workers:
         print(info("No workers registered."))
         print()
-        print("Define workers with @worker decorator or Worker class:")
+        print("Workers are auto-discovered from:")
+        print("  - workers_module in core.toml")
+        print("  - workers.py files in project")
+        print("  - src/*/workers.py patterns")
+        print()
+        print("Example worker definition:")
+        print()
+        print("  # src/workers.py")
+        print("  from core.messaging import worker")
         print()
         print("  @worker(topic='events.raw', output_topic='events.enriched')")
         print("  async def process_event(event: dict) -> dict:")
         print("      return {**event, 'processed': True}")
+        print()
+        if imported:
+            print(f"Modules searched: {', '.join(imported)}")
         return 0
     
     for name, config in workers.items():
@@ -2872,6 +2929,8 @@ def cmd_workers_list(args: argparse.Namespace) -> int:
         print(f"    Retries: {config.retry_policy.max_retries}")
     
     print()
+    if imported:
+        print(info(f"Discovered from: {', '.join(imported)}"))
     return 0
 
 
