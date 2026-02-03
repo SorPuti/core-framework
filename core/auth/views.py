@@ -244,6 +244,43 @@ class AuthViewSet(ViewSet):
         # Default to str
         return str
     
+    def _get_extra_field_names(self) -> list[str]:
+        """
+        Auto-detect extra fields from register_schema.
+        
+        Compares register_schema fields with BaseRegisterInput to find
+        additional fields that need to be passed to create_user().
+        
+        This allows users to define a custom register_schema without
+        also having to define extra_register_fields (DRY principle).
+        
+        Returns:
+            List of field names that are in register_schema but not in BaseRegisterInput
+        
+        Example:
+            class CustomRegisterInput(BaseRegisterInput):
+                name: str
+                phone: str | None = None
+            
+            class MyAuthViewSet(AuthViewSet):
+                register_schema = CustomRegisterInput
+                # extra_register_fields not needed!
+            
+            # _get_extra_field_names() returns ["name", "phone"]
+        """
+        schema = self._get_register_schema()
+        
+        # Get base fields (email, password)
+        base_fields = set(BaseRegisterInput.model_fields.keys())
+        
+        # Get schema fields
+        schema_fields = set(schema.model_fields.keys())
+        
+        # Return extra fields (fields in schema but not in base)
+        extra = schema_fields - base_fields
+        
+        return list(extra)
+    
     def _create_tokens(self, user) -> dict:
         """
         Bug #6 Fix: Create access and refresh tokens using current API.
@@ -328,9 +365,12 @@ class AuthViewSet(ViewSet):
                 detail="User with this email already exists"
             )
         
-        # Bug #5 Fix: Extract extra fields for user creation
+        # Extract extra fields for user creation
+        # Auto-detect from schema if extra_register_fields not explicitly defined
+        extra_field_names = self.extra_register_fields or self._get_extra_field_names()
+        
         extra_fields = {}
-        for field_name in self.extra_register_fields:
+        for field_name in extra_field_names:
             value = getattr(validated, field_name, None)
             if value is not None:
                 extra_fields[field_name] = value

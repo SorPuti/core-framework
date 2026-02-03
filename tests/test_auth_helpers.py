@@ -204,3 +204,109 @@ class TestAuthenticatedUserWrapper:
         wrapper = AuthenticatedUser(mock_model)
         
         assert wrapper.identity == "123"
+
+
+class TestAuthViewSetExtraFields:
+    """Test AuthViewSet._get_extra_field_names() auto-detection."""
+    
+    def test_detects_extra_fields_from_custom_schema(self):
+        """Extra fields should be auto-detected from custom register_schema."""
+        from core.auth.views import AuthViewSet
+        from core.auth.schemas import BaseRegisterInput
+        from pydantic import create_model
+        from typing import Optional
+        
+        # Create custom schema with extra fields
+        CustomRegisterInput = create_model(
+            "CustomRegisterInput",
+            __base__=BaseRegisterInput,
+            name=(str, ...),
+            phone=(Optional[str], None),
+        )
+        
+        class TestAuthViewSet(AuthViewSet):
+            register_schema = CustomRegisterInput
+            # extra_register_fields NOT defined - should be auto-detected
+        
+        viewset = TestAuthViewSet()
+        extra_names = viewset._get_extra_field_names()
+        
+        assert "name" in extra_names
+        assert "phone" in extra_names
+        assert "email" not in extra_names
+        assert "password" not in extra_names
+    
+    def test_returns_empty_for_base_schema(self):
+        """Should return empty list when using base schema."""
+        from core.auth.views import AuthViewSet
+        
+        class TestAuthViewSet(AuthViewSet):
+            # Using default BaseRegisterInput
+            pass
+        
+        viewset = TestAuthViewSet()
+        extra_names = viewset._get_extra_field_names()
+        
+        assert extra_names == []
+    
+    def test_explicit_extra_register_fields_takes_precedence(self):
+        """Explicit extra_register_fields should take precedence over auto-detect."""
+        from core.auth.views import AuthViewSet
+        from core.auth.schemas import BaseRegisterInput
+        from pydantic import create_model
+        from typing import Optional
+        
+        # Create custom schema with extra fields
+        CustomRegisterInput = create_model(
+            "CustomRegisterInput",
+            __base__=BaseRegisterInput,
+            name=(str, ...),
+            phone=(Optional[str], None),
+            company=(Optional[str], None),
+        )
+        
+        class TestAuthViewSet(AuthViewSet):
+            register_schema = CustomRegisterInput
+            # Explicitly define only some fields
+            extra_register_fields = ["name"]
+        
+        viewset = TestAuthViewSet()
+        
+        # Should use explicit list, not auto-detect
+        assert viewset.extra_register_fields == ["name"]
+        
+        # Auto-detect should still return all extra fields
+        auto_detected = viewset._get_extra_field_names()
+        assert "name" in auto_detected
+        assert "phone" in auto_detected
+        assert "company" in auto_detected
+    
+    def test_dynamic_schema_with_extra_register_fields(self):
+        """Dynamic schema creation via extra_register_fields should work."""
+        from core.auth.views import AuthViewSet
+        from core.auth.schemas import BaseRegisterInput
+        from unittest.mock import MagicMock, patch
+        
+        class TestAuthViewSet(AuthViewSet):
+            extra_register_fields = ["name", "phone"]
+        
+        viewset = TestAuthViewSet()
+        
+        # Mock User model to avoid "user_model not configured" error
+        mock_user = MagicMock()
+        mock_user.__name__ = "MockUser"
+        mock_user.__annotations__ = {
+            "name": "Mapped[str]",
+            "phone": "Mapped[str | None]",
+        }
+        
+        # Patch _get_user_model and also mock sqlalchemy.inspect to avoid errors
+        with patch.object(viewset, "_get_user_model", return_value=mock_user):
+            with patch("sqlalchemy.inspect", side_effect=Exception("No mapper")):
+                schema = viewset._get_register_schema()
+        
+        # Dynamic schema should have the extra fields
+        assert "name" in schema.model_fields
+        assert "phone" in schema.model_fields
+        assert "email" in schema.model_fields
+        assert "password" in schema.model_fields
