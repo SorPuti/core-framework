@@ -276,18 +276,18 @@ class Field:
         if default is not None and hasattr(default, "value"):
             actual_default = default.value
         
-        # Create the column
+        # Create the column with choices metadata stored in info dict
+        # SQLAlchemy's info parameter allows storing arbitrary metadata
         column = mapped_column(
             column_type,
             nullable=nullable,
             default=actual_default,
             index=index,
+            info={
+                "choices_class": choices_class,
+                "use_native_enum": use_native_enum,
+            }
         )
-        
-        # Store choices class info for migrations to detect
-        # This will be picked up by the model metaclass
-        column._choices_class = choices_class
-        column._use_native_enum = use_native_enum
         
         return column
 

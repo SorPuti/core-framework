@@ -47,31 +47,31 @@ class ChoicesMeta(type(Enum)):
     
     Instead of:
         DRAFT = "draft"
+    
+    Compatible with Python 3.11+ and 3.12+ using Django's approach.
+    Labels are extracted after enum creation from member values.
     """
     
     def __new__(mcs, name: str, bases: tuple, namespace: dict, **kwargs):
-        # Process members to extract value and label
-        labels = {}
-        
-        for key, value in list(namespace.items()):
-            if key.startswith("_") or callable(value):
-                continue
-            
-            # Handle (value, label) tuple
-            if isinstance(value, tuple) and len(value) == 2:
-                actual_value, label = value
-                namespace[key] = actual_value
-                labels[actual_value] = label
-            elif isinstance(value, (str, int)):
-                # Auto-generate label from key
-                labels[value] = key.replace("_", " ").title()
-        
         # Create the enum class
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)
         
-        # Store labels
-        cls._labels = labels
+        # Extract labels from members - the value is stored as tuple (value, label)
+        # but the enum's actual value should be just the first element
+        labels = {}
         
+        for member in cls:
+            value = member._value_
+            if isinstance(value, (list, tuple)) and len(value) >= 2:
+                # Extract label from tuple
+                actual_value = value[0]
+                label = value[1]
+                labels[actual_value] = label
+            else:
+                # Auto-generate label from name
+                labels[value] = member.name.replace("_", " ").title()
+        
+        cls._labels = labels
         return cls
     
     @property
@@ -203,6 +203,14 @@ class TextChoices(str, Choices):
         post.status == Status.DRAFT  # True
     """
     
+    def __new__(cls, value, label=None):
+        """Create enum member, extracting value from tuple if needed."""
+        if isinstance(value, (list, tuple)):
+            value = value[0]
+        obj = str.__new__(cls, value)
+        obj._value_ = value
+        return obj
+    
     def _generate_next_value_(name, start, count, last_values):
         """Auto-generate value from name (lowercase with underscores)."""
         return name.lower()
@@ -232,6 +240,14 @@ class IntegerChoices(int, Choices):
         task.priority == 3  # True
         task.priority == Priority.HIGH  # True
     """
+    
+    def __new__(cls, value, label=None):
+        """Create enum member, extracting value from tuple if needed."""
+        if isinstance(value, (list, tuple)):
+            value = value[0]
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        return obj
     
     def _generate_next_value_(name, start, count, last_values):
         """Auto-generate value (incrementing integer)."""
