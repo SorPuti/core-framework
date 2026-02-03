@@ -18,6 +18,7 @@ Uso:
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import Any
 
@@ -28,6 +29,9 @@ from core.auth.base import (
     get_auth_config,
 )
 from core.datetime import timezone
+
+# Logger for token operations
+logger = logging.getLogger("core.auth.tokens")
 
 
 class JWTBackend(TokenBackend):
@@ -123,10 +127,14 @@ class JWTBackend(TokenBackend):
         import jwt
         
         try:
-            return jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            logger.debug(f"Token decoded: sub={payload.get('sub')}, type={payload.get('type')}")
+            return payload
         except jwt.ExpiredSignatureError:
+            logger.debug("Token decode failed: token expired")
             raise TokenError("Token expired")
         except jwt.InvalidTokenError as e:
+            logger.debug(f"Token decode failed: {e}")
             raise TokenError(f"Invalid token: {e}")
     
     def verify_token(
@@ -147,11 +155,17 @@ class JWTBackend(TokenBackend):
         try:
             payload = self.decode_token(token)
             
-            if payload.get("type") != token_type:
+            actual_type = payload.get("type")
+            if actual_type != token_type:
+                logger.debug(
+                    f"Token type mismatch: expected '{token_type}', got '{actual_type}'"
+                )
                 return None
             
+            logger.debug(f"Token verified successfully: sub={payload.get('sub')}")
             return payload
-        except TokenError:
+        except TokenError as e:
+            logger.debug(f"Token verification failed: {e}")
             return None
     
     def refresh_token(self, refresh_token: str) -> tuple[str, str] | None:

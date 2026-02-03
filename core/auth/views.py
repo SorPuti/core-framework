@@ -360,15 +360,27 @@ class AuthViewSet(ViewSet):
     ) -> dict:
         """
         Get current authenticated user.
-        """
-        user = getattr(request.state, "user", None)
-        if user is None:
-            raise HTTPException(
-                status_code=401,
-                detail="Not authenticated"
-            )
         
-        return self.user_output_schema.model_validate(user).model_dump()
+        Uses request.user (Starlette pattern) with fallback to request.state.user
+        for backward compatibility.
+        """
+        # Try request.user first (Starlette AuthenticationMiddleware pattern)
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            # user is an AuthenticatedUser wrapper - get underlying model
+            if hasattr(user, "_user"):
+                user = user._user
+            return self.user_output_schema.model_validate(user).model_dump()
+        
+        # Fallback to request.state.user (legacy pattern)
+        user = getattr(request.state, "user", None)
+        if user is not None:
+            return self.user_output_schema.model_validate(user).model_dump()
+        
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
     
     @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
     async def change_password(
@@ -381,7 +393,15 @@ class AuthViewSet(ViewSet):
         """
         Change password for current user.
         """
-        user = getattr(request.state, "user", None)
+        # Try request.user first (Starlette pattern)
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            if hasattr(user, "_user"):
+                user = user._user
+        else:
+            # Fallback to request.state.user
+            user = getattr(request.state, "user", None)
+        
         if user is None:
             raise HTTPException(
                 status_code=401,
