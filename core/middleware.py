@@ -736,11 +736,16 @@ class SecurityHeadersMiddleware(BaseMiddleware):
 # =============================================================================
 
 _builtin_middlewares.update({
+    # Pre-built middlewares from this module
     "timing": "core.middleware.TimingMiddleware",
     "request_id": "core.middleware.RequestIDMiddleware",
     "logging": "core.middleware.LoggingMiddleware",
     "maintenance": "core.middleware.MaintenanceModeMiddleware",
     "security_headers": "core.middleware.SecurityHeadersMiddleware",
+    # Auth middlewares (ensure they're registered even if initial dict failed)
+    "auth": "core.auth.middleware.AuthenticationMiddleware",
+    "authentication": "core.auth.middleware.AuthenticationMiddleware",
+    "optional_auth": "core.auth.middleware.OptionalAuthenticationMiddleware",
 })
 
 

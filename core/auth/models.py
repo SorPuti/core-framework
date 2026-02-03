@@ -27,12 +27,14 @@ Uso:
 from __future__ import annotations
 
 from typing import Any, ClassVar, TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import Table, Column, Integer, ForeignKey, inspect
 from sqlalchemy.orm import Mapped, relationship, declared_attr
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from core.models import Model, Field
+from core.fields import AdvancedField
 from core.auth.base import get_password_hasher, get_auth_config
 from core.datetime import timezone, DateTime
 
@@ -69,7 +71,6 @@ def _get_pk_column_type(model_class: type) -> type:
     from sqlalchemy import Integer, BigInteger, String
     from sqlalchemy.dialects.postgresql import UUID as PG_UUID
     from sqlalchemy import Uuid
-    import uuid
     
     # Verifica cache primeiro
     cache_key = f"{model_class.__module__}.{model_class.__name__}"
@@ -790,12 +791,9 @@ class AbstractUUIDUser(AbstractUser):
     
     __abstract__ = True
     
-    # Importa aqui para evitar circular import
-    from core.fields import AdvancedField
-    from uuid import UUID as UUIDType
-    
     # Override: usa UUID como PK
-    id: Mapped[UUIDType] = AdvancedField.uuid_pk()
+    # UUID importado no topo do módulo para resolução correta de tipos
+    id: Mapped[UUID] = AdvancedField.uuid_pk()
 
 
 # =============================================================================

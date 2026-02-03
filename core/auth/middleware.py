@@ -182,26 +182,65 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         if User is None:
             return None
         
-        # Get database session
-        from core.database import get_read_session
+        # Bug #3 & #4 Fix: Get database session correctly
+        # The middleware runs outside FastAPI DI context, so we need to
+        # handle database session creation carefully
+        db = await self._get_db_session()
+        if db is None:
+            return None
         
-        async for db in get_read_session():
-            try:
-                # Convert user_id to correct type
-                user_id_converted = self._convert_user_id(user_id, User)
-                
-                user = await User.objects.using(db).filter(id=user_id_converted).first()
-                
-                if user is None:
-                    return None
-                
-                # Check if user is active
-                if hasattr(user, "is_active") and not user.is_active:
-                    return None
-                
-                return user
-            except Exception:
+        try:
+            # Convert user_id to correct type
+            user_id_converted = self._convert_user_id(user_id, User)
+            
+            user = await User.objects.using(db).filter(id=user_id_converted).first()
+            
+            if user is None:
                 return None
+            
+            # Check if user is active
+            if hasattr(user, "is_active") and not user.is_active:
+                return None
+            
+            return user
+        except Exception:
+            return None
+        finally:
+            await db.close()
+    
+    async def _get_db_session(self) -> Any | None:
+        """
+        Get a database session for authentication.
+        
+        Bug #3 & #4 Fix: Handles both initialized and uninitialized database states.
+        Creates session directly from engine if normal path fails.
+        
+        Returns:
+            AsyncSession or None if database not available
+        """
+        # Try 1: Use the standard get_read_session (if database is initialized)
+        try:
+            from core.database import get_read_session, _read_session_factory
+            
+            if _read_session_factory is not None:
+                return _read_session_factory()
+        except (RuntimeError, ImportError):
+            pass
+        
+        # Try 2: Create session from settings (lazy initialization)
+        try:
+            from core.config import get_settings
+            from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+            
+            settings = get_settings()
+            db_url = getattr(settings, 'database_read_url', None) or getattr(settings, 'database_url', None)
+            
+            if db_url:
+                engine = create_async_engine(db_url, echo=False)
+                session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+                return session_factory()
+        except Exception:
+            pass
         
         return None
     

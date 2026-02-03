@@ -255,6 +255,71 @@ class MigrationEngine:
             index=col.index,
         )
     
+    def _topological_sort_tables(self, tables: list[TableState]) -> list[TableState]:
+        """
+        Bug #5 Fix: Ordena tabelas em ordem topológica baseada em FKs.
+        
+        Tabelas referenciadas por FKs são criadas ANTES das que as referenciam.
+        
+        Args:
+            tables: Lista de TableState a ordenar
+            
+        Returns:
+            Lista ordenada topologicamente
+        """
+        if not tables:
+            return []
+        
+        # Mapeia nome -> tabela
+        table_map = {t.name: t for t in tables}
+        
+        # Constrói grafo de dependências
+        # dependencias[A] = {B, C} significa A depende de B e C (A tem FK para B e C)
+        dependencies: dict[str, set[str]] = {t.name: set() for t in tables}
+        
+        for table in tables:
+            for fk in table.foreign_keys:
+                ref_table = fk.references_table
+                # Só adiciona dependência se a tabela referenciada também está sendo criada
+                # (tabelas já existentes não precisam ser consideradas)
+                if ref_table in table_map:
+                    dependencies[table.name].add(ref_table)
+        
+        # Algoritmo de Kahn para ordenação topológica
+        result = []
+        
+        # Encontra tabelas sem dependências (grau de entrada 0)
+        no_deps = [name for name, deps in dependencies.items() if not deps]
+        
+        while no_deps:
+            # Remove uma tabela sem dependências
+            name = no_deps.pop(0)
+            result.append(table_map[name])
+            
+            # Remove esta tabela das dependências de outras
+            for other_name, deps in dependencies.items():
+                if name in deps:
+                    deps.remove(name)
+                    # Se não tem mais dependências, adiciona à fila
+                    if not deps and other_name not in [t.name for t in result]:
+                        no_deps.append(other_name)
+        
+        # Verifica ciclo (se sobrou alguma tabela com dependências)
+        remaining = [t for t in tables if t not in result]
+        if remaining:
+            # Há um ciclo - adiciona as tabelas restantes no final
+            # (o banco vai falhar, mas pelo menos o erro será claro)
+            import warnings
+            cycle_tables = [t.name for t in remaining]
+            warnings.warn(
+                f"Circular FK dependency detected involving tables: {cycle_tables}. "
+                "Migration may fail. Consider breaking the cycle with nullable FKs.",
+                RuntimeWarning,
+            )
+            result.extend(remaining)
+        
+        return result
+    
     def _diff_to_operations(self, diff: SchemaDiff) -> list[Operation]:
         """Converte SchemaDiff em lista de operações."""
         from core.migrations.operations import CreateEnum, DropEnum, AlterEnum
@@ -284,8 +349,9 @@ class MigrationEngine:
                 new_values=new_enum.values,
             ))
         
-        # 3. Criar tabelas
-        for table in diff.tables_to_create:
+        # 3. Criar tabelas (BUG #5 FIX: em ordem topológica)
+        sorted_tables = self._topological_sort_tables(diff.tables_to_create)
+        for table in sorted_tables:
             columns = [self._column_state_to_def(col) for col in table.columns.values()]
             foreign_keys = [
                 ForeignKeyDef(
