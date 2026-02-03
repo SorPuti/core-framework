@@ -58,6 +58,7 @@ def _get_pk_column_type(model_class: type) -> type:
     Detecta o tipo da coluna PK de um modelo.
     
     Bug #3 Fix: Detecção robusta do tipo de PK para FKs.
+    Verifica toda a cadeia de herança (MRO) para detectar corretamente.
     
     Suporta:
     - Integer (int)
@@ -71,6 +72,7 @@ def _get_pk_column_type(model_class: type) -> type:
     from sqlalchemy import Integer, BigInteger, String
     from sqlalchemy.dialects.postgresql import UUID as PG_UUID
     from sqlalchemy import Uuid
+    import uuid as uuid_module
     
     # Verifica cache primeiro
     cache_key = f"{model_class.__module__}.{model_class.__name__}"
@@ -79,7 +81,30 @@ def _get_pk_column_type(model_class: type) -> type:
     
     detected_type = Integer  # Default
     
-    # Método 1: Tenta obter da tabela já mapeada
+    # Método 0 (MAIS IMPORTANTE): Verifica herança de AbstractUUIDUser
+    # Isso é verificado PRIMEIRO porque funciona mesmo durante o mapeamento
+    for base in model_class.__mro__:
+        base_name = base.__name__
+        # Verifica se herda de AbstractUUIDUser ou qualquer classe com UUID no nome
+        if base_name == "AbstractUUIDUser":
+            detected_type = PG_UUID
+            _pk_type_cache[cache_key] = detected_type
+            return detected_type
+    
+    # Método 1: Verifica annotations em TODA a cadeia de herança (MRO)
+    for base in model_class.__mro__:
+        annotations = getattr(base, "__annotations__", {})
+        if "id" in annotations:
+            ann = annotations["id"]
+            ann_str = str(ann)
+            
+            # Detecta UUID (vários formatos)
+            if "UUID" in ann_str or "uuid" in ann_str or "Uuid" in ann_str:
+                detected_type = PG_UUID
+                _pk_type_cache[cache_key] = detected_type
+                return detected_type
+    
+    # Método 2: Tenta obter da tabela já mapeada (se existir)
     if hasattr(model_class, "__table__"):
         pk_columns = [c for c in model_class.__table__.columns if c.primary_key]
         if pk_columns:
@@ -102,32 +127,19 @@ def _get_pk_column_type(model_class: type) -> type:
             _pk_type_cache[cache_key] = detected_type
             return detected_type
     
-    # Método 2: Tenta via annotations
-    annotations = getattr(model_class, "__annotations__", {})
-    
-    if "id" in annotations:
-        ann = annotations["id"]
-        ann_str = str(ann)
-        
-        # Detecta UUID (vários formatos)
-        if "UUID" in ann_str or "uuid" in ann_str or "Uuid" in ann_str:
-            detected_type = PG_UUID
-        # Detecta int
-        elif "int" in ann_str.lower() and "uuid" not in ann_str.lower():
-            detected_type = Integer
-        # Detecta str
-        elif "str" in ann_str.lower() and "uuid" not in ann_str.lower():
-            detected_type = String
-    
-    # Método 3: Verifica campos na classe (declared_attr ou column_property)
-    for attr_name in dir(model_class):
-        if attr_name == "id":
-            attr = getattr(model_class, attr_name, None)
+    # Método 3: Verifica atributo 'id' diretamente na classe e bases
+    for base in model_class.__mro__:
+        if hasattr(base, "id"):
+            attr = getattr(base, "id", None)
             if attr is not None:
-                # Pode ser um InstrumentedAttribute
+                # Pode ser um InstrumentedAttribute ou MappedColumn
                 if hasattr(attr, "type"):
                     attr_type = attr.type
                     if isinstance(attr_type, (PG_UUID, Uuid)):
+                        detected_type = PG_UUID
+                        break
+                    type_name = type(attr_type).__name__.upper()
+                    if "UUID" in type_name:
                         detected_type = PG_UUID
                         break
                 # Pode ser um mapped_column
@@ -136,6 +148,20 @@ def _get_pk_column_type(model_class: type) -> type:
                         if isinstance(col.type, (PG_UUID, Uuid)):
                             detected_type = PG_UUID
                             break
+                        type_name = type(col.type).__name__.upper()
+                        if "UUID" in type_name:
+                            detected_type = PG_UUID
+                            break
+                # Verifica se é um MappedColumn com tipo definido
+                if hasattr(attr, "column") and hasattr(attr.column, "type"):
+                    col_type = attr.column.type
+                    if isinstance(col_type, (PG_UUID, Uuid)):
+                        detected_type = PG_UUID
+                        break
+                    type_name = type(col_type).__name__.upper()
+                    if "UUID" in type_name:
+                        detected_type = PG_UUID
+                        break
     
     _pk_type_cache[cache_key] = detected_type
     return detected_type
