@@ -123,11 +123,10 @@ from core.auth import (
     ObjectPermissionBackend,
     # Models
     AbstractUser,
-    CoreUser,
-    User,  # Deprecated alias for CoreUser
     Group,
     Permission as AuthPermission,
     PermissionsMixin,
+    get_user_model,
     # Decorators
     HasPermission,
     IsInGroup,
@@ -242,7 +241,7 @@ from core.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.9.2"
+__version__ = "0.10.0"
 __all__ = [
     # Models
     "Model",
@@ -353,11 +352,10 @@ __all__ = [
     "ObjectPermissionBackend",
     # Auth - Models
     "AbstractUser",
-    "CoreUser",
-    "User",  # Deprecated alias
     "Group",
     "AuthPermission",
     "PermissionsMixin",
+    "get_user_model",
     # Auth - Decorators
     "HasPermission",
     "IsInGroup",

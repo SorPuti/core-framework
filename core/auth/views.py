@@ -77,7 +77,7 @@ class CoreAuthViewSet(ViewSet):
         POST /auth/change-password - Change password
     """
     
-    # Configuration - override in subclass
+    # Configuration - override in subclass or use get_user_model()
     user_model: type | None = None
     register_schema: type = BaseRegisterInput
     login_schema: type = BaseLoginInput
@@ -89,15 +89,19 @@ class CoreAuthViewSet(ViewSet):
     tags: list[str] = ["auth"]
     
     def _get_user_model(self):
-        """Get user model or raise error."""
-        if self.user_model is None:
-            raise NotImplementedError(
-                "CoreAuthViewSet requires user_model to be set. "
-                "Example:\n"
-                "class AuthViewSet(CoreAuthViewSet):\n"
-                "    user_model = User"
-            )
-        return self.user_model
+        """
+        Get user model from class attribute or global config.
+        
+        Priority:
+        1. self.user_model (if set on subclass)
+        2. get_user_model() (from configure_auth or settings)
+        """
+        if self.user_model is not None:
+            return self.user_model
+        
+        # Try to get from global config
+        from core.auth.models import get_user_model
+        return get_user_model()
     
     def _create_tokens(self, user) -> dict:
         """Create access and refresh tokens for user."""

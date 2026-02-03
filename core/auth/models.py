@@ -711,71 +711,78 @@ class PermissionsMixin:
 
 
 # =============================================================================
-# User Model (pronto para usar)
+# User Model Helper
 # =============================================================================
 
-class CoreUser(AbstractUser, PermissionsMixin):
+def get_user_model() -> type[AbstractUser]:
     """
-    Modelo de usuário do Core Framework.
+    Retorna o modelo de usuário configurado no projeto.
     
-    IMPORTANTE: Esta classe foi renomeada de 'User' para 'CoreUser' na v0.9.2
-    para evitar conflitos no SQLAlchemy registry quando o projeto define seu
-    próprio modelo User.
+    O modelo é obtido de:
+    1. AuthConfig.user_model (se configurado via configure_auth)
+    2. Settings.user_model (se definido no settings do projeto)
     
-    Para projetos reais, SEMPRE crie seu próprio User:
+    Raises:
+        RuntimeError: Se nenhum user_model foi configurado
     
-        from core.auth import AbstractUser, PermissionsMixin
+    Example:
+        from core.auth import get_user_model
         
-        class User(AbstractUser, PermissionsMixin):
-            __tablename__ = "users"
+        User = get_user_model()
+        user = await User.create_user("email@example.com", "password", db)
+    
+    Note:
+        O projeto DEVE definir seu próprio User:
+        
+            from core.auth import AbstractUser, PermissionsMixin
             
-            # Seus campos customizados
-            phone: Mapped[str | None] = Field.string(max_length=20, nullable=True)
-    
-    Se você precisa de um User rápido para testes/protótipos:
-    
-        from core.auth import CoreUser
-        user = await CoreUser.create_user("user@example.com", "password123", db)
-    
-    Métodos disponíveis (herdados de AbstractUser):
-        - create_user(email, password, db) - Cria usuário normal
-        - create_superuser(email, password, db) - Cria superusuário
-        - authenticate(email, password, db) - Autentica usuário
-        - get_by_email(email, db) - Busca por email
+            class User(AbstractUser, PermissionsMixin):
+                __tablename__ = "users"
+                # seus campos
+        
+        E configurar via:
+        
+            from core.auth import configure_auth
+            configure_auth(user_model=User)
+        
+        Ou via settings:
+        
+            class Settings(CoreSettings):
+                user_model: str = "myapp.models.User"
     """
+    from core.auth.base import get_auth_config
     
-    __tablename__ = "_core_users"
+    config = get_auth_config()
     
-    # Campos adicionais opcionais
-    first_name: Mapped[str | None] = Field.string(max_length=150, nullable=True)
-    last_name: Mapped[str | None] = Field.string(max_length=150, nullable=True)
+    if config.user_model is not None:
+        return config.user_model
     
-    @property
-    def full_name(self) -> str:
-        """Retorna nome completo."""
-        parts = [self.first_name, self.last_name]
-        return " ".join(p for p in parts if p) or self.email
+    # Tenta obter do settings
+    try:
+        from core.config import get_settings
+        settings = get_settings()
+        if hasattr(settings, "user_model") and settings.user_model:
+            # Se for string, importa dinamicamente
+            if isinstance(settings.user_model, str):
+                import importlib
+                module_path, class_name = settings.user_model.rsplit(".", 1)
+                module = importlib.import_module(module_path)
+                return getattr(module, class_name)
+            return settings.user_model
+    except Exception:
+        pass
     
-    @property
-    def short_name(self) -> str:
-        """Retorna primeiro nome ou email."""
-        return self.first_name or self.email.split("@")[0]
-
-
-# Alias para compatibilidade (DEPRECATED - será removido em v1.0)
-# Use CoreUser ou crie seu próprio User herdando de AbstractUser
-import warnings
-
-def _get_deprecated_user():
-    """Returns CoreUser with deprecation warning."""
-    warnings.warn(
-        "Importing 'User' from core.auth is deprecated and will be removed in v1.0. "
-        "Create your own User class inheriting from AbstractUser, or use CoreUser directly.",
-        DeprecationWarning,
-        stacklevel=3,
+    raise RuntimeError(
+        "No user_model configured. You must:\n"
+        "1. Create your own User class inheriting from AbstractUser\n"
+        "2. Configure it via configure_auth(user_model=User)\n"
+        "   or set user_model in your Settings class\n\n"
+        "Example:\n"
+        "    from core.auth import AbstractUser, PermissionsMixin\n"
+        "    \n"
+        "    class User(AbstractUser, PermissionsMixin):\n"
+        "        __tablename__ = 'users'\n"
+        "        # your fields\n"
+        "    \n"
+        "    configure_auth(user_model=User)"
     )
-    return CoreUser
-
-# For backwards compatibility, User is an alias to CoreUser
-# But projects should define their own User class
-User = CoreUser

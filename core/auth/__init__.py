@@ -77,10 +77,9 @@ from core.auth.permissions import (
 from core.auth.models import (
     AbstractUser,
     PermissionsMixin,
-    CoreUser,
-    User,  # Deprecated alias for CoreUser
     Group,
     Permission,
+    get_user_model,
 )
 
 # Decorators and dependencies
@@ -151,10 +150,9 @@ __all__ = [
     # Models
     "AbstractUser",
     "PermissionsMixin",
-    "CoreUser",
-    "User",  # Deprecated alias
     "Group",
     "Permission",
+    "get_user_model",
     # Decorators
     "HasPermission",
     "IsInGroup",
