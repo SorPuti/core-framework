@@ -15,6 +15,8 @@ from typing import Any, TYPE_CHECKING
 
 from fastapi import HTTPException, Request, status
 
+from core.auth.helpers import get_request_user
+
 if TYPE_CHECKING:
     from core.views import APIView
 
@@ -32,7 +34,7 @@ class Permission(ABC):
                 request: Request,
                 view: APIView | None = None,
             ) -> bool:
-                user = getattr(request.state, "user", None)
+                user = get_request_user(request)
                 return user is not None and user.is_admin
     """
     
@@ -214,7 +216,7 @@ class IsAuthenticated(Permission):
         request: Request,
         view: "APIView | None" = None,
     ) -> bool:
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         return user is not None
 
 
@@ -236,7 +238,7 @@ class IsAuthenticatedOrReadOnly(Permission):
         if request.method in self.SAFE_METHODS:
             return True
         
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         return user is not None
 
 
@@ -250,7 +252,7 @@ class IsAdmin(Permission):
         request: Request,
         view: "APIView | None" = None,
     ) -> bool:
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         if user is None:
             return False
         
@@ -285,7 +287,7 @@ class IsOwner(Permission):
         if obj is None:
             return True
         
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         if user is None:
             return False
         
@@ -318,7 +320,7 @@ class HasRole(Permission):
         request: Request,
         view: "APIView | None" = None,
     ) -> bool:
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         if user is None:
             return False
         

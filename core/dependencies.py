@@ -395,12 +395,14 @@ async def get_request_context(request: Request) -> dict[str, Any]:
     
     Útil para logging e auditoria.
     """
+    from core.auth.helpers import get_request_user
+    
     return {
         "method": request.method,
         "url": str(request.url),
         "client_ip": request.client.host if request.client else None,
         "user_agent": request.headers.get("user-agent"),
-        "user": getattr(request.state, "user", None),
+        "user": get_request_user(request),
     }
 
 

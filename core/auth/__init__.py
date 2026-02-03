@@ -121,7 +121,16 @@ from core.auth.views import (
 from core.auth.middleware import (
     AuthenticationMiddleware,
     OptionalAuthenticationMiddleware,
+    JWTAuthBackend,
+    AuthenticatedUser,
     ensure_auth_middleware,
+)
+
+# Helper functions for consistent user access
+from core.auth.helpers import (
+    get_request_user,
+    is_authenticated,
+    set_request_user,
 )
 
 __all__ = [
@@ -196,5 +205,11 @@ __all__ = [
     # Middleware
     "AuthenticationMiddleware",
     "OptionalAuthenticationMiddleware",
+    "JWTAuthBackend",
+    "AuthenticatedUser",
     "ensure_auth_middleware",
+    # Helpers
+    "get_request_user",
+    "is_authenticated",
+    "set_request_user",
 ]

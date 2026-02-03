@@ -1039,9 +1039,10 @@ class AuthViewSet(ModelViewSet):
         Returns:
             Current user data
         """
-        # User is available via request.state.user (populated by auth middleware)
+        # User is available via request.user (Starlette pattern) or request.state.user (legacy)
         # permission_classes=[IsAuthenticated] ensures user is authenticated
-        user = request.state.user
+        from core.auth.helpers import get_request_user
+        user = get_request_user(request)
         
         if user is None:
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -1065,9 +1066,10 @@ class AuthViewSet(ModelViewSet):
         body = await request.json()
         data = ChangePasswordInput.model_validate(body)
         
-        # User is available via request.state.user (populated by auth middleware)
+        # User is available via request.user (Starlette pattern) or request.state.user (legacy)
         # permission_classes=[IsAuthenticated] ensures user is authenticated
-        user = request.state.user
+        from core.auth.helpers import get_request_user
+        user = get_request_user(request)
         
         if user is None:
             raise HTTPException(status_code=401, detail="Authentication required")

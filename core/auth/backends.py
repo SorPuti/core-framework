@@ -161,14 +161,14 @@ class ModelBackend(AuthBackend):
     
     async def login(self, request: "Request", user: Any) -> None:
         """Executa ações pós-login."""
-        # Armazena usuário no request.state
-        request.state.user = user
+        # Armazena usuário no request.state (for backward compatibility)
+        from core.auth.helpers import set_request_user
+        set_request_user(request, user)
     
     async def logout(self, request: "Request", user: Any) -> None:
         """Executa ações de logout."""
-        # Remove usuário do request.state
-        if hasattr(request.state, "user"):
-            request.state.user = None
+        from core.auth.helpers import set_request_user
+        set_request_user(request, None)
 
 
 class TokenAuthBackend(AuthBackend):

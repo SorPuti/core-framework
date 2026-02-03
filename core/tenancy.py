@@ -231,8 +231,9 @@ async def extract_tenant_from_request(
 
     Checks user, header, and query param in order.
     """
-    # tenant_id = await extract_tenant_from_request(request)
-    user = getattr(request.state, "user", None)
+    from core.auth.helpers import get_request_user
+    
+    user = get_request_user(request)
     if user is not None:
         tenant_id = getattr(user, user_tenant_attr, None)
         if tenant_id is not None:

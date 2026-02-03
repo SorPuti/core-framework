@@ -24,6 +24,7 @@ from typing import Any, TYPE_CHECKING
 from fastapi import Depends, HTTPException, Request, status
 
 from core.permissions import Permission as PermissionBase
+from core.auth.helpers import get_request_user
 
 if TYPE_CHECKING:
     pass
@@ -70,7 +71,7 @@ class HasPermission(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         
         if user is None:
             return False
@@ -135,7 +136,7 @@ class IsInGroup(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         
         if user is None:
             return False
@@ -179,7 +180,7 @@ class IsSuperuser(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         
         if user is None:
             return False
@@ -207,7 +208,7 @@ class IsStaff(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         
         if user is None:
             return False
@@ -235,7 +236,7 @@ class IsActive(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         
         if user is None:
             return False
@@ -371,7 +372,7 @@ def login_required():
             ...
     """
     async def check(request: Request):
-        user = getattr(request.state, "user", None)
+        user = get_request_user(request)
         
         if user is None:
             raise HTTPException(
