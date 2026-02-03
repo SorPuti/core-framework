@@ -1,30 +1,31 @@
 """
-Ready-to-use authentication ViewSets.
+ViewSets de autenticação prontos para uso.
 
-Provides common auth endpoints out of the box:
-- POST /auth/register - User registration
-- POST /auth/login - User login
-- POST /auth/refresh - Token refresh
-- GET /auth/me - Current user info
-- POST /auth/logout - Logout (optional)
-- POST /auth/change-password - Change password
+Endpoints fornecidos:
+- POST /auth/register - Registro de usuário
+- POST /auth/login - Login
+- POST /auth/refresh - Renovar token
+- GET /auth/me - Usuário atual
+- POST /auth/change-password - Alterar senha
 
-Example:
-    from core.auth.views import CoreAuthViewSet
+Exemplo:
+    from core.auth.views import AuthViewSet
     from myapp.models import User
     
-    class AuthViewSet(CoreAuthViewSet):
+    class MyAuthViewSet(AuthViewSet):
         user_model = User
     
-    # Register routes
-    router.register_viewset("/auth", AuthViewSet, basename="auth")
+    router.register_viewset("/auth", MyAuthViewSet, basename="auth")
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any, TYPE_CHECKING
+from uuid import UUID
 
 from fastapi import Request, HTTPException
+from pydantic import create_model
 
 from core.views import ViewSet, action
 from core.permissions import AllowAny, IsAuthenticated
@@ -43,38 +44,34 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class CoreAuthViewSet(ViewSet):
+class AuthViewSet(ViewSet):
     """
-    Ready-to-use authentication ViewSet.
+    ViewSet de autenticação pronto para uso.
     
-    Provides standard auth endpoints. Configure by setting class attributes:
+    Atributos configuráveis:
+        user_model: Classe do modelo User (obrigatório)
+        register_schema: Schema de registro customizado
+        login_schema: Schema de login customizado  
+        user_output_schema: Schema de output do usuário
+        extra_register_fields: Campos extras aceitos no registro
+        access_token_expire_minutes: Expiração do access token (default: 30)
+        refresh_token_expire_days: Expiração do refresh token (default: 7)
     
-    Attributes:
-        user_model: Your User model class (required)
-        register_schema: Custom registration schema (optional)
-        login_schema: Custom login schema (optional)
-        user_output_schema: Custom user output schema (optional)
-        access_token_expire_minutes: Token expiration (default: 30)
-        refresh_token_expire_days: Refresh token expiration (default: 7)
-    
-    Example:
-        from core.auth.views import CoreAuthViewSet
-        from myapp.models import User
-        from myapp.schemas import RegisterInput, UserOutput
+    Exemplo:
+        from core.auth.views import AuthViewSet
         
-        class AuthViewSet(CoreAuthViewSet):
+        class MyAuthViewSet(AuthViewSet):
             user_model = User
-            register_schema = RegisterInput  # Optional custom schema
-            user_output_schema = UserOutput  # Optional custom output
+            extra_register_fields = ["name", "phone"]
         
-        router.register_viewset("/auth", AuthViewSet, basename="auth")
+        router.register_viewset("/auth", MyAuthViewSet)
     
-    Endpoints created:
-        POST /auth/register - Register new user
-        POST /auth/login - Login and get tokens
-        POST /auth/refresh - Refresh access token
-        GET /auth/me - Get current user
-        POST /auth/change-password - Change password
+    Endpoints:
+        POST /auth/register
+        POST /auth/login
+        POST /auth/refresh
+        GET /auth/me
+        POST /auth/change-password
     """
     
     # Configuration - override in subclass or use get_user_model()
@@ -85,8 +82,14 @@ class CoreAuthViewSet(ViewSet):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     
+    # Bug #5 Fix: Extra fields to accept on registration
+    extra_register_fields: list[str] = []
+    
     # ViewSet config
     tags: list[str] = ["auth"]
+    
+    # Cache for dynamic schema
+    _dynamic_register_schema: type | None = None
     
     def _get_user_model(self):
         """
@@ -103,15 +106,82 @@ class CoreAuthViewSet(ViewSet):
         from core.auth.models import get_user_model
         return get_user_model()
     
+    def _get_register_schema(self) -> type:
+        """
+        Bug #5 Fix: Get registration schema with extra fields support.
+        
+        If extra_register_fields is set, creates a dynamic schema that
+        accepts those additional fields.
+        
+        Returns:
+            Pydantic schema class for registration
+        """
+        # If register_schema was explicitly overridden, use it
+        if self.register_schema != BaseRegisterInput:
+            return self.register_schema
+        
+        # If no extra fields, use base schema
+        if not self.extra_register_fields:
+            return BaseRegisterInput
+        
+        # Create dynamic schema with extra fields
+        if self._dynamic_register_schema is not None:
+            return self._dynamic_register_schema
+        
+        # Build extra fields - all as optional strings by default
+        # Users can provide type hints via annotations in User model
+        extra_fields = {}
+        User = self._get_user_model()
+        user_annotations = getattr(User, "__annotations__", {})
+        
+        for field_name in self.extra_register_fields:
+            # Try to get type from User model
+            field_type = user_annotations.get(field_name, str)
+            # Extract actual type from Mapped[...] if needed
+            field_type_str = str(field_type)
+            if "Mapped[" in field_type_str:
+                # It's a Mapped type, try to extract inner type
+                if "str" in field_type_str:
+                    extra_fields[field_name] = (str | None, None)
+                elif "int" in field_type_str:
+                    extra_fields[field_name] = (int | None, None)
+                elif "bool" in field_type_str:
+                    extra_fields[field_name] = (bool | None, None)
+                else:
+                    extra_fields[field_name] = (str | None, None)
+            else:
+                extra_fields[field_name] = (str | None, None)
+        
+        # Create dynamic model
+        self._dynamic_register_schema = create_model(
+            "DynamicRegisterInput",
+            __base__=BaseRegisterInput,
+            __module__=__name__,
+            **extra_fields,
+        )
+        
+        # Allow extra fields
+        self._dynamic_register_schema.model_config = {
+            **BaseRegisterInput.model_config,
+            "extra": "ignore",  # Ignore unknown fields instead of forbidding
+        }
+        
+        return self._dynamic_register_schema
+    
     def _create_tokens(self, user) -> dict:
-        """Create access and refresh tokens for user."""
+        """
+        Bug #6 Fix: Create access and refresh tokens using current API.
+        
+        Uses the correct function signature with user_id and extra_claims.
+        """
         access_token = create_access_token(
-            data={"sub": str(user.id), "email": user.email},
-            expires_minutes=self.access_token_expire_minutes,
+            user_id=str(user.id),
+            extra_claims={"email": getattr(user, "email", None)},
+            expires_delta=timedelta(minutes=self.access_token_expire_minutes),
         )
         refresh_token = create_refresh_token(
-            data={"sub": str(user.id)},
-            expires_days=self.refresh_token_expire_days,
+            user_id=str(user.id),
+            expires_delta=timedelta(days=self.refresh_token_expire_days),
         )
         return {
             "access_token": access_token,
@@ -119,6 +189,39 @@ class CoreAuthViewSet(ViewSet):
             "token_type": "bearer",
             "expires_in": self.access_token_expire_minutes * 60,
         }
+    
+    def _convert_user_id(self, user_id: str, User: type) -> Any:
+        """
+        Bug #7 Fix: Convert user_id string to the correct type.
+        
+        Intelligently converts based on the User model's PK type.
+        
+        Args:
+            user_id: String representation of user ID
+            User: User model class
+            
+        Returns:
+            Converted user ID in the correct type
+        """
+        # Try to detect PK type from model
+        from core.auth.models import _get_pk_column_type
+        from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+        from sqlalchemy import Integer, BigInteger, String
+        
+        pk_type = _get_pk_column_type(User)
+        
+        if pk_type == PG_UUID:
+            try:
+                return UUID(user_id)
+            except (ValueError, TypeError):
+                return user_id
+        elif pk_type in (Integer, BigInteger):
+            try:
+                return int(user_id)
+            except (ValueError, TypeError):
+                return user_id
+        else:
+            return user_id
     
     @action(methods=["POST"], detail=False, permission_classes=[AllowAny])
     async def register(
@@ -131,12 +234,15 @@ class CoreAuthViewSet(ViewSet):
         """
         Register a new user.
         
+        Bug #5 Fix: Now supports extra_register_fields.
+        
         Returns tokens on successful registration.
         """
         User = self._get_user_model()
         
-        # Validate input
-        validated = self.register_schema.model_validate(data)
+        # Bug #5 Fix: Use dynamic schema that includes extra fields
+        schema = self._get_register_schema()
+        validated = schema.model_validate(data)
         
         # Check if user exists
         existing = await User.get_by_email(validated.email, db)
@@ -146,11 +252,19 @@ class CoreAuthViewSet(ViewSet):
                 detail="User with this email already exists"
             )
         
-        # Create user
+        # Bug #5 Fix: Extract extra fields for user creation
+        extra_fields = {}
+        for field_name in self.extra_register_fields:
+            value = getattr(validated, field_name, None)
+            if value is not None:
+                extra_fields[field_name] = value
+        
+        # Create user with extra fields
         user = await User.create_user(
             email=validated.email,
             password=validated.password,
             db=db,
+            **extra_fields,
         )
         
         # Commit the transaction
@@ -206,6 +320,8 @@ class CoreAuthViewSet(ViewSet):
     ) -> dict:
         """
         Refresh access token using refresh token.
+        
+        Bug #7 Fix: Now correctly handles UUID user IDs.
         """
         User = self._get_user_model()
         
@@ -220,9 +336,11 @@ class CoreAuthViewSet(ViewSet):
                 detail="Invalid or expired refresh token"
             )
         
-        # Get user
-        user_id = payload.get("sub")
-        user = await User.objects.using(db).filter(id=int(user_id)).first()
+        # Bug #7 Fix: Convert user_id to correct type
+        user_id_str = payload.get("sub")
+        user_id = self._convert_user_id(user_id_str, User)
+        
+        user = await User.objects.using(db).filter(id=user_id).first()
         
         if user is None or not user.is_active:
             raise HTTPException(
@@ -293,5 +411,5 @@ class CoreAuthViewSet(ViewSet):
 # =============================================================================
 
 __all__ = [
-    "CoreAuthViewSet",
+    "AuthViewSet",
 ]

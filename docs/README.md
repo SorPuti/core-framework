@@ -49,6 +49,20 @@
 | [28 Avro](28-avro.md) | Auto-geração de schemas Avro |
 | [29 Topics](29-topics.md) | Definição de tópicos como classes |
 
+## v0.12.2 - Correções e Middleware
+
+| Guide | Descricao |
+|-------|-----------|
+| [30 Changelog 0.12.2](30-changelog-0.12.2.md) | Bugs corrigidos e novas features |
+| [31 Middleware](31-middleware.md) | Sistema Django-style de middlewares |
+| [32 Migration Guide](32-migration-guide-0.12.2.md) | Como migrar de v0.12.1 |
+
+## Troubleshooting
+
+| Guide | Descricao |
+|-------|-----------|
+| [99 FAQ & Troubleshooting](99-faq-troubleshooting.md) | Erros comuns e soluções |
+
 ## API Reference
 
 | Document | Descricao |

@@ -485,6 +485,10 @@ class AuthConfig:
     password_require_lowercase: bool = False
     password_require_digit: bool = False
     password_require_special: bool = False
+    
+    # Middleware automático (Bug #8 preventive)
+    # Se True, emite warning se middleware não estiver configurado
+    warn_missing_middleware: bool = True
 
 
 _auth_config: AuthConfig | None = None
@@ -599,3 +603,145 @@ def get_auth_config() -> AuthConfig:
     if _auth_config is None:
         _auth_config = AuthConfig()
     return _auth_config
+
+
+# =============================================================================
+# Configuration Validation (Preventive measures)
+# =============================================================================
+
+class ConfigurationWarning(UserWarning):
+    """Warning for potential configuration issues."""
+    pass
+
+
+def validate_auth_configuration() -> list[str]:
+    """
+    Validate current auth configuration and return list of issues.
+    
+    This is a preventive measure to catch common configuration mistakes.
+    
+    Returns:
+        List of warning messages
+    """
+    issues = []
+    config = get_auth_config()
+    
+    # Check secret key
+    if config.secret_key == "change-me-in-production":
+        issues.append(
+            "Using default SECRET_KEY. Set a secure key in production: "
+            "configure_auth(secret_key='your-secure-key-256-bits')"
+        )
+    
+    # Check if user_model is configured
+    if config.user_model is None:
+        issues.append(
+            "No user_model configured. Authentication endpoints may not work. "
+            "Use: configure_auth(user_model=YourUserClass)"
+        )
+    
+    # Check if user_model has UUID PK and warn about PermissionsMixin
+    if config.user_model is not None:
+        try:
+            from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+            from sqlalchemy import Uuid
+            
+            if hasattr(config.user_model, "__table__"):
+                pk_cols = [c for c in config.user_model.__table__.columns if c.primary_key]
+                if pk_cols and isinstance(pk_cols[0].type, (PG_UUID, Uuid)):
+                    # Has UUID PK - check if PermissionsMixin is used
+                    from core.auth.models import PermissionsMixin
+                    if issubclass(config.user_model, PermissionsMixin):
+                        # This is now handled, but inform the user
+                        pass  # Silently pass, we fixed the issue
+        except Exception:
+            pass
+    
+    return issues
+
+
+def emit_configuration_warnings() -> None:
+    """
+    Emit warnings for configuration issues.
+    
+    Called automatically when using authentication features.
+    """
+    import warnings
+    
+    issues = validate_auth_configuration()
+    for issue in issues:
+        warnings.warn(issue, ConfigurationWarning, stacklevel=3)
+
+
+def check_middleware_configured(app: Any = None) -> bool:
+    """
+    Check if AuthenticationMiddleware is configured on the app.
+    
+    Args:
+        app: FastAPI or CoreApp instance (optional)
+        
+    Returns:
+        True if middleware appears to be configured
+    """
+    if app is None:
+        return False
+    
+    # Check if app has our middleware
+    try:
+        if hasattr(app, "app"):
+            # CoreApp wrapping FastAPI
+            fastapi_app = app.app
+        else:
+            fastapi_app = app
+        
+        if hasattr(fastapi_app, "middleware_stack"):
+            # Check middleware stack for our middleware
+            stack = fastapi_app.middleware_stack
+            while stack is not None:
+                if hasattr(stack, "app"):
+                    if "AuthenticationMiddleware" in type(stack.app).__name__:
+                        return True
+                    stack = getattr(stack, "app", None)
+                else:
+                    break
+    except Exception:
+        pass
+    
+    return False
+
+
+def get_auth_setup_checklist() -> str:
+    """
+    Return a checklist of auth setup steps.
+    
+    Useful for documentation and debugging.
+    
+    Returns:
+        Formatted checklist string
+    """
+    config = get_auth_config()
+    
+    checklist = []
+    checklist.append("## Auth Setup Checklist\n")
+    
+    # 1. User model
+    if config.user_model:
+        checklist.append(f" User model configured: {config.user_model.__name__}")
+    else:
+        checklist.append("X User model NOT configured")
+        checklist.append("   -> configure_auth(user_model=YourUserClass)")
+    
+    # 2. Secret key
+    if config.secret_key != "change-me-in-production":
+        checklist.append(" Secret key configured")
+    else:
+        checklist.append("!  Using default secret key (OK for development)")
+        checklist.append("   -> configure_auth(secret_key='secure-key') for production")
+    
+    # 3. Middleware
+    checklist.append("")
+    checklist.append("[!] Don't forget to add AuthenticationMiddleware:")
+    checklist.append("   from core.auth import AuthenticationMiddleware")
+    checklist.append("   app = CoreApp(middlewares=[(AuthenticationMiddleware, {})])")
+    
+    return "\n".join(checklist)

@@ -173,6 +173,33 @@ class Settings(BaseSettings):
     )
     
     # =========================================================================
+    # Middleware (Django-style)
+    # =========================================================================
+    
+    middleware: list[str] = PydanticField(
+        default=[],
+        description="""
+        Lista de middlewares a aplicar, estilo Django.
+        
+        Formatos aceitos:
+        - String path: "core.auth.AuthenticationMiddleware"
+        - Shortcut: "auth", "timing", "logging", etc
+        
+        Exemplo:
+            MIDDLEWARE='["timing", "auth", "core.middleware.LoggingMiddleware"]'
+        
+        Shortcuts disponíveis:
+        - auth: AuthenticationMiddleware
+        - optional_auth: OptionalAuthenticationMiddleware  
+        - timing: TimingMiddleware
+        - request_id: RequestIDMiddleware
+        - logging: LoggingMiddleware
+        - security_headers: SecurityHeadersMiddleware
+        - maintenance: MaintenanceModeMiddleware
+        """,
+    )
+    
+    # =========================================================================
     # DateTime / Timezone
     # =========================================================================
     

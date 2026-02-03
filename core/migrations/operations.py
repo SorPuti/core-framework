@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, ClassVar, TYPE_CHECKING
 from collections.abc import Awaitable
 
 from sqlalchemy import text
@@ -31,9 +31,90 @@ class ColumnDef:
     unique: bool = False
     index: bool = False
     
+    # Mapeamento de tipos genéricos para tipos específicos de cada dialeto
+    # Bug #1: DATETIME → TIMESTAMP para PostgreSQL
+    TYPE_MAPPING: ClassVar[dict[str, dict[str, str]]] = {
+        "postgresql": {
+            "DATETIME": "TIMESTAMP WITH TIME ZONE",
+            "TIMESTAMP": "TIMESTAMP WITH TIME ZONE",
+            "BOOLEAN": "BOOLEAN",
+            "TINYINT": "SMALLINT",
+            "LONGTEXT": "TEXT",
+            "DOUBLE": "DOUBLE PRECISION",
+        },
+        "mysql": {
+            "DATETIME": "DATETIME",
+            "TIMESTAMP": "TIMESTAMP",
+            "BOOLEAN": "TINYINT(1)",
+            "TEXT": "LONGTEXT",
+            "UUID": "CHAR(36)",
+        },
+        "sqlite": {
+            "DATETIME": "DATETIME",
+            "TIMESTAMP": "DATETIME",
+            "BOOLEAN": "BOOLEAN",
+            "UUID": "TEXT",
+        },
+    }
+    
+    def _get_dialect_type(self, dialect: str) -> str:
+        """
+        Converte tipo genérico para tipo específico do dialeto.
+        
+        Args:
+            dialect: Nome do dialeto (postgresql, mysql, sqlite)
+            
+        Returns:
+            Tipo SQL específico para o dialeto
+        """
+        # Extrai tipo base (sem parâmetros como VARCHAR(255))
+        base_type = self.type.split("(")[0].upper()
+        
+        # Verifica se há mapeamento específico
+        dialect_mapping = self.TYPE_MAPPING.get(dialect, {})
+        mapped_type = dialect_mapping.get(base_type)
+        
+        if mapped_type:
+            # Se o tipo original tinha parâmetros, tenta preservá-los
+            if "(" in self.type and "(" not in mapped_type:
+                # Tipo como VARCHAR(255) mantém os parâmetros
+                return self.type
+            return mapped_type
+        
+        return self.type
+    
+    def _get_default_sql(self, dialect: str) -> str | None:
+        """
+        Gera SQL para valor default considerando o dialeto.
+        
+        Bug #2: Boolean defaults usando TRUE/FALSE para PostgreSQL
+        
+        Args:
+            dialect: Nome do dialeto
+            
+        Returns:
+            String SQL para o default ou None
+        """
+        if self.default is None:
+            return None
+        
+        if isinstance(self.default, str):
+            return f"DEFAULT '{self.default}'"
+        
+        if isinstance(self.default, bool):
+            # PostgreSQL exige TRUE/FALSE em vez de 1/0
+            if dialect == "postgresql":
+                return f"DEFAULT {'TRUE' if self.default else 'FALSE'}"
+            else:
+                return f"DEFAULT {1 if self.default else 0}"
+        
+        return f"DEFAULT {self.default}"
+    
     def to_sql(self, dialect: str = "sqlite") -> str:
-        """Gera SQL para a coluna."""
-        parts = [f'"{self.name}"', self.type]
+        """Gera SQL para a coluna, adaptado ao dialeto do banco."""
+        # Obtém tipo adaptado ao dialeto
+        col_type = self._get_dialect_type(dialect)
+        parts = [f'"{self.name}"', col_type]
         
         if self.primary_key:
             parts.append("PRIMARY KEY")
@@ -49,13 +130,10 @@ class ColumnDef:
         if not self.nullable and not self.primary_key:
             parts.append("NOT NULL")
         
-        if self.default is not None:
-            if isinstance(self.default, str):
-                parts.append(f"DEFAULT '{self.default}'")
-            elif isinstance(self.default, bool):
-                parts.append(f"DEFAULT {1 if self.default else 0}")
-            else:
-                parts.append(f"DEFAULT {self.default}")
+        # Gera default adaptado ao dialeto
+        default_sql = self._get_default_sql(dialect)
+        if default_sql:
+            parts.append(default_sql)
         
         if self.unique and not self.primary_key:
             parts.append("UNIQUE")

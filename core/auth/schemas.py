@@ -100,12 +100,16 @@ class BaseUserOutput(OutputSchema):
     """
     Base user output schema.
     
+    Bug #4 Fix: Now supports both int and UUID ids.
+    
     Extend to add custom fields:
         class UserOutput(BaseUserOutput):
             phone: str | None = None
             avatar_url: str | None = None
+    
+    For UUID users, the id will be automatically serialized to string.
     """
-    id: int
+    id: int | str  # Supports both INTEGER and UUID (serialized as string)
     email: str
     is_active: bool = True
     is_staff: bool = False

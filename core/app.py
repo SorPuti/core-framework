@@ -34,7 +34,7 @@ class CoreApp:
     
     Encapsula FastAPI com configurações e lifecycle management.
     
-    Exemplo:
+    Exemplo básico:
         app = CoreApp(
             title="My API",
             settings=MySettings(),
@@ -45,6 +45,23 @@ class CoreApp:
         
         # Obtém a aplicação FastAPI
         fastapi_app = app.app
+    
+    Exemplo com middlewares Django-style:
+        app = CoreApp(
+            title="My API",
+            middleware=[
+                "core.middleware.TimingMiddleware",
+                "core.auth.AuthenticationMiddleware",
+                ("core.middleware.LoggingMiddleware", {"log_headers": True}),
+            ],
+        )
+    
+    Shortcuts disponíveis:
+        - "auth": AuthenticationMiddleware
+        - "timing": TimingMiddleware
+        - "request_id": RequestIDMiddleware
+        - "logging": LoggingMiddleware
+        - "security_headers": SecurityHeadersMiddleware
     """
     
     def __init__(
@@ -57,6 +74,7 @@ class CoreApp:
         on_startup: list[Callable] | None = None,
         on_shutdown: list[Callable] | None = None,
         middlewares: list[tuple[type, dict[str, Any]]] | None = None,
+        middleware: list[str | type | tuple] | None = None,
         exception_handlers: dict[type, Callable] | None = None,
         auto_create_tables: bool = True,
         **fastapi_kwargs: Any,
@@ -72,10 +90,19 @@ class CoreApp:
             routers: Lista de routers a incluir
             on_startup: Callbacks de startup
             on_shutdown: Callbacks de shutdown
-            middlewares: Lista de middlewares (classe, kwargs)
+            middlewares: Lista de middlewares formato antigo (classe, kwargs)
+            middleware: Lista de middlewares formato Django-style (strings/classes)
             exception_handlers: Handlers de exceção customizados
             auto_create_tables: Se True, cria tabelas automaticamente
             **fastapi_kwargs: Argumentos extras para FastAPI
+        
+        Middleware format (novo, Django-style):
+            middleware=[
+                "core.auth.AuthenticationMiddleware",  # String path
+                "auth",  # Shortcut
+                MyMiddleware,  # Classe direta
+                ("logging", {"log_body": True}),  # Com kwargs
+            ]
         """
         self.settings = settings or get_settings()
         self._on_startup = on_startup or []
@@ -100,7 +127,12 @@ class CoreApp:
         if self.settings.tenancy_enabled:
             self._setup_tenancy_middleware()
         
-        # Adiciona middlewares customizados
+        # Adiciona middlewares - formato novo Django-style (parâmetro ou settings)
+        middleware_list = middleware or getattr(self.settings, "middleware", None)
+        if middleware_list:
+            self._setup_django_style_middleware(middleware_list)
+        
+        # Adiciona middlewares - formato antigo (tuple)
         if middlewares:
             for middleware_class, middleware_kwargs in middlewares:
                 self.app.add_middleware(middleware_class, **middleware_kwargs)
@@ -205,6 +237,36 @@ class CoreApp:
             tenant_field=self.settings.tenancy_field,
             require_tenant=self.settings.tenancy_require,
         )
+    
+    def _setup_django_style_middleware(
+        self,
+        middleware_list: list[str | type | tuple],
+    ) -> None:
+        """
+        Configura middlewares no estilo Django.
+        
+        Args:
+            middleware_list: Lista de middlewares
+                - String: path do middleware (ex: "core.auth.AuthenticationMiddleware")
+                - String shortcut: nome curto (ex: "auth", "timing")
+                - Classe: classe do middleware diretamente
+                - Tuple: (middleware, kwargs) para passar configurações
+        
+        Example:
+            middleware_list = [
+                "core.middleware.TimingMiddleware",
+                "auth",  # shortcut para AuthenticationMiddleware
+                MyCustomMiddleware,
+                ("logging", {"log_body": True}),
+            ]
+        """
+        from core.middleware import configure_middleware, apply_middlewares
+        
+        # Configura no registry global
+        configure_middleware(middleware_list, clear_existing=True)
+        
+        # Aplica ao app
+        apply_middlewares(self.app)
     
     def _setup_exception_handlers(
         self,

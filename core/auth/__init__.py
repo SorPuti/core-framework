@@ -43,8 +43,13 @@ from core.auth.base import (
     # Config
     AuthConfig,
     AuthConfigurationError,
+    ConfigurationWarning,
     configure_auth,
     get_auth_config,
+    # Validation helpers (preventive)
+    validate_auth_configuration,
+    check_middleware_configured,
+    get_auth_setup_checklist,
 )
 
 # Default implementations
@@ -76,10 +81,12 @@ from core.auth.permissions import (
 # Models
 from core.auth.models import (
     AbstractUser,
+    AbstractUUIDUser,
     PermissionsMixin,
     Group,
     Permission,
     get_user_model,
+    clear_association_table_cache,
 )
 
 # Decorators and dependencies
@@ -107,7 +114,14 @@ from core.auth.schemas import (
 
 # Views
 from core.auth.views import (
-    CoreAuthViewSet,
+    AuthViewSet,
+)
+
+# Middleware (Bug #8 Fix)
+from core.auth.middleware import (
+    AuthenticationMiddleware,
+    OptionalAuthenticationMiddleware,
+    ensure_auth_middleware,
 )
 
 __all__ = [
@@ -128,8 +142,13 @@ __all__ = [
     # Config
     "AuthConfig",
     "AuthConfigurationError",
+    "ConfigurationWarning",
     "configure_auth",
     "get_auth_config",
+    # Validation helpers
+    "validate_auth_configuration",
+    "check_middleware_configured",
+    "get_auth_setup_checklist",
     # Hashers
     "PBKDF2Hasher",
     "Argon2Hasher",
@@ -149,10 +168,12 @@ __all__ = [
     "ObjectPermissionBackend",
     # Models
     "AbstractUser",
+    "AbstractUUIDUser",
     "PermissionsMixin",
     "Group",
     "Permission",
     "get_user_model",
+    "clear_association_table_cache",
     # Decorators
     "HasPermission",
     "IsInGroup",
@@ -171,5 +192,9 @@ __all__ = [
     "BaseUserOutput",
     "MessageResponse",
     # Views
-    "CoreAuthViewSet",
+    "AuthViewSet",
+    # Middleware
+    "AuthenticationMiddleware",
+    "OptionalAuthenticationMiddleware",
+    "ensure_auth_middleware",
 ]

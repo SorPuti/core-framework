@@ -20,7 +20,21 @@ Enterprise Features (v0.3.0+):
 
 from core.models import Model, Field, SoftDeleteMixin, SoftDeleteManager, TenantSoftDeleteManager
 from core.serializers import InputSchema, OutputSchema, Serializer
-from core.views import APIView, ViewSet, ModelViewSet, action
+from core.views import (
+    APIView,
+    ViewSet,
+    ModelViewSet,
+    ReadOnlyModelViewSet,
+    CreateModelViewSet,
+    ListModelViewSet,
+    ListCreateModelViewSet,
+    RetrieveUpdateModelViewSet,
+    RetrieveDestroyModelViewSet,
+    RetrieveUpdateDestroyModelViewSet,
+    SearchModelViewSet,
+    BulkModelViewSet,
+    action,
+)
 from core.routing import Router, AutoRouter
 from core.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
 from core.dependencies import Depends, get_db, get_current_user
@@ -84,6 +98,25 @@ from core.datetime import (
     get_timezone,
 )
 
+# Middleware - Sistema Django-style
+from core.middleware import (
+    BaseMiddleware,
+    configure_middleware,
+    register_middleware,
+    apply_middlewares,
+    get_middleware_stack_info,
+    print_middleware_stack,
+    # Pre-built middlewares
+    TimingMiddleware,
+    RequestIDMiddleware,
+    LoggingMiddleware,
+    MaintenanceModeMiddleware,
+    SecurityHeadersMiddleware,
+)
+
+# Auth - ViewSet
+from core.auth.views import AuthViewSet
+
 # Auth - Sistema plugável de autenticação
 from core.auth import (
     # Config
@@ -123,6 +156,7 @@ from core.auth import (
     ObjectPermissionBackend,
     # Models
     AbstractUser,
+    AbstractUUIDUser,
     Group,
     Permission as AuthPermission,
     PermissionsMixin,
@@ -136,6 +170,9 @@ from core.auth import (
     require_staff,
     require_active,
     login_required,
+    # Middleware
+    AuthenticationMiddleware,
+    OptionalAuthenticationMiddleware,
 )
 
 # Migrations
@@ -241,7 +278,7 @@ from core.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.12.1"
+__version__ = "0.12.2"
 __all__ = [
     # Models
     "Model",
@@ -257,6 +294,15 @@ __all__ = [
     "APIView",
     "ViewSet",
     "ModelViewSet",
+    "ReadOnlyModelViewSet",
+    "CreateModelViewSet",
+    "ListModelViewSet",
+    "ListCreateModelViewSet",
+    "RetrieveUpdateModelViewSet",
+    "RetrieveDestroyModelViewSet",
+    "RetrieveUpdateDestroyModelViewSet",
+    "SearchModelViewSet",
+    "BulkModelViewSet",
     "action",
     # Routing
     "Router",
@@ -277,6 +323,18 @@ __all__ = [
     "get_settings",
     # App
     "CoreApp",
+    # Middleware
+    "BaseMiddleware",
+    "configure_middleware",
+    "register_middleware",
+    "apply_middlewares",
+    "get_middleware_stack_info",
+    "print_middleware_stack",
+    "TimingMiddleware",
+    "RequestIDMiddleware",
+    "LoggingMiddleware",
+    "MaintenanceModeMiddleware",
+    "SecurityHeadersMiddleware",
     # Advanced Fields
     "uuid7",
     "uuid7_str",
@@ -316,6 +374,8 @@ __all__ = [
     "configure_datetime",
     "get_datetime_config",
     "get_timezone",
+    # Auth - ViewSet
+    "AuthViewSet",
     # Auth - Config
     "AuthConfig",
     "configure_auth",
@@ -352,10 +412,14 @@ __all__ = [
     "ObjectPermissionBackend",
     # Auth - Models
     "AbstractUser",
+    "AbstractUUIDUser",
     "Group",
     "AuthPermission",
     "PermissionsMixin",
     "get_user_model",
+    # Auth - Middleware
+    "AuthenticationMiddleware",
+    "OptionalAuthenticationMiddleware",
     # Auth - Decorators
     "HasPermission",
     "IsInGroup",

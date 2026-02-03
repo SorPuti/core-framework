@@ -45,6 +45,48 @@ InputT = TypeVar("InputT", bound=InputSchema)
 OutputT = TypeVar("OutputT", bound=OutputSchema)
 
 
+# =============================================================================
+# Decorator para actions customizadas
+# =============================================================================
+
+def action(
+    methods: list[str] | None = None,
+    detail: bool = False,
+    url_path: str | None = None,
+    url_name: str | None = None,
+    permission_classes: list[type[Permission]] | None = None,
+    **kwargs: Any,
+):
+    """
+    Decorator para definir actions customizadas em ViewSets.
+    
+    Exemplo:
+        class UserViewSet(ModelViewSet):
+            model = User
+            
+            @action(methods=["POST"], detail=True)
+            async def activate(self, request: Request, db: AsyncSession, **kwargs):
+                user = await self.get_object(db, **kwargs)
+                user.is_active = True
+                await user.save(db)
+                return {"message": "User activated"}
+    """
+    def decorator(func):
+        func.is_action = True
+        func.methods = methods or ["GET"]
+        func.detail = detail
+        func.url_path = url_path or func.__name__
+        func.url_name = url_name or func.__name__
+        func.permission_classes = permission_classes
+        func.kwargs = kwargs
+        return func
+    return decorator
+
+
+# =============================================================================
+# Views
+# =============================================================================
+
 class APIView:
     """
     View baseada em classe, similar ao DRF APIView.
@@ -799,36 +841,419 @@ class ReadOnlyModelViewSet(ViewSet[ModelT, InputT, OutputT]):
         raise HTTPException(status_code=405, detail="Method not allowed")
 
 
-# Decorator para actions customizadas
-def action(
-    methods: list[str] | None = None,
-    detail: bool = False,
-    url_path: str | None = None,
-    url_name: str | None = None,
-    permission_classes: list[type[Permission]] | None = None,
-    **kwargs: Any,
-):
+# =============================================================================
+# Presets de ViewSet
+# =============================================================================
+
+class CreateModelViewSet(ViewSet[ModelT, InputT, OutputT]):
     """
-    Decorator para definir actions customizadas em ViewSets.
+    ViewSet apenas para criação.
     
     Exemplo:
-        class UserViewSet(ModelViewSet):
-            model = User
-            
-            @action(methods=["POST"], detail=True)
-            async def activate(self, request: Request, db: AsyncSession, **kwargs):
-                user = await self.get_object(db, **kwargs)
-                user.is_active = True
-                await user.save(db)
-                return {"message": "User activated"}
+        class ContactFormViewSet(CreateModelViewSet):
+            model = ContactMessage
+            input_schema = ContactInput
+            output_schema = ContactOutput
     """
-    def decorator(func):
-        func.is_action = True
-        func.methods = methods or ["GET"]
-        func.detail = detail
-        func.url_path = url_path or func.__name__
-        func.url_name = url_name or func.__name__
-        func.permission_classes = permission_classes
-        func.kwargs = kwargs
-        return func
-    return decorator
+    
+    async def list(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def retrieve(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def update(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def partial_update(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def destroy(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+
+
+class ListModelViewSet(ViewSet[ModelT, InputT, OutputT]):
+    """
+    ViewSet apenas para listagem.
+    
+    Exemplo:
+        class PublicCategoryViewSet(ListModelViewSet):
+            model = Category
+            output_schema = CategoryOutput
+    """
+    
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def retrieve(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def update(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def partial_update(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def destroy(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+
+
+class ListCreateModelViewSet(ViewSet[ModelT, InputT, OutputT]):
+    """
+    ViewSet para listagem e criação.
+    
+    Exemplo:
+        class CommentViewSet(ListCreateModelViewSet):
+            model = Comment
+            input_schema = CommentInput
+            output_schema = CommentOutput
+    """
+    
+    async def retrieve(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def update(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def partial_update(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def destroy(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+
+
+class RetrieveUpdateModelViewSet(ViewSet[ModelT, InputT, OutputT]):
+    """
+    ViewSet para recuperar e atualizar (sem delete).
+    
+    Exemplo:
+        class ProfileViewSet(RetrieveUpdateModelViewSet):
+            model = Profile
+            input_schema = ProfileInput
+            output_schema = ProfileOutput
+    """
+    
+    async def list(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def destroy(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+
+
+class RetrieveDestroyModelViewSet(ViewSet[ModelT, InputT, OutputT]):
+    """
+    ViewSet para recuperar e deletar.
+    
+    Exemplo:
+        class NotificationViewSet(RetrieveDestroyModelViewSet):
+            model = Notification
+            output_schema = NotificationOutput
+    """
+    
+    async def list(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def update(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def partial_update(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+
+
+class RetrieveUpdateDestroyModelViewSet(ViewSet[ModelT, InputT, OutputT]):
+    """
+    ViewSet para operações em item individual (sem list/create).
+    
+    Exemplo:
+        class SettingsViewSet(RetrieveUpdateDestroyModelViewSet):
+            model = UserSettings
+            input_schema = SettingsInput
+            output_schema = SettingsOutput
+    """
+    
+    async def list(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+    
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
+        raise HTTPException(status_code=405, detail="Method not allowed")
+
+
+class SearchModelViewSet(ModelViewSet[ModelT, InputT, OutputT]):
+    """
+    ModelViewSet com busca integrada.
+    
+    Atributos:
+        search_fields: Campos para busca textual
+        filter_fields: Campos para filtros exatos
+        ordering_fields: Campos permitidos para ordenação
+        default_ordering: Ordenação padrão
+    
+    Exemplo:
+        class ProductViewSet(SearchModelViewSet):
+            model = Product
+            input_schema = ProductInput
+            output_schema = ProductOutput
+            search_fields = ["name", "description"]
+            filter_fields = ["category_id", "is_active"]
+            ordering_fields = ["name", "price", "created_at"]
+            default_ordering = ["-created_at"]
+    """
+    
+    search_fields: list[str] = []
+    filter_fields: list[str] = []
+    ordering_fields: list[str] = []
+    default_ordering: list[str] = ["-id"]
+    search_param: str = "q"
+    
+    async def list(
+        self,
+        request: Request,
+        db: AsyncSession,
+        page: int = 1,
+        page_size: int | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Lista com busca, filtros e ordenação."""
+        await self.check_permissions(request, "list")
+        
+        page_size = min(page_size or self.page_size, self.max_page_size)
+        offset = (page - 1) * page_size
+        
+        queryset = self.get_queryset(db)
+        
+        # Aplicar busca textual
+        search_query = request.query_params.get(self.search_param)
+        if search_query and self.search_fields:
+            queryset = self._apply_search(queryset, search_query)
+        
+        # Aplicar filtros
+        queryset = self._apply_filters(queryset, request.query_params)
+        
+        # Aplicar ordenação
+        ordering = request.query_params.get("ordering")
+        queryset = self._apply_ordering(queryset, ordering)
+        
+        total = await queryset.count()
+        objects = await queryset.offset(offset).limit(page_size).all()
+        
+        output_schema = self.get_output_schema()
+        items = [output_schema.model_validate(obj).model_dump() for obj in objects]
+        
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "pages": (total + page_size - 1) // page_size if page_size > 0 else 0,
+        }
+    
+    def _apply_search(self, queryset: Any, search_query: str) -> Any:
+        """Aplica busca textual nos campos configurados."""
+        from sqlalchemy import or_
+        
+        if not self.search_fields:
+            return queryset
+        
+        conditions = []
+        for field in self.search_fields:
+            if hasattr(self.model, field):
+                column = getattr(self.model, field)
+                conditions.append(column.ilike(f"%{search_query}%"))
+        
+        if conditions:
+            return queryset.filter(or_(*conditions))
+        return queryset
+    
+    def _apply_filters(self, queryset: Any, params: Any) -> Any:
+        """Aplica filtros exatos nos campos configurados."""
+        for field in self.filter_fields:
+            value = params.get(field)
+            if value is not None:
+                queryset = queryset.filter(**{field: value})
+        return queryset
+    
+    def _apply_ordering(self, queryset: Any, ordering: str | None) -> Any:
+        """Aplica ordenação."""
+        if ordering:
+            fields = ordering.split(",")
+        else:
+            fields = self.default_ordering
+        
+        for field in fields:
+            desc = field.startswith("-")
+            field_name = field.lstrip("-")
+            
+            if field_name not in self.ordering_fields and self.ordering_fields:
+                continue
+            
+            if hasattr(self.model, field_name):
+                column = getattr(self.model, field_name)
+                if desc:
+                    queryset = queryset.order_by(column.desc())
+                else:
+                    queryset = queryset.order_by(column.asc())
+        
+        return queryset
+
+
+class BulkModelViewSet(ModelViewSet[ModelT, InputT, OutputT]):
+    """
+    ModelViewSet com operações em lote.
+    
+    Endpoints adicionais:
+        POST /bulk-create - Criar múltiplos
+        PATCH /bulk-update - Atualizar múltiplos
+        DELETE /bulk-delete - Deletar múltiplos
+    
+    Exemplo:
+        class ProductViewSet(BulkModelViewSet):
+            model = Product
+            input_schema = ProductInput
+            output_schema = ProductOutput
+            bulk_max_items = 100
+    """
+    
+    bulk_max_items: int = 100
+    
+    @action(methods=["POST"], detail=False, url_path="bulk-create")
+    async def bulk_create(
+        self,
+        request: Request,
+        db: AsyncSession,
+        data: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Cria múltiplos objetos de uma vez."""
+        await self.check_permissions(request, "create")
+        
+        if not data:
+            raise HTTPException(status_code=400, detail="No data provided")
+        
+        if len(data) > self.bulk_max_items:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximum {self.bulk_max_items} items allowed"
+            )
+        
+        input_schema = self.get_input_schema()
+        output_schema = self.get_output_schema()
+        created = []
+        errors = []
+        
+        for i, item_data in enumerate(data):
+            try:
+                validated = input_schema.model_validate(item_data)
+                data_dict = validated.model_dump()
+                validated_data = await self.validate_data(data_dict, db, instance=None)
+                
+                obj = self.model(**validated_data)
+                await obj.save(db)
+                created.append(output_schema.model_validate(obj).model_dump())
+            except Exception as e:
+                errors.append({"index": i, "error": str(e)})
+        
+        return {
+            "created": created,
+            "created_count": len(created),
+            "errors": errors,
+            "error_count": len(errors),
+        }
+    
+    @action(methods=["PATCH"], detail=False, url_path="bulk-update")
+    async def bulk_update(
+        self,
+        request: Request,
+        db: AsyncSession,
+        data: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Atualiza múltiplos objetos."""
+        await self.check_permissions(request, "update")
+        
+        if not data:
+            raise HTTPException(status_code=400, detail="No data provided")
+        
+        if len(data) > self.bulk_max_items:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximum {self.bulk_max_items} items allowed"
+            )
+        
+        output_schema = self.get_output_schema()
+        updated = []
+        errors = []
+        
+        for i, item_data in enumerate(data):
+            try:
+                item_id = item_data.get(self.lookup_field)
+                if not item_id:
+                    errors.append({"index": i, "error": f"Missing {self.lookup_field}"})
+                    continue
+                
+                obj = await self.get_object(db, **{self.lookup_field: item_id})
+                
+                update_data = {k: v for k, v in item_data.items() if k != self.lookup_field}
+                for field, value in update_data.items():
+                    if hasattr(obj, field):
+                        setattr(obj, field, value)
+                
+                await obj.save(db)
+                updated.append(output_schema.model_validate(obj).model_dump())
+            except HTTPException as e:
+                errors.append({"index": i, "error": e.detail})
+            except Exception as e:
+                errors.append({"index": i, "error": str(e)})
+        
+        return {
+            "updated": updated,
+            "updated_count": len(updated),
+            "errors": errors,
+            "error_count": len(errors),
+        }
+    
+    @action(methods=["DELETE"], detail=False, url_path="bulk-delete")
+    async def bulk_delete(
+        self,
+        request: Request,
+        db: AsyncSession,
+        data: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Deleta múltiplos objetos por IDs."""
+        await self.check_permissions(request, "destroy")
+        
+        if not data or "ids" not in data:
+            raise HTTPException(status_code=400, detail="No ids provided")
+        
+        ids = data["ids"]
+        if len(ids) > self.bulk_max_items:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximum {self.bulk_max_items} items allowed"
+            )
+        
+        deleted = []
+        errors = []
+        
+        for item_id in ids:
+            try:
+                obj = await self.get_object(db, **{self.lookup_field: item_id})
+                await obj.delete(db)
+                deleted.append(item_id)
+            except HTTPException as e:
+                errors.append({"id": item_id, "error": e.detail})
+            except Exception as e:
+                errors.append({"id": item_id, "error": str(e)})
+        
+        return {
+            "deleted": deleted,
+            "deleted_count": len(deleted),
+            "errors": errors,
+            "error_count": len(errors),
+        }

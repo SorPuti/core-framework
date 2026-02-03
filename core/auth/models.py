@@ -47,10 +47,15 @@ if TYPE_CHECKING:
 # Cache de tabelas criadas para evitar duplicação
 _association_tables: dict[str, Table] = {}
 
+# Cache de tipos de PK detectados
+_pk_type_cache: dict[str, type] = {}
+
 
 def _get_pk_column_type(model_class: type) -> type:
     """
     Detecta o tipo da coluna PK de um modelo.
+    
+    Bug #3 Fix: Detecção robusta do tipo de PK para FKs.
     
     Suporta:
     - Integer (int)
@@ -63,41 +68,83 @@ def _get_pk_column_type(model_class: type) -> type:
     """
     from sqlalchemy import Integer, BigInteger, String
     from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+    from sqlalchemy import Uuid
     import uuid
     
-    # Tenta obter do __annotations__ ou columns
+    # Verifica cache primeiro
+    cache_key = f"{model_class.__module__}.{model_class.__name__}"
+    if cache_key in _pk_type_cache:
+        return _pk_type_cache[cache_key]
+    
+    detected_type = Integer  # Default
+    
+    # Método 1: Tenta obter da tabela já mapeada
     if hasattr(model_class, "__table__"):
-        # Modelo já mapeado - pega direto da tabela
         pk_columns = [c for c in model_class.__table__.columns if c.primary_key]
         if pk_columns:
-            return type(pk_columns[0].type)
+            pk_col_type = pk_columns[0].type
+            # Verifica se é UUID
+            if isinstance(pk_col_type, (PG_UUID, Uuid)):
+                detected_type = PG_UUID
+            elif isinstance(pk_col_type, BigInteger):
+                detected_type = BigInteger
+            elif isinstance(pk_col_type, String):
+                detected_type = String
+            elif isinstance(pk_col_type, Integer):
+                detected_type = Integer
+            else:
+                # Tenta pelo nome do tipo
+                type_name = type(pk_col_type).__name__.upper()
+                if "UUID" in type_name:
+                    detected_type = PG_UUID
+            
+            _pk_type_cache[cache_key] = detected_type
+            return detected_type
     
-    # Tenta via annotations
+    # Método 2: Tenta via annotations
     annotations = getattr(model_class, "__annotations__", {})
     
     if "id" in annotations:
         ann = annotations["id"]
         ann_str = str(ann)
         
-        # Detecta UUID
-        if "UUID" in ann_str or "uuid" in ann_str:
-            return PG_UUID
-        
+        # Detecta UUID (vários formatos)
+        if "UUID" in ann_str or "uuid" in ann_str or "Uuid" in ann_str:
+            detected_type = PG_UUID
         # Detecta int
-        if "int" in ann_str.lower():
-            return Integer
-        
+        elif "int" in ann_str.lower() and "uuid" not in ann_str.lower():
+            detected_type = Integer
         # Detecta str
-        if "str" in ann_str.lower():
-            return String
+        elif "str" in ann_str.lower() and "uuid" not in ann_str.lower():
+            detected_type = String
     
-    # Default: Integer
-    return Integer
+    # Método 3: Verifica campos na classe (declared_attr ou column_property)
+    for attr_name in dir(model_class):
+        if attr_name == "id":
+            attr = getattr(model_class, attr_name, None)
+            if attr is not None:
+                # Pode ser um InstrumentedAttribute
+                if hasattr(attr, "type"):
+                    attr_type = attr.type
+                    if isinstance(attr_type, (PG_UUID, Uuid)):
+                        detected_type = PG_UUID
+                        break
+                # Pode ser um mapped_column
+                if hasattr(attr, "property") and hasattr(attr.property, "columns"):
+                    for col in attr.property.columns:
+                        if isinstance(col.type, (PG_UUID, Uuid)):
+                            detected_type = PG_UUID
+                            break
+    
+    _pk_type_cache[cache_key] = detected_type
+    return detected_type
 
 
 def _create_user_fk_column(user_tablename: str, user_model: type | None = None):
     """
     Cria coluna FK para user_id detectando automaticamente o tipo.
+    
+    Bug #3 Fix: Suporte correto a UUID em FKs.
     
     Args:
         user_tablename: Nome da tabela do usuário
@@ -108,9 +155,10 @@ def _create_user_fk_column(user_tablename: str, user_model: type | None = None):
     """
     from sqlalchemy import Integer, BigInteger, String
     from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+    from sqlalchemy import Uuid
     
     # Tenta detectar o tipo do modelo
-    col_type = Integer  # Default
+    col_type: Any = Integer  # Default
     
     if user_model is not None:
         detected = _get_pk_column_type(user_model)
@@ -122,6 +170,16 @@ def _create_user_fk_column(user_tablename: str, user_model: type | None = None):
             col_type = String(36)  # UUID como string
         else:
             col_type = Integer
+    else:
+        # Sem modelo, tenta inferir da configuração global
+        try:
+            config = get_auth_config()
+            if config.user_model is not None:
+                detected = _get_pk_column_type(config.user_model)
+                if detected == PG_UUID:
+                    col_type = PG_UUID(as_uuid=True)
+        except Exception:
+            pass
     
     return Column(
         "user_id",
@@ -129,6 +187,17 @@ def _create_user_fk_column(user_tablename: str, user_model: type | None = None):
         ForeignKey(f"{user_tablename}.id", ondelete="CASCADE"),
         primary_key=True,
     )
+
+
+def clear_association_table_cache() -> None:
+    """
+    Limpa o cache de tabelas de associação.
+    
+    Útil para testes ou quando o modelo de usuário muda.
+    """
+    global _association_tables, _pk_type_cache
+    _association_tables.clear()
+    _pk_type_cache.clear()
 
 
 def get_user_groups_table(user_tablename: str = "auth_users", user_model: type | None = None) -> Table:
@@ -433,17 +502,29 @@ class AbstractUser(Model):
     """
     Modelo abstrato base para usuários.
     
+    Bug #4 Fix: Suporta tanto INTEGER quanto UUID como PK.
+    
     Herde desta classe para criar seu modelo de usuário customizado:
     
+        # Com INTEGER (padrão)
         class User(AbstractUser, PermissionsMixin):
             __tablename__ = "users"
-            
-            # Campos adicionais
-            phone: Mapped[str | None] = Field.string(max_length=20, nullable=True)
-            avatar_url: Mapped[str | None] = Field.string(max_length=500, nullable=True)
+        
+        # Com UUID - sobrescreva o campo id
+        from core.fields import AdvancedField
+        from uuid import UUID
+        
+        class User(AbstractUser, PermissionsMixin):
+            __tablename__ = "users"
+            id: Mapped[UUID] = AdvancedField.uuid_pk()  # Override para UUID
+    
+    Ou use AbstractUUIDUser para UUID por padrão:
+    
+        class User(AbstractUUIDUser, PermissionsMixin):
+            __tablename__ = "users"
     
     Campos incluídos:
-        - id: Chave primária
+        - id: Chave primária (INTEGER por padrão, pode ser UUID)
         - email: Email único (usado para login)
         - password_hash: Hash da senha
         - is_active: Se o usuário está ativo
@@ -455,7 +536,7 @@ class AbstractUser(Model):
     
     __abstract__ = True
     
-    # Campos de autenticação
+    # Campos de autenticação - id pode ser sobrescrito por subclasses
     id: Mapped[int] = Field.pk()
     email: Mapped[str] = Field.string(max_length=255, unique=True, index=True)
     password_hash: Mapped[str] = Field.string(max_length=255)
@@ -680,6 +761,41 @@ class AbstractUser(Model):
     ) -> "AbstractUser | None":
         """Obtém usuário por email."""
         return await cls.objects.using(db).filter(email=email.lower()).first()
+
+
+# =============================================================================
+# AbstractUUIDUser Model (Bug #4 Fix)
+# =============================================================================
+
+class AbstractUUIDUser(AbstractUser):
+    """
+    Modelo abstrato base para usuários com UUID como PK.
+    
+    Bug #4 Fix: Fornece uma versão do AbstractUser que usa UUID por padrão.
+    
+    Ideal para:
+    - Sistemas distribuídos
+    - APIs públicas (UUIDs são mais seguros que IDs sequenciais)
+    - Microservices
+    
+    Exemplo:
+        from core.auth import AbstractUUIDUser, PermissionsMixin
+        
+        class User(AbstractUUIDUser, PermissionsMixin):
+            __tablename__ = "users"
+            
+            # Campos adicionais
+            name: Mapped[str] = Field.string(max_length=100)
+    """
+    
+    __abstract__ = True
+    
+    # Importa aqui para evitar circular import
+    from core.fields import AdvancedField
+    from uuid import UUID as UUIDType
+    
+    # Override: usa UUID como PK
+    id: Mapped[UUIDType] = AdvancedField.uuid_pk()
 
 
 # =============================================================================
