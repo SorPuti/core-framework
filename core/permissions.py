@@ -15,10 +15,31 @@ from typing import Any, TYPE_CHECKING
 
 from fastapi import HTTPException, Request, status
 
-from core.auth.helpers import get_request_user
-
 if TYPE_CHECKING:
     from core.views import APIView
+
+
+def _get_user(request: Request) -> Any | None:
+    """
+    Get authenticated user from request.
+    
+    Internal helper to avoid circular imports.
+    Checks both Starlette and legacy patterns.
+    """
+    # Pattern 1: request.user (Starlette AuthenticationMiddleware)
+    user = getattr(request, "user", None)
+    if user is not None:
+        if getattr(user, "is_authenticated", False):
+            # If it's our AuthenticatedUser wrapper, return the underlying model
+            if hasattr(user, "_user"):
+                return user._user
+            return user
+    
+    # Pattern 2: request.state.user (legacy)
+    if hasattr(request, "state"):
+        return getattr(request.state, "user", None)
+    
+    return None
 
 
 class Permission(ABC):
@@ -34,7 +55,7 @@ class Permission(ABC):
                 request: Request,
                 view: APIView | None = None,
             ) -> bool:
-                user = get_request_user(request)
+                user = _get_user(request)
                 return user is not None and user.is_admin
     """
     
@@ -216,7 +237,7 @@ class IsAuthenticated(Permission):
         request: Request,
         view: "APIView | None" = None,
     ) -> bool:
-        user = get_request_user(request)
+        user = _get_user(request)
         return user is not None
 
 
@@ -238,7 +259,7 @@ class IsAuthenticatedOrReadOnly(Permission):
         if request.method in self.SAFE_METHODS:
             return True
         
-        user = get_request_user(request)
+        user = _get_user(request)
         return user is not None
 
 
@@ -252,7 +273,7 @@ class IsAdmin(Permission):
         request: Request,
         view: "APIView | None" = None,
     ) -> bool:
-        user = get_request_user(request)
+        user = _get_user(request)
         if user is None:
             return False
         
@@ -287,7 +308,7 @@ class IsOwner(Permission):
         if obj is None:
             return True
         
-        user = get_request_user(request)
+        user = _get_user(request)
         if user is None:
             return False
         
@@ -320,7 +341,7 @@ class HasRole(Permission):
         request: Request,
         view: "APIView | None" = None,
     ) -> bool:
-        user = get_request_user(request)
+        user = _get_user(request)
         if user is None:
             return False
         

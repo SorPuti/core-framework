@@ -24,10 +24,31 @@ from typing import Any, TYPE_CHECKING
 from fastapi import Depends, HTTPException, Request, status
 
 from core.permissions import Permission as PermissionBase
-from core.auth.helpers import get_request_user
 
 if TYPE_CHECKING:
     pass
+
+
+def _get_user(request: Request) -> Any | None:
+    """
+    Get authenticated user from request.
+    
+    Internal helper to avoid circular imports.
+    Checks both Starlette and legacy patterns.
+    """
+    # Pattern 1: request.user (Starlette AuthenticationMiddleware)
+    user = getattr(request, "user", None)
+    if user is not None:
+        if getattr(user, "is_authenticated", False):
+            if hasattr(user, "_user"):
+                return user._user
+            return user
+    
+    # Pattern 2: request.state.user (legacy)
+    if hasattr(request, "state"):
+        return getattr(request.state, "user", None)
+    
+    return None
 
 
 # =============================================================================
@@ -71,7 +92,7 @@ class HasPermission(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = get_request_user(request)
+        user = _get_user(request)
         
         if user is None:
             return False
@@ -136,7 +157,7 @@ class IsInGroup(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = get_request_user(request)
+        user = _get_user(request)
         
         if user is None:
             return False
@@ -180,7 +201,7 @@ class IsSuperuser(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = get_request_user(request)
+        user = _get_user(request)
         
         if user is None:
             return False
@@ -208,7 +229,7 @@ class IsStaff(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = get_request_user(request)
+        user = _get_user(request)
         
         if user is None:
             return False
@@ -236,7 +257,7 @@ class IsActive(PermissionBase):
         request: Request,
         view: Any = None,
     ) -> bool:
-        user = get_request_user(request)
+        user = _get_user(request)
         
         if user is None:
             return False
@@ -372,7 +393,7 @@ def login_required():
             ...
     """
     async def check(request: Request):
-        user = get_request_user(request)
+        user = _get_user(request)
         
         if user is None:
             raise HTTPException(
