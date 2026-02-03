@@ -37,6 +37,17 @@
 | [21 Multi-Tenancy](21-tenancy.md) | Isolamento por workspace/organization |
 | [22 Read/Write Replicas](22-replicas.md) | Separacao de leitura e escrita |
 | [23 Soft Delete](23-soft-delete.md) | Exclusao logica com restauracao |
+| [24 Relations](24-relations.md) | Helpers para relacionamentos SQLAlchemy |
+| [25 Exceptions](25-exceptions.md) | Sistema centralizado de exceções |
+| [26 Choices](26-choices.md) | TextChoices e IntegerChoices (Django-style) |
+
+## Messaging (v0.11.0+)
+
+| Guide | Descricao |
+|-------|-----------|
+| [27 Workers](27-workers.md) | Sistema de workers estilo Celery |
+| [28 Avro](28-avro.md) | Auto-geração de schemas Avro |
+| [29 Topics](29-topics.md) | Definição de tópicos como classes |
 
 ## API Reference
 

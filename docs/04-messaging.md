@@ -1,51 +1,118 @@
 # Messaging
 
-Sistema de mensageria assincrona para comunicacao entre servicos. Suporta Kafka, RabbitMQ e Redis como brokers.
+Sistema de mensageria plug-and-play para comunicação entre serviços. Suporta Kafka (aiokafka ou confluent-kafka), RabbitMQ e Redis.
 
-## Configuracao
-
-A configuracao define qual broker usar e como conectar. Deve ser chamada antes de usar qualquer funcionalidade de messaging.
+## Quick Start
 
 ```python
-# src/main.py
+from core.messaging import publish
+
+# Publicar mensagem em 1 linha
+await publish("user-events", {"user_id": 1, "action": "created"})
+```
+
+## Configuração
+
+### Via core.toml (Recomendado)
+
+```toml
+# core.toml
+[messaging]
+message_broker = "kafka"
+kafka_bootstrap_servers = "localhost:9092"
+kafka_backend = "confluent"  # ou "aiokafka"
+kafka_fire_and_forget = true
+```
+
+### Via Variáveis de Ambiente
+
+```env
+MESSAGE_BROKER=kafka
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+KAFKA_BACKEND=confluent
+KAFKA_FIRE_AND_FORGET=true
+KAFKA_SCHEMA_REGISTRY_URL=http://schema-registry:8081
+```
+
+### Via Código
+
+```python
 from core.messaging import configure_messaging
 
 configure_messaging(
-    # Broker a ser usado: "kafka", "rabbitmq" ou "redis"
-    # Cada broker tem caracteristicas diferentes (ver tabela abaixo)
-    broker="kafka",
-    
-    # Endereco do broker - formato depende do broker escolhido
-    bootstrap_servers="localhost:9092",
+    message_broker="kafka",
+    kafka_bootstrap_servers="localhost:9092",
+    kafka_backend="confluent",
+    kafka_fire_and_forget=True,
+    kafka_schema_registry_url="http://schema-registry:8081",
 )
 ```
 
-**Comparacao de brokers**:
+### Todas as Configurações Disponíveis
 
-| Broker | Persistencia | Ordenacao | Throughput | Complexidade |
-|--------|--------------|-----------|------------|--------------|
-| Kafka | Sim | Por particao | Muito alto | Alta |
-| RabbitMQ | Configuravel | Por fila | Alto | Media |
-| Redis | Nao (padrao) | Por stream | Medio | Baixa |
+| Configuração | Tipo | Padrão | Descrição |
+|--------------|------|--------|-----------|
+| `message_broker` | str | "kafka" | Broker: "kafka", "redis", "rabbitmq", "memory" |
+| `kafka_backend` | str | "aiokafka" | Backend Kafka: "aiokafka" (async) ou "confluent" (librdkafka) |
+| `kafka_bootstrap_servers` | str | "localhost:9092" | Servidores Kafka (separados por vírgula) |
+| `kafka_schema_registry_url` | str | None | URL do Schema Registry para Avro |
+| `kafka_fire_and_forget` | bool | False | Se True, não aguarda confirmação do broker |
+| `kafka_security_protocol` | str | "PLAINTEXT" | Protocolo: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL |
+| `kafka_sasl_mechanism` | str | None | Mecanismo SASL: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 |
+| `kafka_sasl_username` | str | None | Usuário SASL |
+| `kafka_sasl_password` | str | None | Senha SASL |
+| `kafka_compression_type` | str | "none" | Compressão: none, gzip, snappy, lz4, zstd |
+| `kafka_linger_ms` | int | 0 | Tempo para acumular batch (ms) |
+| `kafka_max_batch_size` | int | 16384 | Tamanho máximo do batch (bytes) |
 
-Configuracao via variaveis de ambiente (alternativa):
+### Comparação de Backends Kafka
 
-```env
-# Kafka
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+| Backend | Throughput | Latência | Features | Quando Usar |
+|---------|------------|----------|----------|-------------|
+| `aiokafka` | Alto | Baixa | Async nativo | Apps FastAPI simples |
+| `confluent` | Muito Alto | Muito Baixa | Schema Registry, Avro, Transações | Enterprise, alta performance |
 
-# RabbitMQ
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+## Publicação de Mensagens
 
-# Redis
-REDIS_URL=redis://localhost:6379/0
+### Método Simples: `publish()`
+
+```python
+from core.messaging import publish
+
+# Publicar dict simples
+await publish("user-events", {"user_id": 1, "email": "user@example.com"})
+
+# Com chave de partição (garante ordenação por chave)
+await publish("user-events", {"user_id": 1}, key="user-1")
+
+# Aguardar confirmação do broker
+await publish("user-events", data, wait=True)
 ```
 
-**Nota**: Se ambos (codigo e .env) estiverem configurados, o codigo tem precedencia.
+### Com Topic Class (Validação de Schema)
 
-## @event - Publicacao Automatica
+```python
+from core.messaging import publish, Topic
+from pydantic import BaseModel
 
-O decorator `@event` publica eventos automaticamente quando uma acao do ViewSet e executada com sucesso. O evento e disparado APOS a resposta ser enviada ao cliente (fire-and-forget).
+class UserCreatedEvent(BaseModel):
+    user_id: int
+    email: str
+    created_at: datetime
+
+class UserEvents(Topic):
+    name = "user-events"
+    schema = UserCreatedEvent  # Valida automaticamente
+
+# Publicar - valida contra o schema
+await publish(UserEvents, {"user_id": 1, "email": "test@example.com"})
+
+# Também aceita Pydantic model diretamente
+event = UserCreatedEvent(user_id=1, email="test@example.com", created_at=datetime.now())
+await publish(UserEvents, event)
+```
+
+### Com Decorator @event (ViewSets)
 
 ```python
 from core import ModelViewSet, action
@@ -58,102 +125,303 @@ class UserViewSet(ModelViewSet):
     @event("user.created", topic="user-events", key_field="id")
     async def register(self, request, db, **kwargs):
         """
-        POST /users/register
-        
-        Fluxo:
-        1. Metodo executa e retorna resposta ao cliente
-        2. Resposta e enviada
-        3. Evento e publicado em background (nao bloqueia)
-        
-        Se o metodo levantar excecao, evento NAO e publicado.
+        Evento publicado automaticamente após sucesso.
+        O retorno do método se torna o payload do evento.
         """
         body = await request.json()
-        user = await User.create_user(
-            email=body["email"],
-            password=body["password"],
-            db=db,
-        )
-        # O retorno deste metodo se torna o "data" do evento
+        user = await User.create_user(email=body["email"], password=body["password"], db=db)
         return {"id": user.id, "email": user.email}
 ```
 
-Estrutura do evento publicado:
-
-```json
-{
-  "name": "user.created",
-  "data": {"id": 1, "email": "user@example.com"},
-  "timestamp": "2026-02-01T12:00:00Z",
-  "source": "my-service"
-}
-```
-
-**Parametros do @event**:
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| `event_name` | str | Nome do evento. Convencao: `entidade.acao` (ex: `user.created`) |
-| `topic` | str | Topico/fila destino. Se None, usa topico padrao configurado. |
-| `key_field` | str | Campo do retorno usado como chave de particao (Kafka). Garante ordenacao por chave. |
-| `include_result` | bool | Se True (padrao), inclui retorno do metodo em `data`. Se False, `data` fica vazio. |
-
-**Trade-off do @event**: Simplicidade vs controle. O decorator nao permite customizar o payload alem do retorno do metodo. Para payloads complexos, use `get_producer()`.
-
-## Publicacao Manual
-
-Para controle total sobre o que e quando publicar.
+### Publicação Manual (Controle Total)
 
 ```python
 from core.messaging import get_producer
 
-async def send_order_created(order_id: int, user_id: int):
-    """
-    Publicacao manual permite:
-    - Payload customizado
-    - Publicacao condicional
-    - Multiplos eventos em sequencia
-    - Tratamento de erro especifico
-    """
-    producer = get_producer()
-    
-    # send() e async - aguarda confirmacao do broker
-    # Em caso de falha, levanta excecao
-    await producer.send(
-        topic="orders.created",
-        message={
-            "order_id": order_id,
-            "user_id": user_id,
-            "timestamp": datetime.utcnow().isoformat(),
-        },
-    )
+producer = get_producer()
+
+# Garantir que está conectado
+await producer.start()
+
+# Enviar com confirmação
+await producer.send("topic", {"key": "value"}, wait=True)
+
+# Fire-and-forget (mais rápido)
+await producer.send_fire_and_forget("topic", {"key": "value"})
+
+# Batch fire-and-forget
+events = [{"id": i} for i in range(1000)]
+count = await producer.send_batch_fire_and_forget("topic", events)
+
+# Garantir entrega de todos os pendentes
+await producer.flush()
 ```
 
-**Diferenca entre @event e get_producer()**:
-- `@event`: Fire-and-forget, falhas sao silenciosas, nao bloqueia resposta
-- `get_producer()`: Sincrono (aguarda ACK), falhas levantam excecao, bloqueia ate confirmacao
+## Topic Classes
 
-## publish_event - Helper Direto
-
-Funcao de conveniencia para publicar eventos sem instanciar producer.
+Defina tópicos como classes para organização e validação:
 
 ```python
-from core.messaging import publish_event
+from core.messaging import Topic, EventTopic, CommandTopic, StateTopic
+from pydantic import BaseModel
 
-async def notify_user_updated(user_id: int, email: str):
-    """
-    Equivalente a get_producer().send(), mas com interface de evento.
-    Util para publicar de qualquer lugar do codigo.
-    """
-    await publish_event(
-        event_name="user.updated",
-        data={"id": user_id, "email": email},
-        topic="user-events",
-    )
+# Schema do evento
+class OrderCreatedEvent(BaseModel):
+    order_id: int
+    user_id: int
+    total: float
+    items: list[dict]
+
+# Topic com configurações
+class OrderEvents(Topic):
+    name = "order-events"
+    schema = OrderCreatedEvent
+    partitions = 6
+    replication_factor = 3
+    retention_ms = 7 * 24 * 60 * 60 * 1000  # 7 dias
+    cleanup_policy = "delete"
+    value_serializer = "json"  # ou "avro"
+
+# Topics pré-definidos
+class OrderCreated(EventTopic):
+    """Eventos são fatos imutáveis."""
+    name = "order.created"
+    schema = OrderCreatedEvent
+
+class SendEmail(CommandTopic):
+    """Commands são requisições de ação."""
+    name = "email.send"
+    schema = SendEmailCommand
+
+class UserState(StateTopic):
+    """State topics usam compaction."""
+    name = "user.state"
+    schema = UserStateModel
 ```
 
-## @consumer + @on_event - Handlers em Classe
+### Listar Topics Registrados
 
-Agrupa handlers relacionados em uma classe. Util quando multiplos eventos compartilham contexto ou dependencias.
+```python
+from core.messaging import get_all_topics, get_topic
+
+# Todos os topics
+topics = get_all_topics()
+for name, topic_class in topics.items():
+    print(f"{name}: {topic_class.schema}")
+
+# Topic específico
+order_topic = get_topic("order-events")
+```
+
+## Avro Schemas
+
+### Auto-Geração a partir de Pydantic
+
+```python
+from core.messaging import AvroModel
+from datetime import datetime
+from typing import Optional
+
+class UserEvent(AvroModel):
+    __avro_namespace__ = "com.myapp.events"
+    
+    user_id: int
+    email: str
+    created_at: datetime
+    roles: list[str] = []
+    metadata: dict[str, str] | None = None
+
+# Schema Avro gerado automaticamente
+schema = UserEvent.__avro_schema__()
+print(UserEvent.avro_schema_json())
+```
+
+Output:
+```json
+{
+  "type": "record",
+  "name": "UserEvent",
+  "namespace": "com.myapp.events",
+  "fields": [
+    {"name": "user_id", "type": "long"},
+    {"name": "email", "type": "string"},
+    {"name": "created_at", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "roles", "type": {"type": "array", "items": "string"}, "default": []},
+    {"name": "metadata", "type": ["null", {"type": "map", "values": "string"}], "default": null}
+  ]
+}
+```
+
+### Serialização Avro
+
+```python
+# Requer: pip install fastavro
+
+# Serializar para bytes
+avro_bytes = event.to_avro()
+
+# Deserializar
+event = UserEvent.from_avro(avro_bytes)
+```
+
+### Decorator @avro_schema
+
+```python
+from core.messaging import avro_schema
+from pydantic import BaseModel
+
+@avro_schema(namespace="com.myapp.events")
+class OrderEvent(BaseModel):
+    order_id: int
+    total: float
+
+# Agora tem __avro_schema__()
+schema = OrderEvent.__avro_schema__()
+```
+
+### Publicar com Avro (Confluent)
+
+```python
+from core.messaging import get_producer, AvroModel
+
+class Event(AvroModel):
+    event_id: str
+    event_name: str
+
+producer = get_producer()
+await producer.start()
+
+# Enviar com serialização Avro
+await producer.send_avro(
+    "events",
+    {"event_id": "123", "event_name": "test"},
+    schema=Event.__avro_schema__(),
+)
+```
+
+## Workers
+
+Sistema de workers para processar mensagens (inspirado no Celery).
+
+### Decorator Style
+
+```python
+from core.messaging import worker
+
+@worker(
+    topic="events.raw",
+    output_topic="events.enriched",
+    concurrency=5,
+    max_retries=3,
+    retry_backoff="exponential",
+)
+async def enrich_event(event: dict) -> dict:
+    """
+    Processa evento e retorna resultado.
+    Resultado é publicado automaticamente em output_topic.
+    """
+    geo = await geoip_lookup(event.get("ip_address"))
+    return {**event, **geo, "enriched": True}
+```
+
+### Class Style
+
+```python
+from core.messaging import Worker
+from pydantic import BaseModel
+
+class RawEvent(BaseModel):
+    event_id: str
+    ip_address: str
+
+class EnrichedEvent(BaseModel):
+    event_id: str
+    ip_address: str
+    country: str
+    city: str
+
+class GeolocationWorker(Worker):
+    input_topic = "events.raw"
+    output_topic = "events.enriched"
+    group_id = "geolocation-service"
+    concurrency = 10
+    max_retries = 3
+    retry_backoff = "exponential"
+    input_schema = RawEvent
+    output_schema = EnrichedEvent
+    dlq_topic = "events.dlq"  # Dead letter queue
+    
+    async def process(self, event: dict) -> dict:
+        """Lógica de processamento."""
+        geo = await self.lookup_geo(event["ip_address"])
+        return {**event, **geo}
+    
+    async def lookup_geo(self, ip: str) -> dict:
+        """Método auxiliar."""
+        # Implementação...
+        return {"country": "BR", "city": "São Paulo"}
+    
+    async def on_error(self, event: dict, error: Exception) -> None:
+        """Chamado quando processamento falha após todos os retries."""
+        logger.error(f"Failed to process event: {event}, error: {error}")
+    
+    async def on_success(self, event: dict, result: dict) -> None:
+        """Chamado após processamento bem-sucedido."""
+        logger.info(f"Processed event: {event['event_id']}")
+```
+
+### Parâmetros do Worker
+
+| Parâmetro | Tipo | Padrão | Descrição |
+|-----------|------|--------|-----------|
+| `topic` / `input_topic` | str | - | Tópico de entrada (obrigatório) |
+| `output_topic` | str | None | Tópico para publicar resultados |
+| `group_id` | str | nome da função/classe | ID do consumer group |
+| `concurrency` | int | 1 | Número de workers paralelos |
+| `max_retries` | int | 3 | Tentativas antes de enviar para DLQ |
+| `retry_backoff` | str | "exponential" | Estratégia: "linear", "exponential", "fixed" |
+| `input_schema` | BaseModel | None | Schema para validar entrada |
+| `output_schema` | BaseModel | None | Schema para validar saída |
+| `dlq_topic` | str | None | Tópico para mensagens que falharam |
+
+### Executar Workers
+
+```bash
+# Worker específico
+core runworker enrich_event
+
+# Todos os workers registrados
+core runworker all
+
+# Listar workers disponíveis
+core workers
+```
+
+### Retry Policy
+
+```python
+from core.messaging import worker, RetryPolicy
+
+@worker(
+    topic="payments",
+    max_retries=5,
+    retry_backoff="exponential",  # 1s, 2s, 4s, 8s, 16s
+)
+async def process_payment(payment: dict) -> dict:
+    result = await payment_gateway.charge(payment)
+    if not result.success:
+        raise Exception("Payment failed")  # Aciona retry
+    return result
+```
+
+Estratégias de backoff:
+- `"fixed"`: Sempre o mesmo delay (1s)
+- `"linear"`: Delay aumenta linearmente (1s, 2s, 3s, 4s...)
+- `"exponential"`: Delay dobra a cada tentativa (1s, 2s, 4s, 8s...)
+
+## Consumers (Classe Tradicional)
+
+Para consumo mais customizado:
 
 ```python
 from core.messaging import consumer, on_event
@@ -162,352 +430,303 @@ from core.messaging.base import Event
 @consumer("order-service", topics=["user-events", "payment-events"])
 class OrderEventsConsumer:
     """
-    @consumer registra a classe como consumidor.
-    
-    group_id="order-service": Identificador do grupo de consumidores.
-        Mensagens sao distribuidas entre instancias do mesmo grupo.
-        Grupos diferentes recebem copia de todas as mensagens.
-    
-    topics: Lista de topicos que este consumidor escuta.
+    Consumer baseado em classe.
+    Agrupa handlers relacionados.
     """
     
     @on_event("user.created")
     async def handle_user_created(self, event: Event, db):
-        """
-        Chamado quando evento "user.created" e recebido.
-        
-        event.name: Nome do evento
-        event.data: Payload do evento (dict)
-        event.timestamp: Quando foi publicado
-        event.source: Servico que publicou
-        
-        db: Sessao de banco injetada automaticamente
-        """
+        """Cria pedido de boas-vindas para novo usuário."""
         await Order.create_welcome_order(
             user_id=event.data["id"],
             db=db,
         )
     
     @on_event("payment.completed")
-    async def handle_payment_completed(self, event: Event, db):
-        """
-        Metodos da mesma classe podem compartilhar estado e metodos auxiliares.
-        """
+    async def handle_payment(self, event: Event, db):
+        """Marca pedido como pago."""
         await Order.mark_paid(
             order_id=event.data["order_id"],
             db=db,
         )
 ```
 
-**Parametros do @consumer**:
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| `group_id` | str | ID do grupo. Instancias com mesmo ID dividem carga. |
-| `topics` | list[str] | Topicos a consumir. Handler so recebe eventos dos topicos listados. |
-| `auto_start` | bool | Se True (padrao), inicia automaticamente com `core consumer`. |
-
-## @message_handler - Handler Simples
-
-Para handlers isolados que nao precisam de contexto compartilhado.
+### Handler Simples
 
 ```python
 from core.messaging import message_handler
 
-@message_handler(topic="orders.created")
-async def handle_order_created(message: dict, db):
-    """
-    Handler baseado em funcao.
-    
-    message: Payload da mensagem (dict, nao Event)
-    db: Sessao de banco injetada
-    
-    Mais simples que @consumer, mas sem agrupamento.
-    """
-    order_id = message["order_id"]
-    
-    await send_email(
-        to=message["user_email"],
-        subject="Order Confirmed",
-        body=f"Order #{order_id} received.",
-    )
+@message_handler(topic="orders.created", max_retries=3, retry_delay=5)
+async def handle_order(message: dict, db):
+    """Handler baseado em função."""
+    await send_confirmation_email(message["user_email"], message["order_id"])
 ```
 
-## Retry em Handlers
-
-Configure retentativas automaticas para handlers que podem falhar temporariamente.
-
-```python
-@message_handler(
-    topic="payments.process",
-    max_retries=3,      # Numero maximo de tentativas
-    retry_delay=5,      # Segundos entre tentativas (backoff linear)
-)
-async def process_payment(message: dict, db):
-    """
-    Se o handler levantar excecao:
-    1. Aguarda retry_delay segundos
-    2. Tenta novamente
-    3. Repete ate max_retries
-    4. Apos max_retries, mensagem vai para dead letter queue (se configurada)
-    """
-    result = await payment_gateway.charge(
-        amount=message["amount"],
-        card_token=message["card_token"],
-    )
-    
-    if not result.success:
-        # Levantar excecao aciona retry
-        raise Exception("Payment failed")
-```
-
-**Comportamento de retry**: O delay e linear (sempre `retry_delay` segundos). Para backoff exponencial, implemente logica customizada no handler.
-
-## Multiplos Topicos
-
-Um handler pode escutar multiplos topicos.
-
-```python
-@message_handler(topic=["orders.created", "orders.updated"])
-async def sync_inventory(message: dict, db):
-    """
-    Recebe mensagens de ambos os topicos.
-    Use message.get("event_name") ou estrutura do payload para diferenciar.
-    """
-    pass
-```
-
-## Executar Consumer
+### Executar Consumer
 
 ```bash
-# Consumir topico especifico
-core consumer --topic orders.created
-
-# Multiplos topicos
-core consumer --topic orders.created --topic orders.updated
-
-# Todos os handlers registrados (via @message_handler e @consumer)
-core consumer
+core consumer --group order-service --topic user-events --topic payment-events
 ```
 
-**Em producao**: Execute consumers como processos separados. Use Docker Compose ou Kubernetes para escalar.
+## Alta Performance
 
-## Exemplo Completo em ViewSet
+### Configuração para Alto Throughput
 
-Comparacao entre `@event` (automatico) e `get_producer()` (manual):
-
-```python
-from core import ModelViewSet, action
-from core.messaging import event, get_producer
-
-class OrderViewSet(ModelViewSet):
-    model = Order
-    
-    # Abordagem 1: @event (recomendado para casos simples)
-    @event("order.created", topic="order-events", key_field="id")
-    async def perform_create(self, data: dict, db) -> Order:
-        """
-        Evento publicado automaticamente com o retorno do metodo.
-        Limitacao: payload e exatamente o retorno, sem customizacao.
-        """
-        order = await super().perform_create(data, db)
-        return order  # Este objeto e serializado e enviado como evento
-    
-    # Abordagem 2: get_producer() (para payloads customizados)
-    async def perform_create_manual(self, data: dict, db) -> Order:
-        """
-        Controle total sobre o payload do evento.
-        Util quando evento precisa de dados que nao estao no retorno.
-        """
-        order = await super().perform_create(data, db)
-        
-        producer = get_producer()
-        await producer.send("orders.created", {
-            "order_id": order.id,
-            "user_id": order.user_id,
-            "total": float(order.total),
-            "items_count": len(order.items),  # Dado adicional
-            "created_at": order.created_at.isoformat(),
-        })
-        
-        return order
+```toml
+# core.toml
+[messaging]
+message_broker = "kafka"
+kafka_backend = "confluent"
+kafka_fire_and_forget = true
+kafka_linger_ms = 5
+kafka_max_batch_size = 32768
+kafka_compression_type = "lz4"
 ```
 
-## Mensagens Tipadas
-
-Use Pydantic para validacao automatica de mensagens recebidas.
-
-```python
-from pydantic import BaseModel
-from core.messaging import message_handler
-
-class OrderCreatedEvent(BaseModel):
-    """Schema da mensagem esperada."""
-    order_id: int
-    user_id: int
-    total: float
-
-@message_handler(topic="orders.created", schema=OrderCreatedEvent)
-async def handle_order(message: OrderCreatedEvent, db):
-    """
-    message ja e instancia de OrderCreatedEvent, validada.
-    Se payload nao corresponder ao schema, mensagem e rejeitada.
-    """
-    print(f"Order {message.order_id} total: {message.total}")
-```
-
-**Comportamento com schema invalido**: Mensagem e logada como erro e descartada (nao vai para retry). Configure dead letter queue para inspecionar mensagens rejeitadas.
-
-## Alta Performance com Kafka
-
-Para cenarios de alto throughput (>1000 msg/sec), o metodo `send()` padrao pode ser um gargalo porque aguarda confirmacao do broker (ACK) para cada mensagem.
-
-### O Problema
-
-```python
-# LENTO: ~50-100 msg/sec
-# Cada send() aguarda ACK do Kafka (~10-50ms por mensagem)
-for event in events:
-    await producer.send("topic", event)  # Bloqueia ate ACK
-```
-
-### Solucao: Fire-and-Forget
+### Métodos de Alta Performance
 
 ```python
 from core.messaging import get_producer
 
 producer = get_producer()
 
-# RAPIDO: >10.000 msg/sec
-# Enfileira mensagens sem aguardar ACK individual
+# Fire-and-forget: ~15.000 msg/sec
 for event in events:
     await producer.send_fire_and_forget("topic", event)
 
-# Garante entrega no final (opcional, mas recomendado)
+# Batch fire-and-forget: ~25.000 msg/sec
+count = await producer.send_batch_fire_and_forget("topic", events)
+
+# Flush no final
 await producer.flush()
 ```
 
-### Metodos de Alta Performance
+### Comparação de Performance
 
-| Metodo | Throughput | Garantia | Uso |
-|--------|------------|----------|-----|
-| `send(wait=True)` | ~100/sec | ACK por mensagem | Critico (pagamentos) |
-| `send(wait=False)` | ~5.000/sec | Batching interno | Eventos importantes |
-| `send_fire_and_forget()` | >10.000/sec | Flush manual | Analytics, logs |
-| `send_batch_fire_and_forget()` | >20.000/sec | Flush manual | Bulk import |
+| Método | Latência P50 | Throughput |
+|--------|--------------|------------|
+| `send(wait=True)` | 15ms | ~100/sec |
+| `send(wait=False)` | 0.5ms | ~5.000/sec |
+| `send_fire_and_forget()` | 0.1ms | ~15.000/sec |
+| `send_batch_fire_and_forget()` | 0.05ms/msg | ~25.000/sec |
 
-### Exemplo: Event Tracking de Alta Performance
+### Exemplo: Endpoint de Tracking
 
 ```python
 from core import ViewSet, action
-from core.messaging import get_producer
+from core.messaging import publish, Topic
 
-class EventViewSet(ViewSet):
-    """
-    Endpoint de tracking que recebe milhares de eventos/segundo.
-    """
-    
+class TrackingEvents(Topic):
+    name = "tracking.events"
+
+class TrackingViewSet(ViewSet):
     @action(methods=["POST"], detail=False)
     async def track(self, request, **kwargs):
         """
-        POST /events/track
+        POST /tracking/track
         
-        Recebe batch de eventos e enfileira para Kafka.
-        Responde imediatamente sem aguardar confirmacao.
+        Recebe milhares de eventos/segundo.
         """
         body = await request.json()
         events = body.get("events", [])
         
         producer = get_producer()
-        
-        # Enfileira todos sem bloquear
         count = await producer.send_batch_fire_and_forget(
-            "analytics-events",
+            TrackingEvents.name,
             events,
         )
         
-        # Opcional: flush antes de responder para garantir entrega
-        # await producer.flush()
-        
         return {"queued": count}
-    
-    @action(methods=["POST"], detail=False)
-    async def track_single(self, request, **kwargs):
-        """
-        POST /events/track_single
-        
-        Para eventos individuais de alta frequencia.
-        """
-        body = await request.json()
-        
-        producer = get_producer()
-        await producer.send_fire_and_forget("analytics-events", body)
-        
-        return {"status": "queued"}
 ```
 
-### Configuracao para Alta Performance
+## Lifecycle Automático
+
+O framework gerencia automaticamente o ciclo de vida dos producers:
 
 ```python
-from core.messaging import configure_messaging
+from core import CoreApp
 
-configure_messaging(
-    broker="kafka",
-    bootstrap_servers="localhost:9092",
-    
-    # Batching: agrupa mensagens antes de enviar
-    kafka_linger_ms=5,  # Aguarda 5ms para acumular batch
-    kafka_max_batch_size=32768,  # 32KB por batch
-    
-    # Compressao: reduz tamanho na rede
-    kafka_compression_type="lz4",  # Rapido e eficiente
-    
-    # Timeouts
-    kafka_request_timeout_ms=30000,
-)
+app = CoreApp(title="My API")
+
+# Producers são:
+# - Criados automaticamente no primeiro uso
+# - Reutilizados via singleton/pool
+# - Flushed automaticamente no shutdown
 ```
 
-### Quando Usar Cada Abordagem
+Para controle manual:
 
-**Use `send(wait=True)` quando:**
-- Perda de mensagem e inaceitavel (pagamentos, pedidos)
-- Volume baixo (<100 msg/sec)
-- Precisa confirmar entrega antes de responder ao cliente
+```python
+from core.messaging.registry import start_all_producers, stop_all_producers
 
-**Use `send_fire_and_forget()` quando:**
-- Alto volume (>1000 msg/sec)
-- Perda ocasional e toleravel (analytics, logs)
-- Latencia minima e prioridade
+# No startup
+await start_all_producers()
 
-**Use `flush()` quando:**
-- Quer garantir entrega antes de encerrar processo
-- No final de um batch de fire-and-forget
-- Antes de responder ao cliente (se necessario)
+# No shutdown
+await stop_all_producers()
+```
 
-### Metricas de Referencia
+## Exemplos Completos
 
-Testes em ambiente local (Kafka single-node):
+### Event Sourcing
 
-| Metodo | Latencia P50 | Latencia P99 | Throughput |
-|--------|--------------|--------------|------------|
-| `send(wait=True)` | 15ms | 50ms | 100/sec |
-| `send(wait=False)` | 0.5ms | 5ms | 5.000/sec |
-| `send_fire_and_forget()` | 0.1ms | 1ms | 15.000/sec |
-| `send_batch_fire_and_forget()` | 0.05ms/msg | 0.5ms/msg | 25.000/sec |
+```python
+from core.messaging import Topic, AvroModel, publish, worker
+from datetime import datetime
 
-**Nota**: Resultados variam com configuracao de rede, tamanho de mensagem e carga do broker.
+# Eventos
+class OrderCreated(AvroModel):
+    order_id: str
+    user_id: int
+    items: list[dict]
+    total: float
+    created_at: datetime
 
-## Resumo de Abordagens
+class OrderPaid(AvroModel):
+    order_id: str
+    payment_id: str
+    paid_at: datetime
 
-| Abordagem | Quando Usar |
-|-----------|-------------|
-| `@event` | Publicar apos acao do ViewSet, payload simples |
-| `publish_event()` | Publicar de qualquer lugar, interface de evento |
-| `get_producer()` | Controle total, payload customizado, tratamento de erro |
-| `send_fire_and_forget()` | Alta performance, tolerante a perda |
-| `@consumer` + `@on_event` | Handlers relacionados, estado compartilhado |
-| `@message_handler` | Handler isolado, casos simples |
+# Topics
+class OrderEventsTopic(Topic):
+    name = "order.events"
+    partitions = 6
+
+# Publicar eventos
+async def create_order(user_id: int, items: list) -> str:
+    order_id = str(uuid.uuid4())
+    
+    event = OrderCreated(
+        order_id=order_id,
+        user_id=user_id,
+        items=items,
+        total=sum(i["price"] for i in items),
+        created_at=datetime.now(),
+    )
+    
+    await publish(OrderEventsTopic, event.model_dump(), key=order_id)
+    return order_id
+
+# Processar eventos
+@worker(topic="order.events", output_topic="order.projections")
+async def project_order(event: dict) -> dict:
+    """Projeta eventos em read model."""
+    return {
+        "order_id": event["order_id"],
+        "status": "created",
+        "total": event["total"],
+    }
+```
+
+### CQRS com Kafka
+
+```python
+# Commands
+class CreateOrderCommand(Topic):
+    name = "orders.commands.create"
+    schema = CreateOrderInput
+
+# Events
+class OrderCreatedEvent(Topic):
+    name = "orders.events.created"
+    schema = OrderCreatedOutput
+
+# Command Handler
+@worker(topic="orders.commands.create", output_topic="orders.events.created")
+async def handle_create_order(command: dict) -> dict:
+    # Validar
+    # Criar order
+    # Retornar evento
+    return {"order_id": "123", "status": "created"}
+
+# Event Handler (atualiza read model)
+@worker(topic="orders.events.created")
+async def update_read_model(event: dict) -> None:
+    await OrderReadModel.upsert(event)
+```
+
+### Microserviços
+
+```python
+# Service A: User Service
+class UserEvents(Topic):
+    name = "user.events"
+
+@worker(topic="user.commands.create", output_topic="user.events")
+async def create_user(command: dict) -> dict:
+    user = await User.create(**command)
+    return {"event": "user.created", "user_id": user.id}
+
+# Service B: Order Service
+@worker(topic="user.events")
+async def handle_user_event(event: dict) -> None:
+    if event["event"] == "user.created":
+        await create_welcome_order(event["user_id"])
+```
+
+## CLI Commands
+
+```bash
+# Workers
+core runworker <name>       # Rodar worker específico
+core runworker all          # Rodar todos os workers
+core workers                # Listar workers registrados
+
+# Consumers
+core consumer -g <group> -t <topic>  # Rodar consumer
+
+# Topics (Kafka)
+core topics list            # Listar tópicos
+core topics create <name>   # Criar tópico
+core topics delete <name>   # Deletar tópico
+```
+
+## Troubleshooting
+
+### "Producer not found"
+
+```python
+# Solução: Producer é criado automaticamente
+from core.messaging import get_producer
+producer = get_producer()  # Cria se não existir
+```
+
+### "aiokafka/confluent-kafka not installed"
+
+```bash
+# Para aiokafka (padrão)
+pip install aiokafka
+
+# Para confluent (recomendado para produção)
+pip install confluent-kafka
+
+# Para Avro
+pip install fastavro
+pip install confluent-kafka[avro]
+```
+
+### "Too many open files"
+
+O framework usa singleton/pool automaticamente. Se ainda ocorrer:
+
+```toml
+# core.toml
+[messaging]
+kafka_backend = "confluent"  # Usa connection pooling melhor
+```
+
+### Schema Registry Connection Failed
+
+```python
+# Verificar URL
+configure_messaging(
+    kafka_schema_registry_url="http://schema-registry:8081",
+)
+
+# Ou via env
+KAFKA_SCHEMA_REGISTRY_URL=http://schema-registry:8081
+```
 
 ---
 
-Proximo: [Multi-Service Architecture](05-multi-service.md) - Duas APIs comunicando via messaging.
+Próximo: [Multi-Service Architecture](05-multi-service.md)
