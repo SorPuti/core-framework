@@ -29,6 +29,10 @@ from core.migrations.operations import (
     DropForeignKey,
     RunPython,
     RunSQL,
+    # Enum operations
+    CreateEnum,
+    DropEnum,
+    AlterEnum,
 )
 from core.migrations.migration import Migration
 from core.migrations.cli import (
@@ -63,6 +67,10 @@ __all__ = [
     "DropForeignKey",
     "RunPython",
     "RunSQL",
+    # Enum operations
+    "CreateEnum",
+    "DropEnum",
+    "AlterEnum",
     # Migration
     "Migration",
     # CLI

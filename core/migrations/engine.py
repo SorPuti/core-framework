@@ -257,9 +257,34 @@ class MigrationEngine:
     
     def _diff_to_operations(self, diff: SchemaDiff) -> list[Operation]:
         """Converte SchemaDiff em lista de operações."""
+        from core.migrations.operations import CreateEnum, DropEnum, AlterEnum
+        
         operations: list[Operation] = []
         
-        # Criar tabelas
+        # 1. Criar enums PRIMEIRO (antes das tabelas que os usam)
+        for enum_state in diff.enums_to_create:
+            operations.append(CreateEnum(
+                enum_name=enum_state.name,
+                values=enum_state.values,
+            ))
+        
+        # 2. Alterar enums existentes
+        for old_enum, new_enum in diff.enums_to_alter:
+            old_values = set(old_enum.values)
+            new_values = set(new_enum.values)
+            
+            add_values = list(new_values - old_values)
+            remove_values = list(old_values - new_values)
+            
+            operations.append(AlterEnum(
+                enum_name=new_enum.name,
+                add_values=add_values,
+                remove_values=remove_values,
+                old_values=old_enum.values,
+                new_values=new_enum.values,
+            ))
+        
+        # 3. Criar tabelas
         for table in diff.tables_to_create:
             columns = [self._column_state_to_def(col) for col in table.columns.values()]
             foreign_keys = [
@@ -277,7 +302,7 @@ class MigrationEngine:
                 foreign_keys=foreign_keys,
             ))
         
-        # Adicionar colunas
+        # 4. Adicionar colunas
         for table_name, columns in diff.columns_to_add.items():
             for col in columns:
                 operations.append(AddColumn(
@@ -285,7 +310,7 @@ class MigrationEngine:
                     column=self._column_state_to_def(col),
                 ))
         
-        # Remover colunas
+        # 5. Remover colunas
         for table_name, col_names in diff.columns_to_drop.items():
             for col_name in col_names:
                 operations.append(DropColumn(
@@ -293,7 +318,7 @@ class MigrationEngine:
                     column_name=col_name,
                 ))
         
-        # Alterar colunas
+        # 6. Alterar colunas
         for table_name, alterations in diff.columns_to_alter.items():
             for old_col, new_col in alterations:
                 # Ignora alterações em colunas de chave primária
@@ -314,7 +339,7 @@ class MigrationEngine:
                         old_default=col_diff.get("default", (None, None))[0],
                     ))
         
-        # Remover tabelas (por último para evitar problemas de FK)
+        # 7. Remover tabelas (antes de remover enums que elas usam)
         # NUNCA remove tabelas protegidas do framework
         for table_name in diff.tables_to_drop:
             if table_name in PROTECTED_TABLES:
@@ -325,6 +350,10 @@ class MigrationEngine:
                 # Tabelas internas são ignoradas
                 continue
             operations.append(DropTable(table_name=table_name))
+        
+        # 8. Remover enums POR ÚLTIMO (depois das tabelas que os usavam)
+        for enum_name in diff.enums_to_drop:
+            operations.append(DropEnum(enum_name=enum_name))
         
         return operations
     
@@ -365,7 +394,13 @@ from core.migrations import (
     RunSQL,
     RunPython,
 )
-from core.migrations.operations import ColumnDef, ForeignKeyDef
+from core.migrations.operations import (
+    ColumnDef,
+    ForeignKeyDef,
+    CreateEnum,
+    DropEnum,
+    AlterEnum,
+)
 
 
 migration = Migration(

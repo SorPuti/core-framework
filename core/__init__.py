@@ -241,7 +241,7 @@ from core.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 __all__ = [
     # Models
     "Model",

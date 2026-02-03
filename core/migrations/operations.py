@@ -547,3 +547,209 @@ class RunSQL(Operation):
     
     def describe(self) -> str:
         return self.description
+
+
+# =============================================================================
+# Enum Operations (PostgreSQL native ENUM support)
+# =============================================================================
+
+@dataclass
+class EnumDef:
+    """Definição de um tipo ENUM."""
+    
+    name: str
+    values: list[str]
+    
+    def to_sql(self, dialect: str = "postgresql") -> str:
+        """Gera SQL para criar o ENUM."""
+        if dialect != "postgresql":
+            raise NotImplementedError(f"ENUM types not supported for {dialect}")
+        
+        values_sql = ", ".join(f"'{v}'" for v in self.values)
+        return f"CREATE TYPE {self.name} AS ENUM ({values_sql})"
+
+
+@dataclass
+class CreateEnum(Operation):
+    """
+    Cria um tipo ENUM no PostgreSQL.
+    
+    Para outros bancos (SQLite, MySQL), enums são tratados como VARCHAR
+    com CHECK constraint.
+    """
+    
+    enum_name: str
+    values: list[str]
+    
+    async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
+        if dialect == "postgresql":
+            # Verifica se já existe
+            check_sql = """
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_type WHERE typname = :name
+                )
+            """
+            result = await conn.execute(text(check_sql), {"name": self.enum_name})
+            exists = result.scalar()
+            
+            if not exists:
+                values_sql = ", ".join(f"'{v}'" for v in self.values)
+                sql = f"CREATE TYPE {self.enum_name} AS ENUM ({values_sql})"
+                await conn.execute(text(sql))
+        # Para outros dialetos, não fazemos nada - usamos VARCHAR
+    
+    async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
+        if dialect == "postgresql":
+            # DROP TYPE só funciona se não estiver em uso
+            sql = f"DROP TYPE IF EXISTS {self.enum_name}"
+            await conn.execute(text(sql))
+    
+    def describe(self) -> str:
+        return f"Create enum type '{self.enum_name}' with values {self.values}"
+    
+    def to_code(self) -> str:
+        values_str = repr(self.values)
+        return f"CreateEnum(enum_name='{self.enum_name}', values={values_str})"
+
+
+@dataclass
+class DropEnum(Operation):
+    """Remove um tipo ENUM."""
+    
+    enum_name: str
+    values: list[str] = field(default_factory=list)  # Para reversão
+    
+    destructive: bool = True
+    
+    async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
+        if dialect == "postgresql":
+            sql = f"DROP TYPE IF EXISTS {self.enum_name} CASCADE"
+            await conn.execute(text(sql))
+    
+    async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
+        if not self.values:
+            raise RuntimeError(
+                f"Cannot reverse DropEnum for '{self.enum_name}': "
+                "values not provided"
+            )
+        create_op = CreateEnum(self.enum_name, self.values)
+        await create_op.forward(conn, dialect)
+    
+    def describe(self) -> str:
+        return f"Drop enum type '{self.enum_name}'"
+    
+    def to_code(self) -> str:
+        values_str = repr(self.values)
+        return f"DropEnum(enum_name='{self.enum_name}', values={values_str})"
+
+
+@dataclass
+class AlterEnum(Operation):
+    """
+    Altera um tipo ENUM (adiciona/remove valores).
+    
+    PostgreSQL permite apenas ADD VALUE para enums.
+    Para remover valores, precisamos recriar o enum.
+    """
+    
+    enum_name: str
+    add_values: list[str] = field(default_factory=list)
+    remove_values: list[str] = field(default_factory=list)
+    
+    # Estado anterior para reversão
+    old_values: list[str] = field(default_factory=list)
+    new_values: list[str] = field(default_factory=list)
+    
+    async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
+        if dialect != "postgresql":
+            return
+        
+        if self.add_values and not self.remove_values:
+            # Caso simples: apenas adicionar valores
+            for value in self.add_values:
+                sql = f"ALTER TYPE {self.enum_name} ADD VALUE IF NOT EXISTS '{value}'"
+                await conn.execute(text(sql))
+        else:
+            # Caso complexo: precisa recriar o enum
+            await self._recreate_enum(conn, self.new_values)
+    
+    async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
+        if dialect != "postgresql":
+            return
+        
+        if not self.old_values:
+            raise RuntimeError(
+                f"Cannot reverse AlterEnum for '{self.enum_name}': "
+                "old_values not provided"
+            )
+        
+        # Sempre recria para reverter
+        await self._recreate_enum(conn, self.old_values)
+    
+    async def _recreate_enum(self, conn: "AsyncConnection", values: list[str]) -> None:
+        """
+        Recria o enum com novos valores.
+        
+        Estratégia:
+        1. Encontra todas as colunas que usam o enum
+        2. Altera para VARCHAR temporariamente
+        3. Remove o enum antigo
+        4. Cria o novo enum
+        5. Altera de volta para o enum
+        """
+        # 1. Encontra colunas que usam o enum
+        find_columns_sql = """
+            SELECT 
+                c.table_name,
+                c.column_name
+            FROM information_schema.columns c
+            JOIN pg_type t ON c.udt_name = t.typname
+            WHERE t.typname = :enum_name
+        """
+        result = await conn.execute(text(find_columns_sql), {"enum_name": self.enum_name})
+        columns = [(row[0], row[1]) for row in result.fetchall()]
+        
+        # 2. Altera colunas para VARCHAR
+        for table_name, column_name in columns:
+            alter_sql = f"""
+                ALTER TABLE "{table_name}" 
+                ALTER COLUMN "{column_name}" TYPE VARCHAR(255)
+            """
+            await conn.execute(text(alter_sql))
+        
+        # 3. Remove enum antigo
+        drop_sql = f"DROP TYPE IF EXISTS {self.enum_name}"
+        await conn.execute(text(drop_sql))
+        
+        # 4. Cria novo enum
+        values_sql = ", ".join(f"'{v}'" for v in values)
+        create_sql = f"CREATE TYPE {self.enum_name} AS ENUM ({values_sql})"
+        await conn.execute(text(create_sql))
+        
+        # 5. Altera colunas de volta para enum
+        for table_name, column_name in columns:
+            alter_sql = f"""
+                ALTER TABLE "{table_name}" 
+                ALTER COLUMN "{column_name}" TYPE {self.enum_name}
+                USING "{column_name}"::{self.enum_name}
+            """
+            await conn.execute(text(alter_sql))
+    
+    def describe(self) -> str:
+        parts = [f"Alter enum type '{self.enum_name}'"]
+        if self.add_values:
+            parts.append(f"add {self.add_values}")
+        if self.remove_values:
+            parts.append(f"remove {self.remove_values}")
+        return " ".join(parts)
+    
+    def to_code(self) -> str:
+        return (
+            f"AlterEnum(\n"
+            f"        enum_name='{self.enum_name}',\n"
+            f"        add_values={repr(self.add_values)},\n"
+            f"        remove_values={repr(self.remove_values)},\n"
+            f"        old_values={repr(self.old_values)},\n"
+            f"        new_values={repr(self.new_values)},\n"
+            f"    )"
+        )

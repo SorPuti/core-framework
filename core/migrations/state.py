@@ -92,10 +92,40 @@ class TableState:
 
 
 @dataclass
+class EnumState:
+    """Estado de um tipo ENUM."""
+    
+    name: str
+    values: list[str] = field(default_factory=list)
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, EnumState):
+            return False
+        return self.name == other.name and set(self.values) == set(other.values)
+    
+    def diff(self, other: "EnumState") -> dict[str, Any]:
+        """Retorna diferenças entre dois estados de enum."""
+        diffs = {}
+        old_values = set(self.values)
+        new_values = set(other.values)
+        
+        added = new_values - old_values
+        removed = old_values - new_values
+        
+        if added:
+            diffs["added"] = list(added)
+        if removed:
+            diffs["removed"] = list(removed)
+        
+        return diffs
+
+
+@dataclass
 class SchemaState:
     """Estado completo do schema."""
     
     tables: dict[str, TableState] = field(default_factory=dict)
+    enums: dict[str, EnumState] = field(default_factory=dict)
     
     def diff(self, other: "SchemaState") -> "SchemaDiff":
         """Calcula diferenças entre dois estados."""
@@ -118,6 +148,11 @@ class SchemaDiff:
     # Índices
     indexes_to_create: dict[str, list[IndexState]] = field(default_factory=dict)
     indexes_to_drop: dict[str, list[str]] = field(default_factory=dict)
+    
+    # Enums
+    enums_to_create: list[EnumState] = field(default_factory=list)
+    enums_to_drop: list[str] = field(default_factory=list)
+    enums_to_alter: list[tuple[EnumState, EnumState]] = field(default_factory=list)
     
     @classmethod
     def from_states(cls, old: SchemaState, new: SchemaState) -> "SchemaDiff":
@@ -164,6 +199,25 @@ class SchemaDiff:
                         diff.columns_to_alter[table_name] = []
                     diff.columns_to_alter[table_name].append((old_col, new_col))
         
+        # Enums
+        old_enums = set(old.enums.keys())
+        new_enums = set(new.enums.keys())
+        
+        # Enums novos
+        for enum_name in new_enums - old_enums:
+            diff.enums_to_create.append(new.enums[enum_name])
+        
+        # Enums removidos
+        for enum_name in old_enums - new_enums:
+            diff.enums_to_drop.append(enum_name)
+        
+        # Enums alterados
+        for enum_name in old_enums & new_enums:
+            old_enum = old.enums[enum_name]
+            new_enum = new.enums[enum_name]
+            if old_enum != new_enum:
+                diff.enums_to_alter.append((old_enum, new_enum))
+        
         return diff
     
     @property
@@ -177,6 +231,9 @@ class SchemaDiff:
             or self.columns_to_alter
             or self.indexes_to_create
             or self.indexes_to_drop
+            or self.enums_to_create
+            or self.enums_to_drop
+            or self.enums_to_alter
         )
 
 
@@ -252,6 +309,71 @@ def model_to_table_state(model_class: type["Model"]) -> TableState:
     )
 
 
+def _extract_enum_from_model(model_class: type["Model"]) -> dict[str, EnumState]:
+    """
+    Extrai enums definidos em um Model.
+    
+    Detecta campos que usam TextChoices ou IntegerChoices e extrai
+    seus valores para criar tipos ENUM no banco.
+    """
+    enums = {}
+    
+    # Procura por atributos que são classes de Choices
+    for attr_name in dir(model_class):
+        if attr_name.startswith("_"):
+            continue
+        
+        try:
+            attr = getattr(model_class, attr_name)
+            
+            # Verifica se é uma classe de Choices
+            if isinstance(attr, type):
+                # Importa aqui para evitar circular import
+                try:
+                    from core.choices import Choices
+                    if issubclass(attr, Choices) and attr is not Choices:
+                        # Gera nome do enum baseado no model e campo
+                        enum_name = f"{model_class.__tablename__}_{attr_name.lower()}"
+                        enums[enum_name] = EnumState(
+                            name=enum_name,
+                            values=list(attr.values),
+                        )
+                except (ImportError, TypeError):
+                    pass
+        except Exception:
+            pass
+    
+    return enums
+
+
+def _extract_enums_from_annotations(model_class: type["Model"]) -> dict[str, EnumState]:
+    """
+    Extrai enums de campos que usam Field.choice().
+    
+    Analisa os campos do model para encontrar aqueles que referenciam
+    classes de Choices.
+    """
+    enums = {}
+    
+    # Verifica se o model tem __enum_fields__ definido
+    # Isso é setado pelo Field.choice() quando use_native_enum=True
+    enum_fields = getattr(model_class, "__enum_fields__", {})
+    
+    for field_name, choices_class in enum_fields.items():
+        try:
+            from core.choices import Choices
+            if issubclass(choices_class, Choices):
+                enum_name = f"{model_class.__tablename__}_{field_name}"
+                enums[enum_name] = EnumState(
+                    name=enum_name,
+                    values=list(choices_class.values),
+                )
+        except (ImportError, TypeError):
+            pass
+    
+    return enums
+
+
 def models_to_schema_state(models: list[type["Model"]]) -> SchemaState:
     """Extrai estado do schema de uma lista de Models."""
     state = SchemaState()
@@ -260,6 +382,10 @@ def models_to_schema_state(models: list[type["Model"]]) -> SchemaState:
         if hasattr(model, "__table__"):
             table_state = model_to_table_state(model)
             state.tables[table_state.name] = table_state
+            
+            # Extrai enums do model
+            model_enums = _extract_enums_from_annotations(model)
+            state.enums.update(model_enums)
     
     return state
 

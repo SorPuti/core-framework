@@ -209,6 +209,7 @@ class Field:
         default: Any = None,
         nullable: bool = False,
         index: bool = False,
+        use_native_enum: bool = False,
     ) -> Mapped[Any]:
         """
         Campo para enums com TextChoices ou IntegerChoices.
@@ -220,6 +221,8 @@ class Field:
             default: Valor default (pode ser o enum member ou o valor)
             nullable: Se o campo pode ser NULL
             index: Se deve criar índice
+            use_native_enum: Se True, usa tipo ENUM nativo do PostgreSQL
+                           (migrations detectam e gerenciam automaticamente)
         
         Example:
             from core.choices import TextChoices, IntegerChoices
@@ -235,6 +238,13 @@ class Field:
             class Post(Model):
                 status: Mapped[str] = Field.choice(Status, default=Status.DRAFT)
                 priority: Mapped[int] = Field.choice(Priority, default=Priority.LOW)
+                
+                # Com ENUM nativo do PostgreSQL (migrations gerenciam)
+                status_native: Mapped[str] = Field.choice(
+                    Status, 
+                    default=Status.DRAFT,
+                    use_native_enum=True,
+                )
             
             # Usage
             post = Post(status=Status.PUBLISHED, priority=Priority.HIGH)
@@ -243,6 +253,12 @@ class Field:
             
             # Get label
             Status.get_label(post.status)  # "Published"
+        
+        Note:
+            Quando use_native_enum=True:
+            - PostgreSQL: Cria tipo ENUM nativo
+            - SQLite/MySQL: Usa VARCHAR (fallback automático)
+            - Migrations detectam alterações nos valores do enum
         """
         from core.choices import TextChoices, IntegerChoices
         
@@ -260,12 +276,20 @@ class Field:
         if default is not None and hasattr(default, "value"):
             actual_default = default.value
         
-        return mapped_column(
+        # Create the column
+        column = mapped_column(
             column_type,
             nullable=nullable,
             default=actual_default,
             index=index,
         )
+        
+        # Store choices class info for migrations to detect
+        # This will be picked up by the model metaclass
+        column._choices_class = choices_class
+        column._use_native_enum = use_native_enum
+        
+        return column
 
 
 class Manager[T: "Model"]:
