@@ -28,8 +28,9 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, TYPE_CHECKING
 
-from sqlalchemy import Table, Column, Integer, ForeignKey
+from sqlalchemy import Table, Column, Integer, ForeignKey, inspect
 from sqlalchemy.orm import Mapped, relationship, declared_attr
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from core.models import Model, Field
 from core.auth.base import get_password_hasher, get_auth_config
@@ -47,15 +48,106 @@ if TYPE_CHECKING:
 _association_tables: dict[str, Table] = {}
 
 
-def get_user_groups_table(user_tablename: str = "auth_users") -> Table:
-    """Obtém ou cria tabela de associação user <-> groups."""
+def _get_pk_column_type(model_class: type) -> type:
+    """
+    Detecta o tipo da coluna PK de um modelo.
+    
+    Suporta:
+    - Integer (int)
+    - BigInteger (int com bigint=True)
+    - UUID (uuid.UUID)
+    - String (str)
+    
+    Returns:
+        SQLAlchemy column type class
+    """
+    from sqlalchemy import Integer, BigInteger, String
+    from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+    import uuid
+    
+    # Tenta obter do __annotations__ ou columns
+    if hasattr(model_class, "__table__"):
+        # Modelo já mapeado - pega direto da tabela
+        pk_columns = [c for c in model_class.__table__.columns if c.primary_key]
+        if pk_columns:
+            return type(pk_columns[0].type)
+    
+    # Tenta via annotations
+    annotations = getattr(model_class, "__annotations__", {})
+    
+    if "id" in annotations:
+        ann = annotations["id"]
+        ann_str = str(ann)
+        
+        # Detecta UUID
+        if "UUID" in ann_str or "uuid" in ann_str:
+            return PG_UUID
+        
+        # Detecta int
+        if "int" in ann_str.lower():
+            return Integer
+        
+        # Detecta str
+        if "str" in ann_str.lower():
+            return String
+    
+    # Default: Integer
+    return Integer
+
+
+def _create_user_fk_column(user_tablename: str, user_model: type | None = None):
+    """
+    Cria coluna FK para user_id detectando automaticamente o tipo.
+    
+    Args:
+        user_tablename: Nome da tabela do usuário
+        user_model: Classe do modelo (opcional, para detecção de tipo)
+    
+    Returns:
+        SQLAlchemy Column
+    """
+    from sqlalchemy import Integer, BigInteger, String
+    from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+    
+    # Tenta detectar o tipo do modelo
+    col_type = Integer  # Default
+    
+    if user_model is not None:
+        detected = _get_pk_column_type(user_model)
+        if detected == PG_UUID:
+            col_type = PG_UUID(as_uuid=True)
+        elif detected == BigInteger:
+            col_type = BigInteger
+        elif detected == String:
+            col_type = String(36)  # UUID como string
+        else:
+            col_type = Integer
+    
+    return Column(
+        "user_id",
+        col_type,
+        ForeignKey(f"{user_tablename}.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+
+def get_user_groups_table(user_tablename: str = "auth_users", user_model: type | None = None) -> Table:
+    """
+    Obtém ou cria tabela de associação user <-> groups.
+    
+    Detecta automaticamente o tipo do ID do usuário (INTEGER, UUID, etc).
+    
+    Args:
+        user_tablename: Nome da tabela do usuário
+        user_model: Classe do modelo User (para detecção de tipo)
+    """
     key = f"user_groups_{user_tablename}"
     
     if key not in _association_tables:
         _association_tables[key] = Table(
             f"{user_tablename}_groups",
             Model.metadata,
-            Column("user_id", Integer, ForeignKey(f"{user_tablename}.id", ondelete="CASCADE"), primary_key=True),
+            _create_user_fk_column(user_tablename, user_model),
             Column("group_id", Integer, ForeignKey("auth_groups.id", ondelete="CASCADE"), primary_key=True),
             extend_existing=True,
         )
@@ -63,15 +155,23 @@ def get_user_groups_table(user_tablename: str = "auth_users") -> Table:
     return _association_tables[key]
 
 
-def get_user_permissions_table(user_tablename: str = "auth_users") -> Table:
-    """Obtém ou cria tabela de associação user <-> permissions."""
+def get_user_permissions_table(user_tablename: str = "auth_users", user_model: type | None = None) -> Table:
+    """
+    Obtém ou cria tabela de associação user <-> permissions.
+    
+    Detecta automaticamente o tipo do ID do usuário (INTEGER, UUID, etc).
+    
+    Args:
+        user_tablename: Nome da tabela do usuário
+        user_model: Classe do modelo User (para detecção de tipo)
+    """
     key = f"user_permissions_{user_tablename}"
     
     if key not in _association_tables:
         _association_tables[key] = Table(
             f"{user_tablename}_permissions",
             Model.metadata,
-            Column("user_id", Integer, ForeignKey(f"{user_tablename}.id", ondelete="CASCADE"), primary_key=True),
+            _create_user_fk_column(user_tablename, user_model),
             Column("permission_id", Integer, ForeignKey("auth_permissions.id", ondelete="CASCADE"), primary_key=True),
             extend_existing=True,
         )
@@ -595,10 +695,26 @@ class PermissionsMixin:
         class User(AbstractUser, PermissionsMixin):
             __tablename__ = "users"
     
+    Suporta automaticamente diferentes tipos de ID:
+        - INTEGER (padrão)
+        - UUID
+        - BigInteger
+        - String
+    
     Adiciona:
         - groups: Relacionamento com grupos
         - user_permissions: Permissões diretas
         - Métodos para gerenciar grupos e permissões
+    
+    Example com UUID:
+        import uuid
+        from core import Field
+        
+        class User(AbstractUser, PermissionsMixin):
+            __tablename__ = "users"
+            
+            id: Mapped[uuid.UUID] = Field.pk(type="uuid")
+            # PermissionsMixin detecta automaticamente UUID
     """
     
     @declared_attr
@@ -606,7 +722,7 @@ class PermissionsMixin:
         """Grupos do usuário."""
         return relationship(
             "Group",
-            secondary=get_user_groups_table(cls.__tablename__),
+            secondary=get_user_groups_table(cls.__tablename__, cls),
             lazy="selectin",
         )
     
@@ -615,7 +731,7 @@ class PermissionsMixin:
         """Permissões diretas do usuário."""
         return relationship(
             "Permission",
-            secondary=get_user_permissions_table(cls.__tablename__),
+            secondary=get_user_permissions_table(cls.__tablename__, cls),
             lazy="selectin",
         )
     
