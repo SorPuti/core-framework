@@ -91,6 +91,18 @@ class MessagingSettings(BaseSettings):
         default="none",
         description="Compression type for messages",
     )
+    kafka_backend: Literal["aiokafka", "confluent"] = PydanticField(
+        default="aiokafka",
+        description="Kafka client backend: aiokafka (async) or confluent (librdkafka)",
+    )
+    kafka_schema_registry_url: str | None = PydanticField(
+        default=None,
+        description="Schema Registry URL for Avro serialization",
+    )
+    kafka_fire_and_forget: bool = PydanticField(
+        default=False,
+        description="If True, don't wait for broker acknowledgment (faster but less reliable)",
+    )
     
     # Consumer settings
     kafka_auto_offset_reset: Literal["earliest", "latest", "none"] = PydanticField(

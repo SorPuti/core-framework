@@ -76,7 +76,11 @@ def register_producer(producer: "Producer", name: str = "default") -> None:
 
 def get_producer(name: str = "default") -> "Producer":
     """
-    Get a registered producer.
+    Get a registered producer (auto-creates if not exists).
+    
+    Automatically creates the appropriate producer based on settings:
+    - kafka_backend="confluent" -> ConfluentProducer (singleton)
+    - kafka_backend="aiokafka" -> KafkaProducer (singleton)
     
     Args:
         name: Producer name
@@ -84,22 +88,45 @@ def get_producer(name: str = "default") -> "Producer":
     Returns:
         Producer instance
     
-    Raises:
-        ValueError: If producer not found
+    Example:
+        producer = get_producer()
+        await producer.send("topic", {"key": "value"})
     """
     if name not in _producers:
-        # Try to create default producer from broker
-        if _default_broker and _default_broker in _brokers:
-            from core.messaging.kafka import KafkaProducer
-            from core.messaging.config import get_messaging_settings
-            
-            settings = get_messaging_settings()
-            if settings.message_broker == "kafka":
-                producer = KafkaProducer()
-                register_producer(producer, name)
-                return producer
+        from core.messaging.config import get_messaging_settings
         
-        raise ValueError(f"Producer '{name}' not found. Call register_producer() first.")
+        settings = get_messaging_settings()
+        
+        if settings.message_broker == "kafka":
+            # Check which backend to use
+            kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
+            
+            if kafka_backend == "confluent":
+                from core.messaging.confluent import ConfluentProducer
+                producer = ConfluentProducer()
+            else:
+                from core.messaging.kafka import KafkaProducer
+                producer = KafkaProducer()
+            
+            register_producer(producer, name)
+            return producer
+        
+        elif settings.message_broker == "redis":
+            from core.messaging.redis import RedisProducer
+            producer = RedisProducer()
+            register_producer(producer, name)
+            return producer
+        
+        elif settings.message_broker == "rabbitmq":
+            from core.messaging.rabbitmq import RabbitMQProducer
+            producer = RabbitMQProducer()
+            register_producer(producer, name)
+            return producer
+        
+        raise ValueError(
+            f"Producer '{name}' not found and could not auto-create. "
+            f"Configure message_broker in settings or call register_producer()."
+        )
     
     return _producers[name]
 
@@ -225,3 +252,123 @@ async def disconnect_all_brokers() -> None:
     """Disconnect all registered brokers."""
     for broker in _brokers.values():
         await broker.disconnect()
+
+
+# =============================================================================
+# Simplified Publishing API
+# =============================================================================
+
+async def publish(
+    topic: str | type,
+    data: dict[str, Any] | Any,
+    key: str | None = None,
+    headers: dict[str, str] | None = None,
+    wait: bool = False,
+) -> None:
+    """
+    Publish a message to a topic (simplified API).
+    
+    This is the recommended way to publish messages.
+    Automatically handles:
+    - Producer creation and connection pooling
+    - Schema validation (if Topic class with schema)
+    - Serialization (JSON or Avro)
+    
+    Args:
+        topic: Topic name (str) or Topic class
+        data: Message payload (dict or Pydantic model)
+        key: Optional message key for partitioning
+        headers: Optional message headers
+        wait: If True, wait for delivery confirmation
+    
+    Example:
+        # Simple string topic
+        await publish("user-events", {"user_id": 1, "action": "created"})
+        
+        # With Topic class (validates schema)
+        class UserEvents(Topic):
+            name = "user-events"
+            schema = UserEventSchema
+        
+        await publish(UserEvents, {"user_id": 1, "action": "created"})
+        
+        # With Pydantic model
+        event = UserEventSchema(user_id=1, action="created")
+        await publish(UserEvents, event)
+    """
+    from pydantic import BaseModel
+    from core.messaging.topics import Topic
+    
+    # Resolve topic name and validate
+    topic_name: str
+    if isinstance(topic, type) and issubclass(topic, Topic):
+        topic_name = topic.name
+        data = topic.validate(data)
+    elif isinstance(topic, str):
+        topic_name = topic
+        if isinstance(data, BaseModel):
+            data = data.model_dump()
+    else:
+        raise TypeError(f"topic must be str or Topic class, got {type(topic)}")
+    
+    # Get producer and send
+    producer = get_producer()
+    
+    # Ensure started
+    if hasattr(producer, "_started") and not producer._started:
+        await producer.start()
+    
+    # Send with appropriate method
+    if hasattr(producer, "send"):
+        if hasattr(producer.send, "__code__") and "wait" in producer.send.__code__.co_varnames:
+            await producer.send(topic_name, data, key=key, headers=headers, wait=wait)
+        else:
+            await producer.send(topic_name, data, key=key, headers=headers)
+    else:
+        raise RuntimeError("Producer does not have send method")
+
+
+async def publish_event(
+    event_name: str,
+    data: dict[str, Any],
+    topic: str | None = None,
+    key: str | None = None,
+    source: str | None = None,
+) -> None:
+    """
+    Publish an event with standard Event envelope.
+    
+    Creates an Event object with metadata and publishes it.
+    
+    Args:
+        event_name: Event name (e.g., "user.created")
+        data: Event payload
+        topic: Topic name (defaults to messaging_default_topic)
+        key: Optional message key
+        source: Event source (defaults to messaging_event_source)
+    
+    Example:
+        await publish_event(
+            "user.created",
+            {"user_id": 1, "email": "user@example.com"},
+            topic="user-events",
+        )
+    """
+    from core.messaging.base import Event
+    from core.messaging.config import get_messaging_settings
+    
+    settings = get_messaging_settings()
+    
+    event = Event(
+        name=event_name,
+        data=data,
+        source=source or settings.messaging_event_source,
+    )
+    
+    topic_name = topic or settings.messaging_default_topic
+    
+    producer = get_producer()
+    if hasattr(producer, "_started") and not producer._started:
+        await producer.start()
+    
+    await producer.send_event(topic_name, event, key=key)

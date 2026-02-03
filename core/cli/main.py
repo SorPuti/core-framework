@@ -2744,6 +2744,137 @@ def cmd_consumer(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_runworker(args: argparse.Namespace) -> int:
+    """Run a message worker."""
+    print()
+    print(bold("Starting Message Worker"))
+    print("=" * 50)
+    
+    worker_name = args.name
+    
+    # Add current directory to path
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    os.environ["PYTHONPATH"] = cwd
+    
+    # Import app to register workers
+    try:
+        config = load_config()
+        app_module = config.get("app_module", "src.main")
+        try:
+            importlib.import_module(app_module)
+        except ImportError:
+            pass
+        
+        # Try to import workers module
+        for module_name in ["src.workers", "workers", "src.messaging.workers"]:
+            try:
+                importlib.import_module(module_name)
+            except ImportError:
+                pass
+    except Exception as e:
+        print(warning(f"Warning: Could not import app module: {e}"))
+    
+    from core.messaging.workers import get_worker, list_workers, run_worker, run_all_workers
+    
+    if worker_name == "all":
+        print(info("Running all registered workers..."))
+        workers = list_workers()
+        if not workers:
+            print(error("No workers registered."))
+            return 1
+        print(info(f"Workers: {', '.join(workers)}"))
+        print()
+        
+        try:
+            asyncio.run(run_all_workers())
+        except KeyboardInterrupt:
+            print()
+            print(info("Workers stopped."))
+        return 0
+    
+    # Run specific worker
+    worker_config = get_worker(worker_name)
+    if worker_config is None:
+        available = list_workers()
+        print(error(f"Worker '{worker_name}' not found."))
+        if available:
+            print(info(f"Available workers: {', '.join(available)}"))
+        else:
+            print(info("No workers registered. Define workers with @worker decorator or Worker class."))
+        return 1
+    
+    print(info(f"Worker: {worker_name}"))
+    print(info(f"Input topic: {worker_config.input_topic}"))
+    print(info(f"Output topic: {worker_config.output_topic or 'None'}"))
+    print(info(f"Concurrency: {worker_config.concurrency}"))
+    print()
+    
+    try:
+        asyncio.run(run_worker(worker_name))
+    except KeyboardInterrupt:
+        print()
+        print(info("Worker stopped."))
+    
+    return 0
+
+
+def cmd_workers_list(args: argparse.Namespace) -> int:
+    """List registered message workers."""
+    print()
+    print(bold("Registered Message Workers"))
+    print("=" * 50)
+    
+    # Add current directory to path
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    os.environ["PYTHONPATH"] = cwd
+    
+    # Import app to register workers
+    try:
+        config = load_config()
+        app_module = config.get("app_module", "src.main")
+        try:
+            importlib.import_module(app_module)
+        except ImportError:
+            pass
+        
+        for module_name in ["src.workers", "workers", "src.messaging.workers"]:
+            try:
+                importlib.import_module(module_name)
+            except ImportError:
+                pass
+    except Exception:
+        pass
+    
+    from core.messaging.workers import get_all_workers
+    
+    workers = get_all_workers()
+    
+    if not workers:
+        print(info("No workers registered."))
+        print()
+        print("Define workers with @worker decorator or Worker class:")
+        print()
+        print("  @worker(topic='events.raw', output_topic='events.enriched')")
+        print("  async def process_event(event: dict) -> dict:")
+        print("      return {**event, 'processed': True}")
+        return 0
+    
+    for name, config in workers.items():
+        print()
+        print(f"  {bold(name)}")
+        print(f"    Input:  {config.input_topic}")
+        print(f"    Output: {config.output_topic or '-'}")
+        print(f"    Concurrency: {config.concurrency}")
+        print(f"    Retries: {config.retry_policy.max_retries}")
+    
+    print()
+    return 0
+
+
 def cmd_topics_list(args: argparse.Namespace) -> int:
     """List Kafka topics."""
     print()
@@ -3136,6 +3267,24 @@ For more information, visit: https://github.com/SorPuti/core-framework
         help="Topic(s) to subscribe to (can be repeated)"
     )
     consumer_parser.set_defaults(func=cmd_consumer)
+    
+    # runworker (message workers)
+    runworker_parser = subparsers.add_parser(
+        "runworker",
+        help="Run a message worker"
+    )
+    runworker_parser.add_argument(
+        "name",
+        help="Worker name (or 'all' to run all workers)"
+    )
+    runworker_parser.set_defaults(func=cmd_runworker)
+    
+    # workers (list workers)
+    workers_parser = subparsers.add_parser(
+        "workers",
+        help="List registered message workers"
+    )
+    workers_parser.set_defaults(func=cmd_workers_list)
     
     # topics
     topics_parser = subparsers.add_parser(

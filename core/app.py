@@ -171,6 +171,13 @@ class CoreApp:
             if hasattr(result, "__await__"):
                 await result
         
+        # Flush and close messaging producers
+        try:
+            from core.messaging.registry import stop_all_producers
+            await stop_all_producers()
+        except Exception:
+            pass  # Messaging may not be configured
+        
         # Fecha conexões
         if self.settings.has_read_replica:
             from core.database import close_replicas
