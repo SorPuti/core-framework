@@ -174,7 +174,57 @@ from core.validators import (
     FileSizeValidator,
 )
 
-__version__ = "0.6.0"
+# Relations - Django-like relationship helpers
+from core.relations import (
+    Rel,
+    AssociationTable,
+)
+
+# Exceptions - Centralized exception classes
+from core.exceptions import (
+    # Base
+    CoreException,
+    # Validation
+    ValidationException,
+    FieldValidationError,
+    UniqueConstraintError,
+    # Database
+    DatabaseException,
+    DoesNotExist,
+    MultipleObjectsReturned,
+    IntegrityError,
+    # Auth
+    AuthException,
+    AuthenticationFailed,
+    InvalidCredentials,
+    InvalidToken,
+    TokenExpired,
+    PermissionDenied,
+    UserInactive,
+    UserNotFound,
+    # HTTP
+    BadRequest,
+    Unauthorized,
+    Forbidden,
+    NotFound,
+    MethodNotAllowed,
+    Conflict,
+    UnprocessableEntity,
+    TooManyRequests,
+    InternalServerError,
+    ServiceUnavailable,
+    # Business
+    BusinessException,
+    ResourceLocked,
+    PreconditionFailed,
+    OperationNotAllowed,
+    QuotaExceeded,
+    # Configuration
+    ConfigurationError,
+    MissingDependency,
+)
+
+__version__ = "0.7.0"
 __all__ = [
     # Models
     "Model",
@@ -328,6 +378,49 @@ __all__ = [
     "ChoiceValidator",
     "FileExtensionValidator",
     "FileSizeValidator",
+    # Relations
+    "Rel",
+    "AssociationTable",
+    # Exceptions - Base
+    "CoreException",
+    # Exceptions - Validation
+    "ValidationException",
+    "FieldValidationError",
+    "UniqueConstraintError",
+    # Exceptions - Database
+    "DatabaseException",
+    "DoesNotExist",
+    "MultipleObjectsReturned",
+    "IntegrityError",
+    # Exceptions - Auth
+    "AuthException",
+    "AuthenticationFailed",
+    "InvalidCredentials",
+    "InvalidToken",
+    "TokenExpired",
+    "PermissionDenied",
+    "UserInactive",
+    "UserNotFound",
+    # Exceptions - HTTP
+    "BadRequest",
+    "Unauthorized",
+    "Forbidden",
+    "NotFound",
+    "MethodNotAllowed",
+    "Conflict",
+    "UnprocessableEntity",
+    "TooManyRequests",
+    "InternalServerError",
+    "ServiceUnavailable",
+    # Exceptions - Business
+    "BusinessException",
+    "ResourceLocked",
+    "PreconditionFailed",
+    "OperationNotAllowed",
+    "QuotaExceeded",
+    # Exceptions - Configuration
+    "ConfigurationError",
+    "MissingDependency",
     # Messaging (Enterprise)
     "event",
     "consumer",
