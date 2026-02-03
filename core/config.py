@@ -77,6 +77,26 @@ class Settings(BaseSettings):
     )
     
     # =========================================================================
+    # Validation
+    # =========================================================================
+    
+    strict_validation: bool = PydanticField(
+        default=True,
+        description=(
+            "Habilita validação rigorosa de schemas contra models. "
+            "Em modo strict, erros críticos (campo NOT NULL opcional no schema) "
+            "causam falha no startup em DEBUG mode."
+        ),
+    )
+    validation_fail_fast: bool | None = PydanticField(
+        default=None,
+        description=(
+            "Se True, falha no primeiro erro de validação. "
+            "Se None, usa valor de DEBUG."
+        ),
+    )
+    
+    # =========================================================================
     # Database
     # =========================================================================
     

@@ -158,6 +158,13 @@ class CoreApp:
     
     async def _startup(self) -> None:
         """Executa tarefas de startup."""
+        import logging
+        logger = logging.getLogger("core.app")
+        
+        # Schema/Model validation (before database init for fail-fast)
+        if getattr(self.settings, "strict_validation", self.settings.debug):
+            await self._validate_schemas()
+        
         # Verifica se deve usar replicas
         if self.settings.has_read_replica:
             # Inicializa com read/write replicas
@@ -194,6 +201,50 @@ class CoreApp:
             result = callback()
             if hasattr(result, "__await__"):
                 await result
+    
+    async def _validate_schemas(self) -> None:
+        """
+        Validate all ViewSet schemas against their models.
+        
+        Called during startup if strict_validation is enabled.
+        In DEBUG mode, raises SchemaModelMismatchError on critical issues.
+        In production, logs errors but continues.
+        """
+        import logging
+        logger = logging.getLogger("core.app")
+        
+        try:
+            from core.views import validate_pending_viewsets
+            from core.validation import SchemaModelMismatchError
+            
+            logger.info("Running schema/model validations...")
+            
+            # In debug mode, fail fast on critical issues
+            strict = self.settings.debug
+            
+            try:
+                issues = validate_pending_viewsets(strict=strict)
+                
+                if issues:
+                    logger.warning(
+                        f"Schema validation completed with {len(issues)} issues"
+                    )
+                else:
+                    logger.info("Schema validation passed")
+                    
+            except SchemaModelMismatchError as e:
+                if self.settings.debug:
+                    logger.error(f"Schema validation failed: {e}")
+                    raise RuntimeError(
+                        f"Schema validation errors (set DEBUG=False to skip):\n{e}"
+                    ) from e
+                else:
+                    logger.error(f"Schema validation errors (ignored): {e}")
+                    
+        except ImportError:
+            logger.debug("Validation module not available, skipping")
+        except Exception as e:
+            logger.warning(f"Could not validate schemas: {e}")
     
     async def _shutdown(self) -> None:
         """Executa tarefas de shutdown."""

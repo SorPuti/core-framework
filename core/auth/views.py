@@ -108,14 +108,22 @@ class AuthViewSet(ViewSet):
     
     def _get_register_schema(self) -> type:
         """
-        Bug #5 Fix: Get registration schema with extra fields support.
+        Get registration schema with STRICT extra fields support.
         
-        If extra_register_fields is set, creates a dynamic schema that
-        accepts those additional fields.
+        This method validates against the model to determine if fields are
+        required (NOT NULL) or optional (nullable).
+        
+        Rules:
+            - If model column is NOT NULL and has no default -> REQUIRED in schema
+            - If model column is nullable or has default -> OPTIONAL in schema
         
         Returns:
             Pydantic schema class for registration
         """
+        import logging
+        import warnings
+        logger = logging.getLogger("core.auth")
+        
         # If register_schema was explicitly overridden, use it
         if self.register_schema != BaseRegisterInput:
             return self.register_schema
@@ -124,32 +132,53 @@ class AuthViewSet(ViewSet):
         if not self.extra_register_fields:
             return BaseRegisterInput
         
-        # Create dynamic schema with extra fields
+        # Return cached schema if available
         if self._dynamic_register_schema is not None:
             return self._dynamic_register_schema
         
-        # Build extra fields - all as optional strings by default
-        # Users can provide type hints via annotations in User model
-        extra_fields = {}
         User = self._get_user_model()
-        user_annotations = getattr(User, "__annotations__", {})
+        
+        # Get model column info for nullable/required check
+        model_columns = {}
+        try:
+            from sqlalchemy import inspect
+            mapper = inspect(User)
+            model_columns = {col.name: col for col in mapper.columns}
+        except Exception as e:
+            logger.debug(f"Could not inspect User model: {e}")
+        
+        extra_fields = {}
         
         for field_name in self.extra_register_fields:
-            # Try to get type from User model
-            field_type = user_annotations.get(field_name, str)
-            # Extract actual type from Mapped[...] if needed
-            field_type_str = str(field_type)
-            if "Mapped[" in field_type_str:
-                # It's a Mapped type, try to extract inner type
-                if "str" in field_type_str:
-                    extra_fields[field_name] = (str | None, None)
-                elif "int" in field_type_str:
-                    extra_fields[field_name] = (int | None, None)
-                elif "bool" in field_type_str:
-                    extra_fields[field_name] = (bool | None, None)
+            col = model_columns.get(field_name)
+            
+            if col is not None:
+                # Determine type from model
+                python_type = self._get_python_type_from_column(col.type)
+                
+                # Check if field is required
+                is_nullable = col.nullable
+                has_default = col.default is not None or col.server_default is not None
+                
+                if not is_nullable and not has_default:
+                    # REQUIRED field - use ... (Ellipsis) as default
+                    extra_fields[field_name] = (python_type, ...)
+                    logger.info(
+                        f"Field '{field_name}' is NOT NULL in model, "
+                        f"adding as REQUIRED to register schema"
+                    )
                 else:
-                    extra_fields[field_name] = (str | None, None)
+                    # Optional field
+                    extra_fields[field_name] = (python_type | None, None)
             else:
+                # Field not in model columns, warn and make optional
+                warnings.warn(
+                    f"Field '{field_name}' in extra_register_fields "
+                    f"not found in {User.__name__} model columns. "
+                    f"Adding as optional str.",
+                    UserWarning,
+                    stacklevel=2,
+                )
                 extra_fields[field_name] = (str | None, None)
         
         # Create dynamic model
@@ -160,13 +189,60 @@ class AuthViewSet(ViewSet):
             **extra_fields,
         )
         
-        # Allow extra fields
+        # Allow extra fields (ignore unknown)
         self._dynamic_register_schema.model_config = {
             **BaseRegisterInput.model_config,
-            "extra": "ignore",  # Ignore unknown fields instead of forbidding
+            "extra": "ignore",
         }
         
         return self._dynamic_register_schema
+    
+    def _get_python_type_from_column(self, sa_type) -> type:
+        """
+        Convert SQLAlchemy column type to Python type.
+        
+        Args:
+            sa_type: SQLAlchemy type instance
+        
+        Returns:
+            Corresponding Python type
+        """
+        from sqlalchemy import String, Integer, Boolean, Float, Text, DateTime, Date
+        
+        type_map = {
+            String: str,
+            Text: str,
+            Integer: int,
+            Boolean: bool,
+            Float: float,
+        }
+        
+        for sa_cls, py_type in type_map.items():
+            if isinstance(sa_type, sa_cls):
+                return py_type
+        
+        # Check type name for dialect-specific types
+        type_name = type(sa_type).__name__
+        if "String" in type_name or "Text" in type_name or "VARCHAR" in type_name:
+            return str
+        if "Integer" in type_name or "INT" in type_name:
+            return int
+        if "Boolean" in type_name or "BOOL" in type_name:
+            return bool
+        if "Float" in type_name or "Numeric" in type_name or "Decimal" in type_name:
+            return float
+        if "DateTime" in type_name or "Timestamp" in type_name:
+            from datetime import datetime
+            return datetime
+        if "Date" in type_name:
+            from datetime import date
+            return date
+        if "UUID" in type_name:
+            from uuid import UUID
+            return UUID
+        
+        # Default to str
+        return str
     
     def _create_tokens(self, user) -> dict:
         """

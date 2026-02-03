@@ -44,6 +44,58 @@ ModelT = TypeVar("ModelT")
 InputT = TypeVar("InputT", bound=InputSchema)
 OutputT = TypeVar("OutputT", bound=OutputSchema)
 
+# Registry for viewsets pending validation
+_pending_viewsets: set[type] = set()
+
+
+def validate_pending_viewsets(*, strict: bool | None = None) -> list[str]:
+    """
+    Validate all pending viewsets.
+    
+    Called automatically during application startup.
+    
+    Args:
+        strict: Override strict mode. If None, uses each viewset's setting.
+    
+    Returns:
+        List of all validation issues found
+    """
+    import logging
+    logger = logging.getLogger("core.views")
+    
+    if not _pending_viewsets:
+        return []
+    
+    logger.debug(f"Validating {len(_pending_viewsets)} viewsets...")
+    
+    all_issues: list[str] = []
+    
+    for viewset_cls in list(_pending_viewsets):
+        try:
+            vs_strict = strict if strict is not None else viewset_cls.strict_validation
+            
+            # Temporarily set strict mode
+            original_strict = viewset_cls.strict_validation
+            viewset_cls.strict_validation = vs_strict
+            
+            issues = viewset_cls._validate_schemas()
+            all_issues.extend(issues)
+            
+            # Restore
+            viewset_cls.strict_validation = original_strict
+            
+        except Exception as e:
+            all_issues.append(f"{viewset_cls.__name__}: {e}")
+    
+    _pending_viewsets.clear()
+    
+    if all_issues:
+        logger.warning(f"ViewSet validation found {len(all_issues)} issues")
+    else:
+        logger.debug("ViewSet validation passed")
+    
+    return all_issues
+
 
 # =============================================================================
 # Decorator para actions customizadas
@@ -241,6 +293,62 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
     # Validadores assíncronos customizados por campo
     # Formato: {"field_name": [validator1, validator2]}
     field_validators: ClassVar[dict[str, list[AsyncValidator]]] = {}
+    
+    # Schema/Model Validation
+    # Se True, valida schemas contra model no startup (falha em DEBUG)
+    strict_validation: ClassVar[bool] = True
+    # Cache de validação
+    _schema_validated: ClassVar[bool] = False
+    
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """
+        Called when a ViewSet subclass is created.
+        
+        Registers the viewset for startup validation.
+        """
+        super().__init_subclass__(**kwargs)
+        cls._schema_validated = False
+        # Register for lazy validation
+        _pending_viewsets.add(cls)
+    
+    @classmethod
+    def _validate_schemas(cls) -> list[str]:
+        """
+        Validate schemas against model.
+        
+        Called automatically on application startup or first request.
+        
+        Returns:
+            List of validation issues found
+        
+        Raises:
+            SchemaModelMismatchError: If strict_validation=True and critical issues
+        """
+        if cls._schema_validated:
+            return []
+        
+        model = getattr(cls, "model", None)
+        if not model:
+            cls._schema_validated = True
+            return []
+        
+        try:
+            from core.validation import SchemaModelValidator
+            
+            issues = SchemaModelValidator.validate_viewset(
+                cls,
+                strict=cls.strict_validation,
+            )
+            
+            cls._schema_validated = True
+            return issues
+        except Exception as e:
+            import logging
+            logging.getLogger("core.views").warning(
+                f"Could not validate {cls.__name__}: {e}"
+            )
+            cls._schema_validated = True
+            return []
     
     def __init__(self) -> None:
         self.action: str | None = None

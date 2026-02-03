@@ -41,6 +41,15 @@ from core.dependencies import Depends, get_db, get_current_user
 from core.config import Settings, get_settings
 from core.app import CoreApp
 
+# Validation
+from core.validation import (
+    SchemaModelValidator,
+    SchemaModelMismatchError,
+    ValidationWarning,
+    validate_schema,
+    validate_all_viewsets,
+)
+
 # Advanced Fields (UUID7, JSON, etc.)
 from core.fields import (
     uuid7,
@@ -278,7 +287,7 @@ from core.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.12.9"
+__version__ = "0.12.10"
 __all__ = [
     # Models
     "Model",
