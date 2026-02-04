@@ -1,10 +1,4 @@
-"""
-Estado do schema do banco de dados.
-
-Usado para detectar mudanças entre o estado atual dos models
-e o estado do banco de dados.
-"""
-
+"""Estado do schema do banco de dados."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -18,10 +12,51 @@ if TYPE_CHECKING:
     from core.models import Model
 
 
+# Tipos equivalentes entre dialetos (para comparação)
+# O valor do modelo e o valor do banco devem ser considerados iguais
+EQUIVALENT_TYPES: dict[str, set[str]] = {
+    "DATETIME": {"DATETIME", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITHOUT TIME ZONE"},
+    "TIMESTAMP": {"DATETIME", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITHOUT TIME ZONE"},
+    "TIMESTAMP WITH TIME ZONE": {"DATETIME", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE"},
+    "TIMESTAMP WITHOUT TIME ZONE": {"DATETIME", "TIMESTAMP", "TIMESTAMP WITHOUT TIME ZONE"},
+    "BOOLEAN": {"BOOLEAN", "BOOL", "TINYINT(1)", "TINYINT"},
+    "BOOL": {"BOOLEAN", "BOOL"},
+    "JSON": {"JSON", "JSONB", "ADAPTIVEJSON"},
+    "JSONB": {"JSON", "JSONB", "ADAPTIVEJSON"},
+    "ADAPTIVEJSON": {"JSON", "JSONB", "ADAPTIVEJSON"},
+    "TEXT": {"TEXT", "LONGTEXT", "MEDIUMTEXT"},
+    "LONGTEXT": {"TEXT", "LONGTEXT"},
+    "UUID": {"UUID", "TEXT", "CHAR(36)", "VARCHAR(36)"},
+    "DOUBLE": {"DOUBLE", "DOUBLE PRECISION", "FLOAT8"},
+    "DOUBLE PRECISION": {"DOUBLE", "DOUBLE PRECISION", "FLOAT8"},
+    "INTEGER": {"INTEGER", "INT", "INT4", "SERIAL"},
+    "BIGINT": {"BIGINT", "INT8", "BIGSERIAL"},
+    "SMALLINT": {"SMALLINT", "INT2", "TINYINT"},
+}
+
+
+def types_are_equivalent(type1: str, type2: str) -> bool:
+    """Check if two SQL types are equivalent across dialects."""
+    if type1 == type2:
+        return True
+    
+    # Normalize: extract base type (remove size like VARCHAR(255))
+    base1 = type1.split("(")[0].upper().strip()
+    base2 = type2.split("(")[0].upper().strip()
+    
+    if base1 == base2:
+        return True
+    
+    # Check equivalence mapping
+    equiv1 = EQUIVALENT_TYPES.get(base1, {base1})
+    equiv2 = EQUIVALENT_TYPES.get(base2, {base2})
+    
+    return bool(equiv1 & equiv2)
+
+
 @dataclass
 class ColumnState:
     """Estado de uma coluna."""
-    
     name: str
     type: str
     nullable: bool = True
@@ -36,7 +71,7 @@ class ColumnState:
             return False
         return (
             self.name == other.name
-            and self.type == other.type
+            and types_are_equivalent(self.type, other.type)
             and self.nullable == other.nullable
             and self.primary_key == other.primary_key
         )
@@ -44,11 +79,13 @@ class ColumnState:
     def diff(self, other: "ColumnState") -> dict[str, tuple[Any, Any]]:
         """Retorna diferenças entre dois estados."""
         diffs = {}
-        if self.type != other.type:
+        # Use type equivalence check instead of direct comparison
+        if not types_are_equivalent(self.type, other.type):
             diffs["type"] = (self.type, other.type)
         if self.nullable != other.nullable:
             diffs["nullable"] = (self.nullable, other.nullable)
-        if self.default != other.default:
+        # Skip default comparison for callable defaults (handled by ORM)
+        if self.default != other.default and not callable(self.default) and not callable(other.default):
             diffs["default"] = (self.default, other.default)
         if self.unique != other.unique:
             diffs["unique"] = (self.unique, other.unique)
