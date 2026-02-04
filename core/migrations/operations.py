@@ -26,7 +26,7 @@ def _serialize_default(value: Any) -> str:
     - None -> "None"
     - Strings -> repr()
     - Booleans -> "True"/"False"
-    - Callables -> "module.function" (importable reference)
+    - Callables -> short name (e.g., "timezone.now" not "core.datetime.timezone.now")
     - Other -> repr()
     
     Args:
@@ -41,11 +41,21 @@ def _serialize_default(value: Any) -> str:
     if callable(value):
         # Get module and function name for proper serialization
         module = getattr(value, "__module__", "")
-        name = getattr(value, "__qualname__", "") or getattr(value, "__name__", "")
+        qualname = getattr(value, "__qualname__", "") or getattr(value, "__name__", "")
         
-        if module and name:
-            # Return importable reference
-            return f"{module}.{name}"
+        if module and qualname:
+            # Use short form for known modules to avoid long paths
+            # e.g., "core.datetime.timezone.now" -> "timezone.now"
+            # The corresponding import will be added to the migration file
+            if module == "core.datetime" and qualname.startswith("timezone."):
+                return qualname  # Returns "timezone.now"
+            if module == "core.fields" and qualname.startswith("AdvancedField."):
+                return qualname  # Returns "AdvancedField.json_field..."
+            if module == "datetime":
+                return f"datetime.{qualname}"  # Returns "datetime.now"
+            
+            # For other modules, return full path
+            return f"{module}.{qualname}"
         
         # Fallback for lambdas or unnamed functions
         return "None"
@@ -139,8 +149,28 @@ class ColumnDef:
             
         Returns:
             String SQL para o default ou None
+            
+        Note:
+            Callable defaults (like timezone.now) cannot be used as SQL DEFAULT.
+            They are handled by the application layer when creating records.
+            For timestamp defaults, use server-side defaults like CURRENT_TIMESTAMP.
         """
         if self.default is None:
+            return None
+        
+        # Callable defaults cannot be used in SQL - they're Python functions
+        # The ORM handles these when creating records
+        if callable(self.default):
+            # For datetime-related callables, use SQL equivalent
+            func_name = getattr(self.default, "__name__", "") or getattr(self.default, "__qualname__", "")
+            if "now" in func_name.lower() or "utcnow" in func_name.lower():
+                if dialect == "postgresql":
+                    return "DEFAULT CURRENT_TIMESTAMP"
+                elif dialect == "sqlite":
+                    return "DEFAULT CURRENT_TIMESTAMP"
+                elif dialect == "mysql":
+                    return "DEFAULT CURRENT_TIMESTAMP"
+            # For other callables, skip DEFAULT (handled by ORM)
             return None
         
         if isinstance(self.default, str):
@@ -446,6 +476,27 @@ class AlterColumn(Operation):
         if self.set_default:
             changes.append(f"default to {self.new_default}")
         return f"Alter column '{self.column_name}' in '{self.table_name}': {', '.join(changes)}"
+    
+    def to_code(self) -> str:
+        """Gera código Python para AlterColumn com serialização correta de callables."""
+        new_type_str = f"'{self.new_type}'" if self.new_type else "None"
+        old_type_str = f"'{self.old_type}'" if self.old_type else "None"
+        
+        # Serializa defaults corretamente (callables, None, strings, etc.)
+        new_default_str = _serialize_default(self.new_default)
+        old_default_str = _serialize_default(self.old_default)
+        
+        return f"""AlterColumn(
+        table_name='{self.table_name}',
+        column_name='{self.column_name}',
+        new_type={new_type_str},
+        new_nullable={self.new_nullable},
+        new_default={new_default_str},
+        set_default={self.set_default},
+        old_type={old_type_str},
+        old_nullable={self.old_nullable},
+        old_default={old_default_str},
+    )"""
 
 
 @dataclass

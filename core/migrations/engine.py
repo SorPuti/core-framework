@@ -52,6 +52,41 @@ if TYPE_CHECKING:
 MIGRATIONS_TABLE = "_core_migrations"
 
 
+def _detect_extra_imports(ops_code: str) -> list[str]:
+    """
+    Detect and return extra import statements needed for migration code.
+    
+    Analyzes the generated operation code to find references like:
+    - timezone.now -> from core.datetime import timezone
+    - AdvancedField.xxx -> from core.fields import AdvancedField
+    
+    Args:
+        ops_code: The generated operation code string
+    
+    Returns:
+        List of import statements to add to the migration file
+    """
+    imports = set()
+    
+    # Patterns for short-form callable references
+    # These match the output of _serialize_default()
+    patterns = [
+        # timezone.xxx -> from core.datetime import timezone
+        # Match timezone.now but not datetime.timezone.now
+        (r'(?<![.\w])timezone\.\w+', 'from core.datetime import timezone'),
+        # AdvancedField.xxx -> from core.fields import AdvancedField  
+        (r'(?<![.\w])AdvancedField\.\w+', 'from core.fields import AdvancedField'),
+        # datetime.xxx -> from datetime import datetime (for full module path)
+        (r'(?<![.\w])datetime\.\w+', 'from datetime import datetime'),
+    ]
+    
+    for pattern, import_stmt in patterns:
+        if re.search(pattern, ops_code):
+            imports.add(import_stmt)
+    
+    return sorted(imports)
+
+
 def _get_migrations_table_sql(dialect: str) -> str:
     """
     Returns dialect-specific SQL for creating migrations table.
@@ -442,6 +477,10 @@ class MigrationEngine:
         
         ops_str = ",\n".join(ops_code) if ops_code else "    # No operations"
         
+        # Detect and add extra imports needed for callable defaults
+        extra_imports = _detect_extra_imports(ops_str)
+        extra_imports_str = "\n".join(extra_imports) + "\n" if extra_imports else ""
+        
         return f'''"""
 Migration: {name}
 Generated at: {timezone.now().isoformat()}
@@ -467,7 +506,7 @@ from core.migrations.operations import (
     DropEnum,
     AlterEnum,
 )
-
+{extra_imports_str}
 
 migration = Migration(
     name="{name}",

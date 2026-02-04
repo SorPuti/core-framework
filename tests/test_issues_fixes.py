@@ -251,6 +251,31 @@ class TestIssue5MigrationSerialization:
         assert "0x" not in code
         # Should contain proper reference
         assert "CreateTable" in code
+    
+    def test_alter_column_to_code_with_callable(self):
+        """AlterColumn.to_code() should serialize callable defaults correctly."""
+        from core.migrations.operations import AlterColumn
+        from core.datetime import timezone
+        
+        op = AlterColumn(
+            table_name="users",
+            column_name="created_at",
+            new_type="DATETIME",
+            new_default=timezone.now,
+            set_default=True,
+            old_type="TIMESTAMP",
+            old_default=None,
+        )
+        
+        code = op.to_code()
+        
+        # Should NOT contain <function ... at 0x...>
+        assert "<function" not in code, f"Generated invalid code: {code}"
+        assert "0x" not in code, f"Generated memory address: {code}"
+        # Should be valid Python
+        assert "AlterColumn" in code
+        # Should have proper serialization
+        assert "core.datetime.timezone.now" in code or "timezone.now" in code
 
 
 class TestIssue6ResetDbCascade:
