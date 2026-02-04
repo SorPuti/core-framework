@@ -64,6 +64,17 @@ class KafkaProducer(Producer):
         self._producer = None
         self._started = False
     
+    @staticmethod
+    def _resolve_topic(topic) -> str:
+        """Resolve topic name from string or Topic class."""
+        if isinstance(topic, str):
+            return topic
+        elif hasattr(topic, 'name'):
+            return topic.name
+        elif hasattr(topic, 'value'):
+            return topic.value
+        return str(topic)
+    
     async def start(self) -> None:
         """Start the producer and connect to Kafka."""
         if self._started:
@@ -147,6 +158,9 @@ class KafkaProducer(Producer):
         if not self._started:
             await self.start()
         
+        # Resolve topic name from string or Topic class
+        resolved_topic = self._resolve_topic(topic)
+        
         # Determine wait behavior from settings if not specified
         if wait is None:
             wait = not self._settings.kafka_fire_and_forget
@@ -157,7 +171,7 @@ class KafkaProducer(Producer):
         
         if wait:
             await self._producer.send_and_wait(
-                topic,
+                resolved_topic,
                 value=message,
                 key=key,
                 headers=kafka_headers,
@@ -165,7 +179,7 @@ class KafkaProducer(Producer):
         else:
             # Fire-and-forget: returns Future, doesn't wait
             await self._producer.send(
-                topic,
+                resolved_topic,
                 value=message,
                 key=key,
                 headers=kafka_headers,
