@@ -18,6 +18,51 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncConnection
 
 
+def _serialize_default(value: Any) -> str:
+    """
+    Serialize a default value for migration file output.
+    
+    Handles:
+    - None -> "None"
+    - Strings -> repr()
+    - Booleans -> "True"/"False"
+    - Callables -> "module.function" (importable reference)
+    - Other -> repr()
+    
+    Args:
+        value: The default value to serialize
+    
+    Returns:
+        String representation suitable for Python code
+    """
+    if value is None:
+        return "None"
+    
+    if callable(value):
+        # Get module and function name for proper serialization
+        module = getattr(value, "__module__", "")
+        name = getattr(value, "__qualname__", "") or getattr(value, "__name__", "")
+        
+        if module and name:
+            # Return importable reference
+            return f"{module}.{name}"
+        
+        # Fallback for lambdas or unnamed functions
+        return "None"
+    
+    if isinstance(value, bool):
+        return str(value)
+    
+    if isinstance(value, str):
+        return repr(value)
+    
+    if isinstance(value, (int, float)):
+        return str(value)
+    
+    # Default: use repr (may not always be valid Python)
+    return repr(value)
+
+
 @dataclass
 class ColumnDef:
     """Definição de uma coluna."""
@@ -300,15 +345,8 @@ class AddColumn(Operation):
     
     def to_code(self) -> str:
         c = self.column
-        # Serializa default de forma segura
-        default_val = "None"
-        if c.default is not None and not callable(c.default):
-            if isinstance(c.default, str):
-                default_val = f"'{c.default}'"
-            elif isinstance(c.default, bool):
-                default_val = str(c.default)
-            else:
-                default_val = repr(c.default)
+        # Serializa default de forma segura usando helper function
+        default_val = _serialize_default(c.default)
         
         return f"""AddColumn(
         table_name='{self.table_name}',

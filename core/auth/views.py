@@ -88,6 +88,43 @@ class AuthViewSet(ViewSet):
     # ViewSet config
     tags: list[str] = ["auth"]
     
+    # Explicitly disable CRUD endpoints that don't make sense for auth
+    # These would cause 500 errors if called
+    async def list(self, *args, **kwargs):
+        """List is not available on auth endpoint."""
+        raise HTTPException(
+            status_code=405,
+            detail="Method not allowed. Use /auth/me to get current user."
+        )
+    
+    async def retrieve(self, *args, **kwargs):
+        """Retrieve is not available on auth endpoint."""
+        raise HTTPException(
+            status_code=405,
+            detail="Method not allowed. Use /auth/me to get current user."
+        )
+    
+    async def create(self, *args, **kwargs):
+        """Use /auth/register instead."""
+        raise HTTPException(
+            status_code=405,
+            detail="Method not allowed. Use /auth/register to create users."
+        )
+    
+    async def update(self, *args, **kwargs):
+        """Update is not available on auth endpoint."""
+        raise HTTPException(
+            status_code=405,
+            detail="Method not allowed."
+        )
+    
+    async def destroy(self, *args, **kwargs):
+        """Destroy is not available on auth endpoint."""
+        raise HTTPException(
+            status_code=405,
+            detail="Method not allowed."
+        )
+    
     # Cache for dynamic schema
     _dynamic_register_schema: type | None = None
     

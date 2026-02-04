@@ -256,8 +256,14 @@ class Router(APIRouter):
             for http_method in action_methods:
                 route_name = f"{basename}-{name}"
                 
+                # Get action-specific permission_classes
+                action_permission_classes = getattr(method, "permission_classes", None)
+                
                 # Captura method em closure para evitar late binding
-                def make_action_endpoint(action_method: Callable) -> Callable:
+                def make_action_endpoint(
+                    action_method: Callable,
+                    perm_classes: list | None = None,
+                ) -> Callable:
                     async def action_endpoint(
                         request: Request,
                         db: AsyncSession = Depends(get_db),
@@ -265,6 +271,13 @@ class Router(APIRouter):
                         data: dict[str, Any] | None = Body(None),
                     ) -> Any:
                         vs = viewset_class()
+                        
+                        # Apply action-specific permissions if defined
+                        if perm_classes:
+                            from core.permissions import check_permissions
+                            perms = [p() if isinstance(p, type) else p for p in perm_classes]
+                            await check_permissions(perms, request, vs)
+                        
                         path_params = request.path_params
                         if data is not None:
                             return await action_method(vs, request, db, data=data, **path_params)
@@ -273,7 +286,7 @@ class Router(APIRouter):
                 
                 self.add_api_route(
                     path,
-                    make_action_endpoint(method),
+                    make_action_endpoint(method, action_permission_classes),
                     methods=[http_method],
                     tags=tags,
                     name=route_name,

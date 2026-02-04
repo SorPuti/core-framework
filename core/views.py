@@ -497,15 +497,25 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         """
         Levanta erro padronizado para valor de lookup inválido.
         
+        Returns 422 Validation Error (not 500 Internal Server Error).
+        
         Args:
             value: Valor recebido
             expected_type: Tipo esperado (para mensagem de erro)
         """
         raise HTTPException(
-            status_code=400,
+            status_code=422,
             detail={
-                "error": "invalid_lookup_value",
+                "error": "validation_error",
                 "message": f"Invalid {self.lookup_field} format. Expected {expected_type}.",
+                "errors": [
+                    {
+                        "loc": ["path", self.lookup_field],
+                        "msg": f"Invalid {expected_type} format",
+                        "type": f"{expected_type.lower()}_parsing",
+                        "input": str(value),
+                    }
+                ],
                 "field": self.lookup_field,
                 "value": str(value),
                 "expected_type": expected_type,

@@ -2266,7 +2266,32 @@ def cmd_check(args: argparse.Namespace) -> int:
                     continue
                 
                 pending_count += 1
-                migration = engine._load_migration(file_path)
+                
+                # Try to load migration with error handling for syntax errors
+                try:
+                    migration = engine._load_migration(file_path)
+                except SyntaxError as e:
+                    print(error(f"\n  {migration_name}: SYNTAX ERROR"))
+                    print(error(f"    File: {file_path}"))
+                    print(error(f"    Line {e.lineno}: {e.msg}"))
+                    if e.text:
+                        print(error(f"    {e.text.strip()}"))
+                    print(warning(f"    Fix the syntax error and run check again."))
+                    total_issues.append(type('Issue', (), {
+                        'severity': Severity.CRITICAL,
+                        'message': f"Syntax error in {migration_name}: {e.msg}"
+                    })())
+                    continue
+                except Exception as e:
+                    print(error(f"\n  {migration_name}: LOAD ERROR"))
+                    print(error(f"    {type(e).__name__}: {e}"))
+                    print(warning(f"    Fix the error and run check again."))
+                    total_issues.append(type('Issue', (), {
+                        'severity': Severity.CRITICAL,
+                        'message': f"Load error in {migration_name}: {e}"
+                    })())
+                    continue
+                
                 result = await analyzer.analyze(
                     migration.operations,
                     conn,
@@ -2373,13 +2398,22 @@ def cmd_reset_db(args: argparse.Namespace) -> int:
                 elif dialect == "mysql":
                     await conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
                 
-                # Drop all tables
+                # Drop all tables with CASCADE for PostgreSQL
                 for table in tables:
                     print(f"  Dropping: {table}")
                     try:
-                        await conn.execute(text(f'DROP TABLE IF EXISTS "{table}"'))
+                        if dialect == "postgresql":
+                            # Use CASCADE to handle foreign key dependencies
+                            await conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
+                        else:
+                            await conn.execute(text(f'DROP TABLE IF EXISTS "{table}"'))
                     except Exception as e:
                         print(warning(f"    Warning: {e}"))
+                        # Rollback and continue with new transaction
+                        try:
+                            await conn.rollback()
+                        except Exception:
+                            pass
                 
                 # Re-enable foreign key checks
                 if dialect == "sqlite":
