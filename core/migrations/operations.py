@@ -260,23 +260,10 @@ class CreateTable(Operation):
         return f"Create table '{self.table_name}'"
     
     def to_code(self) -> str:
-        def serialize_default(val):
-            """Serializa valor default para código Python válido."""
-            if val is None:
-                return "None"
-            if callable(val):
-                # Funções como datetime.utcnow não podem ser serializadas
-                # Usamos None e deixamos o banco lidar com o default
-                return "None"
-            if isinstance(val, str):
-                return f"'{val}'"
-            if isinstance(val, bool):
-                return str(val)
-            return repr(val)
-        
+        # Use global _serialize_default for consistent callable serialization
         cols = ",\n            ".join(
             f"ColumnDef(name='{c.name}', type='{c.type}', nullable={c.nullable}, "
-            f"default={serialize_default(c.default)}, primary_key={c.primary_key}, "
+            f"default={_serialize_default(c.default)}, primary_key={c.primary_key}, "
             f"autoincrement={c.autoincrement}, unique={c.unique})"
             for c in self.columns
         )

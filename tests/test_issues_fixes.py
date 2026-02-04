@@ -211,6 +211,46 @@ class TestIssue5MigrationSerialization:
         result = _serialize_default(lambda: None)
         # Should not contain <function
         assert "<function" not in result
+    
+    def test_add_column_to_code_with_callable(self):
+        """AddColumn.to_code() should serialize callable defaults correctly."""
+        from core.migrations.operations import AddColumn, ColumnDef
+        from core.datetime import timezone
+        
+        col = ColumnDef(
+            name="created_at",
+            type="DATETIME",
+            nullable=False,
+            default=timezone.now,
+        )
+        op = AddColumn(table_name="users", column=col)
+        
+        code = op.to_code()
+        
+        # Should NOT contain <function ... at 0x...>
+        assert "<function" not in code
+        assert "0x" not in code
+        # Should be valid Python (can be exec'd)
+        assert "AddColumn" in code
+    
+    def test_create_table_to_code_with_callable(self):
+        """CreateTable.to_code() should serialize callable defaults correctly."""
+        from core.migrations.operations import CreateTable, ColumnDef
+        from core.datetime import timezone
+        
+        cols = [
+            ColumnDef(name="id", type="INTEGER", primary_key=True),
+            ColumnDef(name="created_at", type="DATETIME", default=timezone.now),
+        ]
+        op = CreateTable(table_name="test_table", columns=cols)
+        
+        code = op.to_code()
+        
+        # Should NOT contain <function ... at 0x...>
+        assert "<function" not in code
+        assert "0x" not in code
+        # Should contain proper reference
+        assert "CreateTable" in code
 
 
 class TestIssue6ResetDbCascade:
