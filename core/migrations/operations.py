@@ -61,6 +61,10 @@ def map_type(sql_type: str, dialect: str) -> str:
 # Serialization
 # =============================================================================
 
+# Global registry for imports needed during serialization
+_SERIALIZATION_IMPORTS: set[str] = set()
+
+
 def _serialize_default(value: Any) -> str:
     """Serialize default value for migration file."""
     from datetime import datetime, date, time
@@ -72,7 +76,7 @@ def _serialize_default(value: Any) -> str:
         module = getattr(value, "__module__", "")
         qualname = getattr(value, "__qualname__", "") or getattr(value, "__name__", "")
         
-        # Non-importable: closures, lambdas, __main__
+        # Non-importable: closures, lambdas, __main__ -> execute and serialize result
         if "<locals>" in qualname or "<lambda>" in qualname or module == "__main__":
             try:
                 return _serialize_default(value())
@@ -84,15 +88,14 @@ def _serialize_default(value: Any) -> str:
             except Exception:
                 return "None"
         
+        # Importable function: register import and return short name
         if module and qualname:
-            if module == "core.datetime" and qualname.startswith("timezone."):
-                return qualname
-            if module == "core.fields" and qualname.startswith("AdvancedField."):
-                return qualname
-            if module == "datetime":
-                return f"datetime.{qualname}"
-            return f"{module}.{qualname}"
+            # Get the top-level name to import
+            top_name = qualname.split(".")[0]
+            _SERIALIZATION_IMPORTS.add(f"from {module} import {top_name}")
+            return qualname
         
+        # Fallback: execute and serialize result
         try:
             return _serialize_default(value())
         except Exception:
@@ -111,6 +114,14 @@ def _serialize_default(value: Any) -> str:
     if isinstance(value, list):
         return "[]" if not value else repr(value)
     return repr(value)
+
+
+def get_serialization_imports() -> list[str]:
+    """Get and clear the imports collected during serialization."""
+    global _SERIALIZATION_IMPORTS
+    imports = sorted(_SERIALIZATION_IMPORTS)
+    _SERIALIZATION_IMPORTS = set()
+    return imports
 
 
 def _format_sql_default(value: Any, dialect: str) -> str | None:

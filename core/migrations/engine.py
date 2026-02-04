@@ -52,30 +52,6 @@ if TYPE_CHECKING:
 MIGRATIONS_TABLE = "_core_migrations"
 
 
-def _detect_extra_imports(ops_code: str) -> list[str]:
-    """Detect and return extra import statements needed for migration code."""
-    imports = set()
-    
-    # Simple patterns (no capture groups)
-    simple_patterns = [
-        (r'(?<![.\w])timezone\.\w+', 'from core.datetime import timezone'),
-        (r'(?<![.\w])AdvancedField\.\w+', 'from core.fields import AdvancedField'),
-        (r'(?<![.\w])datetime\.\w+', 'from datetime import datetime'),
-    ]
-    for pattern, import_stmt in simple_patterns:
-        if re.search(pattern, ops_code):
-            imports.add(import_stmt)
-    
-    # Dynamic patterns (with capture groups)
-    # core.fields.xxx -> from core.fields import xxx
-    for match in re.finditer(r'core\.fields\.(\w+)', ops_code):
-        imports.add(f'from core.fields import {match.group(1)}')
-    
-    # core.datetime.xxx -> from core.datetime import xxx  
-    for match in re.finditer(r'core\.datetime\.(\w+)', ops_code):
-        imports.add(f'from core.datetime import {match.group(1)}')
-    
-    return sorted(imports)
 
 
 def _get_migrations_table_sql(dialect: str) -> str:
@@ -468,8 +444,9 @@ class MigrationEngine:
         
         ops_str = ",\n".join(ops_code) if ops_code else "    # No operations"
         
-        # Detect and add extra imports needed for callable defaults
-        extra_imports = _detect_extra_imports(ops_str)
+        # Get imports collected during serialization
+        from core.migrations.operations import get_serialization_imports
+        extra_imports = get_serialization_imports()
         extra_imports_str = "\n".join(extra_imports) + "\n" if extra_imports else ""
         
         return f'''"""
