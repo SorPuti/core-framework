@@ -327,3 +327,116 @@ class TestValidUUIDConversion:
         
         assert isinstance(result, uuid.UUID)
         assert str(result) == valid_uuid
+
+
+class TestIssue11TopologicalSort:
+    """Issue #11: Tables should be created in FK dependency order."""
+    
+    def test_simple_fk_dependency(self):
+        """Table with FK should come after referenced table."""
+        from core.migrations.state import TableState, ForeignKeyState
+        from core.migrations.engine import MigrationEngine
+        
+        parent = TableState(name='parent', columns={}, foreign_keys=[])
+        child = TableState(name='child', columns={}, foreign_keys=[
+            ForeignKeyState(column='parent_id', references_table='parent', references_column='id')
+        ])
+        
+        engine = MigrationEngine.__new__(MigrationEngine)
+        result = engine._topological_sort_tables([child, parent])
+        
+        assert [t.name for t in result] == ['parent', 'child']
+    
+    def test_chain_dependency(self):
+        """Chain A -> B -> C should result in C, B, A order."""
+        from core.migrations.state import TableState, ForeignKeyState
+        from core.migrations.engine import MigrationEngine
+        
+        a = TableState(name='a', columns={}, foreign_keys=[])
+        b = TableState(name='b', columns={}, foreign_keys=[
+            ForeignKeyState(column='a_id', references_table='a', references_column='id')
+        ])
+        c = TableState(name='c', columns={}, foreign_keys=[
+            ForeignKeyState(column='b_id', references_table='b', references_column='id')
+        ])
+        
+        engine = MigrationEngine.__new__(MigrationEngine)
+        result = engine._topological_sort_tables([c, b, a])
+        
+        assert [t.name for t in result] == ['a', 'b', 'c']
+    
+    def test_many_to_many_association(self):
+        """Association table should come after both referenced tables."""
+        from core.migrations.state import TableState, ForeignKeyState
+        from core.migrations.engine import MigrationEngine
+        
+        users = TableState(name='users', columns={}, foreign_keys=[])
+        roles = TableState(name='roles', columns={}, foreign_keys=[])
+        user_roles = TableState(name='user_roles', columns={}, foreign_keys=[
+            ForeignKeyState(column='user_id', references_table='users', references_column='id'),
+            ForeignKeyState(column='role_id', references_table='roles', references_column='id'),
+        ])
+        
+        engine = MigrationEngine.__new__(MigrationEngine)
+        result = engine._topological_sort_tables([user_roles, users, roles])
+        
+        names = [t.name for t in result]
+        assert names.index('users') < names.index('user_roles')
+        assert names.index('roles') < names.index('user_roles')
+    
+    def test_complex_dependency_graph(self):
+        """Complex graph: link_clicks -> tracking_links -> campaigns -> workspaces -> users."""
+        from core.migrations.state import TableState, ForeignKeyState
+        from core.migrations.engine import MigrationEngine
+        
+        users = TableState(name='users', columns={}, foreign_keys=[])
+        workspaces = TableState(name='workspaces', columns={}, foreign_keys=[
+            ForeignKeyState(column='owner_id', references_table='users', references_column='id')
+        ])
+        campaigns = TableState(name='campaigns', columns={}, foreign_keys=[
+            ForeignKeyState(column='workspace_id', references_table='workspaces', references_column='id')
+        ])
+        tracking_links = TableState(name='tracking_links', columns={}, foreign_keys=[
+            ForeignKeyState(column='campaign_id', references_table='campaigns', references_column='id')
+        ])
+        link_clicks = TableState(name='link_clicks', columns={}, foreign_keys=[
+            ForeignKeyState(column='link_id', references_table='tracking_links', references_column='id'),
+            ForeignKeyState(column='user_id', references_table='users', references_column='id'),
+        ])
+        
+        # Input in worst possible order
+        tables = [link_clicks, tracking_links, campaigns, workspaces, users]
+        
+        engine = MigrationEngine.__new__(MigrationEngine)
+        result = engine._topological_sort_tables(tables)
+        
+        # Validate all dependencies come before dependents
+        created = set()
+        for t in result:
+            for fk in t.foreign_keys:
+                assert fk.references_table in created, f"{t.name} references {fk.references_table} before it's created"
+            created.add(t.name)
+    
+    def test_circular_dependency_warning(self):
+        """Circular dependency should emit warning but not crash."""
+        import warnings
+        from core.migrations.state import TableState, ForeignKeyState
+        from core.migrations.engine import MigrationEngine
+        
+        a = TableState(name='a', columns={}, foreign_keys=[
+            ForeignKeyState(column='b_id', references_table='b', references_column='id')
+        ])
+        b = TableState(name='b', columns={}, foreign_keys=[
+            ForeignKeyState(column='a_id', references_table='a', references_column='id')
+        ])
+        
+        engine = MigrationEngine.__new__(MigrationEngine)
+        
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = engine._topological_sort_tables([a, b])
+            
+            assert len(w) == 1
+            assert "Circular FK" in str(w[0].message)
+        
+        assert len(result) == 2
