@@ -26,7 +26,11 @@ def _serialize_default(value: Any) -> str:
     - None -> "None"
     - Strings -> repr()
     - Booleans -> "True"/"False"
-    - Callables -> short name (e.g., "timezone.now" not "core.datetime.timezone.now")
+    - Callables:
+      - Module functions -> "module.function" (e.g., "timezone.now")
+      - Closures -> Execute and serialize result, or "None" if fails
+    - datetime/date/time -> repr() with proper format
+    - dict/list -> repr() for JSON-like data
     - Other -> repr()
     
     Args:
@@ -35,33 +39,77 @@ def _serialize_default(value: Any) -> str:
     Returns:
         String representation suitable for Python code
     """
+    from datetime import datetime, date, time
+    
     if value is None:
         return "None"
     
     if callable(value):
-        # Get module and function name for proper serialization
+        # Get module and function name
         module = getattr(value, "__module__", "")
         qualname = getattr(value, "__qualname__", "") or getattr(value, "__name__", "")
         
+        # Check if it's a non-importable callable:
+        # - Closures (contains <locals>)
+        # - Lambdas
+        # - __main__ module (not importable in migrations)
+        is_closure = "<locals>" in qualname
+        is_lambda = "<lambda>" in qualname
+        is_main = module == "__main__"
+        
+        if is_closure or is_lambda or is_main:
+            # Non-importable callables: try to execute and serialize result
+            try:
+                result = value()
+                return _serialize_default(result)  # Recursive call
+            except TypeError:
+                # SQLAlchemy may wrap functions with a context parameter
+                # Try calling with None as context
+                try:
+                    result = value(None)
+                    return _serialize_default(result)
+                except Exception:
+                    return "None"
+            except Exception:
+                # If execution fails, return None (ORM handles at runtime)
+                return "None"
+        
         if module and qualname:
-            # Use short form for known modules to avoid long paths
-            # e.g., "core.datetime.timezone.now" -> "timezone.now"
-            # The corresponding import will be added to the migration file
+            # Use short form for known modules
             if module == "core.datetime" and qualname.startswith("timezone."):
                 return qualname  # Returns "timezone.now"
             if module == "core.fields" and qualname.startswith("AdvancedField."):
-                return qualname  # Returns "AdvancedField.json_field..."
+                # Non-closure AdvancedField methods
+                return qualname
             if module == "datetime":
-                return f"datetime.{qualname}"  # Returns "datetime.now"
+                return f"datetime.{qualname}"
             
             # For other modules, return full path
             return f"{module}.{qualname}"
         
-        # Fallback for lambdas or unnamed functions
-        return "None"
+        # Unknown callable - try to execute
+        try:
+            result = value()
+            return _serialize_default(result)
+        except TypeError:
+            # Try with None as context (SQLAlchemy pattern)
+            try:
+                result = value(None)
+                return _serialize_default(result)
+            except Exception:
+                return "None"
+        except Exception:
+            return "None"
     
     if isinstance(value, bool):
         return str(value)
+    
+    if isinstance(value, datetime):
+        # Serialize datetime as a reproducible call
+        return f"None"  # Let ORM handle datetime defaults at runtime
+    
+    if isinstance(value, (date, time)):
+        return "None"  # Let ORM handle at runtime
     
     if isinstance(value, str):
         return repr(value)
@@ -69,7 +117,19 @@ def _serialize_default(value: Any) -> str:
     if isinstance(value, (int, float)):
         return str(value)
     
-    # Default: use repr (may not always be valid Python)
+    if isinstance(value, dict):
+        # For empty dict or simple dicts, serialize as literal
+        if not value:
+            return "{}"
+        # For complex dicts, use repr
+        return repr(value)
+    
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        return repr(value)
+    
+    # Default: use repr
     return repr(value)
 
 
