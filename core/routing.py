@@ -47,42 +47,36 @@ class Router(APIRouter):
         viewset_class: type["ViewSet"],
         basename: str | None = None,
         tags: list[str] | None = None,
+        include_crud: bool | None = None,
     ) -> None:
         """
         Registra um ViewSet com rotas REST automáticas.
         
-        Gera as seguintes rotas (na ordem correta para evitar conflitos):
-        1. GET {prefix}/ -> list
-        2. POST {prefix}/ -> create
-        3. Custom actions com detail=False (ex: /users/types)
-        4. GET {prefix}/{id} -> retrieve
-        5. PUT {prefix}/{id} -> update
-        6. PATCH {prefix}/{id} -> partial_update
-        7. DELETE {prefix}/{id} -> destroy
-        8. Custom actions com detail=True (ex: /users/{id}/activate)
+        Para ViewSet com model: cria rotas CRUD + actions customizadas.
+        Para ViewSet sem model: cria apenas actions customizadas.
         
         Args:
             prefix: Prefixo da URL (ex: "/users")
             viewset_class: Classe do ViewSet
             basename: Nome base para as rotas (default: nome do model)
             tags: Tags para OpenAPI
-        
-        Note:
-            Actions detail=False são registradas ANTES das rotas {id} para
-            evitar conflitos onde /users/types seria interpretado como /users/{id}
-            com id="types".
+            include_crud: Forçar criação de rotas CRUD (default: auto-detecta por model)
         """
         viewset = viewset_class()
+        
+        # Detecta se tem model (para decidir sobre CRUD routes)
+        has_model = hasattr(viewset_class, "model") and viewset_class.model is not None
+        
+        # Auto-detecta include_crud baseado em model, ou usa valor explícito
+        if include_crud is None:
+            include_crud = has_model
         
         # Infer basename from model or class name
         if basename is None:
             model = getattr(viewset_class, "model", None)
             if model is not None:
-                # Use model's tablename or class name
                 basename = getattr(model, "__tablename__", None) or model.__name__.lower()
             else:
-                # Fallback: infer from ViewSet class name
-                # UserViewSet -> user, EventViewSet -> event
                 class_name = viewset_class.__name__
                 basename = class_name.lower().replace("viewset", "").replace("view", "") or "api"
         
@@ -93,6 +87,14 @@ class Router(APIRouter):
         
         # Normaliza o prefixo
         prefix = prefix.rstrip("/")
+        
+        # Se não tem model e não forçou CRUD, registra apenas actions customizadas
+        if not include_crud:
+            self._register_custom_actions(
+                prefix, viewset_class, basename, tags, lookup_url_kwarg,
+                detail_filter=None  # Registra todas as actions
+            )
+            return
         
         # 1. Rota de lista (GET)
         @self.get(

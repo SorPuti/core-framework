@@ -174,7 +174,20 @@ class APIView:
             method.upper(),
             self.permission_classes,
         )
-        return [perm() for perm in perm_classes]
+        
+        # Validate and instantiate permissions
+        instances = []
+        for i, perm in enumerate(perm_classes):
+            if not isinstance(perm, type):
+                class_name = type(perm).__name__
+                source = f"permission_classes_by_method['{method.upper()}']" if method.upper() in self.permission_classes_by_method else "permission_classes"
+                raise TypeError(
+                    f"{source}[{i}] contains an instance of {class_name} instead of a class. "
+                    f"Use [{class_name}] instead of [{class_name}()]"
+                )
+            instances.append(perm())
+        
+        return instances
     
     async def check_permissions(self, request: Request, method: str) -> None:
         """Verifica permissões antes de executar o handler."""
@@ -361,7 +374,21 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
             action,
             self.permission_classes,
         )
-        return [perm() for perm in perm_classes]
+        
+        # Validate and instantiate permissions
+        instances = []
+        for i, perm in enumerate(perm_classes):
+            if not isinstance(perm, type):
+                # Already an instance - raise clear error
+                class_name = type(perm).__name__
+                source = f"permission_classes_by_action['{action}']" if action in self.permission_classes_by_action else "permission_classes"
+                raise TypeError(
+                    f"{source}[{i}] contains an instance of {class_name} instead of a class. "
+                    f"Use [{class_name}] instead of [{class_name}()]"
+                )
+            instances.append(perm())
+        
+        return instances
     
     async def check_permissions(self, request: Request, action: str) -> None:
         """Verifica permissões antes de executar a action."""
