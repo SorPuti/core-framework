@@ -258,67 +258,34 @@ class MigrationEngine:
         )
     
     def _topological_sort_tables(self, tables: list[TableState]) -> list[TableState]:
-        """
-        Bug #5 Fix: Ordena tabelas em ordem topológica baseada em FKs.
-        
-        Tabelas referenciadas por FKs são criadas ANTES das que as referenciam.
-        
-        Args:
-            tables: Lista de TableState a ordenar
-            
-        Returns:
-            Lista ordenada topologicamente
-        """
+        """Ordena tabelas por dependências de FK (Kahn's algorithm)."""
         if not tables:
             return []
         
-        # Mapeia nome -> tabela
+        from collections import deque
+        
         table_map = {t.name: t for t in tables}
+        deps = {t.name: {fk.references_table for fk in t.foreign_keys if fk.references_table in table_map} for t in tables}
+        in_degree = {name: len(d) for name, d in deps.items()}
         
-        # Constrói grafo de dependências
-        # dependencias[A] = {B, C} significa A depende de B e C (A tem FK para B e C)
-        dependencies: dict[str, set[str]] = {t.name: set() for t in tables}
-        
-        for table in tables:
-            for fk in table.foreign_keys:
-                ref_table = fk.references_table
-                # Só adiciona dependência se a tabela referenciada também está sendo criada
-                # (tabelas já existentes não precisam ser consideradas)
-                if ref_table in table_map:
-                    dependencies[table.name].add(ref_table)
-        
-        # Algoritmo de Kahn para ordenação topológica
+        queue = deque(name for name, deg in in_degree.items() if deg == 0)
         result = []
         
-        # Encontra tabelas sem dependências (grau de entrada 0)
-        no_deps = [name for name, deps in dependencies.items() if not deps]
-        
-        while no_deps:
-            # Remove uma tabela sem dependências
-            name = no_deps.pop(0)
+        while queue:
+            name = queue.popleft()
             result.append(table_map[name])
-            
-            # Remove esta tabela das dependências de outras
-            for other_name, deps in dependencies.items():
-                if name in deps:
-                    deps.remove(name)
-                    # Se não tem mais dependências, adiciona à fila
-                    if not deps and other_name not in [t.name for t in result]:
-                        no_deps.append(other_name)
+            for other, other_deps in deps.items():
+                if name in other_deps:
+                    other_deps.discard(name)
+                    in_degree[other] -= 1
+                    if in_degree[other] == 0:
+                        queue.append(other)
         
-        # Verifica ciclo (se sobrou alguma tabela com dependências)
-        remaining = [t for t in tables if t not in result]
-        if remaining:
-            # Há um ciclo - adiciona as tabelas restantes no final
-            # (o banco vai falhar, mas pelo menos o erro será claro)
+        if len(result) < len(tables):
             import warnings
-            cycle_tables = [t.name for t in remaining]
-            warnings.warn(
-                f"Circular FK dependency detected involving tables: {cycle_tables}. "
-                "Migration may fail. Consider breaking the cycle with nullable FKs.",
-                RuntimeWarning,
-            )
-            result.extend(remaining)
+            remaining = [t.name for t in tables if t.name not in {r.name for r in result}]
+            warnings.warn(f"Circular FK: {remaining}", RuntimeWarning)
+            result.extend(table_map[n] for n in remaining)
         
         return result
     
@@ -351,7 +318,7 @@ class MigrationEngine:
                 new_values=new_enum.values,
             ))
         
-        # 3. Criar tabelas (BUG #5 FIX: em ordem topológica)
+        # Ordenar tabelas por dependências de FK
         sorted_tables = self._topological_sort_tables(diff.tables_to_create)
         for table in sorted_tables:
             columns = [self._column_state_to_def(col) for col in table.columns.values()]
@@ -389,8 +356,6 @@ class MigrationEngine:
         # 6. Alterar colunas
         for table_name, alterations in diff.columns_to_alter.items():
             for old_col, new_col in alterations:
-                # Ignora alterações em colunas de chave primária
-                # (PKs não devem ter nullable alterado)
                 if old_col.primary_key or new_col.primary_key:
                     continue
                 
@@ -407,19 +372,13 @@ class MigrationEngine:
                         old_default=col_diff.get("default", (None, None))[0],
                     ))
         
-        # 7. Remover tabelas (antes de remover enums que elas usam)
-        # NUNCA remove tabelas protegidas do framework
         for table_name in diff.tables_to_drop:
             if table_name in PROTECTED_TABLES:
-                # Tabelas protegidas não podem ser removidas via migrate
-                # Use 'core reset_db' para resetar o banco completamente
                 continue
             if table_name in INTERNAL_TABLES:
-                # Tabelas internas são ignoradas
                 continue
             operations.append(DropTable(table_name=table_name))
         
-        # 8. Remover enums POR ÚLTIMO (depois das tabelas que os usavam)
         for enum_name in diff.enums_to_drop:
             operations.append(DropEnum(enum_name=enum_name))
         
@@ -444,7 +403,6 @@ class MigrationEngine:
         
         ops_str = ",\n".join(ops_code) if ops_code else "    # No operations"
         
-        # Get imports collected during serialization
         from core.migrations.operations import get_serialization_imports
         extra_imports = get_serialization_imports()
         extra_imports_str = "\n".join(extra_imports) + "\n" if extra_imports else ""
@@ -490,14 +448,11 @@ migration = Migration(
         models: list[type["Model"]],
     ) -> SchemaDiff:
         """Detecta mudanças entre models e banco de dados."""
-        # Estado atual dos models
         models_state = models_to_schema_state(models)
         
-        # Estado atual do banco
         async with self._engine.connect() as conn:
             db_state = await get_database_schema_state(conn)
         
-        # Calcula diferenças
         return db_state.diff(models_state)
     
     async def makemigrations(
@@ -534,18 +489,15 @@ migration = Migration(
                 print("No changes detected.")
                 return None
         
-        # Gera nome da migração
         number = self._get_next_migration_number()
         migration_name = f"{number}_{name or 'auto'}"
         
-        # Dependências (última migração aplicada)
         files = self._get_migration_files()
         dependencies = []
         if files:
             last_migration = files[-1].stem
             dependencies = [(self.app_label, last_migration)]
         
-        # Gera código
         code = self._generate_migration_code(migration_name, operations, dependencies)
         
         if dry_run:
@@ -554,21 +506,17 @@ migration = Migration(
             print(code)
             return None
         
-        # Cria diretório se não existir
         self.migrations_dir.mkdir(parents=True, exist_ok=True)
         
-        # Cria __init__.py se não existir
         init_file = self.migrations_dir / "__init__.py"
         if not init_file.exists():
             init_file.write_text('"""Migrations package."""\n')
         
-        # Salva arquivo
         file_path = self.migrations_dir / f"{migration_name}.py"
         file_path.write_text(code)
         
         print(f"Created migration: {file_path}")
         
-        # Mostra operações
         for op in operations:
             print(f"  - {op.describe()}")
         
@@ -611,7 +559,6 @@ migration = Migration(
             
             migration_files = self._get_migration_files()
             
-            # Coleta migrações pendentes
             pending_migrations = []
             for file_path in migration_files:
                 migration_name = file_path.stem
@@ -628,7 +575,6 @@ migration = Migration(
                 print("No migrations to apply.")
                 return applied
             
-            # Analisa todas as migrações pendentes
             if check and not fake:
                 analyzer = MigrationAnalyzer(dialect=self.dialect)
                 all_issues = []
@@ -646,7 +592,6 @@ migration = Migration(
                     all_results.append(result)
                     all_issues.extend(result.issues)
                 
-                # Verifica se pode prosseguir
                 has_errors = any(
                     i.severity in (Severity.ERROR, Severity.CRITICAL)
                     for i in all_issues
@@ -656,7 +601,6 @@ migration = Migration(
                     for i in all_issues
                 )
                 
-                # Mostra resultados
                 for result in all_results:
                     print(format_analysis_report(result))
                 
@@ -679,9 +623,8 @@ migration = Migration(
                         return []
                 
                 if all_issues and not has_errors:
-                    print()  # Linha em branco antes de aplicar
+                    print()
             
-            # Aplica migrações
             print("\nApplying migrations...")
             for file_path, migration_name in pending_migrations:
                 migration = self._load_migration(file_path)
@@ -885,13 +828,10 @@ migration = Migration(
         for op in operations:
             if isinstance(op, CreateTable):
                 if op.table_name in dropped_tables:
-                    # Tabela foi criada, dropada e criada de novo
                     dropped_tables.remove(op.table_name)
-                created_tables.add(op.table_name)
+                    created_tables.add(op.table_name)
                 optimized.append(op)
-            
             elif isinstance(op, DropTable):
-                # PROTEÇÃO: Nunca permite drop de tabelas protegidas
                 if op.table_name in PROTECTED_TABLES:
                     raise RuntimeError(
                         f"Cannot drop protected table '{op.table_name}'. "
