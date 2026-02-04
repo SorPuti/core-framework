@@ -65,19 +65,34 @@ class ConfluentConsumer(Consumer):
         
         Args:
             group_id: Consumer group ID
-            topics: Topics to subscribe to
+            topics: Topics to subscribe to (strings or Topic classes)
             message_handler: Optional custom message handler
             **kwargs: Additional confluent-kafka config
         """
         self._settings = get_messaging_settings()
         self.group_id = group_id or ""
-        self.topics = topics or []
+        self.topics = self._resolve_topics(topics or [])
         self._message_handler = message_handler
         self._extra_config = kwargs
         self._consumer = None
         self._running = False
         self._task: asyncio.Task | None = None
         self._db_session_factory = None
+    
+    @staticmethod
+    def _resolve_topics(topics: list) -> list[str]:
+        """Resolve topic names from strings or Topic classes."""
+        resolved = []
+        for topic in topics:
+            if isinstance(topic, str):
+                resolved.append(topic)
+            elif hasattr(topic, 'name'):
+                resolved.append(topic.name)
+            elif hasattr(topic, 'value'):
+                resolved.append(topic.value)
+            else:
+                resolved.append(str(topic))
+        return resolved
     
     def set_db_session_factory(self, factory: Callable) -> None:
         """

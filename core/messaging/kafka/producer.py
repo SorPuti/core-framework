@@ -78,6 +78,11 @@ class KafkaProducer(Producer):
             )
         
         # Build producer config
+        # aiokafka expects None for no compression, not "none" string
+        compression = self._settings.kafka_compression_type
+        if compression == "none":
+            compression = None
+        
         config = {
             "bootstrap_servers": self._bootstrap_servers,
             "client_id": self._client_id,
@@ -87,7 +92,7 @@ class KafkaProducer(Producer):
             "retry_backoff_ms": self._settings.kafka_retry_backoff_ms,
             "max_batch_size": self._settings.kafka_max_batch_size,
             "linger_ms": self._settings.kafka_linger_ms,
-            "compression_type": self._settings.kafka_compression_type,
+            "compression_type": compression,
         }
         
         # Add security config if needed
