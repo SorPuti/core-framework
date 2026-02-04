@@ -181,19 +181,35 @@ class ColumnDef:
             return _format_sql_default(result, dialect)
         return _format_sql_default(self.default, dialect)
     
-    def to_sql(self, dialect: str = "sqlite") -> str:
+    def to_sql(self, dialect: str = "sqlite", *, include_pk: bool = True) -> str:
+        """Generate SQL for column definition.
+        
+        Args:
+            dialect: Database dialect
+            include_pk: If False, skip PRIMARY KEY clause (for composite PKs)
+        """
         parts = [f'"{self.name}"', self.get_type(dialect)]
-        if self.primary_key:
+        
+        # Handle primary key
+        if self.primary_key and include_pk:
             parts.append("PRIMARY KEY")
             if self.autoincrement and dialect == "sqlite":
                 parts.append("AUTOINCREMENT")
+        
+        # NOT NULL (PKs are implicitly NOT NULL)
         if not self.nullable and not self.primary_key:
             parts.append("NOT NULL")
+        elif self.primary_key and not include_pk:
+            # For composite PK, column must be NOT NULL
+            parts.append("NOT NULL")
+        
         default_sql = self.get_default_sql(dialect)
         if default_sql:
             parts.append(default_sql)
+        
         if self.unique and not self.primary_key:
             parts.append("UNIQUE")
+        
         return " ".join(parts)
 
 
@@ -248,10 +264,30 @@ class CreateTable(Operation):
     foreign_keys: list[ForeignKeyDef] = field(default_factory=list)
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        cols = ",\n    ".join(c.to_sql(dialect) for c in self.columns)
+        # Detect composite primary key
+        pk_columns = [c for c in self.columns if c.primary_key]
+        is_composite_pk = len(pk_columns) > 1
+        
+        # Generate column definitions
+        col_defs = []
+        for c in self.columns:
+            # For composite PK, don't include PRIMARY KEY in column def
+            col_sql = c.to_sql(dialect, include_pk=not is_composite_pk)
+            col_defs.append(col_sql)
+        
+        parts = col_defs.copy()
+        
+        # Add composite PRIMARY KEY constraint if needed
+        if is_composite_pk:
+            pk_names = ", ".join(f'"{c.name}"' for c in pk_columns)
+            parts.append(f"PRIMARY KEY ({pk_names})")
+        
+        # Add foreign keys
         if self.foreign_keys:
-            fks = ",\n    ".join(fk.to_sql(self.table_name) for fk in self.foreign_keys)
-            cols += f",\n    {fks}"
+            for fk in self.foreign_keys:
+                parts.append(fk.to_sql(self.table_name))
+        
+        cols = ",\n    ".join(parts)
         sql = f'CREATE TABLE IF NOT EXISTS "{self.table_name}" (\n    {cols}\n)'
         await conn.execute(text(sql))
     
