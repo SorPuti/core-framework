@@ -53,36 +53,27 @@ MIGRATIONS_TABLE = "_core_migrations"
 
 
 def _detect_extra_imports(ops_code: str) -> list[str]:
-    """
-    Detect and return extra import statements needed for migration code.
-    
-    Analyzes the generated operation code to find references like:
-    - timezone.now -> from core.datetime import timezone
-    - AdvancedField.xxx -> from core.fields import AdvancedField
-    
-    Args:
-        ops_code: The generated operation code string
-    
-    Returns:
-        List of import statements to add to the migration file
-    """
+    """Detect and return extra import statements needed for migration code."""
     imports = set()
     
-    # Patterns for short-form callable references
-    # These match the output of _serialize_default()
-    patterns = [
-        # timezone.xxx -> from core.datetime import timezone
-        # Match timezone.now but not datetime.timezone.now
+    # Simple patterns (no capture groups)
+    simple_patterns = [
         (r'(?<![.\w])timezone\.\w+', 'from core.datetime import timezone'),
-        # AdvancedField.xxx -> from core.fields import AdvancedField  
         (r'(?<![.\w])AdvancedField\.\w+', 'from core.fields import AdvancedField'),
-        # datetime.xxx -> from datetime import datetime (for full module path)
         (r'(?<![.\w])datetime\.\w+', 'from datetime import datetime'),
     ]
-    
-    for pattern, import_stmt in patterns:
+    for pattern, import_stmt in simple_patterns:
         if re.search(pattern, ops_code):
             imports.add(import_stmt)
+    
+    # Dynamic patterns (with capture groups)
+    # core.fields.xxx -> from core.fields import xxx
+    for match in re.finditer(r'core\.fields\.(\w+)', ops_code):
+        imports.add(f'from core.fields import {match.group(1)}')
+    
+    # core.datetime.xxx -> from core.datetime import xxx  
+    for match in re.finditer(r'core\.datetime\.(\w+)', ops_code):
+        imports.add(f'from core.datetime import {match.group(1)}')
     
     return sorted(imports)
 
