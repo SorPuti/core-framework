@@ -258,38 +258,35 @@ class MigrationEngine:
         )
     
     def _topological_sort_tables(self, tables: list[TableState]) -> list[TableState]:
-        """Ordena tabelas por dependências de FK (Kahn's algorithm com quebra de ciclos)."""
+        """Ordena tabelas por dependências de FK (Kahn's algorithm)."""
         if not tables:
             return []
-        
-        import logging
-        logger = logging.getLogger("core.migrations")
         
         table_map = {t.name: t for t in tables}
         table_names = set(table_map.keys())
         
-        # Constrói grafo de dependências (apenas FKs para tabelas sendo criadas)
-        deps = {t.name: {fk.references_table for fk in t.foreign_keys if fk.references_table in table_names} for t in tables}
+        # Mapa de FK: table -> [(column, ref_table)]
+        fk_map = {}
+        for t in tables:
+            fk_map[t.name] = [(fk.column, fk.references_table) for fk in t.foreign_keys if fk.references_table in table_names]
         
-        # Detecta ciclos via DFS e encontra quais arestas quebrar
+        deps = {name: {ref for _, ref in fks} for name, fks in fk_map.items()}
+        
+        # Detecta ciclo via DFS
         def find_cycle():
-            visited = set()
-            rec_stack = set()
+            visited, rec_stack = set(), set()
             
             def dfs(node, path):
                 visited.add(node)
                 rec_stack.add(node)
-                
                 for neighbor in deps.get(node, []):
                     if neighbor not in visited:
                         cycle = dfs(neighbor, path + [node])
                         if cycle:
                             return cycle
                     elif neighbor in rec_stack:
-                        # Encontrou ciclo
-                        cycle_start = path.index(neighbor) if neighbor in path else len(path)
-                        return path[cycle_start:] + [node, neighbor]
-                
+                        idx = path.index(neighbor) if neighbor in path else len(path)
+                        return path[idx:] + [node, neighbor]
                 rec_stack.remove(node)
                 return None
             
@@ -300,20 +297,46 @@ class MigrationEngine:
                         return cycle
             return None
         
-        # Quebra ciclos removendo uma aresta
-        broken_edges = []  # (from_table, to_table)
-        while True:
-            cycle = find_cycle()
-            if not cycle:
-                break
+        cycle = find_cycle()
+        if cycle:
+            # Formata mensagem de erro detalhada
+            lines = [
+                "",
+                "=" * 60,
+                "CIRCULAR FOREIGN KEY DEPENDENCY DETECTED",
+                "=" * 60,
+                "",
+                "The following tables have circular FK references:",
+                "",
+            ]
             
-            # Quebra o ciclo removendo a aresta do último nó
-            from_node, to_node = cycle[-2], cycle[-1]
-            logger.warning(f"Breaking circular FK: {from_node} -> {to_node}")
-            deps[from_node].discard(to_node)
-            broken_edges.append((from_node, to_node))
+            # Mostra o ciclo
+            for i in range(len(cycle) - 1):
+                from_table, to_table = cycle[i], cycle[i + 1]
+                # Encontra o campo que causa a FK
+                fk_cols = [col for col, ref in fk_map.get(from_table, []) if ref == to_table]
+                col_name = fk_cols[0] if fk_cols else "?"
+                lines.append(f"  {from_table}.{col_name} -> {to_table}")
+            
+            lines.extend([
+                "",
+                "To fix this, you need to break the cycle by:",
+                "  1. Remove one of the ForeignKey relationships, OR",
+                "  2. Make one FK nullable and set it after creation, OR",
+                "  3. Use a regular field (e.g., AdvancedField.uuid()) instead of FK",
+                "",
+                "Example fix:",
+                f"  # In {cycle[0]} model, change:",
+                f"  #   {fk_map.get(cycle[0], [('field', '')])[0][0]} = ForeignKey('{cycle[1]}.id')",
+                f"  # To:",
+                f"  #   {fk_map.get(cycle[0], [('field', '')])[0][0]} = AdvancedField.uuid(nullable=True)",
+                "",
+                "=" * 60,
+            ])
+            
+            raise RuntimeError("\n".join(lines))
         
-        # Kahn's algorithm sem ciclos
+        # Kahn's algorithm
         in_degree = {name: len(d) for name, d in deps.items()}
         queue = [name for name, deg in in_degree.items() if deg == 0]
         result = []
@@ -327,11 +350,6 @@ class MigrationEngine:
                     in_degree[other] -= 1
                     if in_degree[other] == 0:
                         queue.append(other)
-        
-        # Adiciona qualquer tabela restante (não deveria acontecer)
-        for t in tables:
-            if t not in result:
-                result.append(t)
         
         return result
     

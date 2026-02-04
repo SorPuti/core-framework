@@ -417,9 +417,8 @@ class TestIssue11TopologicalSort:
                 assert fk.references_table in created, f"{t.name} references {fk.references_table} before it's created"
             created.add(t.name)
     
-    def test_circular_dependency_handled(self):
-        """Circular dependency should be broken and not crash."""
-        import logging
+    def test_circular_dependency_raises_error(self):
+        """Circular dependency should raise RuntimeError with formatted message."""
         from core.migrations.state import TableState, ForeignKeyState
         from core.migrations.engine import MigrationEngine
         
@@ -432,26 +431,11 @@ class TestIssue11TopologicalSort:
         
         engine = MigrationEngine.__new__(MigrationEngine)
         
-        with self._caplog_context(logging.WARNING) as logs:
-            result = engine._topological_sort_tables([a, b])
+        with pytest.raises(RuntimeError) as exc_info:
+            engine._topological_sort_tables([a, b])
         
-        # Should break cycle and produce valid order
-        assert len(result) == 2
-        # First table should be one that had its FK broken
-        assert result[0].name in ('a', 'b')
-    
-    @staticmethod
-    def _caplog_context(level):
-        """Context manager for capturing logs."""
-        import logging
-        from io import StringIO
-        
-        class LogCapture:
-            def __init__(self):
-                self.records = []
-            def __enter__(self):
-                return self.records
-            def __exit__(self, *args):
-                pass
-        
-        return LogCapture()
+        error_msg = str(exc_info.value)
+        assert "CIRCULAR FOREIGN KEY DEPENDENCY" in error_msg
+        assert "a.b_id -> b" in error_msg
+        assert "b.a_id -> a" in error_msg
+        assert "AdvancedField.uuid()" in error_msg
