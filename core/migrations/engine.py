@@ -258,21 +258,68 @@ class MigrationEngine:
         )
     
     def _topological_sort_tables(self, tables: list[TableState]) -> list[TableState]:
-        """Ordena tabelas por dependências de FK (Kahn's algorithm)."""
+        """Ordena tabelas por dependências de FK (Kahn's algorithm com quebra de ciclos)."""
         if not tables:
             return []
         
-        from collections import deque
+        import logging
+        logger = logging.getLogger("core.migrations")
         
         table_map = {t.name: t for t in tables}
-        deps = {t.name: {fk.references_table for fk in t.foreign_keys if fk.references_table in table_map} for t in tables}
-        in_degree = {name: len(d) for name, d in deps.items()}
+        table_names = set(table_map.keys())
         
-        queue = deque(name for name, deg in in_degree.items() if deg == 0)
+        # Constrói grafo de dependências (apenas FKs para tabelas sendo criadas)
+        deps = {t.name: {fk.references_table for fk in t.foreign_keys if fk.references_table in table_names} for t in tables}
+        
+        # Detecta ciclos via DFS e encontra quais arestas quebrar
+        def find_cycle():
+            visited = set()
+            rec_stack = set()
+            
+            def dfs(node, path):
+                visited.add(node)
+                rec_stack.add(node)
+                
+                for neighbor in deps.get(node, []):
+                    if neighbor not in visited:
+                        cycle = dfs(neighbor, path + [node])
+                        if cycle:
+                            return cycle
+                    elif neighbor in rec_stack:
+                        # Encontrou ciclo
+                        cycle_start = path.index(neighbor) if neighbor in path else len(path)
+                        return path[cycle_start:] + [node, neighbor]
+                
+                rec_stack.remove(node)
+                return None
+            
+            for node in table_names:
+                if node not in visited:
+                    cycle = dfs(node, [])
+                    if cycle:
+                        return cycle
+            return None
+        
+        # Quebra ciclos removendo uma aresta
+        broken_edges = []  # (from_table, to_table)
+        while True:
+            cycle = find_cycle()
+            if not cycle:
+                break
+            
+            # Quebra o ciclo removendo a aresta do último nó
+            from_node, to_node = cycle[-2], cycle[-1]
+            logger.warning(f"Breaking circular FK: {from_node} -> {to_node}")
+            deps[from_node].discard(to_node)
+            broken_edges.append((from_node, to_node))
+        
+        # Kahn's algorithm sem ciclos
+        in_degree = {name: len(d) for name, d in deps.items()}
+        queue = [name for name, deg in in_degree.items() if deg == 0]
         result = []
         
         while queue:
-            name = queue.popleft()
+            name = queue.pop(0)
             result.append(table_map[name])
             for other, other_deps in deps.items():
                 if name in other_deps:
@@ -281,11 +328,10 @@ class MigrationEngine:
                     if in_degree[other] == 0:
                         queue.append(other)
         
-        if len(result) < len(tables):
-            import warnings
-            remaining = [t.name for t in tables if t.name not in {r.name for r in result}]
-            warnings.warn(f"Circular FK: {remaining}", RuntimeWarning)
-            result.extend(table_map[n] for n in remaining)
+        # Adiciona qualquer tabela restante (não deveria acontecer)
+        for t in tables:
+            if t not in result:
+                result.append(t)
         
         return result
     
