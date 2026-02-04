@@ -1,259 +1,50 @@
 """
-Messaging configuration settings.
+Messaging configuration.
 
-All messaging-related settings are defined here and can be
-configured via environment variables or .env file.
+Usa o Settings centralizado automaticamente - não precisa configurar nada.
+Basta definir no .env:
+
+    KAFKA_ENABLED=true
+    KAFKA_BACKEND=confluent
+    KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+
+E tudo funciona automaticamente.
 """
 
 from __future__ import annotations
 
-from typing import Literal
-from pydantic import Field as PydanticField
-from pydantic_settings import BaseSettings
+from core.config import get_settings
 
 
-class MessagingSettings(BaseSettings):
+def get_messaging_settings():
     """
-    Messaging system configuration.
+    Retorna configurações de messaging.
     
-    All settings can be overridden via environment variables:
-        MESSAGE_BROKER=kafka
-        KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-        REDIS_URL=redis://localhost:6379/0
+    Simplesmente retorna o Settings global que já carrega do .env.
+    
+    Exemplo:
+        settings = get_messaging_settings()
+        print(settings.kafka_backend)
+        print(settings.kafka_bootstrap_servers)
     """
-    
-    # ==========================================================================
-    # BROKER SELECTION
-    # ==========================================================================
-    
-    message_broker: Literal["kafka", "redis", "rabbitmq", "memory"] = PydanticField(
-        default="kafka",
-        description="Message broker to use: kafka, redis, rabbitmq, memory (for testing)",
-    )
-    
-    # ==========================================================================
-    # KAFKA SETTINGS
-    # ==========================================================================
-    
-    kafka_bootstrap_servers: str = PydanticField(
-        default="localhost:9092",
-        description="Kafka bootstrap servers (comma-separated)",
-    )
-    kafka_security_protocol: Literal["PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"] = PydanticField(
-        default="PLAINTEXT",
-        description="Kafka security protocol",
-    )
-    kafka_sasl_mechanism: str | None = PydanticField(
-        default=None,
-        description="SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)",
-    )
-    kafka_sasl_username: str | None = PydanticField(
-        default=None,
-        description="SASL username",
-    )
-    kafka_sasl_password: str | None = PydanticField(
-        default=None,
-        description="SASL password",
-    )
-    kafka_ssl_cafile: str | None = PydanticField(
-        default=None,
-        description="Path to CA certificate file",
-    )
-    kafka_ssl_certfile: str | None = PydanticField(
-        default=None,
-        description="Path to client certificate file",
-    )
-    kafka_ssl_keyfile: str | None = PydanticField(
-        default=None,
-        description="Path to client key file",
-    )
-    kafka_client_id: str = PydanticField(
-        default="core-framework",
-        description="Kafka client ID",
-    )
-    kafka_request_timeout_ms: int = PydanticField(
-        default=30000,
-        description="Kafka request timeout in milliseconds",
-    )
-    kafka_retry_backoff_ms: int = PydanticField(
-        default=100,
-        description="Kafka retry backoff in milliseconds",
-    )
-    kafka_max_batch_size: int = PydanticField(
-        default=16384,
-        description="Maximum batch size in bytes",
-    )
-    kafka_linger_ms: int = PydanticField(
-        default=0,
-        description="Time to wait for batch to fill (0 = send immediately)",
-    )
-    kafka_compression_type: Literal["none", "gzip", "snappy", "lz4", "zstd"] = PydanticField(
-        default="none",
-        description="Compression type for messages",
-    )
-    kafka_backend: Literal["aiokafka", "confluent"] = PydanticField(
-        default="aiokafka",
-        description="Kafka client backend: aiokafka (async) or confluent (librdkafka)",
-    )
-    kafka_schema_registry_url: str | None = PydanticField(
-        default=None,
-        description="Schema Registry URL for Avro serialization",
-    )
-    kafka_fire_and_forget: bool = PydanticField(
-        default=False,
-        description="If True, don't wait for broker acknowledgment (faster but less reliable)",
-    )
-    
-    # Consumer settings
-    kafka_auto_offset_reset: Literal["earliest", "latest", "none"] = PydanticField(
-        default="earliest",
-        description="Where to start consuming when no offset exists",
-    )
-    kafka_enable_auto_commit: bool = PydanticField(
-        default=True,
-        description="Enable auto-commit of offsets",
-    )
-    kafka_auto_commit_interval_ms: int = PydanticField(
-        default=5000,
-        description="Auto-commit interval in milliseconds",
-    )
-    kafka_max_poll_records: int = PydanticField(
-        default=500,
-        description="Maximum records to poll at once",
-    )
-    kafka_session_timeout_ms: int = PydanticField(
-        default=10000,
-        description="Consumer session timeout in milliseconds",
-    )
-    kafka_heartbeat_interval_ms: int = PydanticField(
-        default=3000,
-        description="Consumer heartbeat interval in milliseconds",
-    )
-    
-    # ==========================================================================
-    # REDIS SETTINGS
-    # ==========================================================================
-    
-    redis_url: str = PydanticField(
-        default="redis://localhost:6379/0",
-        description="Redis connection URL",
-    )
-    redis_max_connections: int = PydanticField(
-        default=10,
-        description="Maximum Redis connections in pool",
-    )
-    redis_stream_max_len: int = PydanticField(
-        default=10000,
-        description="Maximum length of Redis streams (older messages trimmed)",
-    )
-    redis_consumer_block_ms: int = PydanticField(
-        default=5000,
-        description="How long to block waiting for messages",
-    )
-    redis_consumer_count: int = PydanticField(
-        default=10,
-        description="Number of messages to read at once",
-    )
-    
-    # ==========================================================================
-    # RABBITMQ SETTINGS
-    # ==========================================================================
-    
-    rabbitmq_url: str = PydanticField(
-        default="amqp://guest:guest@localhost:5672/",
-        description="RabbitMQ connection URL",
-    )
-    rabbitmq_exchange: str = PydanticField(
-        default="core_events",
-        description="Default exchange name",
-    )
-    rabbitmq_exchange_type: Literal["direct", "fanout", "topic", "headers"] = PydanticField(
-        default="topic",
-        description="Exchange type",
-    )
-    rabbitmq_prefetch_count: int = PydanticField(
-        default=10,
-        description="Number of messages to prefetch",
-    )
-    rabbitmq_durable: bool = PydanticField(
-        default=True,
-        description="Whether queues and exchanges are durable",
-    )
-    
-    # ==========================================================================
-    # GENERAL SETTINGS
-    # ==========================================================================
-    
-    messaging_enabled: bool = PydanticField(
-        default=True,
-        description="Enable/disable messaging system",
-    )
-    messaging_default_topic: str = PydanticField(
-        default="events",
-        description="Default topic for events without explicit topic",
-    )
-    messaging_event_source: str = PydanticField(
-        default="",
-        description="Source identifier for events (e.g., service name)",
-    )
-    messaging_serializer: Literal["json", "msgpack"] = PydanticField(
-        default="json",
-        description="Message serialization format",
-    )
-    messaging_retry_attempts: int = PydanticField(
-        default=3,
-        description="Number of retry attempts for failed messages",
-    )
-    messaging_retry_delay_seconds: int = PydanticField(
-        default=5,
-        description="Delay between retry attempts in seconds",
-    )
-    messaging_dead_letter_topic: str = PydanticField(
-        default="dead-letter",
-        description="Topic for failed messages after all retries",
-    )
-    
-    model_config = {
-        "env_prefix": "",
-        "env_file": ".env",
-        "env_file_encoding": "utf-8",
-        "extra": "ignore",
-    }
+    return get_settings()
 
 
-# Global settings instance
-_messaging_settings: MessagingSettings | None = None
-
-
-def get_messaging_settings() -> MessagingSettings:
+def configure_messaging(**kwargs):
     """
-    Get the global messaging settings instance.
+    DEPRECATED: Não precisa mais chamar isso.
     
-    Returns:
-        MessagingSettings instance
+    Configure diretamente no .env:
+        KAFKA_BACKEND=confluent
+        KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    
+    Ou se precisar via código:
+        from core import configure
+        configure(kafka_backend="confluent")
     """
-    global _messaging_settings
-    if _messaging_settings is None:
-        _messaging_settings = MessagingSettings()
-    return _messaging_settings
+    from core.config import configure
+    return configure(**kwargs)
 
 
-def configure_messaging(**kwargs) -> MessagingSettings:
-    """
-    Configure messaging settings programmatically.
-    
-    Args:
-        **kwargs: Settings to override
-    
-    Returns:
-        Updated MessagingSettings instance
-    
-    Example:
-        configure_messaging(
-            message_broker="kafka",
-            kafka_bootstrap_servers="kafka1:9092,kafka2:9092",
-        )
-    """
-    global _messaging_settings
-    _messaging_settings = MessagingSettings(**kwargs)
-    return _messaging_settings
+# Alias para compatibilidade
+MessagingSettings = type(get_settings())

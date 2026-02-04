@@ -38,7 +38,7 @@ from core.views import (
 from core.routing import Router, AutoRouter
 from core.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
 from core.dependencies import Depends, get_db, get_current_user
-from core.config import Settings, get_settings
+from core.config import Settings, get_settings, configure, is_configured, reset_settings
 from core.app import CoreApp
 
 # Validation
@@ -287,7 +287,7 @@ from core.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.12.26"
+__version__ = "0.12.27"
 __all__ = [
     # Models
     "Model",
@@ -330,6 +330,9 @@ __all__ = [
     # Config
     "Settings",
     "get_settings",
+    "configure",
+    "is_configured",
+    "reset_settings",
     # App
     "CoreApp",
     # Middleware

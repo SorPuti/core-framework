@@ -79,8 +79,11 @@ def get_producer(name: str = "default") -> "Producer":
     Get a registered producer (auto-creates if not exists).
     
     Automatically creates the appropriate producer based on settings:
-    - kafka_backend="confluent" -> ConfluentProducer (singleton)
-    - kafka_backend="aiokafka" -> KafkaProducer (singleton)
+    - kafka_backend="confluent" -> ConfluentProducer
+    - kafka_backend="aiokafka" -> KafkaProducer (default)
+    
+    Configuração via .env:
+        KAFKA_BACKEND=confluent
     
     Args:
         name: Producer name
@@ -93,40 +96,20 @@ def get_producer(name: str = "default") -> "Producer":
         await producer.send("topic", {"key": "value"})
     """
     if name not in _producers:
-        from core.messaging.config import get_messaging_settings
+        from core.config import get_settings
         
-        settings = get_messaging_settings()
+        settings = get_settings()
+        kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
         
-        if settings.message_broker == "kafka":
-            # Check which backend to use
-            kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
-            
-            if kafka_backend == "confluent":
-                from core.messaging.confluent import ConfluentProducer
-                producer = ConfluentProducer()
-            else:
-                from core.messaging.kafka import KafkaProducer
-                producer = KafkaProducer()
-            
-            register_producer(producer, name)
-            return producer
+        if kafka_backend == "confluent":
+            from core.messaging.confluent import ConfluentProducer
+            producer = ConfluentProducer()
+        else:
+            from core.messaging.kafka import KafkaProducer
+            producer = KafkaProducer()
         
-        elif settings.message_broker == "redis":
-            from core.messaging.redis import RedisProducer
-            producer = RedisProducer()
-            register_producer(producer, name)
-            return producer
-        
-        elif settings.message_broker == "rabbitmq":
-            from core.messaging.rabbitmq import RabbitMQProducer
-            producer = RabbitMQProducer()
-            register_producer(producer, name)
-            return producer
-        
-        raise ValueError(
-            f"Producer '{name}' not found and could not auto-create. "
-            f"Configure message_broker in settings or call register_producer()."
-        )
+        register_producer(producer, name)
+        return producer
     
     return _producers[name]
 
@@ -169,6 +152,58 @@ def get_consumer(group_id: str) -> type:
         raise ValueError(f"Consumer '{group_id}' not found. Available: {list(_consumers.keys())}")
     
     return _consumers[group_id]
+
+
+def get_kafka_consumer_class() -> type:
+    """
+    Get the appropriate Kafka consumer class based on settings.
+    
+    Configuração via .env:
+        KAFKA_BACKEND=confluent
+    
+    Returns:
+        Consumer class (KafkaConsumer or ConfluentConsumer)
+    """
+    from core.config import get_settings
+    
+    settings = get_settings()
+    kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
+    
+    if kafka_backend == "confluent":
+        from core.messaging.confluent import ConfluentConsumer
+        return ConfluentConsumer
+    else:
+        from core.messaging.kafka import KafkaConsumer
+        return KafkaConsumer
+
+
+def create_consumer(
+    group_id: str,
+    topics: list[str],
+    **kwargs,
+) -> "Consumer":
+    """
+    Create a consumer instance with the appropriate backend.
+    
+    Factory function that creates the correct consumer based on settings.
+    
+    Args:
+        group_id: Consumer group ID
+        topics: List of topics to subscribe to
+        **kwargs: Additional consumer configuration
+    
+    Returns:
+        Consumer instance (KafkaConsumer or ConfluentConsumer)
+    
+    Example:
+        consumer = create_consumer(
+            group_id="my-service",
+            topics=["user-events", "payment-events"],
+        )
+        await consumer.start()
+    """
+    ConsumerClass = get_kafka_consumer_class()
+    return ConsumerClass(group_id=group_id, topics=topics, **kwargs)
 
 
 def get_consumers() -> dict[str, type]:
@@ -263,7 +298,7 @@ async def publish(
     data: dict[str, Any] | Any,
     key: str | None = None,
     headers: dict[str, str] | None = None,
-    wait: bool = False,
+    wait: bool | None = None,
 ) -> None:
     """
     Publish a message to a topic (simplified API).
@@ -273,13 +308,16 @@ async def publish(
     - Producer creation and connection pooling
     - Schema validation (if Topic class with schema)
     - Serialization (JSON or Avro)
+    - Backend selection (aiokafka or confluent)
     
     Args:
         topic: Topic name (str) or Topic class
         data: Message payload (dict or Pydantic model)
         key: Optional message key for partitioning
         headers: Optional message headers
-        wait: If True, wait for delivery confirmation
+        wait: If True, wait for delivery confirmation.
+              If False, fire-and-forget.
+              If None (default), uses kafka_fire_and_forget setting (inverted).
     
     Example:
         # Simple string topic
@@ -295,6 +333,9 @@ async def publish(
         # With Pydantic model
         event = UserEventSchema(user_id=1, action="created")
         await publish(UserEvents, event)
+        
+        # Explicit wait for confirmation
+        await publish("critical-events", data, wait=True)
     """
     from pydantic import BaseModel
     from core.messaging.topics import Topic
@@ -318,14 +359,8 @@ async def publish(
     if hasattr(producer, "_started") and not producer._started:
         await producer.start()
     
-    # Send with appropriate method
-    if hasattr(producer, "send"):
-        if hasattr(producer.send, "__code__") and "wait" in producer.send.__code__.co_varnames:
-            await producer.send(topic_name, data, key=key, headers=headers, wait=wait)
-        else:
-            await producer.send(topic_name, data, key=key, headers=headers)
-    else:
-        raise RuntimeError("Producer does not have send method")
+    # Send - wait=None lets the producer use its settings
+    await producer.send(topic_name, data, key=key, headers=headers, wait=wait)
 
 
 async def publish_event(

@@ -393,148 +393,79 @@ class User(Model):
     id: Mapped[UUID] = AdvancedField.uuid_pk()
 ```
 
-## Messaging Settings (v0.11.0+)
+## Kafka / Messaging (v0.12.0+)
 
-Configurações para o sistema de mensageria (Kafka, Redis, RabbitMQ).
+Configurações de Kafka estão **centralizadas no Settings principal** - não precisa de configuração separada.
 
-### Configuração Básica
-
-```env
-# .env
-MESSAGE_BROKER=kafka
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-```
-
-### Kafka - Todas as Configurações
+### Configuração via .env
 
 ```env
-# =============================================================================
-# Kafka - Broker
-# =============================================================================
-MESSAGE_BROKER=kafka
-KAFKA_BOOTSTRAP_SERVERS=kafka1:9092,kafka2:9092,kafka3:9092
-
-# Backend: "aiokafka" (async, padrão) ou "confluent" (librdkafka, mais rápido)
+# Básico - habilita Kafka
+KAFKA_ENABLED=true
 KAFKA_BACKEND=confluent
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
-# Schema Registry para Avro
+# Performance
+KAFKA_FIRE_AND_FORGET=true
+KAFKA_COMPRESSION_TYPE=lz4
+KAFKA_LINGER_MS=5
+
+# Schema Registry (apenas confluent)
 KAFKA_SCHEMA_REGISTRY_URL=http://schema-registry:8081
 
-# Fire-and-forget: não aguarda confirmação (mais rápido, menos confiável)
-KAFKA_FIRE_AND_FORGET=true
-
-# =============================================================================
-# Kafka - Segurança
-# =============================================================================
+# Segurança
 KAFKA_SECURITY_PROTOCOL=SASL_SSL
 KAFKA_SASL_MECHANISM=PLAIN
 KAFKA_SASL_USERNAME=api-key
 KAFKA_SASL_PASSWORD=api-secret
+```
 
-# SSL (se necessário)
-KAFKA_SSL_CAFILE=/path/to/ca.pem
-KAFKA_SSL_CERTFILE=/path/to/cert.pem
-KAFKA_SSL_KEYFILE=/path/to/key.pem
+### Configuração via código (ANTES de iniciar a app)
 
-# =============================================================================
-# Kafka - Performance
-# =============================================================================
-# Compressão: none, gzip, snappy, lz4, zstd
-KAFKA_COMPRESSION_TYPE=lz4
+```python
+from core import configure
 
-# Batching
-KAFKA_LINGER_MS=5
-KAFKA_MAX_BATCH_SIZE=32768
-
-# Timeouts
-KAFKA_REQUEST_TIMEOUT_MS=30000
-KAFKA_RETRY_BACKOFF_MS=100
-
-# =============================================================================
-# Kafka - Consumer
-# =============================================================================
-KAFKA_AUTO_OFFSET_RESET=earliest
-KAFKA_ENABLE_AUTO_COMMIT=true
-KAFKA_AUTO_COMMIT_INTERVAL_MS=5000
-KAFKA_MAX_POLL_RECORDS=500
-KAFKA_SESSION_TIMEOUT_MS=10000
-KAFKA_HEARTBEAT_INTERVAL_MS=3000
-
-# =============================================================================
-# Messaging - Geral
-# =============================================================================
-MESSAGING_ENABLED=true
-MESSAGING_DEFAULT_TOPIC=events
-MESSAGING_EVENT_SOURCE=my-service
-MESSAGING_SERIALIZER=json
-MESSAGING_RETRY_ATTEMPTS=3
-MESSAGING_RETRY_DELAY_SECONDS=5
-MESSAGING_DEAD_LETTER_TOPIC=dead-letter
+# Configura TUDO em um lugar só
+configure(
+    kafka_enabled=True,
+    kafka_backend="confluent",
+    kafka_bootstrap_servers="kafka:9092",
+    kafka_fire_and_forget=True,
+    database_url="postgresql+asyncpg://localhost/myapp",
+)
 ```
 
 ### Tabela de Configurações Kafka
 
 | Variável | Tipo | Padrão | Descrição |
 |----------|------|--------|-----------|
-| `MESSAGE_BROKER` | str | "kafka" | Broker: kafka, redis, rabbitmq, memory |
+| `KAFKA_ENABLED` | bool | False | Habilita Kafka |
 | `KAFKA_BACKEND` | str | "aiokafka" | Backend: aiokafka ou confluent |
 | `KAFKA_BOOTSTRAP_SERVERS` | str | "localhost:9092" | Servidores Kafka |
-| `KAFKA_SCHEMA_REGISTRY_URL` | str | None | URL do Schema Registry |
 | `KAFKA_FIRE_AND_FORGET` | bool | False | Não aguardar confirmação |
+| `KAFKA_SCHEMA_REGISTRY_URL` | str | None | URL do Schema Registry |
 | `KAFKA_SECURITY_PROTOCOL` | str | "PLAINTEXT" | Protocolo de segurança |
 | `KAFKA_SASL_MECHANISM` | str | None | Mecanismo SASL |
-| `KAFKA_SASL_USERNAME` | str | None | Usuário SASL |
-| `KAFKA_SASL_PASSWORD` | str | None | Senha SASL |
-| `KAFKA_COMPRESSION_TYPE` | str | "none" | Tipo de compressão |
+| `KAFKA_COMPRESSION_TYPE` | str | "none" | Compressão: none, gzip, lz4, zstd |
 | `KAFKA_LINGER_MS` | int | 0 | Tempo para acumular batch |
-| `KAFKA_MAX_BATCH_SIZE` | int | 16384 | Tamanho máximo do batch |
 
-### Redis
+### Backends Kafka (Plug-and-Play)
 
-```env
-MESSAGE_BROKER=redis
-REDIS_URL=redis://localhost:6379/0
-REDIS_MAX_CONNECTIONS=10
-REDIS_STREAM_MAX_LEN=10000
-REDIS_CONSUMER_BLOCK_MS=5000
-REDIS_CONSUMER_COUNT=10
-```
-
-### RabbitMQ
-
-```env
-MESSAGE_BROKER=rabbitmq
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/
-RABBITMQ_EXCHANGE=core_events
-RABBITMQ_EXCHANGE_TYPE=topic
-RABBITMQ_PREFETCH_COUNT=10
-RABBITMQ_DURABLE=true
-```
-
-### Uso no Código
-
-```python
-from core.messaging import configure_messaging, get_producer, publish
-
-# Configuração é carregada automaticamente do .env
-# Ou configure programaticamente:
-configure_messaging(
-    message_broker="kafka",
-    kafka_backend="confluent",
-    kafka_bootstrap_servers="kafka:9092",
-    kafka_fire_and_forget=True,
-)
-
-# Publicar mensagem
-await publish("my-topic", {"key": "value"})
-```
-
-### Comparação de Backends Kafka
+Troque backend sem mudar código - apenas configure:
 
 | Backend | Throughput | Latência | Features | Quando Usar |
 |---------|------------|----------|----------|-------------|
 | `aiokafka` | Alto | Baixa | Async nativo | Apps simples |
-| `confluent` | Muito Alto | Muito Baixa | Schema Registry, Avro, Transações | Enterprise |
+| `confluent` | Muito Alto | Muito Baixa | Schema Registry, Avro | Enterprise |
+
+```python
+# Mesmo código funciona com ambos os backends
+from core.messaging import publish
+
+await publish("events", {"user_id": 1})
+```
+
+Veja mais detalhes em [Kafka Backends](34-kafka-backends.md).
 
 ## Exemplo Completo de .env
 

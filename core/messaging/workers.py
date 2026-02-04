@@ -4,19 +4,8 @@ Worker system for message processing.
 Celery-inspired worker pattern for consuming and processing messages.
 
 Example:
-    from core.messaging import worker, Worker
+    from core.messaging import Worker
     
-    # Decorator style (simple)
-    @worker(
-        topic="events.raw",
-        output_topic="events.enriched",
-        concurrency=5,
-    )
-    async def enrich_event(event: dict) -> dict:
-        geo = await geoip_lookup(event["ip"])
-        return {**event, **geo}
-    
-    # Class style (complex)
     class GeolocationWorker(Worker):
         input_topic = "events.raw"
         output_topic = "events.enriched"
@@ -26,9 +15,24 @@ Example:
             geo = await geoip_lookup(event["ip"])
             return {**event, **geo}
     
-    # Run workers
-    # core runworker enrich_event
-    # core runworker GeolocationWorker
+    # Usar o nome da classe
+    print(GeolocationWorker.name)  # "GeolocationWorker"
+    
+    # Rodar - várias formas
+    await GeolocationWorker.run()            # Mais simples
+    await run_worker(GeolocationWorker)      # Passa a classe
+    await run_worker("GeolocationWorker")    # Passa string (compatibilidade)
+    
+    # Batch processing
+    class BatchWorker(Worker):
+        input_topic = "events"
+        batch_size = 1000
+        batch_timeout = 10.0
+        
+        async def process_batch(self, events: list[dict]):
+            # Processa batch de eventos
+            for event in events:
+                await self.handle(event)
 """
 
 from __future__ import annotations
@@ -49,6 +53,16 @@ OutputT = TypeVar("OutputT", bound=BaseModel | dict)
 
 # Worker registry
 _worker_registry: dict[str, "WorkerConfig"] = {}
+
+
+class classproperty:
+    """Descriptor for class-level properties."""
+    
+    def __init__(self, func):
+        self.func = func
+    
+    def __get__(self, obj, objtype=None):
+        return self.func(objtype)
 
 
 @dataclass
@@ -84,6 +98,14 @@ class WorkerConfig:
     input_schema: type[BaseModel] | None = None
     output_schema: type[BaseModel] | None = None
     dlq_topic: str | None = None
+    
+    # Batch processing
+    batch_size: int = 1
+    batch_timeout: float = 0.0
+    batch_handler: Callable[..., Awaitable[Any]] | None = None
+    
+    # Worker class reference
+    _worker_class: type | None = None
     
     # Runtime state
     _running: bool = False
@@ -161,8 +183,7 @@ class Worker(ABC):
     """
     Base class for message workers.
     
-    Provides a class-based alternative to the @worker decorator
-    for more complex processing logic.
+    Abstração de Consumer + Producer para processamento de mensagens.
     
     Example:
         class OrderProcessor(Worker):
@@ -171,35 +192,45 @@ class Worker(ABC):
             concurrency = 3
             
             async def process(self, order: dict) -> dict:
-                # Complex processing with access to self
-                validated = await self.validate_order(order)
-                enriched = await self.enrich_order(validated)
-                return enriched
+                return {**order, "processed": True}
+        
+        # Acessar nome
+        print(OrderProcessor.name)  # "OrderProcessor"
+        
+        # Rodar worker
+        await OrderProcessor.run()
+        
+        # Batch processing
+        class BatchProcessor(Worker):
+            input_topic = "events"
+            batch_size = 1000
+            batch_timeout = 10.0
             
-            async def validate_order(self, order: dict) -> dict:
-                # Validation logic
-                return order
-            
-            async def enrich_order(self, order: dict) -> dict:
-                # Enrichment logic
-                return order
+            async def process_batch(self, events: list[dict]):
+                # Processa batch
+                pass
     """
     
     # Configuration (override in subclass)
-    input_topic: str = ""
-    output_topic: str | None = None
+    input_topic: str | Any = ""  # Pode ser string ou Topic class
+    output_topic: str | Any | None = None
     group_id: str | None = None
     concurrency: int = 1
     max_retries: int = 3
     retry_backoff: str = "exponential"
     input_schema: type[BaseModel] | None = None
     output_schema: type[BaseModel] | None = None
-    dlq_topic: str | None = None
+    dlq_topic: str | Any | None = None
+    
+    # Batch processing
+    batch_size: int = 1
+    batch_timeout: float = 0.0
     
     # Runtime state
     _running: bool = False
     _consumer = None
     _producer = None
+    _config: WorkerConfig | None = None
     
     def __init_subclass__(cls, **kwargs):
         """Auto-register worker subclasses."""
@@ -209,12 +240,20 @@ class Worker(ABC):
         if cls.__name__ == "Worker":
             return
         
+        # Resolve topic names (pode ser string ou Topic class)
+        input_topic = cls._resolve_topic(cls.input_topic)
+        output_topic = cls._resolve_topic(cls.output_topic) if cls.output_topic else None
+        dlq_topic = cls._resolve_topic(cls.dlq_topic) if cls.dlq_topic else None
+        
+        # Check if has batch handler
+        has_batch = hasattr(cls, 'process_batch') and cls.process_batch is not Worker.process_batch
+        
         # Create config
         config = WorkerConfig(
             name=cls.__name__,
             handler=cls._create_handler(cls),
-            input_topic=cls.input_topic,
-            output_topic=cls.output_topic,
+            input_topic=input_topic,
+            output_topic=output_topic,
             group_id=cls.group_id or cls.__name__,
             concurrency=cls.concurrency,
             retry_policy=RetryPolicy(
@@ -223,14 +262,33 @@ class Worker(ABC):
             ),
             input_schema=cls.input_schema,
             output_schema=cls.output_schema,
-            dlq_topic=cls.dlq_topic,
+            dlq_topic=dlq_topic,
+            batch_size=cls.batch_size,
+            batch_timeout=cls.batch_timeout,
+            batch_handler=cls._create_batch_handler(cls) if has_batch else None,
+            _worker_class=cls,
         )
         
-        # Store class reference
-        config._worker_class = cls
+        # Store config on class
+        cls._config = config
         
         # Register
         _worker_registry[cls.__name__] = config
+    
+    @classmethod
+    def _resolve_topic(cls, topic: str | Any) -> str:
+        """Resolve topic name from string or Topic class."""
+        if topic is None:
+            return ""
+        if isinstance(topic, str):
+            return topic
+        # Topic class or similar with .name attribute
+        if hasattr(topic, 'name'):
+            return topic.name
+        # Topic class or similar with .value attribute (Enum)
+        if hasattr(topic, 'value'):
+            return topic.value
+        return str(topic)
     
     @classmethod
     def _create_handler(cls, worker_cls: type["Worker"]) -> Callable[..., Awaitable[Any]]:
@@ -240,12 +298,47 @@ class Worker(ABC):
             return await instance.process(message)
         return handler
     
-    @abstractmethod
+    @classmethod
+    def _create_batch_handler(cls, worker_cls: type["Worker"]) -> Callable[..., Awaitable[Any]]:
+        """Create batch handler function from worker class."""
+        async def handler(messages: list[dict]) -> Any:
+            instance = worker_cls()
+            return await instance.process_batch(messages)
+        return handler
+    
+    # =========================================================================
+    # Class properties and methods
+    # =========================================================================
+    
+    @classproperty
+    def name(cls) -> str:
+        """Nome do worker (nome da classe)."""
+        return cls.__name__
+    
+    @classmethod
+    async def run(cls) -> None:
+        """
+        Roda o worker.
+        
+        Forma mais simples de iniciar:
+            await MyWorker.run()
+        """
+        await run_worker(cls)
+    
+    @classmethod
+    def get_config(cls) -> WorkerConfig | None:
+        """Retorna configuração do worker."""
+        return cls._config
+    
+    # =========================================================================
+    # Instance methods (override in subclass)
+    # =========================================================================
+    
     async def process(self, message: dict[str, Any]) -> Any:
         """
         Process a single message.
         
-        Override this method in your worker.
+        Override this OR process_batch in your worker.
         
         Args:
             message: Deserialized message payload
@@ -253,7 +346,24 @@ class Worker(ABC):
         Returns:
             Processed result (sent to output_topic if configured)
         """
-        ...
+        # Default: não faz nada se process_batch está definido
+        pass
+    
+    async def process_batch(self, messages: list[dict[str, Any]]) -> Any:
+        """
+        Process a batch of messages.
+        
+        Override this for batch processing.
+        
+        Args:
+            messages: List of deserialized message payloads
+        
+        Returns:
+            Processed result
+        """
+        # Default: processa um por um
+        for message in messages:
+            await self.process(message)
     
     async def on_error(self, message: dict[str, Any], error: Exception) -> None:
         """
@@ -280,17 +390,29 @@ class Worker(ABC):
         pass
 
 
-def get_worker(name: str) -> WorkerConfig | None:
+def get_worker(name_or_class: str | type) -> WorkerConfig | None:
     """
-    Get a registered worker by name.
+    Get a registered worker by name or class.
     
     Args:
-        name: Worker name (function or class name)
+        name_or_class: Worker name (string) ou Worker class
     
     Returns:
         WorkerConfig or None if not found
+    
+    Example:
+        config = get_worker("MyWorker")
+        config = get_worker(MyWorker)
     """
-    return _worker_registry.get(name)
+    if isinstance(name_or_class, str):
+        return _worker_registry.get(name_or_class)
+    
+    # É uma classe Worker
+    if hasattr(name_or_class, '_config'):
+        return name_or_class._config
+    
+    # Tenta pelo nome da classe
+    return _worker_registry.get(name_or_class.__name__)
 
 
 def get_all_workers() -> dict[str, WorkerConfig]:
@@ -313,18 +435,30 @@ def list_workers() -> list[str]:
     return list(_worker_registry.keys())
 
 
-async def run_worker(name: str) -> None:
+async def run_worker(worker: str | type) -> None:
     """
-    Run a worker by name.
+    Run a worker by name or class.
     
     Args:
-        name: Worker name
+        worker: Worker name (string) ou Worker class
     
     Raises:
         ValueError: If worker not found
+    
+    Example:
+        # Por string
+        await run_worker("MyWorker")
+        
+        # Por classe (recomendado)
+        await run_worker(MyWorker)
+        
+        # Ou diretamente
+        await MyWorker.run()
     """
-    config = get_worker(name)
+    config = get_worker(worker)
+    
     if config is None:
+        name = worker if isinstance(worker, str) else worker.__name__
         raise ValueError(f"Worker '{name}' not found. Available: {list_workers()}")
     
     await _run_worker_config(config)
@@ -347,42 +481,87 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     Args:
         config: Worker configuration
     """
+    import logging
     from core.messaging import get_producer
-    from core.messaging.config import get_messaging_settings
+    from core.messaging.registry import create_consumer
     
-    settings = get_messaging_settings()
+    logger = logging.getLogger(f"worker.{config.name}")
     
-    # Get appropriate consumer based on backend
-    kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
-    
-    if kafka_backend == "confluent":
-        from core.messaging.confluent import ConfluentConsumer
-        consumer_class = ConfluentConsumer
-    else:
-        from core.messaging.kafka import KafkaConsumer
-        consumer_class = KafkaConsumer
-    
-    # Create consumer
-    consumer = consumer_class(
-        group_id=config.group_id,
-        topics=[config.input_topic],
-    )
-    
-    # Get producer if output topic configured
+    # Get producer if output topic or DLQ configured
     producer = None
-    if config.output_topic:
+    if config.output_topic or config.dlq_topic:
         producer = get_producer()
         await producer.start()
     
-    async def process_with_retry(message: dict) -> None:
-        """Process message with retry logic."""
+    # Batch state
+    batch: list[dict] = []
+    batch_lock = asyncio.Lock()
+    last_batch_time = asyncio.get_event_loop().time()
+    
+    async def flush_batch() -> None:
+        """Flush accumulated batch."""
+        nonlocal batch, last_batch_time
+        
+        if not batch:
+            return
+        
+        async with batch_lock:
+            messages_to_process = batch.copy()
+            batch = []
+            last_batch_time = asyncio.get_event_loop().time()
+        
+        if not messages_to_process:
+            return
+        
+        # Process batch with retries
+        last_error = None
+        for attempt in range(config.retry_policy.max_retries + 1):
+            try:
+                if config.batch_handler:
+                    await config.batch_handler(messages_to_process)
+                else:
+                    for msg in messages_to_process:
+                        await config.handler(msg)
+                return  # Success
+                
+            except Exception as e:
+                last_error = e
+                if attempt < config.retry_policy.max_retries:
+                    delay = config.retry_policy.get_delay(attempt)
+                    logger.warning(f"Batch retry {attempt + 1}/{config.retry_policy.max_retries} in {delay}s: {e}")
+                    await asyncio.sleep(delay)
+        
+        # All retries failed
+        logger.error(f"Batch failed after {config.retry_policy.max_retries} retries: {last_error}")
+        
+        if config.dlq_topic and producer:
+            for msg in messages_to_process:
+                await producer.send(config.dlq_topic, {
+                    "original": msg,
+                    "error": str(last_error),
+                    "worker": config.name,
+                })
+    
+    async def batch_timer() -> None:
+        """Timer to flush batch on timeout."""
+        while True:
+            await asyncio.sleep(1)
+            if config.batch_timeout > 0 and batch:
+                elapsed = asyncio.get_event_loop().time() - last_batch_time
+                if elapsed >= config.batch_timeout:
+                    await flush_batch()
+    
+    async def process_message(message: dict) -> None:
+        """Process single message or add to batch."""
+        nonlocal batch
+        
         # Validate input
         if config.input_schema:
             try:
                 validated = config.input_schema.model_validate(message)
                 message = validated.model_dump()
             except Exception as e:
-                print(f"Input validation failed: {e}")
+                logger.error(f"Input validation failed: {e}")
                 if config.dlq_topic and producer:
                     await producer.send(config.dlq_topic, {
                         "original": message,
@@ -391,7 +570,15 @@ async def _run_worker_config(config: WorkerConfig) -> None:
                     })
                 return
         
-        # Process with retries
+        # Batch mode
+        if config.batch_size > 1 or config.batch_handler:
+            async with batch_lock:
+                batch.append(message)
+                if len(batch) >= config.batch_size:
+                    await flush_batch()
+            return
+        
+        # Single message mode with retries
         last_error = None
         for attempt in range(config.retry_policy.max_retries + 1):
             try:
@@ -411,11 +598,11 @@ async def _run_worker_config(config: WorkerConfig) -> None:
                 last_error = e
                 if attempt < config.retry_policy.max_retries:
                     delay = config.retry_policy.get_delay(attempt)
-                    print(f"Worker {config.name} retry {attempt + 1}/{config.retry_policy.max_retries} in {delay}s: {e}")
+                    logger.warning(f"Retry {attempt + 1}/{config.retry_policy.max_retries} in {delay}s: {e}")
                     await asyncio.sleep(delay)
         
         # All retries failed
-        print(f"Worker {config.name} failed after {config.retry_policy.max_retries} retries: {last_error}")
+        logger.error(f"Failed after {config.retry_policy.max_retries} retries: {last_error}")
         
         if config.dlq_topic and producer:
             await producer.send(config.dlq_topic, {
@@ -425,19 +612,43 @@ async def _run_worker_config(config: WorkerConfig) -> None:
                 "retries": config.retry_policy.max_retries,
             })
     
-    # Start consumer
-    print(f"Starting worker: {config.name}")
-    print(f"  Input topic: {config.input_topic}")
-    print(f"  Output topic: {config.output_topic or 'None'}")
-    print(f"  Concurrency: {config.concurrency}")
+    # Create consumer with message handler
+    consumer = create_consumer(
+        group_id=config.group_id,
+        topics=[config.input_topic],
+        message_handler=process_message,
+    )
     
-    await consumer.start(process_with_retry)
+    # Log startup
+    logger.info(f"Starting worker: {config.name}")
+    logger.info(f"  Input topic: {config.input_topic}")
+    logger.info(f"  Output topic: {config.output_topic or 'None'}")
+    logger.info(f"  Concurrency: {config.concurrency}")
+    if config.batch_size > 1:
+        logger.info(f"  Batch size: {config.batch_size}")
+        logger.info(f"  Batch timeout: {config.batch_timeout}s")
+    
+    # Start batch timer if needed
+    timer_task = None
+    if config.batch_timeout > 0 and (config.batch_size > 1 or config.batch_handler):
+        timer_task = asyncio.create_task(batch_timer())
+    
+    # Start consumer
+    await consumer.start()
     
     # Keep running
     try:
         while True:
             await asyncio.sleep(1)
     except asyncio.CancelledError:
+        # Flush remaining batch
+        if batch:
+            await flush_batch()
+        
+        if timer_task:
+            timer_task.cancel()
+        
         await consumer.stop()
+        
         if producer:
             await producer.stop()

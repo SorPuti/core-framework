@@ -78,6 +78,8 @@ from core.messaging.registry import (
     register_broker,
     register_consumer,
     get_consumers,
+    get_kafka_consumer_class,
+    create_consumer,
     publish,
     publish_event,
 )
@@ -127,6 +129,8 @@ __all__ = [
     "register_broker",
     "register_consumer",
     "get_consumers",
+    "get_kafka_consumer_class",
+    "create_consumer",
     "publish",
     "publish_event",
     # Topics

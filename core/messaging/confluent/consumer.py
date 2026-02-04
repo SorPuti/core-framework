@@ -2,6 +2,7 @@
 Confluent Kafka consumer implementation.
 
 High-performance consumer using confluent-kafka (librdkafka).
+Compatible with aiokafka backend - same interface and behavior.
 """
 
 from __future__ import annotations
@@ -9,10 +10,14 @@ from __future__ import annotations
 from typing import Any, Callable, Awaitable
 import json
 import asyncio
+import logging
 
-from core.messaging.base import Consumer, Event
+from core.messaging.base import Consumer, Event, EventHandler
 from core.messaging.config import get_messaging_settings
+from core.messaging.registry import get_event_handlers
 
+
+logger = logging.getLogger(__name__)
 
 MessageHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
@@ -26,23 +31,33 @@ class ConfluentConsumer(Consumer):
         - Batch processing support
         - Graceful shutdown
         - Schema Registry integration
+        - Event routing compatible with aiokafka backend
     
     Example:
+        # Basic usage (same as KafkaConsumer)
         consumer = ConfluentConsumer(
             group_id="my-service",
             topics=["user-events"],
         )
+        await consumer.start()
         
+        # With custom handler
         async def handler(message):
             print(f"Received: {message}")
         
-        await consumer.start(handler)
+        consumer = ConfluentConsumer(
+            group_id="logger",
+            topics=["all-events"],
+            message_handler=handler,
+        )
+        await consumer.start()
     """
     
     def __init__(
         self,
         group_id: str | None = None,
         topics: list[str] | None = None,
+        message_handler: MessageHandler | None = None,
         **kwargs: Any,
     ):
         """
@@ -51,22 +66,35 @@ class ConfluentConsumer(Consumer):
         Args:
             group_id: Consumer group ID
             topics: Topics to subscribe to
+            message_handler: Optional custom message handler
             **kwargs: Additional confluent-kafka config
         """
         self._settings = get_messaging_settings()
         self.group_id = group_id or ""
         self.topics = topics or []
+        self._message_handler = message_handler
         self._extra_config = kwargs
         self._consumer = None
         self._running = False
-        self._handler: MessageHandler | None = None
+        self._task: asyncio.Task | None = None
+        self._db_session_factory = None
     
-    async def start(self, handler: MessageHandler | None = None) -> None:
+    def set_db_session_factory(self, factory: Callable) -> None:
+        """
+        Set database session factory for handlers.
+        
+        Args:
+            factory: Async context manager that yields db session
+        """
+        self._db_session_factory = factory
+    
+    async def start(self) -> None:
         """
         Start consuming messages.
         
-        Args:
-            handler: Async function to call for each message
+        Note:
+            Handler should be set via constructor (message_handler parameter)
+            for compatibility with KafkaConsumer backend.
         """
         if self._running:
             return
@@ -78,9 +106,6 @@ class ConfluentConsumer(Consumer):
                 "confluent-kafka is required for Confluent backend. "
                 "Install with: pip install confluent-kafka"
             )
-        
-        if handler:
-            self._handler = handler
         
         # Build consumer config
         config = {
@@ -113,59 +138,133 @@ class ConfluentConsumer(Consumer):
         self._consumer.subscribe(self.topics)
         self._running = True
         
-        # Start consume loop
-        asyncio.create_task(self._consume_loop())
+        # Start consume loop and store task reference for proper cancellation
+        self._task = asyncio.create_task(self._consume_loop())
+        
+        logger.info(
+            f"Consumer '{self.group_id}' started, subscribed to: {self.topics}"
+        )
     
     async def _consume_loop(self) -> None:
         """Main consume loop."""
-        while self._running:
-            try:
-                # Poll with timeout
-                msg = self._consumer.poll(timeout=1.0)
-                
-                if msg is None:
-                    await asyncio.sleep(0.01)  # Yield to event loop
-                    continue
-                
-                if msg.error():
-                    # Handle errors
-                    error = msg.error()
-                    if error.code() == error._PARTITION_EOF:
-                        continue
-                    else:
-                        print(f"Consumer error: {error}")
-                        continue
-                
-                # Process message
+        try:
+            while self._running:
                 try:
-                    value = json.loads(msg.value().decode("utf-8"))
-                    await self.process_message(value)
-                except json.JSONDecodeError:
-                    print(f"Failed to decode message: {msg.value()}")
+                    # Poll with timeout
+                    msg = self._consumer.poll(timeout=1.0)
+                    
+                    if msg is None:
+                        await asyncio.sleep(0.01)  # Yield to event loop
+                        continue
+                    
+                    if msg.error():
+                        # Handle errors
+                        error = msg.error()
+                        if error.code() == error._PARTITION_EOF:
+                            continue
+                        else:
+                            logger.error(f"Consumer error: {error}")
+                            continue
+                    
+                    # Process message
+                    try:
+                        value = json.loads(msg.value().decode("utf-8"))
+                        await self.process_message(value)
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to decode message: {msg.value()}")
+                    except Exception as e:
+                        logger.error(
+                            f"Error processing message: {e}",
+                            exc_info=True,
+                        )
+                        # TODO: Send to dead letter queue
+                    
                 except Exception as e:
-                    print(f"Error processing message: {e}")
-                
-            except Exception as e:
-                print(f"Consumer loop error: {e}")
-                await asyncio.sleep(1)
+                    logger.error(f"Consumer loop error: {e}", exc_info=True)
+                    await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Consumer loop error: {e}", exc_info=True)
     
     async def stop(self) -> None:
         """Stop consuming messages."""
         self._running = False
         
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+        
         if self._consumer:
             self._consumer.close()
             self._consumer = None
+        
+        logger.info(f"Consumer '{self.group_id}' stopped")
     
     async def process_message(self, message: dict[str, Any]) -> None:
         """
         Process a single message.
         
+        Routes to appropriate event handler or custom handler.
+        Compatible with KafkaConsumer behavior.
+        
         Args:
             message: Deserialized message payload
         """
-        if self._handler:
-            await self._handler(message)
+        # Use custom handler if provided
+        if self._message_handler:
+            await self._message_handler(message)
+            return
+        
+        # Route to event handlers (same logic as KafkaConsumer)
+        event_name = message.get("name")
+        if not event_name:
+            logger.warning(f"Message without event name: {message}")
+            return
+        
+        # Create Event object
+        event = Event.from_dict(message)
+        
+        # Get handlers for this event
+        handlers = get_event_handlers(event_name)
+        
+        if not handlers:
+            logger.debug(f"No handlers for event: {event_name}")
+            return
+        
+        # Execute handlers
+        for handler in handlers:
+            try:
+                await self._execute_handler(handler, event)
+            except Exception as e:
+                logger.error(
+                    f"Handler error for {event_name}: {e}",
+                    exc_info=True,
+                )
+    
+    async def _execute_handler(
+        self,
+        handler: EventHandler,
+        event: Event,
+    ) -> None:
+        """Execute an event handler with proper context."""
+        # Get or create consumer instance
+        if handler.consumer_class:
+            consumer_instance = handler.consumer_class()
+            handler_method = getattr(consumer_instance, handler.method_name)
+        else:
+            handler_method = handler.handler
+        
+        # Execute with or without db session
+        if self._db_session_factory:
+            async with self._db_session_factory() as db:
+                await handler_method(event, db)
+        else:
+            await handler_method(event, None)
     
     def is_running(self) -> bool:
         """Check if consumer is running."""

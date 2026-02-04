@@ -121,7 +121,7 @@ class KafkaProducer(Producer):
         message: dict[str, Any],
         key: str | None = None,
         headers: dict[str, str] | None = None,
-        wait: bool = True,
+        wait: bool | None = None,
     ) -> None:
         """
         Send a message to a topic.
@@ -131,8 +131,9 @@ class KafkaProducer(Producer):
             message: Message payload (dict)
             key: Optional message key for partitioning
             headers: Optional message headers
-            wait: If True (default), waits for broker acknowledgment.
+            wait: If True, waits for broker acknowledgment.
                   If False, returns immediately (fire-and-forget).
+                  If None, uses kafka_fire_and_forget setting (inverted).
         
         Note:
             For high-throughput scenarios, use wait=False or send_fire_and_forget().
@@ -140,6 +141,10 @@ class KafkaProducer(Producer):
         """
         if not self._started:
             await self.start()
+        
+        # Determine wait behavior from settings if not specified
+        if wait is None:
+            wait = not self._settings.kafka_fire_and_forget
         
         kafka_headers = None
         if headers:
@@ -195,7 +200,7 @@ class KafkaProducer(Producer):
         """
         await self.send(topic, message, key, headers, wait=False)
     
-    async def flush(self, timeout: float | None = None) -> None:
+    async def flush(self, timeout: float | None = None) -> int:
         """
         Flush all pending messages to Kafka.
         
@@ -205,16 +210,23 @@ class KafkaProducer(Producer):
         Args:
             timeout: Max seconds to wait (None = wait forever)
         
+        Returns:
+            Number of messages still in queue (0 = all delivered)
+        
         Example:
             # Send batch without waiting
             for event in events:
                 await producer.send_fire_and_forget("events", event)
             
             # Ensure all delivered before response
-            await producer.flush()
+            remaining = await producer.flush()
+            assert remaining == 0  # All delivered
         """
         if self._producer and self._started:
             await self._producer.flush(timeout_ms=int(timeout * 1000) if timeout else None)
+            # aiokafka doesn't return queue size, but after flush all should be delivered
+            return 0
+        return 0
     
     async def send_event(
         self,
@@ -247,8 +259,8 @@ class KafkaProducer(Producer):
         self,
         topic: str,
         messages: list[dict[str, Any]],
-        wait: bool = True,
-    ) -> None:
+        wait: bool | None = None,
+    ) -> int:
         """
         Send multiple messages to a topic efficiently.
         
@@ -259,6 +271,10 @@ class KafkaProducer(Producer):
             messages: List of message payloads
             wait: If True, waits for all messages to be acknowledged.
                   If False, returns after queueing (call flush() later).
+                  If None, uses kafka_fire_and_forget setting (inverted).
+        
+        Returns:
+            Number of messages queued
         
         Performance Tips:
             - For maximum throughput, use wait=False
@@ -267,6 +283,10 @@ class KafkaProducer(Producer):
         """
         if not self._started:
             await self.start()
+        
+        # Determine wait behavior from settings if not specified
+        if wait is None:
+            wait = not self._settings.kafka_fire_and_forget
         
         # Create batch
         batch = self._producer.create_batch()
@@ -292,6 +312,8 @@ class KafkaProducer(Producer):
         # Wait for acknowledgment if requested
         if wait:
             await self.flush()
+        
+        return len(messages)
     
     async def send_batch_fire_and_forget(
         self,

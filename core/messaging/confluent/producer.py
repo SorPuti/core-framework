@@ -168,24 +168,31 @@ class ConfluentProducer(Producer):
         message: dict[str, Any],
         key: str | None = None,
         headers: dict[str, str] | None = None,
-        wait: bool = False,
+        wait: bool | None = None,
         on_delivery: Callable | None = None,
     ) -> None:
         """
         Send a message to a topic.
         
-        By default uses fire-and-forget for maximum throughput.
+        Default behavior is controlled by kafka_fire_and_forget setting
+        for consistency with aiokafka backend.
         
         Args:
             topic: Topic name
             message: Message payload (dict)
             key: Optional message key for partitioning
             headers: Optional message headers
-            wait: If True, wait for delivery confirmation
+            wait: If True, wait for delivery confirmation.
+                  If False, fire-and-forget (maximum throughput).
+                  If None, uses kafka_fire_and_forget setting (inverted).
             on_delivery: Optional callback(err, msg) for async confirmation
         """
         if not self._started:
             await self.start()
+        
+        # Determine wait behavior from settings if not specified
+        if wait is None:
+            wait = not self._settings.kafka_fire_and_forget
         
         # Serialize
         value = json.dumps(message).encode("utf-8")
@@ -369,7 +376,7 @@ class ConfluentProducer(Producer):
         self,
         topic: str,
         messages: list[dict[str, Any]],
-        wait: bool = False,
+        wait: bool | None = None,
     ) -> int:
         """
         Send multiple messages efficiently.
@@ -377,13 +384,19 @@ class ConfluentProducer(Producer):
         Args:
             topic: Topic name
             messages: List of message payloads
-            wait: If True, wait for all deliveries
+            wait: If True, wait for all deliveries.
+                  If False, fire-and-forget.
+                  If None, uses kafka_fire_and_forget setting (inverted).
         
         Returns:
             Number of messages queued
         """
         if not self._started:
             await self.start()
+        
+        # Determine wait behavior from settings if not specified
+        if wait is None:
+            wait = not self._settings.kafka_fire_and_forget
         
         for message in messages:
             value = json.dumps(message).encode("utf-8")
