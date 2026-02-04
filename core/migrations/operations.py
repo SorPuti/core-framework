@@ -1,10 +1,4 @@
-"""
-Operações de migração.
-
-Cada operação representa uma mudança no schema do banco de dados.
-Todas as operações são reversíveis quando possível.
-"""
-
+"""Migration operations."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -18,127 +12,138 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncConnection
 
 
+# =============================================================================
+# Type Mapping
+# =============================================================================
+
+TYPE_MAPPING: dict[str, dict[str, str]] = {
+    "postgresql": {
+        "DATETIME": "TIMESTAMP WITH TIME ZONE",
+        "TIMESTAMP": "TIMESTAMP WITH TIME ZONE",
+        "BOOLEAN": "BOOLEAN",
+        "TINYINT": "SMALLINT",
+        "LONGTEXT": "TEXT",
+        "DOUBLE": "DOUBLE PRECISION",
+        "ADAPTIVEJSON": "JSONB",
+        "JSON": "JSONB",
+    },
+    "mysql": {
+        "DATETIME": "DATETIME",
+        "TIMESTAMP": "TIMESTAMP",
+        "BOOLEAN": "TINYINT(1)",
+        "TEXT": "LONGTEXT",
+        "UUID": "CHAR(36)",
+        "ADAPTIVEJSON": "JSON",
+    },
+    "sqlite": {
+        "DATETIME": "DATETIME",
+        "TIMESTAMP": "DATETIME",
+        "BOOLEAN": "BOOLEAN",
+        "UUID": "TEXT",
+        "ADAPTIVEJSON": "JSON",
+    },
+}
+
+
+def map_type(sql_type: str, dialect: str) -> str:
+    """Convert generic SQL type to dialect-specific type."""
+    base = sql_type.split("(")[0].upper()
+    mapping = TYPE_MAPPING.get(dialect, {})
+    mapped = mapping.get(base)
+    if mapped:
+        if "(" in sql_type and "(" not in mapped:
+            return sql_type
+        return mapped
+    return sql_type
+
+
+# =============================================================================
+# Serialization
+# =============================================================================
+
 def _serialize_default(value: Any) -> str:
-    """
-    Serialize a default value for migration file output.
-    
-    Handles:
-    - None -> "None"
-    - Strings -> repr()
-    - Booleans -> "True"/"False"
-    - Callables:
-      - Module functions -> "module.function" (e.g., "timezone.now")
-      - Closures -> Execute and serialize result, or "None" if fails
-    - datetime/date/time -> repr() with proper format
-    - dict/list -> repr() for JSON-like data
-    - Other -> repr()
-    
-    Args:
-        value: The default value to serialize
-    
-    Returns:
-        String representation suitable for Python code
-    """
+    """Serialize default value for migration file."""
     from datetime import datetime, date, time
     
     if value is None:
         return "None"
     
     if callable(value):
-        # Get module and function name
         module = getattr(value, "__module__", "")
         qualname = getattr(value, "__qualname__", "") or getattr(value, "__name__", "")
         
-        # Check if it's a non-importable callable:
-        # - Closures (contains <locals>)
-        # - Lambdas
-        # - __main__ module (not importable in migrations)
-        is_closure = "<locals>" in qualname
-        is_lambda = "<lambda>" in qualname
-        is_main = module == "__main__"
-        
-        if is_closure or is_lambda or is_main:
-            # Non-importable callables: try to execute and serialize result
+        # Non-importable: closures, lambdas, __main__
+        if "<locals>" in qualname or "<lambda>" in qualname or module == "__main__":
             try:
-                result = value()
-                return _serialize_default(result)  # Recursive call
+                return _serialize_default(value())
             except TypeError:
-                # SQLAlchemy may wrap functions with a context parameter
-                # Try calling with None as context
                 try:
-                    result = value(None)
-                    return _serialize_default(result)
+                    return _serialize_default(value(None))
                 except Exception:
                     return "None"
             except Exception:
-                # If execution fails, return None (ORM handles at runtime)
                 return "None"
         
         if module and qualname:
-            # Use short form for known modules
             if module == "core.datetime" and qualname.startswith("timezone."):
-                return qualname  # Returns "timezone.now"
+                return qualname
             if module == "core.fields" and qualname.startswith("AdvancedField."):
-                # Non-closure AdvancedField methods
                 return qualname
             if module == "datetime":
                 return f"datetime.{qualname}"
-            
-            # For other modules, return full path
             return f"{module}.{qualname}"
         
-        # Unknown callable - try to execute
         try:
-            result = value()
-            return _serialize_default(result)
-        except TypeError:
-            # Try with None as context (SQLAlchemy pattern)
-            try:
-                result = value(None)
-                return _serialize_default(result)
-            except Exception:
-                return "None"
+            return _serialize_default(value())
         except Exception:
             return "None"
     
     if isinstance(value, bool):
         return str(value)
-    
-    if isinstance(value, datetime):
-        # Serialize datetime as a reproducible call
-        return f"None"  # Let ORM handle datetime defaults at runtime
-    
-    if isinstance(value, (date, time)):
-        return "None"  # Let ORM handle at runtime
-    
+    if isinstance(value, (datetime, date, time)):
+        return "None"
     if isinstance(value, str):
         return repr(value)
-    
     if isinstance(value, (int, float)):
         return str(value)
-    
     if isinstance(value, dict):
-        # For empty dict or simple dicts, serialize as literal
-        if not value:
-            return "{}"
-        # For complex dicts, use repr
-        return repr(value)
-    
+        return "{}" if not value else repr(value)
     if isinstance(value, list):
-        if not value:
-            return "[]"
-        return repr(value)
-    
-    # Default: use repr
+        return "[]" if not value else repr(value)
     return repr(value)
 
 
+def _format_sql_default(value: Any, dialect: str) -> str | None:
+    """Format value as SQL DEFAULT clause."""
+    from datetime import datetime, date, time
+    import json
+    
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        if dialect == "postgresql":
+            return f"DEFAULT {'TRUE' if value else 'FALSE'}"
+        return f"DEFAULT {1 if value else 0}"
+    if isinstance(value, (datetime, date, time)):
+        return f"DEFAULT '{value.isoformat()}'"
+    if isinstance(value, str):
+        return f"DEFAULT '{value.replace(chr(39), chr(39)+chr(39))}'"
+    if isinstance(value, (int, float)):
+        return f"DEFAULT {value}"
+    if isinstance(value, (dict, list)):
+        return f"DEFAULT '{json.dumps(value).replace(chr(39), chr(39)+chr(39))}'"
+    return f"DEFAULT '{str(value)}'"
+
+
+# =============================================================================
+# Data Classes
+# =============================================================================
+
 @dataclass
 class ColumnDef:
-    """Definição de uma coluna."""
-    
+    """Column definition."""
     name: str
-    type: str  # Ex: "VARCHAR(255)", "INTEGER", "BOOLEAN", "TEXT", "DATETIME"
+    type: str
     nullable: bool = True
     default: Any = None
     primary_key: bool = False
@@ -146,168 +151,44 @@ class ColumnDef:
     unique: bool = False
     index: bool = False
     
-    # Mapeamento de tipos genéricos para tipos específicos de cada dialeto
-    # Bug #1: DATETIME → TIMESTAMP para PostgreSQL
-    TYPE_MAPPING: ClassVar[dict[str, dict[str, str]]] = {
-        "postgresql": {
-            "DATETIME": "TIMESTAMP WITH TIME ZONE",
-            "TIMESTAMP": "TIMESTAMP WITH TIME ZONE",
-            "BOOLEAN": "BOOLEAN",
-            "TINYINT": "SMALLINT",
-            "LONGTEXT": "TEXT",
-            "DOUBLE": "DOUBLE PRECISION",
-        },
-        "mysql": {
-            "DATETIME": "DATETIME",
-            "TIMESTAMP": "TIMESTAMP",
-            "BOOLEAN": "TINYINT(1)",
-            "TEXT": "LONGTEXT",
-            "UUID": "CHAR(36)",
-        },
-        "sqlite": {
-            "DATETIME": "DATETIME",
-            "TIMESTAMP": "DATETIME",
-            "BOOLEAN": "BOOLEAN",
-            "UUID": "TEXT",
-        },
-    }
+    def get_type(self, dialect: str) -> str:
+        return map_type(self.type, dialect)
     
-    def _get_dialect_type(self, dialect: str) -> str:
-        """
-        Converte tipo genérico para tipo específico do dialeto.
-        
-        Args:
-            dialect: Nome do dialeto (postgresql, mysql, sqlite)
-            
-        Returns:
-            Tipo SQL específico para o dialeto
-        """
-        # Extrai tipo base (sem parâmetros como VARCHAR(255))
-        base_type = self.type.split("(")[0].upper()
-        
-        # Verifica se há mapeamento específico
-        dialect_mapping = self.TYPE_MAPPING.get(dialect, {})
-        mapped_type = dialect_mapping.get(base_type)
-        
-        if mapped_type:
-            # Se o tipo original tinha parâmetros, tenta preservá-los
-            if "(" in self.type and "(" not in mapped_type:
-                # Tipo como VARCHAR(255) mantém os parâmetros
-                return self.type
-            return mapped_type
-        
-        return self.type
-    
-    def _format_default_value(self, value: Any, dialect: str) -> str | None:
-        """
-        Formata um valor para uso em cláusula DEFAULT SQL.
-        
-        Args:
-            value: Valor a ser formatado
-            dialect: Nome do dialeto SQL
-            
-        Returns:
-            String SQL formatada com DEFAULT ou None
-        """
-        from datetime import datetime, date, time
-        
-        if value is None:
-            return None
-        
-        if isinstance(value, bool):
-            if dialect == "postgresql":
-                return f"DEFAULT {'TRUE' if value else 'FALSE'}"
-            return f"DEFAULT {1 if value else 0}"
-        
-        if isinstance(value, datetime):
-            # Format datetime as ISO string for SQL
-            return f"DEFAULT '{value.isoformat()}'"
-        
-        if isinstance(value, date):
-            return f"DEFAULT '{value.isoformat()}'"
-        
-        if isinstance(value, time):
-            return f"DEFAULT '{value.isoformat()}'"
-        
-        if isinstance(value, str):
-            # Escape single quotes in strings
-            escaped = value.replace("'", "''")
-            return f"DEFAULT '{escaped}'"
-        
-        if isinstance(value, (int, float)):
-            return f"DEFAULT {value}"
-        
-        if isinstance(value, (dict, list)):
-            # JSON values - serialize and quote
-            import json
-            json_str = json.dumps(value).replace("'", "''")
-            return f"DEFAULT '{json_str}'"
-        
-        # Fallback: convert to string
-        return f"DEFAULT '{str(value)}'"
-    
-    def _get_default_sql(self, dialect: str) -> str | None:
-        """
-        Gera SQL para valor default considerando o dialeto.
-        
-        Args:
-            dialect: Nome do dialeto
-            
-        Returns:
-            String SQL para o default ou None
-        """
+    def get_default_sql(self, dialect: str) -> str | None:
         if self.default is None:
             return None
-        
-        # Callable defaults: execute and use the result
-        # This is the most robust approach - no need to detect function names
         if callable(self.default):
             try:
                 result = self.default()
-                # Format the result as SQL DEFAULT
-                return self._format_default_value(result, dialect)
+            except TypeError:
+                try:
+                    result = self.default(None)
+                except Exception:
+                    return None
             except Exception:
-                # If callable fails (needs arguments, etc.), skip DEFAULT
                 return None
-        
-        # Non-callable values: format directly
-        return self._format_default_value(self.default, dialect)
+            return _format_sql_default(result, dialect)
+        return _format_sql_default(self.default, dialect)
     
     def to_sql(self, dialect: str = "sqlite") -> str:
-        """Gera SQL para a coluna, adaptado ao dialeto do banco."""
-        # Obtém tipo adaptado ao dialeto
-        col_type = self._get_dialect_type(dialect)
-        parts = [f'"{self.name}"', col_type]
-        
+        parts = [f'"{self.name}"', self.get_type(dialect)]
         if self.primary_key:
             parts.append("PRIMARY KEY")
-            if self.autoincrement:
-                if dialect == "sqlite":
-                    parts.append("AUTOINCREMENT")
-                elif dialect == "postgresql":
-                    # PostgreSQL usa SERIAL ou IDENTITY
-                    pass
-                else:
-                    parts.append("AUTO_INCREMENT")
-        
+            if self.autoincrement and dialect == "sqlite":
+                parts.append("AUTOINCREMENT")
         if not self.nullable and not self.primary_key:
             parts.append("NOT NULL")
-        
-        # Gera default adaptado ao dialeto
-        default_sql = self._get_default_sql(dialect)
+        default_sql = self.get_default_sql(dialect)
         if default_sql:
             parts.append(default_sql)
-        
         if self.unique and not self.primary_key:
             parts.append("UNIQUE")
-        
         return " ".join(parts)
 
 
 @dataclass
 class ForeignKeyDef:
-    """Definição de uma chave estrangeira."""
-    
+    """Foreign key definition."""
     column: str
     references_table: str
     references_column: str = "id"
@@ -315,7 +196,6 @@ class ForeignKeyDef:
     on_update: str = "CASCADE"
     
     def to_sql(self, table_name: str) -> str:
-        """Gera SQL para a FK."""
         return (
             f'FOREIGN KEY ("{self.column}") '
             f'REFERENCES "{self.references_table}" ("{self.references_column}") '
@@ -323,62 +203,54 @@ class ForeignKeyDef:
         )
 
 
+# =============================================================================
+# Base Operation
+# =============================================================================
+
 class Operation(ABC):
-    """Classe base para operações de migração."""
-    
-    # Se True, a operação pode causar perda de dados
+    """Base migration operation."""
     destructive: bool = False
-    
-    # Se True, a operação é reversível
     reversible: bool = True
     
     @abstractmethod
-    async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        """Executa a operação."""
-        ...
+    async def forward(self, conn: "AsyncConnection", dialect: str) -> None: ...
     
     @abstractmethod
-    async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        """Reverte a operação."""
-        ...
+    async def backward(self, conn: "AsyncConnection", dialect: str) -> None: ...
     
     @abstractmethod
-    def describe(self) -> str:
-        """Descrição legível da operação."""
-        ...
+    def describe(self) -> str: ...
     
     def to_code(self) -> str:
-        """Gera código Python para a operação."""
         return repr(self)
 
 
+# =============================================================================
+# Table Operations
+# =============================================================================
+
 @dataclass
 class CreateTable(Operation):
-    """Cria uma nova tabela."""
-    
+    """Create a new table."""
     table_name: str
     columns: list[ColumnDef] = field(default_factory=list)
     foreign_keys: list[ForeignKeyDef] = field(default_factory=list)
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        columns_sql = ",\n    ".join(col.to_sql(dialect) for col in self.columns)
-        
+        cols = ",\n    ".join(c.to_sql(dialect) for c in self.columns)
         if self.foreign_keys:
-            fk_sql = ",\n    ".join(fk.to_sql(self.table_name) for fk in self.foreign_keys)
-            columns_sql += f",\n    {fk_sql}"
-        
-        sql = f'CREATE TABLE IF NOT EXISTS "{self.table_name}" (\n    {columns_sql}\n)'
+            fks = ",\n    ".join(fk.to_sql(self.table_name) for fk in self.foreign_keys)
+            cols += f",\n    {fks}"
+        sql = f'CREATE TABLE IF NOT EXISTS "{self.table_name}" (\n    {cols}\n)'
         await conn.execute(text(sql))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        sql = f'DROP TABLE IF EXISTS "{self.table_name}"'
-        await conn.execute(text(sql))
+        await conn.execute(text(f'DROP TABLE IF EXISTS "{self.table_name}"'))
     
     def describe(self) -> str:
         return f"Create table '{self.table_name}'"
     
     def to_code(self) -> str:
-        # Use global _serialize_default for consistent callable serialization
         cols = ",\n            ".join(
             f"ColumnDef(name='{c.name}', type='{c.type}', nullable={c.nullable}, "
             f"default={_serialize_default(c.default)}, primary_key={c.primary_key}, "
@@ -403,61 +275,51 @@ class CreateTable(Operation):
 
 @dataclass
 class DropTable(Operation):
-    """Remove uma tabela."""
-    
+    """Drop a table."""
     table_name: str
     destructive: bool = True
-    
-    # Para reversão, precisamos guardar a estrutura
     columns: list[ColumnDef] = field(default_factory=list)
     foreign_keys: list[ForeignKeyDef] = field(default_factory=list)
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        sql = f'DROP TABLE IF EXISTS "{self.table_name}"'
-        await conn.execute(text(sql))
+        await conn.execute(text(f'DROP TABLE IF EXISTS "{self.table_name}"'))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
         if not self.columns:
-            raise RuntimeError(
-                f"Cannot reverse DropTable for '{self.table_name}': "
-                "column definitions not provided"
-            )
-        create_op = CreateTable(self.table_name, self.columns, self.foreign_keys)
-        await create_op.forward(conn, dialect)
+            raise RuntimeError(f"Cannot reverse DropTable '{self.table_name}': no columns")
+        await CreateTable(self.table_name, self.columns, self.foreign_keys).forward(conn, dialect)
     
     def describe(self) -> str:
         return f"Drop table '{self.table_name}'"
 
 
+# =============================================================================
+# Column Operations
+# =============================================================================
+
 @dataclass
 class AddColumn(Operation):
-    """Adiciona uma coluna a uma tabela existente."""
-    
+    """Add a column to a table."""
     table_name: str
     column: ColumnDef
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        col_sql = self.column.to_sql(dialect)
-        sql = f'ALTER TABLE "{self.table_name}" ADD COLUMN {col_sql}'
+        sql = f'ALTER TABLE "{self.table_name}" ADD COLUMN {self.column.to_sql(dialect)}'
         await conn.execute(text(sql))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        drop_op = DropColumn(self.table_name, self.column.name)
-        await drop_op.forward(conn, dialect)
+        await DropColumn(self.table_name, self.column.name).forward(conn, dialect)
     
     def describe(self) -> str:
-        return f"Add column '{self.column.name}' to table '{self.table_name}'"
+        return f"Add column '{self.column.name}' to '{self.table_name}'"
     
     def to_code(self) -> str:
         c = self.column
-        # Serializa default de forma segura usando helper function
-        default_val = _serialize_default(c.default)
-        
         return f"""AddColumn(
         table_name='{self.table_name}',
         column=ColumnDef(
             name='{c.name}', type='{c.type}', nullable={c.nullable},
-            default={default_val}, primary_key={c.primary_key},
+            default={_serialize_default(c.default)}, primary_key={c.primary_key},
             autoincrement={c.autoincrement}, unique={c.unique}
         ),
     )"""
@@ -465,209 +327,167 @@ class AddColumn(Operation):
 
 @dataclass
 class DropColumn(Operation):
-    """Remove uma coluna de uma tabela."""
-    
+    """Drop a column from a table."""
     table_name: str
     column_name: str
     destructive: bool = True
-    
-    # Para reversão
     column_def: ColumnDef | None = None
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect == "sqlite":
-            # SQLite não suporta DROP COLUMN diretamente em versões antigas
-            # Mas SQLite 3.35+ suporta
-            sql = f'ALTER TABLE "{self.table_name}" DROP COLUMN "{self.column_name}"'
-        else:
-            sql = f'ALTER TABLE "{self.table_name}" DROP COLUMN "{self.column_name}"'
-        await conn.execute(text(sql))
+        await conn.execute(text(f'ALTER TABLE "{self.table_name}" DROP COLUMN "{self.column_name}"'))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
         if not self.column_def:
-            raise RuntimeError(
-                f"Cannot reverse DropColumn for '{self.column_name}': "
-                "column definition not provided"
-            )
-        add_op = AddColumn(self.table_name, self.column_def)
-        await add_op.forward(conn, dialect)
+            raise RuntimeError(f"Cannot reverse DropColumn '{self.column_name}': no definition")
+        await AddColumn(self.table_name, self.column_def).forward(conn, dialect)
     
     def describe(self) -> str:
-        return f"Drop column '{self.column_name}' from table '{self.table_name}'"
+        return f"Drop column '{self.column_name}' from '{self.table_name}'"
 
 
 @dataclass
 class AlterColumn(Operation):
-    """Altera uma coluna existente."""
-    
+    """Alter a column."""
     table_name: str
     column_name: str
     new_type: str | None = None
     new_nullable: bool | None = None
     new_default: Any = None
-    set_default: bool = False  # True para definir default, mesmo que seja None
-    
-    # Para reversão
+    set_default: bool = False
     old_type: str | None = None
     old_nullable: bool | None = None
     old_default: Any = None
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         if dialect == "sqlite":
-            # SQLite tem suporte limitado a ALTER COLUMN
-            # Precisaria recriar a tabela
-            raise NotImplementedError(
-                "SQLite não suporta ALTER COLUMN diretamente. "
-                "Use uma migração manual com RunSQL."
-            )
+            raise NotImplementedError("SQLite does not support ALTER COLUMN")
         
-        alterations = []
-        
+        for alt in self._build_alterations(dialect):
+            await conn.execute(text(f'ALTER TABLE "{self.table_name}" {alt}'))
+    
+    def _build_alterations(self, dialect: str) -> list[str]:
+        alts = []
         if self.new_type:
-            alterations.append(f'ALTER COLUMN "{self.column_name}" TYPE {self.new_type}')
-        
+            # CRITICAL: Convert type to dialect-specific type
+            mapped = map_type(self.new_type, dialect)
+            alts.append(f'ALTER COLUMN "{self.column_name}" TYPE {mapped}')
         if self.new_nullable is not None:
             if self.new_nullable:
-                alterations.append(f'ALTER COLUMN "{self.column_name}" DROP NOT NULL')
+                alts.append(f'ALTER COLUMN "{self.column_name}" DROP NOT NULL')
             else:
-                alterations.append(f'ALTER COLUMN "{self.column_name}" SET NOT NULL')
-        
+                alts.append(f'ALTER COLUMN "{self.column_name}" SET NOT NULL')
         if self.set_default:
             if self.new_default is None:
-                alterations.append(f'ALTER COLUMN "{self.column_name}" DROP DEFAULT')
+                alts.append(f'ALTER COLUMN "{self.column_name}" DROP DEFAULT')
             else:
-                alterations.append(
-                    f'ALTER COLUMN "{self.column_name}" SET DEFAULT {repr(self.new_default)}'
+                default_sql = _format_sql_default(
+                    self.new_default() if callable(self.new_default) else self.new_default,
+                    dialect
                 )
-        
-        for alt in alterations:
-            sql = f'ALTER TABLE "{self.table_name}" {alt}'
-            await conn.execute(text(sql))
+                if default_sql:
+                    alts.append(f'ALTER COLUMN "{self.column_name}" SET {default_sql}')
+        return alts
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        reverse_op = AlterColumn(
-            table_name=self.table_name,
-            column_name=self.column_name,
-            new_type=self.old_type,
-            new_nullable=self.old_nullable,
-            new_default=self.old_default,
-            set_default=self.set_default,
-        )
-        await reverse_op.forward(conn, dialect)
+        await AlterColumn(
+            self.table_name, self.column_name,
+            self.old_type, self.old_nullable, self.old_default, self.set_default
+        ).forward(conn, dialect)
     
     def describe(self) -> str:
         changes = []
         if self.new_type:
-            changes.append(f"type to {self.new_type}")
+            changes.append(f"type={self.new_type}")
         if self.new_nullable is not None:
-            changes.append(f"nullable to {self.new_nullable}")
+            changes.append(f"nullable={self.new_nullable}")
         if self.set_default:
-            changes.append(f"default to {self.new_default}")
-        return f"Alter column '{self.column_name}' in '{self.table_name}': {', '.join(changes)}"
+            changes.append(f"default={self.new_default}")
+        return f"Alter '{self.column_name}' in '{self.table_name}': {', '.join(changes)}"
     
     def to_code(self) -> str:
-        """Gera código Python para AlterColumn com serialização correta de callables."""
-        new_type_str = f"'{self.new_type}'" if self.new_type else "None"
-        old_type_str = f"'{self.old_type}'" if self.old_type else "None"
-        
-        # Serializa defaults corretamente (callables, None, strings, etc.)
-        new_default_str = _serialize_default(self.new_default)
-        old_default_str = _serialize_default(self.old_default)
-        
         return f"""AlterColumn(
         table_name='{self.table_name}',
         column_name='{self.column_name}',
-        new_type={new_type_str},
+        new_type={repr(self.new_type)},
         new_nullable={self.new_nullable},
-        new_default={new_default_str},
+        new_default={_serialize_default(self.new_default)},
         set_default={self.set_default},
-        old_type={old_type_str},
+        old_type={repr(self.old_type)},
         old_nullable={self.old_nullable},
-        old_default={old_default_str},
+        old_default={_serialize_default(self.old_default)},
     )"""
 
 
 @dataclass
 class RenameColumn(Operation):
-    """Renomeia uma coluna."""
-    
+    """Rename a column."""
     table_name: str
     old_name: str
     new_name: str
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect == "sqlite":
-            sql = f'ALTER TABLE "{self.table_name}" RENAME COLUMN "{self.old_name}" TO "{self.new_name}"'
-        elif dialect == "postgresql":
-            sql = f'ALTER TABLE "{self.table_name}" RENAME COLUMN "{self.old_name}" TO "{self.new_name}"'
-        else:
-            sql = f'ALTER TABLE "{self.table_name}" CHANGE "{self.old_name}" "{self.new_name}"'
+        sql = f'ALTER TABLE "{self.table_name}" RENAME COLUMN "{self.old_name}" TO "{self.new_name}"'
         await conn.execute(text(sql))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        reverse_op = RenameColumn(self.table_name, self.new_name, self.old_name)
-        await reverse_op.forward(conn, dialect)
+        await RenameColumn(self.table_name, self.new_name, self.old_name).forward(conn, dialect)
     
     def describe(self) -> str:
-        return f"Rename column '{self.old_name}' to '{self.new_name}' in '{self.table_name}'"
+        return f"Rename '{self.old_name}' to '{self.new_name}' in '{self.table_name}'"
 
+
+# =============================================================================
+# Index Operations
+# =============================================================================
 
 @dataclass
 class CreateIndex(Operation):
-    """Cria um índice."""
-    
+    """Create an index."""
     table_name: str
     index_name: str
     columns: list[str]
     unique: bool = False
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        unique_str = "UNIQUE " if self.unique else ""
+        unique = "UNIQUE " if self.unique else ""
         cols = ", ".join(f'"{c}"' for c in self.columns)
-        sql = f'CREATE {unique_str}INDEX IF NOT EXISTS "{self.index_name}" ON "{self.table_name}" ({cols})'
+        sql = f'CREATE {unique}INDEX IF NOT EXISTS "{self.index_name}" ON "{self.table_name}" ({cols})'
         await conn.execute(text(sql))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        sql = f'DROP INDEX IF EXISTS "{self.index_name}"'
-        await conn.execute(text(sql))
+        await conn.execute(text(f'DROP INDEX IF EXISTS "{self.index_name}"'))
     
     def describe(self) -> str:
-        unique_str = "unique " if self.unique else ""
-        return f"Create {unique_str}index '{self.index_name}' on '{self.table_name}'"
+        return f"Create {'unique ' if self.unique else ''}index '{self.index_name}'"
 
 
 @dataclass
 class DropIndex(Operation):
-    """Remove um índice."""
-    
+    """Drop an index."""
     table_name: str
     index_name: str
-    
-    # Para reversão
     columns: list[str] = field(default_factory=list)
     unique: bool = False
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        sql = f'DROP INDEX IF EXISTS "{self.index_name}"'
-        await conn.execute(text(sql))
+        await conn.execute(text(f'DROP INDEX IF EXISTS "{self.index_name}"'))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
         if not self.columns:
-            raise RuntimeError(
-                f"Cannot reverse DropIndex for '{self.index_name}': "
-                "column list not provided"
-            )
-        create_op = CreateIndex(self.table_name, self.index_name, self.columns, self.unique)
-        await create_op.forward(conn, dialect)
+            raise RuntimeError(f"Cannot reverse DropIndex '{self.index_name}': no columns")
+        await CreateIndex(self.table_name, self.index_name, self.columns, self.unique).forward(conn, dialect)
     
     def describe(self) -> str:
         return f"Drop index '{self.index_name}'"
 
 
+# =============================================================================
+# Foreign Key Operations
+# =============================================================================
+
 @dataclass
 class AddForeignKey(Operation):
-    """Adiciona uma chave estrangeira."""
-    
+    """Add a foreign key."""
     table_name: str
     constraint_name: str
     column: str
@@ -678,12 +498,7 @@ class AddForeignKey(Operation):
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         if dialect == "sqlite":
-            # SQLite não suporta ADD CONSTRAINT para FK
-            raise NotImplementedError(
-                "SQLite não suporta adicionar FK após criação da tabela. "
-                "Defina a FK na criação da tabela."
-            )
-        
+            raise NotImplementedError("SQLite does not support ADD CONSTRAINT")
         sql = (
             f'ALTER TABLE "{self.table_name}" '
             f'ADD CONSTRAINT "{self.constraint_name}" '
@@ -694,21 +509,17 @@ class AddForeignKey(Operation):
         await conn.execute(text(sql))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        drop_op = DropForeignKey(self.table_name, self.constraint_name)
-        await drop_op.forward(conn, dialect)
+        await DropForeignKey(self.table_name, self.constraint_name).forward(conn, dialect)
     
     def describe(self) -> str:
-        return f"Add foreign key '{self.constraint_name}' to '{self.table_name}'"
+        return f"Add FK '{self.constraint_name}' to '{self.table_name}'"
 
 
 @dataclass
 class DropForeignKey(Operation):
-    """Remove uma chave estrangeira."""
-    
+    """Drop a foreign key."""
     table_name: str
     constraint_name: str
-    
-    # Para reversão
     column: str | None = None
     references_table: str | None = None
     references_column: str = "id"
@@ -716,39 +527,31 @@ class DropForeignKey(Operation):
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         if dialect == "sqlite":
-            raise NotImplementedError("SQLite não suporta DROP CONSTRAINT")
-        
-        sql = f'ALTER TABLE "{self.table_name}" DROP CONSTRAINT "{self.constraint_name}"'
-        await conn.execute(text(sql))
+            raise NotImplementedError("SQLite does not support DROP CONSTRAINT")
+        await conn.execute(text(f'ALTER TABLE "{self.table_name}" DROP CONSTRAINT "{self.constraint_name}"'))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
         if not self.column or not self.references_table:
-            raise RuntimeError(
-                f"Cannot reverse DropForeignKey for '{self.constraint_name}': "
-                "FK definition not provided"
-            )
-        add_op = AddForeignKey(
-            self.table_name,
-            self.constraint_name,
-            self.column,
-            self.references_table,
-            self.references_column,
-            self.on_delete,
-        )
-        await add_op.forward(conn, dialect)
+            raise RuntimeError(f"Cannot reverse DropForeignKey '{self.constraint_name}'")
+        await AddForeignKey(
+            self.table_name, self.constraint_name, self.column,
+            self.references_table, self.references_column, self.on_delete
+        ).forward(conn, dialect)
     
     def describe(self) -> str:
-        return f"Drop foreign key '{self.constraint_name}' from '{self.table_name}'"
+        return f"Drop FK '{self.constraint_name}'"
 
+
+# =============================================================================
+# Custom SQL/Python Operations
+# =============================================================================
 
 @dataclass
 class RunPython(Operation):
-    """Executa código Python arbitrário."""
-    
+    """Run Python code."""
     forward_func: Callable[["AsyncConnection"], Awaitable[None]]
     backward_func: Callable[["AsyncConnection"], Awaitable[None]] | None = None
-    description: str = "Run Python code"
-    
+    description: str = "Run Python"
     reversible: bool = field(init=False)
     
     def __post_init__(self):
@@ -758,8 +561,8 @@ class RunPython(Operation):
         await self.forward_func(conn)
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if self.backward_func is None:
-            raise RuntimeError("This RunPython operation is not reversible")
+        if not self.backward_func:
+            raise RuntimeError("Operation not reversible")
         await self.backward_func(conn)
     
     def describe(self) -> str:
@@ -768,12 +571,10 @@ class RunPython(Operation):
 
 @dataclass
 class RunSQL(Operation):
-    """Executa SQL arbitrário."""
-    
+    """Run SQL."""
     forward_sql: str
     backward_sql: str | None = None
     description: str = "Run SQL"
-    
     reversible: bool = field(init=False)
     
     def __post_init__(self):
@@ -783,8 +584,8 @@ class RunSQL(Operation):
         await conn.execute(text(self.forward_sql))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if self.backward_sql is None:
-            raise RuntimeError("This RunSQL operation is not reversible")
+        if not self.backward_sql:
+            raise RuntimeError("Operation not reversible")
         await conn.execute(text(self.backward_sql))
     
     def describe(self) -> str:
@@ -792,206 +593,108 @@ class RunSQL(Operation):
 
 
 # =============================================================================
-# Enum Operations (PostgreSQL native ENUM support)
+# Enum Operations (PostgreSQL)
 # =============================================================================
 
 @dataclass
-class EnumDef:
-    """Definição de um tipo ENUM."""
-    
-    name: str
-    values: list[str]
-    
-    def to_sql(self, dialect: str = "postgresql") -> str:
-        """Gera SQL para criar o ENUM."""
-        if dialect != "postgresql":
-            raise NotImplementedError(f"ENUM types not supported for {dialect}")
-        
-        values_sql = ", ".join(f"'{v}'" for v in self.values)
-        return f"CREATE TYPE {self.name} AS ENUM ({values_sql})"
-
-
-@dataclass
 class CreateEnum(Operation):
-    """
-    Cria um tipo ENUM no PostgreSQL.
-    
-    Para outros bancos (SQLite, MySQL), enums são tratados como VARCHAR
-    com CHECK constraint.
-    """
-    
+    """Create PostgreSQL ENUM type."""
     enum_name: str
     values: list[str]
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect == "postgresql":
-            # Verifica se já existe
-            check_sql = """
-                SELECT EXISTS (
-                    SELECT 1 FROM pg_type WHERE typname = :name
-                )
-            """
-            result = await conn.execute(text(check_sql), {"name": self.enum_name})
-            exists = result.scalar()
-            
-            if not exists:
-                values_sql = ", ".join(f"'{v}'" for v in self.values)
-                sql = f"CREATE TYPE {self.enum_name} AS ENUM ({values_sql})"
-                await conn.execute(text(sql))
-        # Para outros dialetos, não fazemos nada - usamos VARCHAR
+        if dialect != "postgresql":
+            return
+        check = await conn.execute(
+            text("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :name)"),
+            {"name": self.enum_name}
+        )
+        if not check.scalar():
+            vals = ", ".join(f"'{v}'" for v in self.values)
+            await conn.execute(text(f"CREATE TYPE {self.enum_name} AS ENUM ({vals})"))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
         if dialect == "postgresql":
-            # DROP TYPE só funciona se não estiver em uso
-            sql = f"DROP TYPE IF EXISTS {self.enum_name}"
-            await conn.execute(text(sql))
+            await conn.execute(text(f"DROP TYPE IF EXISTS {self.enum_name}"))
     
     def describe(self) -> str:
-        return f"Create enum type '{self.enum_name}' with values {self.values}"
+        return f"Create enum '{self.enum_name}'"
     
     def to_code(self) -> str:
-        values_str = repr(self.values)
-        return f"CreateEnum(enum_name='{self.enum_name}', values={values_str})"
+        return f"CreateEnum(enum_name='{self.enum_name}', values={repr(self.values)})"
 
 
 @dataclass
 class DropEnum(Operation):
-    """Remove um tipo ENUM."""
-    
+    """Drop PostgreSQL ENUM type."""
     enum_name: str
-    values: list[str] = field(default_factory=list)  # Para reversão
-    
+    values: list[str] = field(default_factory=list)
     destructive: bool = True
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         if dialect == "postgresql":
-            sql = f"DROP TYPE IF EXISTS {self.enum_name} CASCADE"
-            await conn.execute(text(sql))
+            await conn.execute(text(f"DROP TYPE IF EXISTS {self.enum_name} CASCADE"))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
         if not self.values:
-            raise RuntimeError(
-                f"Cannot reverse DropEnum for '{self.enum_name}': "
-                "values not provided"
-            )
-        create_op = CreateEnum(self.enum_name, self.values)
-        await create_op.forward(conn, dialect)
+            raise RuntimeError(f"Cannot reverse DropEnum '{self.enum_name}'")
+        await CreateEnum(self.enum_name, self.values).forward(conn, dialect)
     
     def describe(self) -> str:
-        return f"Drop enum type '{self.enum_name}'"
+        return f"Drop enum '{self.enum_name}'"
     
     def to_code(self) -> str:
-        values_str = repr(self.values)
-        return f"DropEnum(enum_name='{self.enum_name}', values={values_str})"
+        return f"DropEnum(enum_name='{self.enum_name}', values={repr(self.values)})"
 
 
 @dataclass
 class AlterEnum(Operation):
-    """
-    Altera um tipo ENUM (adiciona/remove valores).
-    
-    PostgreSQL permite apenas ADD VALUE para enums.
-    Para remover valores, precisamos recriar o enum.
-    """
-    
+    """Alter PostgreSQL ENUM type."""
     enum_name: str
     add_values: list[str] = field(default_factory=list)
     remove_values: list[str] = field(default_factory=list)
-    
-    # Estado anterior para reversão
     old_values: list[str] = field(default_factory=list)
     new_values: list[str] = field(default_factory=list)
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         if dialect != "postgresql":
             return
-        
         if self.add_values and not self.remove_values:
-            # Caso simples: apenas adicionar valores
-            for value in self.add_values:
-                sql = f"ALTER TYPE {self.enum_name} ADD VALUE IF NOT EXISTS '{value}'"
-                await conn.execute(text(sql))
+            for v in self.add_values:
+                await conn.execute(text(f"ALTER TYPE {self.enum_name} ADD VALUE IF NOT EXISTS '{v}'"))
         else:
-            # Caso complexo: precisa recriar o enum
-            await self._recreate_enum(conn, self.new_values)
+            await self._recreate(conn, self.new_values)
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect != "postgresql":
+        if dialect != "postgresql" or not self.old_values:
             return
-        
-        if not self.old_values:
-            raise RuntimeError(
-                f"Cannot reverse AlterEnum for '{self.enum_name}': "
-                "old_values not provided"
-            )
-        
-        # Sempre recria para reverter
-        await self._recreate_enum(conn, self.old_values)
+        await self._recreate(conn, self.old_values)
     
-    async def _recreate_enum(self, conn: "AsyncConnection", values: list[str]) -> None:
-        """
-        Recria o enum com novos valores.
-        
-        Estratégia:
-        1. Encontra todas as colunas que usam o enum
-        2. Altera para VARCHAR temporariamente
-        3. Remove o enum antigo
-        4. Cria o novo enum
-        5. Altera de volta para o enum
-        """
-        # 1. Encontra colunas que usam o enum
-        find_columns_sql = """
-            SELECT 
-                c.table_name,
-                c.column_name
+    async def _recreate(self, conn: "AsyncConnection", values: list[str]) -> None:
+        result = await conn.execute(text("""
+            SELECT c.table_name, c.column_name
             FROM information_schema.columns c
             JOIN pg_type t ON c.udt_name = t.typname
-            WHERE t.typname = :enum_name
-        """
-        result = await conn.execute(text(find_columns_sql), {"enum_name": self.enum_name})
-        columns = [(row[0], row[1]) for row in result.fetchall()]
+            WHERE t.typname = :name
+        """), {"name": self.enum_name})
+        cols = [(r[0], r[1]) for r in result.fetchall()]
         
-        # 2. Altera colunas para VARCHAR
-        for table_name, column_name in columns:
-            alter_sql = f"""
-                ALTER TABLE "{table_name}" 
-                ALTER COLUMN "{column_name}" TYPE VARCHAR(255)
-            """
-            await conn.execute(text(alter_sql))
-        
-        # 3. Remove enum antigo
-        drop_sql = f"DROP TYPE IF EXISTS {self.enum_name}"
-        await conn.execute(text(drop_sql))
-        
-        # 4. Cria novo enum
-        values_sql = ", ".join(f"'{v}'" for v in values)
-        create_sql = f"CREATE TYPE {self.enum_name} AS ENUM ({values_sql})"
-        await conn.execute(text(create_sql))
-        
-        # 5. Altera colunas de volta para enum
-        for table_name, column_name in columns:
-            alter_sql = f"""
-                ALTER TABLE "{table_name}" 
-                ALTER COLUMN "{column_name}" TYPE {self.enum_name}
-                USING "{column_name}"::{self.enum_name}
-            """
-            await conn.execute(text(alter_sql))
+        for t, c in cols:
+            await conn.execute(text(f'ALTER TABLE "{t}" ALTER COLUMN "{c}" TYPE VARCHAR(255)'))
+        await conn.execute(text(f"DROP TYPE IF EXISTS {self.enum_name}"))
+        vals = ", ".join(f"'{v}'" for v in values)
+        await conn.execute(text(f"CREATE TYPE {self.enum_name} AS ENUM ({vals})"))
+        for t, c in cols:
+            await conn.execute(text(
+                f'ALTER TABLE "{t}" ALTER COLUMN "{c}" TYPE {self.enum_name} USING "{c}"::{self.enum_name}'
+            ))
     
     def describe(self) -> str:
-        parts = [f"Alter enum type '{self.enum_name}'"]
-        if self.add_values:
-            parts.append(f"add {self.add_values}")
-        if self.remove_values:
-            parts.append(f"remove {self.remove_values}")
-        return " ".join(parts)
+        return f"Alter enum '{self.enum_name}'"
     
     def to_code(self) -> str:
         return (
-            f"AlterEnum(\n"
-            f"        enum_name='{self.enum_name}',\n"
-            f"        add_values={repr(self.add_values)},\n"
-            f"        remove_values={repr(self.remove_values)},\n"
-            f"        old_values={repr(self.old_values)},\n"
-            f"        new_values={repr(self.new_values)},\n"
-            f"    )"
+            f"AlterEnum(enum_name='{self.enum_name}', add_values={repr(self.add_values)}, "
+            f"remove_values={repr(self.remove_values)}, old_values={repr(self.old_values)}, "
+            f"new_values={repr(self.new_values)})"
         )
