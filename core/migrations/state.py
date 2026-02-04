@@ -414,19 +414,78 @@ def _extract_enums_from_annotations(model_class: type["Model"]) -> dict[str, Enu
 
 
 def models_to_schema_state(models: list[type["Model"]]) -> SchemaState:
-    """Extrai estado do schema de uma lista de Models."""
+    """Extrai estado do schema de uma lista de Models e tabelas de associação."""
     state = SchemaState()
+    processed_tables = set()
     
+    # 1. Processa models explícitos
     for model in models:
         if hasattr(model, "__table__"):
             table_state = model_to_table_state(model)
             state.tables[table_state.name] = table_state
+            processed_tables.add(table_state.name)
             
             # Extrai enums do model
             model_enums = _extract_enums_from_annotations(model)
             state.enums.update(model_enums)
     
+    # 2. Processa tabelas de associação do metadata (ex: PermissionsMixin)
+    # Estas são criadas via Table() e não herdam de Model
+    if models:
+        from core.models import Model as BaseModel
+        for table_name, table in BaseModel.metadata.tables.items():
+            if table_name in processed_tables:
+                continue
+            if table_name in INTERNAL_TABLES:
+                continue
+            if table_name.startswith("_"):
+                continue
+            
+            # Extrai estado da tabela de associação
+            table_state = _table_to_state(table)
+            if table_state:
+                state.tables[table_state.name] = table_state
+    
     return state
+
+
+def _table_to_state(table) -> TableState | None:
+    """Extrai estado de uma tabela SQLAlchemy (não-model)."""
+    try:
+        columns = {}
+        for col in table.columns:
+            auto_inc = col.autoincrement
+            if auto_inc == "auto":
+                auto_inc = col.primary_key
+            else:
+                auto_inc = bool(auto_inc)
+            
+            columns[col.name] = ColumnState(
+                name=col.name,
+                type=get_sqlalchemy_type_string(col.type),
+                nullable=col.nullable,
+                default=col.default.arg if col.default is not None else None,
+                primary_key=col.primary_key,
+                autoincrement=auto_inc,
+                unique=col.unique if col.unique else False,
+                index=col.index if col.index else False,
+            )
+        
+        foreign_keys = []
+        for fk in table.foreign_keys:
+            foreign_keys.append(ForeignKeyState(
+                column=fk.parent.name,
+                references_table=fk.column.table.name,
+                references_column=fk.column.name,
+            ))
+        
+        return TableState(
+            name=table.name,
+            columns=columns,
+            foreign_keys=foreign_keys,
+        )
+    except Exception:
+        return None
 
 
 # Tabelas internas do framework que devem ser ignoradas em migrações

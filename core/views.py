@@ -462,11 +462,11 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
             except (ValueError, TypeError):
                 self._raise_invalid_lookup_error(value, "integer")
         
-        # UUID
-        if type_name in ('UUID', 'GUID') or isinstance(field_type, PG_UUID):
+        # UUID (includes core.fields.Uuid, SQLAlchemy UUID, PostgreSQL UUID)
+        if type_name in ('UUID', 'GUID', 'Uuid') or isinstance(field_type, PG_UUID):
             try:
                 return uuid.UUID(value)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, AttributeError):
                 self._raise_invalid_lookup_error(value, "UUID")
         
         # String - sem conversão necessária
