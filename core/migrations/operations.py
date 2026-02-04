@@ -138,52 +138,80 @@ class ColumnDef:
         
         return self.type
     
+    def _format_default_value(self, value: Any, dialect: str) -> str | None:
+        """
+        Formata um valor para uso em cláusula DEFAULT SQL.
+        
+        Args:
+            value: Valor a ser formatado
+            dialect: Nome do dialeto SQL
+            
+        Returns:
+            String SQL formatada com DEFAULT ou None
+        """
+        from datetime import datetime, date, time
+        
+        if value is None:
+            return None
+        
+        if isinstance(value, bool):
+            if dialect == "postgresql":
+                return f"DEFAULT {'TRUE' if value else 'FALSE'}"
+            return f"DEFAULT {1 if value else 0}"
+        
+        if isinstance(value, datetime):
+            # Format datetime as ISO string for SQL
+            return f"DEFAULT '{value.isoformat()}'"
+        
+        if isinstance(value, date):
+            return f"DEFAULT '{value.isoformat()}'"
+        
+        if isinstance(value, time):
+            return f"DEFAULT '{value.isoformat()}'"
+        
+        if isinstance(value, str):
+            # Escape single quotes in strings
+            escaped = value.replace("'", "''")
+            return f"DEFAULT '{escaped}'"
+        
+        if isinstance(value, (int, float)):
+            return f"DEFAULT {value}"
+        
+        if isinstance(value, (dict, list)):
+            # JSON values - serialize and quote
+            import json
+            json_str = json.dumps(value).replace("'", "''")
+            return f"DEFAULT '{json_str}'"
+        
+        # Fallback: convert to string
+        return f"DEFAULT '{str(value)}'"
+    
     def _get_default_sql(self, dialect: str) -> str | None:
         """
         Gera SQL para valor default considerando o dialeto.
-        
-        Bug #2: Boolean defaults usando TRUE/FALSE para PostgreSQL
         
         Args:
             dialect: Nome do dialeto
             
         Returns:
             String SQL para o default ou None
-            
-        Note:
-            Callable defaults (like timezone.now) cannot be used as SQL DEFAULT.
-            They are handled by the application layer when creating records.
-            For timestamp defaults, use server-side defaults like CURRENT_TIMESTAMP.
         """
         if self.default is None:
             return None
         
-        # Callable defaults cannot be used in SQL - they're Python functions
-        # The ORM handles these when creating records
+        # Callable defaults: execute and use the result
+        # This is the most robust approach - no need to detect function names
         if callable(self.default):
-            # For datetime-related callables, use SQL equivalent
-            func_name = getattr(self.default, "__name__", "") or getattr(self.default, "__qualname__", "")
-            if "now" in func_name.lower() or "utcnow" in func_name.lower():
-                if dialect == "postgresql":
-                    return "DEFAULT CURRENT_TIMESTAMP"
-                elif dialect == "sqlite":
-                    return "DEFAULT CURRENT_TIMESTAMP"
-                elif dialect == "mysql":
-                    return "DEFAULT CURRENT_TIMESTAMP"
-            # For other callables, skip DEFAULT (handled by ORM)
-            return None
+            try:
+                result = self.default()
+                # Format the result as SQL DEFAULT
+                return self._format_default_value(result, dialect)
+            except Exception:
+                # If callable fails (needs arguments, etc.), skip DEFAULT
+                return None
         
-        if isinstance(self.default, str):
-            return f"DEFAULT '{self.default}'"
-        
-        if isinstance(self.default, bool):
-            # PostgreSQL exige TRUE/FALSE em vez de 1/0
-            if dialect == "postgresql":
-                return f"DEFAULT {'TRUE' if self.default else 'FALSE'}"
-            else:
-                return f"DEFAULT {1 if self.default else 0}"
-        
-        return f"DEFAULT {self.default}"
+        # Non-callable values: format directly
+        return self._format_default_value(self.default, dialect)
     
     def to_sql(self, dialect: str = "sqlite") -> str:
         """Gera SQL para a coluna, adaptado ao dialeto do banco."""

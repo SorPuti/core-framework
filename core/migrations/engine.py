@@ -561,6 +561,10 @@ migration = Migration(
                 return None
             
             operations = self._diff_to_operations(diff)
+            
+            if not operations:
+                print("No changes detected.")
+                return None
         
         # Gera nome da migração
         number = self._get_next_migration_number()
