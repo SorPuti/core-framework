@@ -180,7 +180,7 @@
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
                         <template x-for="item in items" :key="item[pkField]">
-                            <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-750/50 transition-colors">
+                            <tr class="group border-l-2 border-l-transparent hover:border-l-primary-500 hover:bg-primary-50/30 dark:hover:bg-primary-900/10 transition-all duration-150">
                                 <td class="px-4 py-3">
                                     <input type="checkbox" :value="item[pkField]" x-model="selectedIds" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500/20">
                                 </td>

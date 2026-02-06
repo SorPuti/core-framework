@@ -359,12 +359,25 @@ def create_api_views(site: Any) -> APIRouter:
         except Exception:
             pass  # Se introspeccao falhar, deixa o banco validar
         
+        # Processa campos inteligentes (password, secrets, etc)
+        safe_data = _process_smart_fields(safe_data, model, admin_instance)
+        
+        # Extrai plain password se detectado
+        plain_password = safe_data.pop("__plain_password__", None)
+        password_field = safe_data.pop("__password_field__", None)
+        
         from core.models import get_session
         db = await get_session()
         
         try:
             async with db:
-                obj = model(**safe_data)
+                # Se tem password, remove o campo hash do kwargs (set_password cuida)
+                create_data = {k: v for k, v in safe_data.items() if k != password_field} if plain_password else safe_data
+                obj = model(**create_data)
+                
+                # Aplica password hash via set_password se disponível
+                if plain_password and password_field:
+                    await _apply_password(obj, plain_password)
                 
                 await admin_instance.before_save(db, obj, is_new=True)
                 await obj.save(db)
@@ -430,6 +443,11 @@ def create_api_views(site: Any) -> APIRouter:
         except Exception:
             pass
         
+        # Processa campos inteligentes (password, secrets, etc)
+        safe_data = _process_smart_fields(safe_data, model, admin_instance)
+        plain_password = safe_data.pop("__plain_password__", None)
+        password_field = safe_data.pop("__password_field__", None)
+        
         from core.models import get_session
         db = await get_session()
         
@@ -445,9 +463,15 @@ def create_api_views(site: Any) -> APIRouter:
                 # Captura estado anterior para audit log
                 old_data = obj.to_dict()
                 
-                # Aplica alterações
+                # Aplica alterações (exceto campo de password que set_password cuida)
                 for key, value in safe_data.items():
+                    if key == password_field and plain_password:
+                        continue
                     setattr(obj, key, value)
+                
+                # Aplica password hash se detectado
+                if plain_password:
+                    await _apply_password(obj, plain_password)
                 
                 await admin_instance.before_save(db, obj, is_new=False)
                 await obj.save(db)
@@ -677,6 +701,86 @@ def _cast_pk(model: Any, pk_field: str, pk_value: str) -> Any:
         pass
     
     return pk_value
+
+
+async def _apply_password(obj: Any, plain_password: str) -> None:
+    """
+    Aplica password hash ao objeto usando o método disponível no model.
+    
+    Tenta na ordem:
+    1. obj.set_password(plain_password) — padrão Django/Core
+    2. obj.make_password(plain_password) — alternativo
+    3. Fallback: seta diretamente no campo password_hash
+    """
+    if hasattr(obj, "set_password"):
+        result = obj.set_password(plain_password)
+        if hasattr(result, "__await__"):
+            await result
+    elif hasattr(obj, "make_password"):
+        result = obj.make_password(plain_password)
+        if hasattr(result, "__await__"):
+            await result
+    else:
+        # Fallback: tenta hashear com passlib ou bcrypt se disponível
+        try:
+            from passlib.hash import pbkdf2_sha256
+            hashed = pbkdf2_sha256.hash(plain_password)
+            if hasattr(obj, "password_hash"):
+                obj.password_hash = hashed
+            elif hasattr(obj, "hashed_password"):
+                obj.hashed_password = hashed
+            elif hasattr(obj, "password"):
+                obj.password = hashed
+        except ImportError:
+            try:
+                import hashlib
+                hashed = hashlib.pbkdf2_hmac(
+                    "sha256", plain_password.encode(), b"admin-salt", 100000
+                ).hex()
+                if hasattr(obj, "password_hash"):
+                    obj.password_hash = hashed
+                elif hasattr(obj, "hashed_password"):
+                    obj.hashed_password = hashed
+            except Exception:
+                logger.warning("Could not hash password — no hashing method available")
+
+
+def _process_smart_fields(
+    data: dict[str, Any],
+    model: Any,
+    admin_instance: Any,
+) -> dict[str, Any]:
+    """
+    Processa campos inteligentes antes de salvar:
+    
+    - password → detecta set_password() no model e usa em vez de setar direto
+    - password_hash → se recebeu plain password, faz hash
+    - Campos sensíveis com valor placeholder → remove do payload
+    """
+    column_info = {c["name"]: c for c in admin_instance.get_column_info()}
+    processed = dict(data)
+    
+    for field_name, meta in column_info.items():
+        widget = meta.get("widget", "default")
+        
+        if widget in ("password", "password_hash", "secret"):
+            value = processed.get(field_name)
+            
+            # Se valor é o placeholder mascarado, remover do payload
+            if value in (None, "", "••••••••"):
+                processed.pop(field_name, None)
+                continue
+            
+            # Password: tenta usar set_password() do model se disponível
+            if widget in ("password", "password_hash") and value:
+                if hasattr(model, "set_password") or hasattr(model, "make_password"):
+                    # Marca para processamento posterior (precisa do obj)
+                    processed[f"__plain_password__"] = value
+                    processed[f"__password_field__"] = field_name
+                    # Não remove — o before_save vai lidar
+                    continue
+    
+    return processed
 
 
 def _cast_and_clean_data(

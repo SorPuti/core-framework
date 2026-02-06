@@ -20,6 +20,55 @@ if TYPE_CHECKING:
 logger = logging.getLogger("core.admin")
 
 
+def _detect_widget(col_name: str, field_type: str, all_columns: list[str]) -> str:
+    """
+    Detecta o widget ideal para um campo baseado no nome e tipo.
+    
+    Retorna um string que o frontend usa para decidir qual
+    componente de input renderizar.
+    """
+    name = col_name.lower()
+    
+    # Password fields — hash ou plain
+    if name in ("password_hash", "hashed_password", "password_digest"):
+        return "password_hash"
+    if name in ("password", "passwd", "pwd", "new_password"):
+        return "password"
+    
+    # Secret/token fields — nunca exibir
+    if any(s in name for s in ("_secret", "_token", "_key", "api_key", "secret_key")):
+        if name not in ("is_active", "primary_key"):
+            return "secret"
+    if name.endswith("_hash") and "password" not in name:
+        return "secret"
+    
+    # Slug
+    if name == "slug" or name.endswith("_slug"):
+        return "slug"
+    
+    # Email
+    if name == "email" or name.endswith("_email") or name == "email_address":
+        return "email"
+    
+    # URL
+    if name in ("url", "website", "homepage", "avatar_url", "image_url", "photo_url"):
+        return "url"
+    if name.endswith("_url") or name.endswith("_link"):
+        return "url"
+    
+    # Color
+    if name in ("color", "hex_color", "bg_color", "text_color", "background_color"):
+        return "color"
+    if name.endswith("_color"):
+        return "color"
+    
+    # IP Address
+    if name in ("ip_address", "ip", "remote_ip", "client_ip"):
+        return "ip"
+    
+    return "default"
+
+
 def _camel_to_title(name: str) -> str:
     """Converte CamelCase para Title Case com espaços."""
     s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name)
@@ -258,11 +307,29 @@ class ModelAdmin:
     # -- Serialization helpers --
     
     def get_column_info(self) -> list[dict[str, Any]]:
-        """Retorna metadados das colunas do model para o frontend."""
+        """
+        Retorna metadados das colunas do model para o frontend.
+        
+        Inclui detecção automática de widget type baseada no nome
+        e tipo da coluna para renderização inteligente:
+        - password/password_hash → widget "password" (nunca exibe valor)
+        - slug → widget "slug" (auto-gera a partir de name/title)
+        - email → widget "email" (validação HTML5)
+        - url/website → widget "url" (validação + link preview)
+        - color/hex_color → widget "color" (color picker)
+        - *_secret/*_token/*_key → widget "secret" (nunca exibe valor)
+        """
         if not self.model:
             return []
         
         columns = []
+        all_col_names = []
+        
+        try:
+            all_col_names = [c.name for c in self.model.__table__.columns]
+        except Exception:
+            pass
+        
         try:
             for col in self.model.__table__.columns:
                 col_type = str(col.type).upper()
@@ -290,15 +357,28 @@ class ModelAdmin:
                     and col.name not in self.readonly_fields
                 )
                 
+                # ── Smart widget detection ──
+                widget = _detect_widget(col.name, field_type, all_col_names)
+                
+                # Slug source field: detect companion name/title field
+                slug_source = None
+                if widget == "slug":
+                    for candidate in ("name", "title", "label", "display_name"):
+                        if candidate in all_col_names and candidate != col.name:
+                            slug_source = candidate
+                            break
+                
                 columns.append({
                     "name": col.name,
                     "type": field_type,
+                    "widget": widget,
                     "nullable": col.nullable,
                     "primary_key": col.primary_key,
                     "has_default": has_default,
                     "required": is_required,
                     "readonly": col.name in self.readonly_fields,
                     "help_text": self.help_texts.get(col.name, ""),
+                    **({"slug_source": slug_source} if slug_source else {}),
                 })
         except Exception:
             pass

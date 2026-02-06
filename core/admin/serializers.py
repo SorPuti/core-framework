@@ -162,15 +162,37 @@ def generate_write_schema(
     )
 
 
+# Campos sensíveis: nunca serializar o valor real
+_SENSITIVE_PATTERNS = frozenset({
+    "password", "password_hash", "hashed_password", "password_digest",
+    "passwd", "pwd", "new_password",
+})
+_SENSITIVE_SUFFIXES = ("_secret", "_token", "_hash", "_key", "_digest")
+
+
+def _is_sensitive_field(name: str) -> bool:
+    """Detecta se um campo contém dados sensíveis que não devem ser expostos."""
+    lower = name.lower()
+    if lower in _SENSITIVE_PATTERNS:
+        return True
+    return any(lower.endswith(s) for s in _SENSITIVE_SUFFIXES)
+
+
 def serialize_instance(obj: Any, schema_fields: list[str], admin: Any = None) -> dict[str, Any]:
     """
     Serializa uma instância de model para dict.
     
     Suporta campos computados (métodos no ModelAdmin).
+    Campos sensíveis (password, tokens, hashes) são mascarados.
     """
     data: dict[str, Any] = {}
     
     for field_name in schema_fields:
+        # Campos sensíveis — nunca expor valor real
+        if _is_sensitive_field(field_name):
+            data[field_name] = "••••••••"
+            continue
+        
         # Tenta campo do model primeiro
         if hasattr(obj, field_name):
             value = getattr(obj, field_name)
