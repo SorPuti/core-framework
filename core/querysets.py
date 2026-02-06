@@ -384,11 +384,17 @@ class QuerySet[T: "Model"]:
         """
         Executa funções de agregação.
         
+        As funções recebem nomes de campos como string e resolvem
+        automaticamente para colunas SQLAlchemy do modelo.
+        
         Exemplo:
+            from core.querysets import Count, Sum, Avg, Max, Min
+            
             result = await User.objects.using(session).aggregate(
                 total=Count("id"),
                 avg_age=Avg("age"),
             )
+            # {"total": 42, "avg_age": 28.5}
         """
         session = self._get_session()
         
@@ -397,7 +403,9 @@ class QuerySet[T: "Model"]:
         labels = []
         
         for label, expr in kwargs.items():
-            agg_exprs.append(expr.label(label))
+            # Resolve a coluna do modelo para a expressão de agregação
+            resolved = expr.resolve(self._model_class)
+            agg_exprs.append(resolved.label(label))
             labels.append(label)
         
         stmt = select(*agg_exprs).select_from(self._model_class)
@@ -428,55 +436,91 @@ class QuerySet[T: "Model"]:
 
 # Funções de agregação
 class Count:
-    """Função de agregação COUNT."""
+    """
+    Função de agregação COUNT.
+    
+    Uso:
+        Count("*")   -> COUNT(*)
+        Count("id")  -> COUNT(model.id)
+    """
     
     def __init__(self, field: str = "*"):
         self.field = field
     
-    def label(self, name: str):
+    def resolve(self, model_class: type) -> Any:
+        """Resolve o campo para expressão SQLAlchemy."""
         if self.field == "*":
-            return func.count().label(name)
-        return func.count(self.field).label(name)
+            return func.count()
+        column = getattr(model_class, self.field)
+        return func.count(column)
 
 
 class Sum:
-    """Função de agregação SUM."""
+    """
+    Função de agregação SUM.
+    
+    Uso:
+        Sum("price")  -> SUM(model.price)
+    """
     
     def __init__(self, field: str):
         self.field = field
     
-    def label(self, name: str):
-        return func.sum(self.field).label(name)
+    def resolve(self, model_class: type) -> Any:
+        """Resolve o campo para expressão SQLAlchemy."""
+        column = getattr(model_class, self.field)
+        return func.sum(column)
 
 
 class Avg:
-    """Função de agregação AVG."""
+    """
+    Função de agregação AVG.
+    
+    Uso:
+        Avg("price")  -> AVG(model.price)
+    """
     
     def __init__(self, field: str):
         self.field = field
     
-    def label(self, name: str):
-        return func.avg(self.field).label(name)
+    def resolve(self, model_class: type) -> Any:
+        """Resolve o campo para expressão SQLAlchemy."""
+        column = getattr(model_class, self.field)
+        return func.avg(column)
 
 
 class Max:
-    """Função de agregação MAX."""
+    """
+    Função de agregação MAX.
+    
+    Uso:
+        Max("price")  -> MAX(model.price)
+    """
     
     def __init__(self, field: str):
         self.field = field
     
-    def label(self, name: str):
-        return func.max(self.field).label(name)
+    def resolve(self, model_class: type) -> Any:
+        """Resolve o campo para expressão SQLAlchemy."""
+        column = getattr(model_class, self.field)
+        return func.max(column)
 
 
 class Min:
-    """Função de agregação MIN."""
+    """
+    Função de agregação MIN.
+    
+    Uso:
+        Min("price")  -> MIN(model.price)
+    """
     
     def __init__(self, field: str):
         self.field = field
     
-    def label(self, name: str):
-        return func.min(self.field).label(name)
+    def resolve(self, model_class: type) -> Any:
+        """Resolve o campo para expressão SQLAlchemy."""
+        column = getattr(model_class, self.field)
+        return func.min(column)
 
 
 # =============================================================================

@@ -391,6 +391,59 @@ class Manager[T: "Model"]:
             qs = qs.filter(**kwargs)
         return await qs.exists()
     
+    async def last(self) -> T | None:
+        """Retorna o último registro ou None."""
+        from core.querysets import QuerySet
+        qs = QuerySet(self._model_class, self._session)
+        return await qs.last()
+    
+    async def values(self, *fields: str) -> list[dict[str, Any]]:
+        """
+        Retorna dicionários com os campos especificados.
+        
+        Se nenhum campo for especificado, retorna todos.
+        """
+        from core.querysets import QuerySet
+        qs = QuerySet(self._model_class, self._session)
+        return await qs.values(*fields)
+    
+    async def values_list(self, *fields: str, flat: bool = False) -> list[Any]:
+        """
+        Retorna tuplas com os valores dos campos especificados.
+        
+        Se flat=True e apenas um campo, retorna lista simples.
+        """
+        from core.querysets import QuerySet
+        qs = QuerySet(self._model_class, self._session)
+        return await qs.values_list(*fields, flat=flat)
+    
+    async def aggregate(self, **kwargs: Any) -> dict[str, Any]:
+        """
+        Executa funções de agregação.
+        
+        Exemplo:
+            from core.querysets import Count, Sum, Avg, Max, Min
+            result = await User.objects.using(db).aggregate(
+                total=Count("*"),
+                avg_age=Avg("age"),
+            )
+        """
+        from core.querysets import QuerySet
+        qs = QuerySet(self._model_class, self._session)
+        return await qs.aggregate(**kwargs)
+    
+    def select_related(self, *fields: str) -> "QuerySet[T]":
+        """Carrega relacionamentos junto com a query principal (JOIN)."""
+        from core.querysets import QuerySet
+        qs = QuerySet(self._model_class, self._session)
+        return qs.select_related(*fields)
+    
+    def prefetch_related(self, *fields: str) -> "QuerySet[T]":
+        """Pré-carrega relacionamentos em queries separadas."""
+        from core.querysets import QuerySet
+        qs = QuerySet(self._model_class, self._session)
+        return qs.prefetch_related(*fields)
+    
     async def create(self, **kwargs: Any) -> T:
         """Cria um novo registro."""
         session = self._get_session()
