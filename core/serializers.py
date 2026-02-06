@@ -288,11 +288,49 @@ class ErrorResponse(BaseModel):
     errors: list[dict[str, Any]] | None = None
 
 
+class ValidationErrorDetail(BaseModel):
+    """Detalhe de um erro de validação individual."""
+    
+    loc: list[str | int]
+    msg: str
+    type: str
+    input: Any | None = None
+
+
+class ValidationErrorResponse(BaseModel):
+    """Schema para respostas de erro de validação (422)."""
+    
+    detail: str = "Validation error"
+    code: str = "validation_error"
+    errors: list[ValidationErrorDetail]
+
+
+class NotFoundResponse(BaseModel):
+    """Schema para respostas de recurso não encontrado (404)."""
+    
+    detail: str
+
+
+class ConflictResponse(BaseModel):
+    """Schema para respostas de conflito/duplicidade (409)."""
+    
+    detail: str
+    code: str = "unique_constraint"
+    field: str | None = None
+    value: str | None = None
+
+
 class SuccessResponse(BaseModel):
     """Schema padrão para respostas de sucesso simples."""
     
     message: str
     data: dict[str, Any] | None = None
+
+
+class DeleteResponse(BaseModel):
+    """Schema para resposta de deleção bem-sucedida."""
+    
+    message: str
 
 
 # Decorators para validação customizada

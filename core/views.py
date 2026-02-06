@@ -107,10 +107,21 @@ def action(
     url_path: str | None = None,
     url_name: str | None = None,
     permission_classes: list[type[Permission]] | None = None,
+    input_schema: type[InputSchema] | None = None,
+    output_schema: type[OutputSchema] | None = None,
     **kwargs: Any,
 ):
     """
     Decorator para definir actions customizadas em ViewSets.
+    
+    Args:
+        methods: Lista de métodos HTTP (default: ["GET"])
+        detail: Se True, action é para um item específico (/resource/{id}/action)
+        url_path: Caminho da URL (default: nome da função)
+        url_name: Nome da URL (default: nome da função)
+        permission_classes: Permissões específicas para esta action
+        input_schema: Schema Pydantic para o request body (aparece no OpenAPI/Postman)
+        output_schema: Schema Pydantic para o response body (aparece no OpenAPI/Postman)
     
     Exemplo:
         class UserViewSet(ModelViewSet):
@@ -122,6 +133,15 @@ def action(
                 user.is_active = True
                 await user.save(db)
                 return {"message": "User activated"}
+            
+            @action(
+                methods=["POST"],
+                detail=False,
+                input_schema=BulkDeleteInput,
+                output_schema=BulkDeleteOutput,
+            )
+            async def bulk_delete(self, request, db, data=None, **kwargs):
+                ...
     """
     def decorator(func):
         func.is_action = True
@@ -130,6 +150,8 @@ def action(
         func.url_path = url_path or func.__name__
         func.url_name = url_name or func.__name__
         func.permission_classes = permission_classes
+        func.action_input_schema = input_schema
+        func.action_output_schema = output_schema
         func.kwargs = kwargs
         return func
     return decorator

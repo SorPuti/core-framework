@@ -24,7 +24,7 @@
 | [13 Validators](13-validators.md) | Validacao de campos e unicidade |
 | [14 QuerySets](14-querysets.md) | Queries fluentes estilo Django |
 | [15 Routing](15-routing.md) | AutoRouter, rotas manuais |
-| [16 Serializers](16-serializers.md) | Input/Output schemas |
+| [16 Serializers](16-serializers.md) | Input/Output schemas, migracao de BaseModel, OpenAPI/Postman |
 | [17 DateTime](17-datetime.md) | Timezones, formatacao |
 | [18 Dependencies](18-dependencies.md) | Dependency injection, get_db, get_current_user |
 | [19 Views](19-views.md) | APIView, ViewSet, ModelViewSet, ReadOnlyModelViewSet |
