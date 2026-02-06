@@ -22,7 +22,7 @@
 | [11 Permissions](11-permissions.md) | Permissoes built-in e customizadas |
 | [12 Auth Backends](12-auth-backends.md) | Backends customizados, OAuth |
 | [13 Validators](13-validators.md) | Validacao de campos e unicidade |
-| [14 QuerySets](14-querysets.md) | Queries fluentes estilo Django |
+| [14 QuerySets](14-querysets.md) | Queries fluentes, lookups, agregacoes, Manager + QuerySet completo |
 | [15 Routing](15-routing.md) | AutoRouter, rotas manuais |
 | [16 Serializers](16-serializers.md) | Input/Output schemas, migracao de BaseModel, OpenAPI/Postman |
 | [17 DateTime](17-datetime.md) | Timezones, formatacao |
