@@ -268,6 +268,94 @@
                                             </div>
                                         </template>
                                         
+                                        <!-- FK / Foreign Key — searchable dropdown -->
+                                        <template x-if="field.widget === 'fk'">
+                                            <div x-data="fkField(field)" class="relative">
+                                                <!-- Selected value display + clear -->
+                                                <div class="relative">
+                                                    <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        x-model="searchQuery"
+                                                        @focus="openDropdown()"
+                                                        @input="onSearchInput()"
+                                                        @keydown.escape="closeDropdown()"
+                                                        @keydown.arrow-down.prevent="highlightNext()"
+                                                        @keydown.arrow-up.prevent="highlightPrev()"
+                                                        @keydown.enter.prevent="selectHighlighted()"
+                                                        :placeholder="selectedLabel || (field.required ? 'Search...' : 'Optional — search...')"
+                                                        :class="selectedLabel ? 'pl-10 pr-10' : 'pl-10 pr-4'"
+                                                        class="w-full py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                    >
+                                                    <!-- Clear button -->
+                                                    <template x-if="selectedLabel">
+                                                        <button type="button" @click="clearSelection()" 
+                                                                class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                                
+                                                <!-- Selected value chip -->
+                                                <template x-if="selectedLabel && !isOpen">
+                                                    <div class="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg border border-primary-200 dark:border-primary-800">
+                                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                                        <span x-text="selectedLabel"></span>
+                                                    </div>
+                                                </template>
+                                                
+                                                <!-- Dropdown -->
+                                                <div x-show="isOpen" x-cloak
+                                                     @click.outside="closeDropdown()"
+                                                     x-transition:enter="transition ease-out duration-150"
+                                                     x-transition:enter-start="opacity-0 -translate-y-1"
+                                                     x-transition:enter-end="opacity-100 translate-y-0"
+                                                     x-transition:leave="transition ease-in duration-100"
+                                                     x-transition:leave-start="opacity-100"
+                                                     x-transition:leave-end="opacity-0"
+                                                     class="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                                    
+                                                    <!-- Loading -->
+                                                    <div x-show="loading" class="px-4 py-3 text-center">
+                                                        <div class="inline-block w-4 h-4 border-2 border-gray-200 dark:border-gray-600 border-t-primary-500 rounded-full animate-spin"></div>
+                                                        <span class="ml-2 text-xs text-gray-400">Searching...</span>
+                                                    </div>
+                                                    
+                                                    <!-- Results -->
+                                                    <template x-if="!loading && options.length > 0">
+                                                        <div class="py-1">
+                                                            <template x-for="(opt, idx) in options" :key="opt.pk">
+                                                                <button type="button"
+                                                                        @click="selectOption(opt)"
+                                                                        @mouseenter="highlightedIdx = idx"
+                                                                        class="w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2"
+                                                                        :class="idx === highlightedIdx 
+                                                                            ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
+                                                                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'">
+                                                                    <span class="flex-1 truncate" x-text="opt.display"></span>
+                                                                    <span class="text-[10px] font-mono text-gray-400 flex-shrink-0" x-text="'#' + opt.pk"></span>
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                    
+                                                    <!-- Empty -->
+                                                    <div x-show="!loading && options.length === 0 && searchQuery.length > 0" class="px-4 py-3 text-center">
+                                                        <p class="text-xs text-gray-400">No results found</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- FK info -->
+                                                <template x-if="field.fk_app_label">
+                                                    <p class="text-xs text-gray-400 mt-1">
+                                                        Related to <span class="font-mono" x-text="field.fk_app_label + '.' + field.fk_model_name"></span>
+                                                    </p>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        
                                         <!-- ═══ STANDARD WIDGETS ═══ -->
                                         
                                         <!-- Boolean field (toggle switch) -->
@@ -679,6 +767,172 @@ function detailView() {
                 }
             } catch (e) {
                 window.showToast('error', 'Network Error', e.message);
+            }
+        }
+    };
+}
+
+/**
+ * FK Field — Searchable dropdown Alpine component.
+ * 
+ * Busca items do model relacionado via /api/{app}/{model}/autocomplete
+ * com debounce e keyboard navigation.
+ */
+function fkField(field) {
+    const adminPrefix = '{{ admin_prefix }}';
+    let debounceTimer = null;
+    
+    return {
+        searchQuery: '',
+        selectedLabel: '',
+        options: [],
+        loading: false,
+        isOpen: false,
+        highlightedIdx: -1,
+        _initialized: false,
+        
+        init() {
+            // Resolve label para o valor atual do formData
+            const parentData = this.$root.__x.$data || {};
+            // Use Alpine magic to access parent formData
+            this.$nextTick(() => {
+                const currentVal = this.getFormValue();
+                if (currentVal && currentVal !== '' && currentVal !== null) {
+                    this.resolveCurrentLabel(currentVal);
+                }
+            });
+        },
+        
+        getFormValue() {
+            // Access parent Alpine scope formData
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData && field.name in data.formData) {
+                        return data.formData[field.name];
+                    }
+                }
+            } catch(e) {}
+            return null;
+        },
+        
+        setFormValue(val) {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        data.formData[field.name] = val;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        async resolveCurrentLabel(pkVal) {
+            if (!field.fk_app_label || !field.fk_model_name) {
+                this.selectedLabel = String(pkVal);
+                return;
+            }
+            try {
+                const resp = await fetch(
+                    `${adminPrefix}/api/${field.fk_app_label}/${field.fk_model_name}/${pkVal}`
+                );
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.item) {
+                        const display = data.item[field.fk_display] || data.item.name || data.item.email || data.item.title || pkVal;
+                        this.selectedLabel = `${display} — #${pkVal}`;
+                    } else {
+                        this.selectedLabel = `#${pkVal}`;
+                    }
+                } else {
+                    this.selectedLabel = `#${pkVal}`;
+                }
+            } catch(e) {
+                this.selectedLabel = `#${pkVal}`;
+            }
+        },
+        
+        openDropdown() {
+            this.isOpen = true;
+            this.highlightedIdx = -1;
+            if (this.options.length === 0) {
+                this.fetchOptions('');
+            }
+        },
+        
+        closeDropdown() {
+            this.isOpen = false;
+            // Restore search query to selected label if nothing was picked
+            if (this.selectedLabel) {
+                this.searchQuery = '';
+            }
+        },
+        
+        onSearchInput() {
+            this.isOpen = true;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                this.fetchOptions(this.searchQuery);
+            }, 250);
+        },
+        
+        async fetchOptions(query) {
+            if (!field.fk_app_label || !field.fk_model_name) return;
+            
+            this.loading = true;
+            try {
+                const url = `${adminPrefix}/api/${field.fk_app_label}/${field.fk_model_name}/autocomplete?q=${encodeURIComponent(query)}&limit=20`;
+                const resp = await fetch(url);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.options = data.items || [];
+                } else {
+                    this.options = [];
+                }
+            } catch(e) {
+                this.options = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        selectOption(opt) {
+            this.setFormValue(opt.pk);
+            this.selectedLabel = opt.label;
+            this.searchQuery = '';
+            this.isOpen = false;
+        },
+        
+        clearSelection() {
+            this.setFormValue(field.nullable ? null : '');
+            this.selectedLabel = '';
+            this.searchQuery = '';
+            this.options = [];
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.markDirty) { data.markDirty(); break; }
+                }
+            } catch(e) {}
+        },
+        
+        highlightNext() {
+            if (this.highlightedIdx < this.options.length - 1) {
+                this.highlightedIdx++;
+            }
+        },
+        
+        highlightPrev() {
+            if (this.highlightedIdx > 0) {
+                this.highlightedIdx--;
+            }
+        },
+        
+        selectHighlighted() {
+            if (this.highlightedIdx >= 0 && this.highlightedIdx < this.options.length) {
+                this.selectOption(this.options[this.highlightedIdx]);
             }
         }
     };

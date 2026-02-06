@@ -69,6 +69,64 @@ def _detect_widget(col_name: str, field_type: str, all_columns: list[str]) -> st
     return "default"
 
 
+def _detect_fk(col: Any, current_widget: str) -> dict[str, str] | None:
+    """
+    Detecta se uma coluna é FK e retorna metadata do model alvo.
+    
+    Retorna dict com:
+    - fk_table: nome da tabela alvo (ex: "users")  
+    - fk_column: coluna PK na tabela alvo (ex: "id")
+    - fk_display: campo sugerido para exibição (name > email > title > id)
+    - fk_app_label / fk_model_name: coordenadas admin para o endpoint
+    
+    Retorna None se não é FK ou se o widget já é especial (password, etc).
+    """
+    if current_widget not in ("default", "ip"):
+        return None
+    
+    try:
+        fks = col.foreign_keys
+        if not fks:
+            return None
+        
+        fk = next(iter(fks))
+        target = fk.column  # SQLAlchemy Column object do target
+        target_table = target.table.name
+        target_col = target.name
+        
+        # Tenta adivinhar campo de exibição da tabela alvo
+        target_col_names = [c.name for c in target.table.columns]
+        fk_display = target_col  # fallback: a PK
+        for candidate in ("name", "email", "title", "label", "display_name", "username", "slug"):
+            if candidate in target_col_names:
+                fk_display = candidate
+                break
+        
+        result: dict[str, str] = {
+            "fk_table": target_table,
+            "fk_column": target_col,
+            "fk_display": fk_display,
+        }
+        
+        # Resolve admin app_label/model_name para o endpoint de autocomplete
+        try:
+            from core.admin import default_site
+            for reg_model, admin_inst in default_site.get_registry().items():
+                try:
+                    if reg_model.__tablename__ == target_table:
+                        result["fk_app_label"] = admin_inst._app_label
+                        result["fk_model_name"] = admin_inst._model_name
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        
+        return result
+    except Exception:
+        return None
+
+
 def _camel_to_title(name: str) -> str:
     """Converte CamelCase para Title Case com espaços."""
     s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name)
@@ -368,6 +426,17 @@ class ModelAdmin:
                             slug_source = candidate
                             break
                 
+                # ── FK detection ──
+                fk_meta = _detect_fk(col, widget)
+                if fk_meta:
+                    widget = "fk"
+                
+                extra = {}
+                if slug_source:
+                    extra["slug_source"] = slug_source
+                if fk_meta:
+                    extra.update(fk_meta)
+                
                 columns.append({
                     "name": col.name,
                     "type": field_type,
@@ -378,7 +447,7 @@ class ModelAdmin:
                     "required": is_required,
                     "readonly": col.name in self.readonly_fields,
                     "help_text": self.help_texts.get(col.name, ""),
-                    **({"slug_source": slug_source} if slug_source else {}),
+                    **extra,
                 })
         except Exception:
             pass

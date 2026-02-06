@@ -623,6 +623,114 @@ def create_api_views(site: Any) -> APIRouter:
             logger.error("Error in bulk delete for %s: %s", model_name, e)
             raise HTTPException(400, detail=str(e))
     
+    # =========================================================================
+    # Autocomplete endpoint para FK fields
+    # =========================================================================
+    
+    @router.get("/{app_label}/{model_name}/autocomplete")
+    async def autocomplete_view(
+        request: Request,
+        app_label: str,
+        model_name: str,
+        q: str = Query("", alias="q"),
+        limit: int = Query(20, ge=1, le=100),
+        user: Any = Depends(check_admin_access),
+    ) -> dict:
+        """
+        Autocomplete — retorna itens de um model para popular FK dropdowns.
+        
+        Busca por search_fields do model ou por colunas de texto comuns.
+        Retorna {items: [{pk: "...", label: "..."}]}.
+        """
+        result = site.get_model_by_name(app_label, model_name)
+        if not result:
+            raise HTTPException(404, f"Model '{app_label}.{model_name}' not found")
+        
+        model, admin_instance = result
+        
+        from core.models import get_session
+        
+        try:
+            db = await get_session()
+            async with db:
+                qs = admin_instance.get_queryset(db)
+                
+                # Busca por texto se query fornecida
+                if q and q.strip():
+                    from sqlalchemy import or_, cast, String
+                    
+                    # Determina campos de busca
+                    search_cols = list(admin_instance.search_fields) if admin_instance.search_fields else []
+                    
+                    # Fallback: usa campos de texto comuns
+                    if not search_cols:
+                        for col in model.__table__.columns:
+                            col_type = str(col.type).upper()
+                            if any(t in col_type for t in ("VARCHAR", "TEXT", "CHAR", "STRING")):
+                                search_cols.append(col.name)
+                                if len(search_cols) >= 5:
+                                    break
+                    
+                    if search_cols:
+                        conditions = []
+                        for field_name in search_cols:
+                            col = getattr(model, field_name, None)
+                            if col is not None:
+                                try:
+                                    col_type_str = str(col.property.columns[0].type).upper()
+                                    if any(t in col_type_str for t in ("VARCHAR", "TEXT", "CHAR", "STRING")):
+                                        conditions.append(col.ilike(f"%{q}%"))
+                                    elif "UUID" in col_type_str:
+                                        conditions.append(cast(col, String).ilike(f"%{q}%"))
+                                    elif "INT" in col_type_str:
+                                        try:
+                                            conditions.append(col == int(q))
+                                        except (ValueError, TypeError):
+                                            pass
+                                    else:
+                                        conditions.append(cast(col, String).ilike(f"%{q}%"))
+                                except Exception:
+                                    pass
+                        
+                        if conditions:
+                            from core.querysets import QuerySet as _QS
+                            if isinstance(qs, _QS):
+                                qs = qs._clone()
+                                qs._filters.append(or_(*conditions))
+                            else:
+                                qs = qs.filter(or_(*conditions))
+                
+                items_raw = await qs[:limit]
+                
+                # Determina o campo de exibição
+                pk_field = admin_instance._pk_field
+                display_field = _find_display_field(model)
+                
+                items = []
+                for obj in items_raw:
+                    pk_val = getattr(obj, pk_field, None)
+                    display_val = getattr(obj, display_field, None) if display_field != pk_field else pk_val
+                    
+                    # Constrói label legível
+                    label_parts = []
+                    if display_val and str(display_val) != str(pk_val):
+                        label_parts.append(str(display_val))
+                    label_parts.append(f"#{pk_val}")
+                    
+                    items.append({
+                        "pk": _safe_value(pk_val),
+                        "label": " — ".join(label_parts) if len(label_parts) > 1 else str(pk_val),
+                        "display": str(display_val) if display_val else str(pk_val),
+                    })
+                
+                return {"items": items, "total": len(items)}
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Autocomplete error for %s.%s: %s", app_label, model_name, e)
+            return {"items": [], "total": 0, "error": str(e)}
+    
     return router
 
 
@@ -678,6 +786,32 @@ def _safe_value(value: Any) -> Any:
     if isinstance(value, bytes):
         return "<binary>"
     return value
+
+
+def _find_display_field(model: Any) -> str:
+    """Encontra o melhor campo para exibição de um model em autocomplete."""
+    try:
+        col_names = [c.name for c in model.__table__.columns]
+    except Exception:
+        return "id"
+    
+    # Ordem de preferência para display
+    for candidate in ("name", "title", "email", "label", "display_name", "username", "slug"):
+        if candidate in col_names:
+            return candidate
+    
+    # Fallback: primeiro campo VARCHAR que não é PK
+    try:
+        for col in model.__table__.columns:
+            if col.primary_key:
+                continue
+            col_type = str(col.type).upper()
+            if any(t in col_type for t in ("VARCHAR", "TEXT", "CHAR")):
+                return col.name
+    except Exception:
+        pass
+    
+    return "id"
 
 
 def _cast_pk(model: Any, pk_field: str, pk_value: str) -> Any:
