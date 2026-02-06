@@ -655,7 +655,11 @@ function detailView() {
                 this.error = 'Network error: ' + e.message;
             } finally {
                 this.loading = false;
-                this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                    // Notify FK fields that formData is ready
+                    window.dispatchEvent(new CustomEvent('formdata-loaded'));
+                });
             }
         },
         
@@ -795,17 +799,31 @@ function fkField(field) {
         isOpen: false,
         highlightedIdx: -1,
         _initialized: false,
+        _resolvedPk: null,
         
         init() {
-            // Resolve label para o valor atual do formData
-            const parentData = this.$root.__x.$data || {};
-            // Use Alpine magic to access parent formData
+            // Try resolving immediately (covers case where formData is already loaded)
             this.$nextTick(() => {
-                const currentVal = this.getFormValue();
-                if (currentVal && currentVal !== '' && currentVal !== null) {
-                    this.resolveCurrentLabel(currentVal);
-                }
+                this._tryResolve();
             });
+            
+            // Listen for 'formdata-loaded' event dispatched by loadData()
+            // This covers the common case where fkField inits before the API returns
+            window.addEventListener('formdata-loaded', () => {
+                this.$nextTick(() => {
+                    this._tryResolve();
+                });
+            });
+        },
+        
+        _tryResolve() {
+            const currentVal = this.getFormValue();
+            if (currentVal && currentVal !== '' && currentVal !== null && currentVal !== undefined) {
+                // Only resolve once per unique PK value
+                if (this._resolvedPk === currentVal) return;
+                this._resolvedPk = currentVal;
+                this.resolveCurrentLabel(currentVal);
+            }
         },
         
         getFormValue() {
