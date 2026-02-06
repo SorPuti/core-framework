@@ -327,7 +327,7 @@ def create_api_views(site: Any) -> APIRouter:
                             qs = qs._clone()
                             qs._filters.append(or_(*conditions))
                 
-                items_raw = await qs[:limit]
+                items_raw = await qs.limit(limit).all()
                 
                 # Determina o campo de exibição
                 pk_field = admin_instance._pk_field
