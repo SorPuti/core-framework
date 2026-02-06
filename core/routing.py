@@ -153,6 +153,8 @@ class Router(APIRouter):
     Compatível com FastAPI APIRouter, mas com métodos adicionais
     para registro de ViewSets com documentação OpenAPI rica.
     
+    Inclui proteção contra registro duplicado de rotas.
+    
     Exemplo:
         router = Router(prefix="/api/v1", tags=["api"])
         router.register_viewset("/users", UserViewSet)
@@ -161,6 +163,48 @@ class Router(APIRouter):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._viewsets: list[tuple[str, type]] = []
+        # Rastreia rotas registradas para prevenir duplicação
+        self._registered_routes: set[tuple[str, str]] = set()  # (path, method)
+    
+    def add_api_route(
+        self,
+        path: str,
+        endpoint: Callable,
+        *,
+        methods: list[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Override para prevenir registro duplicado de rotas.
+        
+        Se uma rota com o mesmo (path, method) já foi registrada,
+        emite um warning e ignora o registro duplicado.
+        """
+        import warnings
+        
+        route_methods = methods or ["GET"]
+        
+        # Verifica duplicatas
+        duplicates = []
+        for m in route_methods:
+            key = (path, m.upper())
+            if key in self._registered_routes:
+                duplicates.append(m.upper())
+            else:
+                self._registered_routes.add(key)
+        
+        if duplicates:
+            route_name = kwargs.get("name", endpoint.__name__)
+            warnings.warn(
+                f"Rota duplicada ignorada: {duplicates} {path} "
+                f"(name={route_name}). Verifique se o ViewSet ou router "
+                f"não está sendo registrado duas vezes.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return
+        
+        super().add_api_route(path, endpoint, methods=methods, **kwargs)
     
     def register_viewset(
         self,
@@ -194,9 +238,12 @@ class Router(APIRouter):
         # Detecta se tem model (para decidir sobre CRUD routes)
         has_model = hasattr(viewset_class, "model") and viewset_class.model is not None
         
+        # Respeita _exclude_crud do ViewSet (ex: AuthViewSet nunca cria CRUD)
+        exclude_crud = getattr(viewset_class, "_exclude_crud", False)
+        
         # Auto-detecta include_crud baseado em model, ou usa valor explícito
         if include_crud is None:
-            include_crud = has_model
+            include_crud = has_model and not exclude_crud
         
         # Infer basename from model or class name
         if basename is None:

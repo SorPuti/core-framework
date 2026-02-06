@@ -88,6 +88,10 @@ class AuthViewSet(ViewSet):
     # ViewSet config
     tags: list[str] = ["auth"]
     
+    # Previne que CRUD routes sejam criadas mesmo se user_model/model for definido
+    # AuthViewSet usa apenas @action endpoints, nunca CRUD
+    _exclude_crud: bool = True
+    
     # Explicitly disable CRUD endpoints that don't make sense for auth
     # These would cause 500 errors if called
     async def list(self, *args, **kwargs):
@@ -373,7 +377,10 @@ class AuthViewSet(ViewSet):
         else:
             return user_id
     
-    @action(methods=["POST"], detail=False, permission_classes=[AllowAny])
+    @action(
+        methods=["POST"], detail=False, permission_classes=[AllowAny],
+        input_schema=BaseRegisterInput, output_schema=TokenResponse,
+    )
     async def register(
         self,
         request: Request,
@@ -426,7 +433,10 @@ class AuthViewSet(ViewSet):
         # Return tokens
         return self._create_tokens(user)
     
-    @action(methods=["POST"], detail=False, permission_classes=[AllowAny])
+    @action(
+        methods=["POST"], detail=False, permission_classes=[AllowAny],
+        input_schema=BaseLoginInput, output_schema=TokenResponse,
+    )
     async def login(
         self,
         request: Request,
@@ -463,7 +473,10 @@ class AuthViewSet(ViewSet):
         # Return tokens
         return self._create_tokens(user)
     
-    @action(methods=["POST"], detail=False, permission_classes=[AllowAny])
+    @action(
+        methods=["POST"], detail=False, permission_classes=[AllowAny],
+        input_schema=RefreshTokenInput, output_schema=TokenResponse,
+    )
     async def refresh(
         self,
         request: Request,
@@ -504,7 +517,10 @@ class AuthViewSet(ViewSet):
         # Return new tokens
         return self._create_tokens(user)
     
-    @action(methods=["GET"], detail=False, permission_classes=[IsAuthenticated])
+    @action(
+        methods=["GET"], detail=False, permission_classes=[IsAuthenticated],
+        output_schema=BaseUserOutput,
+    )
     async def me(
         self,
         request: Request,
@@ -535,7 +551,10 @@ class AuthViewSet(ViewSet):
             detail="Not authenticated"
         )
     
-    @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
+    @action(
+        methods=["POST"], detail=False, permission_classes=[IsAuthenticated],
+        input_schema=ChangePasswordInput, output_schema=MessageResponse,
+    )
     async def change_password(
         self,
         request: Request,
