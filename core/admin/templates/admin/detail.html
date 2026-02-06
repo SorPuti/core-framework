@@ -146,17 +146,20 @@ function detailView() {
         
         async loadData() {
             if (isNew) {
-                // New item — load field metadata from API
-                try {
-                    const resp = await fetch('{{ admin_prefix }}/api/metadata');
-                    if (resp.ok) {
-                        // Just need column info, load any existing item to get fields
-                    }
-                } catch (e) {}
+                // New item — field metadata injetado pelo template (sem fetch)
+                const allFields = JSON.parse('{{ fields_json | safe }}');
+                const editableNames = new Set(JSON.parse('{{ editable_fields_json | safe }}'));
                 
-                // For new, we'll set up empty form with column info
-                this.fields = [];
-                this.formData = {};
+                // Filtra: apenas campos editaveis e nao-PK para o form de criacao
+                this.fields = allFields.filter(f => editableNames.has(f.name) && !f.primary_key);
+                
+                // Inicializa formData com defaults
+                const defaults = {};
+                for (const f of this.fields) {
+                    if (f.type === 'boolean') defaults[f.name] = false;
+                    else defaults[f.name] = '';
+                }
+                this.formData = defaults;
                 this.loading = false;
                 return;
             }

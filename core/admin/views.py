@@ -100,16 +100,23 @@ def create_api_views(site: Any) -> APIRouter:
                     if conditions:
                         qs = qs.filter_raw(or_(*conditions))
                 
-                # Filtros de query params
+                # Filtros de query params — respeita tipo da coluna
                 filters = {}
                 for filter_field in admin_instance.list_filter:
                     value = request.query_params.get(filter_field)
-                    if value is not None:
-                        # Converte valores especiais
-                        if value.lower() in ("true", "1"):
-                            filters[filter_field] = True
-                        elif value.lower() in ("false", "0"):
-                            filters[filter_field] = False
+                    if value is not None and value != "":
+                        # Detecta tipo da coluna para cast correto
+                        col = getattr(model, filter_field, None)
+                        is_boolean = False
+                        if col is not None:
+                            try:
+                                col_type = str(col.property.columns[0].type).upper()
+                                is_boolean = "BOOL" in col_type
+                            except Exception:
+                                pass
+                        
+                        if is_boolean:
+                            filters[filter_field] = value.lower() in ("true", "1")
                         else:
                             filters[filter_field] = value
                 if filters:
@@ -136,6 +143,30 @@ def create_api_views(site: Any) -> APIRouter:
                     for item in items
                 ]
                 
+                # Busca opcoes distintas para filtros nao-boolean
+                filter_options = {}
+                for filter_field in admin_instance.list_filter:
+                    col = getattr(model, filter_field, None)
+                    if col is not None:
+                        try:
+                            col_type = str(col.property.columns[0].type).upper()
+                            if "BOOL" in col_type:
+                                filter_options[filter_field] = [
+                                    {"value": "true", "label": "Yes"},
+                                    {"value": "false", "label": "No"},
+                                ]
+                            else:
+                                from sqlalchemy import select as sa_select
+                                distinct_q = sa_select(col).distinct().order_by(col).limit(50)
+                                result_rows = await db.execute(distinct_q)
+                                filter_options[filter_field] = [
+                                    {"value": str(v), "label": str(v)}
+                                    for (v,) in result_rows
+                                    if v is not None
+                                ]
+                        except Exception:
+                            filter_options[filter_field] = []
+                
                 return {
                     "items": serialized,
                     "total": total,
@@ -150,6 +181,7 @@ def create_api_views(site: Any) -> APIRouter:
                         }
                         for f in display_fields
                     ],
+                    "filter_options": filter_options,
                     "model_meta": {
                         "display_name": admin_instance.display_name,
                         "display_name_plural": admin_instance.display_name_plural,
@@ -200,7 +232,8 @@ def create_api_views(site: Any) -> APIRouter:
         try:
             async with db:
                 pk_field = admin_instance._pk_field
-                obj = await admin_instance.get_queryset(db).filter(**{pk_field: pk}).first()
+                pk_typed = _cast_pk(model, pk_field, pk)
+                obj = await admin_instance.get_queryset(db).filter(**{pk_field: pk_typed}).first()
                 
                 if obj is None:
                     raise HTTPException(404, f"{admin_instance.display_name} with {pk_field}={pk} not found")
@@ -251,6 +284,31 @@ def create_api_views(site: Any) -> APIRouter:
         # Filtra campos: só aceita editable fields (proteção mass assignment)
         editable = set(admin_instance.get_editable_fields())
         safe_data = {k: v for k, v in body.items() if k in editable}
+        
+        # Validar campos obrigatórios antes do INSERT
+        try:
+            required_fields = []
+            for col in model.__table__.columns:
+                if (
+                    not col.nullable
+                    and not col.primary_key
+                    and col.default is None
+                    and col.server_default is None
+                    and col.name in editable
+                ):
+                    required_fields.append(col.name)
+            
+            missing = [f for f in required_fields if f not in safe_data or safe_data[f] in (None, "")]
+            if missing:
+                raise HTTPException(400, detail={
+                    "error": "validation_error",
+                    "missing_fields": missing,
+                    "message": f"Required fields: {', '.join(missing)}",
+                })
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # Se introspeccao falhar, deixa o banco validar
         
         from core.models import get_session
         db = await get_session()
@@ -316,7 +374,8 @@ def create_api_views(site: Any) -> APIRouter:
         try:
             async with db:
                 pk_field = admin_instance._pk_field
-                obj = await admin_instance.get_queryset(db).filter(**{pk_field: pk}).first()
+                pk_typed = _cast_pk(model, pk_field, pk)
+                obj = await admin_instance.get_queryset(db).filter(**{pk_field: pk_typed}).first()
                 
                 if obj is None:
                     raise HTTPException(404, f"{admin_instance.display_name} with {pk_field}={pk} not found")
@@ -388,7 +447,8 @@ def create_api_views(site: Any) -> APIRouter:
         try:
             async with db:
                 pk_field = admin_instance._pk_field
-                obj = await admin_instance.get_queryset(db).filter(**{pk_field: pk}).first()
+                pk_typed = _cast_pk(model, pk_field, pk)
+                obj = await admin_instance.get_queryset(db).filter(**{pk_field: pk_typed}).first()
                 
                 if obj is None:
                     raise HTTPException(404, f"{admin_instance.display_name} with {pk_field}={pk} not found")
@@ -447,9 +507,10 @@ def create_api_views(site: Any) -> APIRouter:
         deleted_count = 0
         try:
             async with db:
+                pk_field = admin_instance._pk_field
                 for pk in pks:
-                    pk_field = admin_instance._pk_field
-                    obj = await admin_instance.get_queryset(db).filter(**{pk_field: pk}).first()
+                    pk_typed = _cast_pk(model, pk_field, pk)
+                    obj = await admin_instance.get_queryset(db).filter(**{pk_field: pk_typed}).first()
                     if obj:
                         await admin_instance.before_delete(db, obj)
                         await obj.delete(db)
@@ -531,6 +592,29 @@ def _safe_value(value: Any) -> Any:
     if isinstance(value, bytes):
         return "<binary>"
     return value
+
+
+def _cast_pk(model: Any, pk_field: str, pk_value: str) -> Any:
+    """
+    Converte PK string do URL para o tipo nativo da coluna.
+    
+    - INTEGER → int
+    - UUID → UUID (ou str se falhar)
+    - Outros → str (passthrough)
+    """
+    try:
+        col = model.__table__.c[pk_field]
+        col_type = str(col.type).upper()
+        
+        if "INT" in col_type:
+            return int(pk_value)
+        elif "UUID" in col_type:
+            from uuid import UUID
+            return UUID(pk_value)
+    except (ValueError, KeyError, TypeError):
+        pass
+    
+    return pk_value
 
 
 def _get_error_hint(error: Exception) -> str:

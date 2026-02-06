@@ -59,8 +59,9 @@
                 class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
             >
                 <option value="">All {{ filter_name }}</option>
-                <option value="true">True</option>
-                <option value="false">False</option>
+                <template x-for="opt in (filterOptions['{{ filter_name }}'] || [])" :key="opt.value">
+                    <option :value="opt.value" x-text="opt.label"></option>
+                </template>
             </select>
             {% endfor %}
             
@@ -181,6 +182,7 @@ function listView() {
         search: '',
         ordering: '{{ admin.ordering[0] if admin.ordering else "" }}',
         filters: { {% for f in admin.list_filter %}'{{ f }}': '',{% endfor %} },
+        filterOptions: {},
         selectedIds: [],
         loading: true,
         error: null,
@@ -211,6 +213,7 @@ function listView() {
                 this.total = data.total;
                 this.totalPages = data.total_pages;
                 this.pkField = data.model_meta.pk_field;
+                if (data.filter_options) this.filterOptions = data.filter_options;
             } catch (e) {
                 this.error = 'Network error: ' + e.message;
             } finally {

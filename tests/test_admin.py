@@ -53,9 +53,22 @@ class _MockPK:
         self.columns = columns
 
 
+class _MockColumnCollection:
+    """Simula table.c para acesso por nome."""
+    def __init__(self, columns):
+        self._cols = {col.name: col for col in columns}
+    
+    def __getitem__(self, key):
+        return self._cols[key]
+    
+    def __contains__(self, key):
+        return key in self._cols
+
+
 class _MockTable:
     def __init__(self, columns):
         self.columns = columns
+        self.c = _MockColumnCollection(columns)
         pk_cols = [c for c in columns if c.primary_key]
         self.primary_key = _MockPK(pk_cols)
 
@@ -929,3 +942,53 @@ class TestAdminSessionMiddleware:
         app.add_middleware.assert_called_once_with(
             AdminSessionMiddleware, admin_prefix="/admin"
         )
+
+
+# =========================================================================
+# Tests — Bug fixes (issue #8)
+# =========================================================================
+
+class TestPKCast:
+    """Testa _cast_pk para conversao de tipo de PK."""
+    
+    def test_cast_integer_pk(self):
+        from core.admin.views import _cast_pk
+        result = _cast_pk(MockModel, "id", "42")
+        # MockModel tem INTEGER PK
+        assert result == 42
+        assert isinstance(result, int)
+    
+    def test_cast_string_pk_fallback(self):
+        from core.admin.views import _cast_pk
+        # Se conversao falhar, retorna string original
+        result = _cast_pk(MockModel, "id", "not-a-number")
+        assert result == "not-a-number"
+    
+    def test_cast_unknown_field_returns_string(self):
+        from core.admin.views import _cast_pk
+        result = _cast_pk(MockModel, "nonexistent", "abc")
+        assert result == "abc"
+
+
+class TestCreateValidation:
+    """Testa validacao de campos obrigatorios no create."""
+    
+    def test_required_fields_detected(self):
+        """Deve detectar campos obrigatorios (not null, sem default)."""
+        # MockModel tem campos not-nullable
+        model = MockModel
+        editable = {"name", "email", "is_active"}
+        required = []
+        for col in model.__table__.columns:
+            if (
+                not col.nullable
+                and not col.primary_key
+                and col.default is None
+                and col.server_default is None
+                and col.name in editable
+            ):
+                required.append(col.name)
+        
+        # "name" e "email" devem ser required (not nullable, no default)
+        assert "name" in required
+        assert "email" in required

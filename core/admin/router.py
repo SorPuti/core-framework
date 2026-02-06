@@ -215,6 +215,24 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         # Verificar erros do model
         model_errors = site.errors.get_errors_for_model(model.__name__)
         
+        # Resolve tipo de cada filtro para gerar opcoes corretas no template
+        filter_types = {}
+        for filter_name in admin_instance.list_filter:
+            col = getattr(model, filter_name, None)
+            if col is not None:
+                try:
+                    col_type = str(col.property.columns[0].type).upper()
+                    if "BOOL" in col_type:
+                        filter_types[filter_name] = "boolean"
+                    else:
+                        filter_types[filter_name] = "string"
+                except Exception:
+                    filter_types[filter_name] = "string"
+            else:
+                filter_types[filter_name] = "string"
+        
+        import json as _json
+        
         ctx = _base_context(
             request,
             user=user,
@@ -222,6 +240,8 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             model_name=model_name,
             admin=admin_instance,
             model_errors=model_errors,
+            filter_types=filter_types,
+            filter_types_json=_json.dumps(filter_types),
         )
         return _templates.TemplateResponse("admin/list.html", ctx)
     
@@ -243,6 +263,10 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         
         model, admin_instance = result
         
+        import json as _json
+        fields_json = _json.dumps(admin_instance.get_column_info())
+        editable_fields_json = _json.dumps(admin_instance.get_editable_fields())
+        
         ctx = _base_context(
             request,
             user=user,
@@ -251,6 +275,8 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             pk=pk,
             admin=admin_instance,
             is_new=(pk == "new"),
+            fields_json=fields_json,
+            editable_fields_json=editable_fields_json,
         )
         return _templates.TemplateResponse("admin/detail.html", ctx)
     
