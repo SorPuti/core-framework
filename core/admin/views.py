@@ -86,41 +86,84 @@ def create_api_views(site: Any) -> APIRouter:
         
         try:
             async with db:
-                # Base queryset
-                qs = admin_instance.get_queryset(db)
+                # Base queryset — converte Manager para QuerySet
+                from core.querysets import QuerySet as _QS
+                base = admin_instance.get_queryset(db)
+                if isinstance(base, _QS):
+                    qs = base
+                else:
+                    # Manager — cria QuerySet directamente
+                    qs = _QS(model, getattr(base, '_session', db))
                 
-                # Busca
+                # Busca — OR across search_fields (apenas colunas text-like)
                 if search and admin_instance.search_fields:
-                    from sqlalchemy import or_
+                    from sqlalchemy import or_, cast, String
                     conditions = []
                     for field_name in admin_instance.search_fields:
                         col = getattr(model, field_name, None)
                         if col is not None:
-                            conditions.append(col.ilike(f"%{search}%"))
+                            try:
+                                col_type = str(col.property.columns[0].type).upper()
+                                if any(t in col_type for t in ("VARCHAR", "TEXT", "CHAR", "STRING")):
+                                    conditions.append(col.ilike(f"%{search}%"))
+                                elif "UUID" in col_type:
+                                    # UUID — cast to text for LIKE search
+                                    conditions.append(cast(col, String).ilike(f"%{search}%"))
+                                elif "INT" in col_type:
+                                    # Numeric — try exact match only if value is numeric
+                                    try:
+                                        conditions.append(col == int(search))
+                                    except (ValueError, TypeError):
+                                        pass
+                                else:
+                                    # Fallback: cast to string for LIKE
+                                    conditions.append(cast(col, String).ilike(f"%{search}%"))
+                            except Exception:
+                                # If introspection fails, try ilike anyway
+                                try:
+                                    conditions.append(col.ilike(f"%{search}%"))
+                                except Exception:
+                                    pass
                     if conditions:
-                        qs = qs.filter_raw(or_(*conditions))
+                        qs = qs._clone()
+                        qs._filters.append(or_(*conditions))
                 
-                # Filtros de query params — respeita tipo da coluna
-                filters = {}
+                # Filtros de query params — respeita tipo da coluna com cast
                 for filter_field in admin_instance.list_filter:
                     value = request.query_params.get(filter_field)
                     if value is not None and value != "":
-                        # Detecta tipo da coluna para cast correto
                         col = getattr(model, filter_field, None)
-                        is_boolean = False
-                        if col is not None:
-                            try:
-                                col_type = str(col.property.columns[0].type).upper()
-                                is_boolean = "BOOL" in col_type
-                            except Exception:
-                                pass
+                        if col is None:
+                            continue
                         
-                        if is_boolean:
-                            filters[filter_field] = value.lower() in ("true", "1")
+                        try:
+                            col_type = str(col.property.columns[0].type).upper()
+                        except Exception:
+                            col_type = "VARCHAR"
+                        
+                        # Cast valor para o tipo correto da coluna
+                        if "BOOL" in col_type:
+                            typed_value = value.lower() in ("true", "1")
+                        elif "INT" in col_type:
+                            try:
+                                typed_value = int(value)
+                            except (ValueError, TypeError):
+                                continue
+                        elif "UUID" in col_type:
+                            from uuid import UUID as _UUID
+                            try:
+                                typed_value = _UUID(value)
+                            except (ValueError, TypeError):
+                                continue
+                        elif "FLOAT" in col_type or "NUMERIC" in col_type or "DECIMAL" in col_type:
+                            try:
+                                typed_value = float(value)
+                            except (ValueError, TypeError):
+                                continue
                         else:
-                            filters[filter_field] = value
-                if filters:
-                    qs = qs.filter(**filters)
+                            typed_value = value
+                        
+                        qs = qs.filter(**{filter_field: typed_value})
                 
                 # Ordering
                 if ordering:
@@ -285,9 +328,11 @@ def create_api_views(site: Any) -> APIRouter:
         editable = set(admin_instance.get_editable_fields())
         safe_data = {k: v for k, v in body.items() if k in editable}
         
-        # Validar campos obrigatórios antes do INSERT
+        # Validar campos obrigatórios e cast de tipos
         try:
             required_fields = []
+            columns_map = {col.name: col for col in model.__table__.columns}
+            
             for col in model.__table__.columns:
                 if (
                     not col.nullable
@@ -305,6 +350,10 @@ def create_api_views(site: Any) -> APIRouter:
                     "missing_fields": missing,
                     "message": f"Required fields: {', '.join(missing)}",
                 })
+            
+            # Cast tipos e remove campos vazios opcionais
+            safe_data = _cast_and_clean_data(safe_data, columns_map, required_fields)
+            
         except HTTPException:
             raise
         except Exception:
@@ -367,6 +416,19 @@ def create_api_views(site: Any) -> APIRouter:
         
         editable = set(admin_instance.get_editable_fields())
         safe_data = {k: v for k, v in body.items() if k in editable}
+        
+        # Cast tipos e remove campos vazios opcionais
+        try:
+            columns_map = {col.name: col for col in model.__table__.columns}
+            required_fields = [
+                col.name for col in model.__table__.columns
+                if not col.nullable and not col.primary_key
+                and col.default is None and col.server_default is None
+                and col.name in editable
+            ]
+            safe_data = _cast_and_clean_data(safe_data, columns_map, required_fields)
+        except Exception:
+            pass
         
         from core.models import get_session
         db = await get_session()
@@ -615,6 +677,117 @@ def _cast_pk(model: Any, pk_field: str, pk_value: str) -> Any:
         pass
     
     return pk_value
+
+
+def _cast_and_clean_data(
+    data: dict[str, Any],
+    columns_map: dict[str, Any],
+    required_fields: list[str],
+) -> dict[str, Any]:
+    """
+    Cast valores do formulário para os tipos nativos das colunas
+    e remove campos opcionais vazios para que o banco aplique defaults.
+    
+    Resolve:
+    - UUID strings → uuid.UUID
+    - datetime-local strings → datetime objects (com timezone)
+    - Campos opcionais vazios ("") removidos ao invés de enviados
+    - Inteiros/floats convertidos a partir de strings
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    from uuid import UUID as _UUID
+    
+    cleaned: dict[str, Any] = {}
+    
+    for field_name, value in data.items():
+        col = columns_map.get(field_name)
+        if col is None:
+            cleaned[field_name] = value
+            continue
+        
+        col_type = str(col.type).upper()
+        
+        # Campo opcional vazio → não incluir (banco aplica default/NULL)
+        if value in (None, "") and field_name not in required_fields:
+            if col.nullable:
+                cleaned[field_name] = None
+            # Se não é nullable mas tem default, simplesmente não incluímos
+            elif col.default is not None or col.server_default is not None:
+                continue
+            else:
+                continue
+            continue
+        
+        # Cast UUID
+        if "UUID" in col_type and isinstance(value, str) and value:
+            try:
+                cleaned[field_name] = _UUID(value)
+            except (ValueError, TypeError):
+                cleaned[field_name] = value
+            continue
+        
+        # Cast DATETIME / TIMESTAMP
+        if ("DATETIME" in col_type or "TIMESTAMP" in col_type) and isinstance(value, str) and value:
+            try:
+                # HTML datetime-local: "2024-01-01T12:00"
+                # Pode vir com ou sem timezone
+                dt_val = value.replace("Z", "+00:00")
+                
+                if "T" in dt_val:
+                    # Tenta ISO format completo
+                    try:
+                        parsed = _dt.fromisoformat(dt_val)
+                    except ValueError:
+                        # Tenta formato datetime-local sem segundos
+                        parsed = _dt.strptime(dt_val[:16], "%Y-%m-%dT%H:%M")
+                    
+                    # Adiciona timezone UTC se não tem
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=_tz.utc)
+                    
+                    cleaned[field_name] = parsed
+                else:
+                    # Só data, sem hora
+                    parsed = _dt.strptime(dt_val[:10], "%Y-%m-%d")
+                    parsed = parsed.replace(tzinfo=_tz.utc)
+                    cleaned[field_name] = parsed
+            except (ValueError, TypeError):
+                cleaned[field_name] = value
+            continue
+        
+        # Cast DATE
+        if "DATE" in col_type and "TIME" not in col_type and isinstance(value, str) and value:
+            try:
+                from datetime import date as _date
+                cleaned[field_name] = _date.fromisoformat(value[:10])
+            except (ValueError, TypeError):
+                cleaned[field_name] = value
+            continue
+        
+        # Cast INTEGER
+        if "INT" in col_type and isinstance(value, str) and value:
+            try:
+                cleaned[field_name] = int(value)
+            except (ValueError, TypeError):
+                cleaned[field_name] = value
+            continue
+        
+        # Cast FLOAT/NUMERIC/DECIMAL
+        if any(t in col_type for t in ("FLOAT", "NUMERIC", "DECIMAL")) and isinstance(value, str) and value:
+            try:
+                cleaned[field_name] = float(value)
+            except (ValueError, TypeError):
+                cleaned[field_name] = value
+            continue
+        
+        # Cast BOOLEAN (strings from form)
+        if "BOOL" in col_type and isinstance(value, str):
+            cleaned[field_name] = value.lower() in ("true", "1", "yes")
+            continue
+        
+        cleaned[field_name] = value
+    
+    return cleaned
 
 
 def _get_error_hint(error: Exception) -> str:

@@ -1,13 +1,24 @@
 {% extends "admin/base.html" %}
 
 {% block title %}{{ admin.display_name_plural }}{% endblock %}
-{% block page_title %}{{ admin.display_name_plural }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="flex items-center gap-1.5 text-sm">
+    <a href="{{ admin_prefix }}/" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </a>
+    <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    <span class="text-gray-400 dark:text-gray-500">{{ app_label }}</span>
+    <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    <span class="font-semibold text-gray-900 dark:text-gray-100">{{ admin.display_name_plural }}</span>
+</div>
+{% endblock %}
 
 {% block page_actions %}
 {% if 'add' in admin.permissions and 'add' not in admin.exclude_actions %}
 <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/new/"
-   class="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors">
-    <i data-lucide="plus" class="w-4 h-4 mr-1.5"></i>
+   class="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-primary-600/20">
+    <svg class="w-4 h-4 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Add {{ admin.display_name }}
 </a>
 {% endif %}
@@ -20,9 +31,9 @@
     {% if model_errors %}
     <div class="mb-6 space-y-3">
         {% for error in model_errors %}
-        <div class="border rounded-lg p-4 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+        <div class="border rounded-xl p-4 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
             <div class="flex items-start">
-                <i data-lucide="x-circle" class="w-5 h-5 text-red-600 mr-3 mt-0.5"></i>
+                <svg class="w-5 h-5 text-red-600 mr-3 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 <div>
                     <h3 class="text-sm font-semibold text-red-800 dark:text-red-200">{{ error.title }}</h3>
                     <p class="mt-1 text-sm text-red-700 dark:text-red-300">{{ error.detail }}</p>
@@ -36,64 +47,110 @@
     </div>
     {% endif %}
     
-    <!-- Search and Filters -->
-    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mb-4">
+    <!-- Search, Filters and Counter -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl mb-4">
         <div class="p-4 flex flex-wrap gap-3 items-center">
             {% if admin.search_fields %}
             <div class="relative flex-1 min-w-[200px] max-w-md">
-                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input 
                     type="text" 
                     x-model="search"
                     @input.debounce.300ms="loadData()"
                     placeholder="Search {{ admin.display_name_plural | lower }}..."
-                    class="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    class="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
                 >
             </div>
             {% endif %}
             
+            <!-- Pill-style Filters -->
             {% for filter_name in admin.list_filter %}
-            <select 
-                x-model="filters['{{ filter_name }}']"
-                @change="loadData()"
-                class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
-            >
-                <option value="">All {{ filter_name }}</option>
-                <template x-for="opt in (filterOptions['{{ filter_name }}'] || [])" :key="opt.value">
-                    <option :value="opt.value" x-text="opt.label"></option>
-                </template>
-            </select>
+            <div class="relative" x-data="{ filterOpen: false }">
+                <button @click="filterOpen = !filterOpen" 
+                        @click.outside="filterOpen = false"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-xl transition-all"
+                        :class="filters['{{ filter_name }}'] ? 'bg-primary-50 dark:bg-primary-900/30 border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 font-medium' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300'">
+                    <span>{{ filter_name | replace('_', ' ') | title }}</span>
+                    <template x-if="filters['{{ filter_name }}']">
+                        <span class="w-1.5 h-1.5 rounded-full bg-primary-500"></span>
+                    </template>
+                    <svg class="w-3.5 h-3.5 transition-transform" :class="{ 'rotate-180': filterOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                
+                <!-- Dropdown -->
+                <div x-show="filterOpen" x-cloak x-transition
+                     class="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-20 py-1 max-h-64 overflow-y-auto">
+                    <button @click="filters['{{ filter_name }}'] = ''; loadData(); filterOpen = false"
+                            class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            :class="!filters['{{ filter_name }}'] ? 'text-primary-600 font-medium' : 'text-gray-600 dark:text-gray-300'">
+                        All
+                    </button>
+                    <template x-for="opt in (filterOptions['{{ filter_name }}'] || [])" :key="opt.value">
+                        <button @click="filters['{{ filter_name }}'] = opt.value; loadData(); filterOpen = false"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors truncate"
+                                :class="filters['{{ filter_name }}'] === String(opt.value) ? 'text-primary-600 font-medium' : 'text-gray-600 dark:text-gray-300'"
+                                x-text="opt.label"></button>
+                    </template>
+                </div>
+            </div>
             {% endfor %}
             
-            <div class="ml-auto text-sm text-gray-500 dark:text-gray-400" x-text="'Total: ' + total"></div>
+            <!-- Counter -->
+            <div class="ml-auto flex items-center gap-2">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300" 
+                      x-text="total + ' record' + (total !== 1 ? 's' : '')"></span>
+            </div>
+        </div>
+        
+        <!-- Active Filters Bar -->
+        <div x-show="Object.values(filters).some(v => v)" x-cloak
+             class="border-t border-gray-100 dark:border-gray-700 px-4 py-2 flex flex-wrap items-center gap-2">
+            <span class="text-xs text-gray-400 mr-1">Active filters:</span>
+            {% for filter_name in admin.list_filter %}
+            <template x-if="filters['{{ filter_name }}']">
+                <button @click="filters['{{ filter_name }}'] = ''; loadData()"
+                        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors">
+                    {{ filter_name | replace('_', ' ') | title }}: <span x-text="filters['{{ filter_name }}']" class="font-medium"></span>
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </template>
+            {% endfor %}
+            <button @click="Object.keys(filters).forEach(k => filters[k] = ''); loadData()"
+                    class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors ml-1">
+                Clear all
+            </button>
         </div>
     </div>
     
     <!-- Bulk Actions Bar -->
-    <div x-show="selectedIds.length > 0" x-cloak
-         class="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-3 mb-4 flex items-center">
+    <div x-show="selectedIds.length > 0" x-cloak x-transition
+         class="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-xl p-3 mb-4 flex items-center">
         <span class="text-sm text-primary-800 dark:text-primary-200 font-medium" x-text="selectedIds.length + ' selected'"></span>
         {% if 'delete' in admin.permissions and 'delete' not in admin.exclude_actions %}
         <button @click="bulkDelete()" 
-                class="ml-4 text-sm text-red-600 hover:text-red-800 font-medium">
-            <i data-lucide="trash-2" class="w-3.5 h-3.5 inline mr-1"></i>
+                class="ml-4 inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-800 font-medium transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             Delete selected
         </button>
         {% endif %}
+        <button @click="selectedIds = []" class="ml-auto text-sm text-primary-600 dark:text-primary-400 hover:text-primary-800 transition-colors">
+            Deselect all
+        </button>
     </div>
     
     <!-- Table -->
-    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
         <!-- Loading -->
-        <div x-show="loading" class="p-8 text-center text-gray-500">
-            <div class="inline-block w-6 h-6 border-2 border-gray-300 border-t-primary-600 rounded-full animate-spin"></div>
-            <p class="mt-2 text-sm">Loading...</p>
+        <div x-show="loading" class="p-12 text-center text-gray-500">
+            <div class="inline-block w-7 h-7 border-2 border-gray-200 dark:border-gray-600 border-t-primary-600 rounded-full animate-spin"></div>
+            <p class="mt-3 text-sm text-gray-400">Loading...</p>
         </div>
         
         <!-- Error State -->
-        <div x-show="error" x-cloak class="p-8 text-center">
-            <i data-lucide="alert-circle" class="w-8 h-8 text-red-400 mx-auto"></i>
-            <p class="mt-2 text-sm text-red-600" x-text="error"></p>
+        <div x-show="error" x-cloak class="p-12 text-center">
+            <svg class="w-10 h-10 text-red-300 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            <p class="mt-3 text-sm text-red-600 font-medium" x-text="error"></p>
+            <button @click="loadData()" class="mt-3 text-sm text-primary-600 hover:text-primary-800 font-medium transition-colors">Try again</button>
         </div>
         
         <!-- Data Table -->
@@ -101,39 +158,48 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                        <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/80">
                             <th class="w-10 px-4 py-3">
-                                <input type="checkbox" @change="toggleAll($event)" class="rounded">
+                                <input type="checkbox" @change="toggleAll($event)" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500/20">
                             </th>
                             <template x-for="col in columns" :key="col.name">
-                                <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-900 dark:hover:text-gray-200"
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none transition-colors whitespace-nowrap"
                                     @click="toggleSort(col.name)">
-                                    <span x-text="col.label"></span>
-                                    <template x-if="ordering === col.name">
-                                        <i data-lucide="arrow-up" class="w-3 h-3 inline ml-1"></i>
-                                    </template>
-                                    <template x-if="ordering === '-' + col.name">
-                                        <i data-lucide="arrow-down" class="w-3 h-3 inline ml-1"></i>
-                                    </template>
+                                    <span class="inline-flex items-center gap-1">
+                                        <span x-text="col.label"></span>
+                                        <template x-if="ordering === col.name">
+                                            <svg class="w-3.5 h-3.5 text-primary-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+                                        </template>
+                                        <template x-if="ordering === '-' + col.name">
+                                            <svg class="w-3.5 h-3.5 text-primary-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                        </template>
+                                    </span>
                                 </th>
                             </template>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
                         <template x-for="item in items" :key="item[pkField]">
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-750">
+                            <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-750/50 transition-colors">
                                 <td class="px-4 py-3">
-                                    <input type="checkbox" :value="item[pkField]" x-model="selectedIds" class="rounded">
+                                    <input type="checkbox" :value="item[pkField]" x-model="selectedIds" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500/20">
                                 </td>
                                 <template x-for="col in columns" :key="col.name">
                                     <td class="px-4 py-3">
                                         <template x-if="col.is_link">
                                             <a :href="'{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/' + item[pkField] + '/'"
-                                               class="text-primary-600 hover:text-primary-800 dark:text-primary-400 font-medium"
+                                               class="text-primary-600 hover:text-primary-800 dark:text-primary-400 font-medium transition-colors"
                                                x-text="formatValue(item[col.name])"></a>
                                         </template>
-                                        <template x-if="!col.is_link">
-                                            <span x-text="formatValue(item[col.name])"></span>
+                                        <template x-if="!col.is_link && typeof item[col.name] === 'boolean'">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md"
+                                                  :class="item[col.name] ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'">
+                                                <span class="w-1.5 h-1.5 rounded-full" :class="item[col.name] ? 'bg-green-500' : 'bg-gray-400'"></span>
+                                                <span x-text="item[col.name] ? 'Yes' : 'No'"></span>
+                                            </span>
+                                        </template>
+                                        <template x-if="!col.is_link && typeof item[col.name] !== 'boolean'">
+                                            <span class="text-gray-700 dark:text-gray-300" x-text="formatValue(item[col.name])"></span>
                                         </template>
                                     </td>
                                 </template>
@@ -144,24 +210,50 @@
             </div>
             
             <!-- Empty State -->
-            <div x-show="items.length === 0 && !loading" class="p-12 text-center text-gray-500">
-                <i data-lucide="inbox" class="w-10 h-10 mx-auto text-gray-300"></i>
-                <p class="mt-3 text-sm">No {{ admin.display_name_plural | lower }} found.</p>
+            <div x-show="items.length === 0 && !loading" class="p-16 text-center">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-gray-300 dark:text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+                    </svg>
+                </div>
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">No {{ admin.display_name_plural | lower }} found</h3>
+                <p class="text-sm text-gray-400 dark:text-gray-500 mb-4">
+                    <template x-if="search || Object.values(filters).some(v => v)">
+                        <span>Try adjusting your search or filters.</span>
+                    </template>
+                    <template x-if="!search && !Object.values(filters).some(v => v)">
+                        <span>Get started by creating your first {{ admin.display_name | lower }}.</span>
+                    </template>
+                </p>
+                {% if 'add' in admin.permissions and 'add' not in admin.exclude_actions %}
+                <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/new/"
+                   class="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-all shadow-sm">
+                    <svg class="w-4 h-4 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add {{ admin.display_name }}
+                </a>
+                {% endif %}
             </div>
             
             <!-- Pagination -->
             <div x-show="totalPages > 1" class="border-t border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
                 <span class="text-sm text-gray-500" x-text="'Page ' + page + ' of ' + totalPages"></span>
-                <div class="flex gap-2">
+                <div class="flex items-center gap-1">
                     <button @click="page > 1 && (page--, loadData())"
                             :disabled="page <= 1"
-                            class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                        Previous
+                            class="p-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                     </button>
+                    <!-- Page numbers (compact) -->
+                    <template x-for="p in getPageRange()" :key="p">
+                        <button @click="page = p; loadData()"
+                                class="w-8 h-8 text-sm rounded-lg transition-colors"
+                                :class="p === page ? 'bg-primary-600 text-white font-medium' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'"
+                                x-text="p"></button>
+                    </template>
                     <button @click="page < totalPages && (page++, loadData())"
                             :disabled="page >= totalPages"
-                            class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                        Next
+                            class="p-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                     </button>
                 </div>
             </div>
@@ -187,6 +279,16 @@ function listView() {
         loading: true,
         error: null,
         pkField: '{{ admin._pk_field }}',
+        
+        getPageRange() {
+            const range = [];
+            const maxVisible = 5;
+            let start = Math.max(1, this.page - Math.floor(maxVisible / 2));
+            let end = Math.min(this.totalPages, start + maxVisible - 1);
+            start = Math.max(1, end - maxVisible + 1);
+            for (let i = start; i <= end; i++) range.push(i);
+            return range;
+        },
         
         async loadData() {
             this.loading = true;
@@ -243,7 +345,7 @@ function listView() {
         },
         
         async bulkDelete() {
-            if (!confirm('Delete ' + this.selectedIds.length + ' items?')) return;
+            if (!confirm('Delete ' + this.selectedIds.length + ' items? This action cannot be undone.')) return;
             
             try {
                 const resp = await fetch('{{ admin_prefix }}/api/{{ app_label }}/{{ model_name }}/bulk-delete', {
@@ -252,11 +354,15 @@ function listView() {
                     body: JSON.stringify({ ids: this.selectedIds }),
                 });
                 if (resp.ok) {
+                    const data = await resp.json();
+                    window.showToast('success', 'Deleted', (data.deleted || this.selectedIds.length) + ' items deleted successfully');
                     this.selectedIds = [];
                     this.loadData();
+                } else {
+                    window.showToast('error', 'Error', 'Failed to delete selected items');
                 }
             } catch (e) {
-                alert('Error: ' + e.message);
+                window.showToast('error', 'Network Error', e.message);
             }
         },
         

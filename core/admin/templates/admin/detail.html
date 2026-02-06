@@ -1,130 +1,279 @@
 {% extends "admin/base.html" %}
 
 {% block title %}{% if is_new %}New {{ admin.display_name }}{% else %}Edit {{ admin.display_name }}{% endif %}{% endblock %}
-{% block page_title %}{% if is_new %}New {{ admin.display_name }}{% else %}Edit {{ admin.display_name }}{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="flex items-center gap-1.5 text-sm">
+    <a href="{{ admin_prefix }}/" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </a>
+    <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    <span class="text-gray-400 dark:text-gray-500">{{ app_label }}</span>
+    <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">{{ admin.display_name_plural }}</a>
+    <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    <span class="font-semibold text-gray-900 dark:text-gray-100">{% if is_new %}New{% else %}#{{ pk }}{% endif %}</span>
+</div>
+{% endblock %}
 
 {% block page_actions %}
 <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/"
-   class="inline-flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200">
-    <i data-lucide="arrow-left" class="w-4 h-4 mr-1.5"></i>
+   class="inline-flex items-center px-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all">
+    <svg class="w-4 h-4 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     Back to list
 </a>
 {% endblock %}
 
+{% block extra_head %}
+<style>
+    /* Fix dark mode input contrast — explicit text color on all form elements */
+    input[type="text"],
+    input[type="number"],
+    input[type="email"],
+    input[type="password"],
+    input[type="url"],
+    input[type="datetime-local"],
+    input[type="date"],
+    input[type="time"],
+    textarea,
+    select {
+        color: #111827; /* gray-900 */
+    }
+    .dark input[type="text"],
+    .dark input[type="number"],
+    .dark input[type="email"],
+    .dark input[type="password"],
+    .dark input[type="url"],
+    .dark input[type="datetime-local"],
+    .dark input[type="date"],
+    .dark input[type="time"],
+    .dark textarea,
+    .dark select {
+        color: #f3f4f6; /* gray-100 */
+    }
+    /* Readonly inputs — dimmed */
+    .dark input:read-only,
+    .dark textarea:read-only {
+        color: #9ca3af; /* gray-400 */
+    }
+    input:read-only,
+    textarea:read-only {
+        color: #6b7280; /* gray-500 */
+    }
+    /* Placeholder contrast fix */
+    .dark input::placeholder,
+    .dark textarea::placeholder {
+        color: #6b7280; /* gray-500 */
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div x-data="detailView()" x-init="loadData()">
+<div x-data="detailView()" x-init="loadData()"
+     @beforeunload.window="handleBeforeUnload($event)">
     
     <!-- Loading -->
-    <div x-show="loading" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center text-gray-500">
-        <div class="inline-block w-6 h-6 border-2 border-gray-300 border-t-primary-600 rounded-full animate-spin"></div>
-        <p class="mt-2 text-sm">Loading...</p>
+    <div x-show="loading" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-12 text-center">
+        <div class="inline-block w-7 h-7 border-2 border-gray-200 dark:border-gray-600 border-t-primary-600 rounded-full animate-spin"></div>
+        <p class="mt-3 text-sm text-gray-400">Loading...</p>
     </div>
     
     <!-- Error -->
-    <div x-show="error" x-cloak class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
-        <i data-lucide="alert-circle" class="w-8 h-8 text-red-400 mx-auto"></i>
-        <p class="mt-2 text-red-600" x-text="error"></p>
-    </div>
-    
-    <!-- Success message -->
-    <div x-show="message" x-cloak x-transition
-         class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 mb-4">
-        <div class="flex items-center">
-            <i data-lucide="check-circle" class="w-4 h-4 text-green-600 mr-2"></i>
-            <span class="text-sm text-green-800 dark:text-green-200" x-text="message"></span>
-        </div>
+    <div x-show="error && !loading" x-cloak class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-8 text-center">
+        <svg class="w-10 h-10 text-red-300 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <p class="mt-3 text-sm text-red-600 font-medium" x-text="error"></p>
     </div>
     
     <!-- Form -->
     <div x-show="!loading && !error" x-cloak>
-        <form @submit.prevent="save()" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-            <div class="p-6 space-y-6">
-                <template x-for="field in fields" :key="field.name">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                            <span x-text="field.name.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())"></span>
-                            <template x-if="field.readonly">
-                                <span class="ml-1 text-xs text-gray-400 font-normal">(read only)</span>
-                            </template>
-                        </label>
-                        
-                        <!-- Help text -->
-                        <template x-if="field.help_text">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" x-text="field.help_text"></p>
-                        </template>
-                        
-                        <!-- Boolean field -->
-                        <template x-if="field.type === 'boolean'">
-                            <div class="flex items-center">
-                                <input type="checkbox" 
-                                       :checked="formData[field.name]"
-                                       @change="formData[field.name] = $event.target.checked"
-                                       :disabled="field.readonly"
-                                       class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
-                                <span class="ml-2 text-sm text-gray-600 dark:text-gray-400" x-text="formData[field.name] ? 'Yes' : 'No'"></span>
-                            </div>
-                        </template>
-                        
-                        <!-- Text/textarea field -->
-                        <template x-if="field.type === 'text'">
-                            <textarea 
-                                x-model="formData[field.name]"
-                                :readonly="field.readonly"
-                                rows="4"
-                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 dark:disabled:bg-gray-600"
-                                :class="{ 'bg-gray-50 dark:bg-gray-700 cursor-not-allowed': field.readonly }"
-                            ></textarea>
-                        </template>
-                        
-                        <!-- JSON field -->
-                        <template x-if="field.type === 'json'">
-                            <textarea 
-                                :value="JSON.stringify(formData[field.name], null, 2)"
-                                @input="try { formData[field.name] = JSON.parse($event.target.value) } catch(e) {}"
-                                :readonly="field.readonly"
-                                rows="6"
-                                class="w-full px-3 py-2 text-sm font-mono border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500"
-                                :class="{ 'bg-gray-50 dark:bg-gray-700 cursor-not-allowed': field.readonly }"
-                            ></textarea>
-                        </template>
-                        
-                        <!-- Default input -->
-                        <template x-if="!['boolean', 'text', 'json'].includes(field.type)">
-                            <input 
-                                :type="field.type === 'integer' || field.type === 'float' ? 'number' : field.type === 'datetime' ? 'datetime-local' : 'text'"
-                                x-model="formData[field.name]"
-                                :readonly="field.readonly"
-                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500"
-                                :class="{ 'bg-gray-50 dark:bg-gray-700 cursor-not-allowed': field.readonly }"
-                            >
-                        </template>
+        <form @submit.prevent="save()">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Main Form Area (2/3 width) -->
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- Unsaved Changes Indicator -->
+                    <div x-show="hasUnsavedChanges" x-cloak x-transition
+                         class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 flex items-center">
+                        <svg class="w-4 h-4 text-amber-500 mr-2 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        <span class="text-sm text-amber-700 dark:text-amber-300">You have unsaved changes</span>
                     </div>
-                </template>
-            </div>
-            
-            <!-- Actions -->
-            <div class="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
-                <div>
-                    {% if not is_new and 'delete' in admin.permissions and 'delete' not in admin.exclude_actions %}
-                    <button type="button" @click="deleteItem()"
-                            class="text-sm text-red-600 hover:text-red-800 font-medium">
-                        <i data-lucide="trash-2" class="w-3.5 h-3.5 inline mr-1"></i>
-                        Delete
-                    </button>
-                    {% endif %}
+                    
+                    <!-- Editable Fields Card -->
+                    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                {% if is_new %}Create {{ admin.display_name }}{% else %}Edit Details{% endif %}
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-1">
+                                Fields marked with <span class="text-red-400">*</span> are required.
+                                <span class="text-gray-300 dark:text-gray-600">Optional fields can be left empty.</span>
+                            </p>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                                <template x-for="field in editableFields" :key="field.name">
+                                    <div :class="{ 'md:col-span-2': field.type === 'text' || field.type === 'json' }">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                            <span x-text="field.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())"></span>
+                                            <template x-if="field.required">
+                                                <span class="text-red-400 ml-0.5">*</span>
+                                            </template>
+                                            <template x-if="!field.required">
+                                                <span class="text-gray-400 dark:text-gray-500 text-xs font-normal ml-1">(optional)</span>
+                                            </template>
+                                        </label>
+                                        
+                                        <!-- Help text -->
+                                        <template x-if="field.help_text">
+                                            <p class="text-xs text-gray-400 dark:text-gray-500 mb-1.5" x-text="field.help_text"></p>
+                                        </template>
+                                        
+                                        <!-- Field type hint for UUID -->
+                                        <template x-if="field.type === 'uuid'">
+                                            <p class="text-xs text-gray-400 dark:text-gray-500 mb-1.5">UUID format expected (e.g. 550e8400-e29b-41d4-a716-446655440000)</p>
+                                        </template>
+                                        
+                                        <!-- Boolean field (toggle switch) -->
+                                        <template x-if="field.type === 'boolean'">
+                                            <label class="relative inline-flex items-center cursor-pointer mt-1">
+                                                <input type="checkbox" 
+                                                       :checked="formData[field.name]"
+                                                       @change="formData[field.name] = $event.target.checked; markDirty()"
+                                                       class="sr-only peer">
+                                                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-500/20 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600"></div>
+                                                <span class="ml-2 text-sm text-gray-600 dark:text-gray-400" x-text="formData[field.name] ? 'Yes' : 'No'"></span>
+                                            </label>
+                                        </template>
+                                        
+                                        <!-- Text/textarea field -->
+                                        <template x-if="field.type === 'text'">
+                                            <textarea 
+                                                x-model="formData[field.name]"
+                                                @input="markDirty()"
+                                                rows="4"
+                                                :required="field.required"
+                                                :placeholder="field.required ? 'Required' : 'Optional'"
+                                                class="w-full px-3.5 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all resize-y"
+                                            ></textarea>
+                                        </template>
+                                        
+                                        <!-- JSON field -->
+                                        <template x-if="field.type === 'json'">
+                                            <textarea 
+                                                :value="JSON.stringify(formData[field.name], null, 2)"
+                                                @input="try { formData[field.name] = JSON.parse($event.target.value); markDirty(); } catch(e) {}"
+                                                rows="6"
+                                                class="w-full px-3.5 py-2.5 text-sm font-mono border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all resize-y"
+                                            ></textarea>
+                                        </template>
+                                        
+                                        <!-- Datetime field (uses datetime-local) -->
+                                        <template x-if="field.type === 'datetime'">
+                                            <input 
+                                                type="datetime-local"
+                                                :value="formatDatetimeLocal(formData[field.name])"
+                                                @input="formData[field.name] = $event.target.value; markDirty()"
+                                                :required="field.required"
+                                                step="1"
+                                                class="w-full px-3.5 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                            >
+                                        </template>
+                                        
+                                        <!-- Default input (string, integer, float, uuid) -->
+                                        <template x-if="!['boolean', 'text', 'json', 'datetime'].includes(field.type)">
+                                            <input 
+                                                :type="field.type === 'integer' || field.type === 'float' ? 'number' : 'text'"
+                                                :step="field.type === 'float' ? 'any' : undefined"
+                                                x-model="formData[field.name]"
+                                                @input="markDirty()"
+                                                :required="field.required"
+                                                :placeholder="field.required ? 'Required' : 'Optional'"
+                                                class="w-full px-3.5 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                            >
+                                        </template>
+                                        
+                                        <!-- Validation hint -->
+                                        <template x-if="field.required && (!formData[field.name] && formData[field.name] !== false && formData[field.name] !== 0)">
+                                            <p class="text-xs text-amber-500 mt-1">This field is required</p>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                            
+                            <!-- Empty editable fields -->
+                            <div x-show="editableFields.length === 0" class="text-center py-6 text-gray-400 text-sm">
+                                No editable fields for this model.
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex gap-3">
-                    <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/"
-                       class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
-                        Cancel
-                    </a>
-                    {% if (is_new and 'add' in admin.permissions) or (not is_new and 'change' in admin.permissions) %}
-                    <button type="submit" :disabled="saving"
-                            class="px-4 py-2 text-sm bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg disabled:opacity-50">
-                        <span x-show="!saving">{% if is_new %}Create{% else %}Save changes{% endif %}</span>
-                        <span x-show="saving">Saving...</span>
-                    </button>
-                    {% endif %}
+                
+                <!-- Sidebar: Actions + Read-only Fields (1/3 width) -->
+                <div class="space-y-6">
+                    
+                    <!-- Actions Card -->
+                    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Actions</h3>
+                        </div>
+                        <div class="p-5 space-y-3">
+                            {% if (is_new and 'add' in admin.permissions) or (not is_new and 'change' in admin.permissions) %}
+                            <button type="submit" :disabled="saving"
+                                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-primary-600/20 disabled:opacity-60 disabled:cursor-not-allowed">
+                                <template x-if="!saving">
+                                    <span class="inline-flex items-center gap-1.5">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                        {% if is_new %}Create {{ admin.display_name }}{% else %}Save Changes{% endif %}
+                                    </span>
+                                </template>
+                                <template x-if="saving">
+                                    <span class="inline-flex items-center gap-2">
+                                        <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                        Saving...
+                                    </span>
+                                </template>
+                            </button>
+                            {% endif %}
+                            
+                            <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/"
+                               class="w-full inline-flex items-center justify-center px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                Cancel
+                            </a>
+                            
+                            {% if not is_new and 'delete' in admin.permissions and 'delete' not in admin.exclude_actions %}
+                            <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
+                                <button type="button" @click="deleteItem()"
+                                        class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    Delete {{ admin.display_name }}
+                                </button>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Read-only Metadata Card -->
+                    <div x-show="readonlyFields.length > 0" x-cloak
+                         class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                Metadata
+                            </h3>
+                        </div>
+                        <div class="p-5 space-y-3.5">
+                            <template x-for="field in readonlyFields" :key="field.name">
+                                <div>
+                                    <dt class="text-[11px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider" 
+                                        x-text="field.name.replace(/_/g, ' ')"></dt>
+                                    <dd class="mt-0.5 text-sm text-gray-900 dark:text-gray-100 font-mono break-all"
+                                        x-text="formatDisplayValue(formData[field.name])"></dd>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
             </div>
         </form>
@@ -139,27 +288,82 @@ function detailView() {
     return {
         formData: {},
         fields: [],
+        editableFields: [],
+        readonlyFields: [],
         loading: !isNew,
         saving: false,
         error: null,
-        message: null,
+        hasUnsavedChanges: false,
+        _originalData: null,
+        
+        markDirty() {
+            if (this._originalData) {
+                this.hasUnsavedChanges = JSON.stringify(this.formData) !== JSON.stringify(this._originalData);
+            } else {
+                this.hasUnsavedChanges = true;
+            }
+        },
+        
+        handleBeforeUnload(event) {
+            if (this.hasUnsavedChanges) {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+        },
+        
+        formatDisplayValue(val) {
+            if (val === null || val === undefined) return '—';
+            if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+            return String(val);
+        },
+        
+        /**
+         * Converte ISO datetime ou datetime-local value para o formato
+         * esperado por <input type="datetime-local"> (YYYY-MM-DDTHH:MM:SS)
+         */
+        formatDatetimeLocal(val) {
+            if (!val) return '';
+            try {
+                // Se já está no formato datetime-local, retorna direto
+                if (typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)) {
+                    // Remove timezone suffix se existir
+                    return val.replace(/[Z+].*$/, '').substring(0, 19);
+                }
+                const d = new Date(val);
+                if (isNaN(d.getTime())) return val;
+                // Format: YYYY-MM-DDTHH:MM:SS
+                return d.getFullYear() + '-' +
+                    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(d.getDate()).padStart(2, '0') + 'T' +
+                    String(d.getHours()).padStart(2, '0') + ':' +
+                    String(d.getMinutes()).padStart(2, '0') + ':' +
+                    String(d.getSeconds()).padStart(2, '0');
+            } catch (e) {
+                return val || '';
+            }
+        },
+        
+        categorizeFields(allFields, editableNames) {
+            const editableSet = new Set(editableNames);
+            this.editableFields = allFields.filter(f => editableSet.has(f.name) && !f.primary_key && !f.readonly);
+            this.readonlyFields = allFields.filter(f => f.readonly || f.primary_key || !editableSet.has(f.name));
+        },
         
         async loadData() {
             if (isNew) {
-                // New item — field metadata injetado pelo template (sem fetch)
                 const allFields = JSON.parse('{{ fields_json | safe }}');
-                const editableNames = new Set(JSON.parse('{{ editable_fields_json | safe }}'));
+                const editableNames = JSON.parse('{{ editable_fields_json | safe }}');
                 
-                // Filtra: apenas campos editaveis e nao-PK para o form de criacao
-                this.fields = allFields.filter(f => editableNames.has(f.name) && !f.primary_key);
+                this.fields = allFields;
+                this.categorizeFields(allFields, editableNames);
                 
-                // Inicializa formData com defaults
                 const defaults = {};
-                for (const f of this.fields) {
+                for (const f of this.editableFields) {
                     if (f.type === 'boolean') defaults[f.name] = false;
                     else defaults[f.name] = '';
                 }
                 this.formData = defaults;
+                this._originalData = JSON.parse(JSON.stringify(defaults));
                 this.loading = false;
                 return;
             }
@@ -173,6 +377,11 @@ function detailView() {
                 const data = await resp.json();
                 this.formData = data.item;
                 this.fields = data.fields;
+                
+                const editableNames = data.fields.filter(f => !f.readonly).map(f => f.name);
+                this.categorizeFields(data.fields, editableNames);
+                
+                this._originalData = JSON.parse(JSON.stringify(data.item));
             } catch (e) {
                 this.error = 'Network error: ' + e.message;
             } finally {
@@ -183,7 +392,7 @@ function detailView() {
         
         async save() {
             this.saving = true;
-            this.message = null;
+            this.error = null;
             
             const url = isNew 
                 ? '{{ admin_prefix }}/api/{{ app_label }}/{{ model_name }}'
@@ -191,27 +400,58 @@ function detailView() {
             
             const method = isNew ? 'POST' : 'PUT';
             
+            // Build payload: only send editable fields
+            // Skip empty optional fields — backend will apply defaults/NULL
+            const payload = {};
+            for (const f of this.editableFields) {
+                const val = this.formData[f.name];
+                
+                // Always include required fields
+                if (f.required) {
+                    payload[f.name] = val;
+                    continue;
+                }
+                
+                // Skip empty optional fields (let backend handle defaults)
+                if (val === '' || val === null || val === undefined) {
+                    continue;
+                }
+                
+                payload[f.name] = val;
+            }
+            
             try {
                 const resp = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.formData),
+                    body: JSON.stringify(payload),
                 });
                 
                 const data = await resp.json();
                 
                 if (resp.ok) {
-                    this.message = data.message;
+                    this.hasUnsavedChanges = false;
                     if (isNew && data.pk) {
-                        // Redirect to edit view
-                        window.location.href = '{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/' + data.pk + '/';
-                    } else if (data.item) {
-                        this.formData = data.item;
+                        window.showToast('success', 'Created', '{{ admin.display_name }} created successfully');
+                        setTimeout(() => {
+                            window.location.href = '{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/' + data.pk + '/';
+                        }, 500);
+                    } else {
+                        window.showToast('success', 'Saved', 'Changes saved successfully');
+                        if (data.item) {
+                            this.formData = data.item;
+                            this._originalData = JSON.parse(JSON.stringify(data.item));
+                        }
                     }
                 } else {
-                    this.error = data.detail || 'Failed to save';
+                    const errorMsg = typeof data.detail === 'object' 
+                        ? (data.detail.message || data.detail.detail || data.detail.title || 'Validation error') 
+                        : (data.detail || 'Failed to save');
+                    window.showToast('error', 'Error', errorMsg);
+                    this.error = errorMsg;
                 }
             } catch (e) {
+                window.showToast('error', 'Network Error', e.message);
                 this.error = 'Network error: ' + e.message;
             } finally {
                 this.saving = false;
@@ -219,20 +459,24 @@ function detailView() {
         },
         
         async deleteItem() {
-            if (!confirm('Are you sure you want to delete this {{ admin.display_name | lower }}?')) return;
+            if (!confirm('Are you sure you want to delete this {{ admin.display_name | lower }}? This action cannot be undone.')) return;
             
             try {
                 const resp = await fetch('{{ admin_prefix }}/api/{{ app_label }}/{{ model_name }}/{{ pk }}', {
                     method: 'DELETE',
                 });
                 if (resp.ok) {
-                    window.location.href = '{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/';
+                    this.hasUnsavedChanges = false;
+                    window.showToast('success', 'Deleted', '{{ admin.display_name }} deleted successfully');
+                    setTimeout(() => {
+                        window.location.href = '{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/';
+                    }, 500);
                 } else {
                     const data = await resp.json();
-                    this.error = data.detail || 'Failed to delete';
+                    window.showToast('error', 'Error', data.detail || 'Failed to delete');
                 }
             } catch (e) {
-                this.error = 'Network error: ' + e.message;
+                window.showToast('error', 'Network Error', e.message);
             }
         }
     };

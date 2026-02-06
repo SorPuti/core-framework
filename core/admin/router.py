@@ -51,6 +51,11 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
     
     def _base_context(request: Request, **extra: Any) -> dict:
         """Contexto base para todos os templates."""
+        from core import __version__ as core_version
+        
+        # Resolve current page for active sidebar indicator
+        current_path = str(request.url.path).rstrip("/")
+        
         return {
             "request": request,
             "site_title": getattr(settings, "admin_site_title", "Admin"),
@@ -63,6 +68,8 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             "theme": getattr(settings, "admin_theme", "default"),
             "primary_color": getattr(settings, "admin_primary_color", "#3B82F6"),
             "logo_url": getattr(settings, "admin_logo_url", None),
+            "core_version": core_version,
+            "current_path": current_path,
             **extra,
         }
     

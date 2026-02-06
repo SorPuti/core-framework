@@ -282,11 +282,21 @@ class ModelAdmin:
                 elif "UUID" in col_type:
                     field_type = "uuid"
                 
+                has_default = col.default is not None or col.server_default is not None
+                is_required = (
+                    not col.nullable
+                    and not col.primary_key
+                    and not has_default
+                    and col.name not in self.readonly_fields
+                )
+                
                 columns.append({
                     "name": col.name,
                     "type": field_type,
                     "nullable": col.nullable,
                     "primary_key": col.primary_key,
+                    "has_default": has_default,
+                    "required": is_required,
                     "readonly": col.name in self.readonly_fields,
                     "help_text": self.help_texts.get(col.name, ""),
                 })

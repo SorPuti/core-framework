@@ -24,6 +24,82 @@
         }
     </script>
     
+    <!-- CSS Custom Properties for theming -->
+    <style>
+        :root {
+            --admin-primary: {{ primary_color }};
+            --admin-primary-hover: #2563eb;
+            --admin-primary-light: #eff6ff;
+            --admin-radius: 0.75rem;
+            --admin-sidebar-width: 272px;
+            --admin-header-height: 60px;
+        }
+        .dark {
+            --admin-primary-light: rgba(59, 130, 246, 0.1);
+        }
+        [x-cloak] { display: none !important; }
+        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+        .htmx-request .htmx-indicator { opacity: 1; }
+        
+        /* Sidebar transition */
+        .sidebar-enter { transition: transform 0.2s ease, opacity 0.2s ease; }
+        
+        /* Toast animations */
+        @keyframes toast-in { from { opacity: 0; transform: translateY(-12px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes toast-out { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-12px) scale(0.95); } }
+        .toast-enter { animation: toast-in 0.3s ease forwards; }
+        .toast-exit { animation: toast-out 0.2s ease forwards; }
+        
+        /* Smooth accordion */
+        .accordion-content { transition: max-height 0.25s ease, opacity 0.2s ease; overflow: hidden; }
+        
+        /* Active nav indicator */
+        .nav-active { background: var(--admin-primary-light); color: var(--admin-primary); font-weight: 600; }
+        .nav-active .nav-icon { color: var(--admin-primary); }
+        
+        /* Scrollbar styling */
+        .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+        .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+        .dark .sidebar-scroll::-webkit-scrollbar-thumb { background: #4b5563; }
+        
+        /* Fix dark mode input contrast — explicit text color on all form elements */
+        input[type="text"],
+        input[type="number"],
+        input[type="email"],
+        input[type="password"],
+        input[type="url"],
+        input[type="search"],
+        input[type="datetime-local"],
+        input[type="date"],
+        input[type="time"],
+        textarea,
+        select {
+            color: #111827;
+        }
+        .dark input[type="text"],
+        .dark input[type="number"],
+        .dark input[type="email"],
+        .dark input[type="password"],
+        .dark input[type="url"],
+        .dark input[type="search"],
+        .dark input[type="datetime-local"],
+        .dark input[type="date"],
+        .dark input[type="time"],
+        .dark textarea,
+        .dark select {
+            color: #f3f4f6;
+        }
+        .dark input::placeholder,
+        .dark textarea::placeholder {
+            color: #6b7280;
+        }
+        .dark input:read-only,
+        .dark textarea:read-only {
+            color: #9ca3af;
+        }
+    </style>
+    
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
     
@@ -33,57 +109,158 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
     
-    <style>
-        [x-cloak] { display: none !important; }
-        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
-        .htmx-request .htmx-indicator { opacity: 1; }
-    </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
-    <div class="flex min-h-screen" x-data="{ sidebarOpen: true }">
+    
+    <!-- Toast Notification System -->
+    <div id="toast-container" 
+         x-data="toastManager()" 
+         class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+         style="min-width: 320px; max-width: 420px;"
+         @toast.window="add($event.detail)">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div class="pointer-events-auto rounded-xl shadow-lg border px-4 py-3 flex items-start gap-3 toast-enter"
+                 :class="{
+                     'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700': toast.type === 'info',
+                     'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800': toast.type === 'success',
+                     'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800': toast.type === 'error',
+                     'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800': toast.type === 'warning'
+                 }">
+                <!-- Icon -->
+                <div class="flex-shrink-0 mt-0.5">
+                    <template x-if="toast.type === 'success'">
+                        <svg class="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    </template>
+                    <template x-if="toast.type === 'error'">
+                        <svg class="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    </template>
+                    <template x-if="toast.type === 'warning'">
+                        <svg class="w-5 h-5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </template>
+                    <template x-if="toast.type === 'info'">
+                        <svg class="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    </template>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100" x-text="toast.title"></p>
+                    <p x-show="toast.message" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" x-text="toast.message"></p>
+                </div>
+                <button @click="remove(toast.id)" class="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+        </template>
+    </div>
+    
+    <div class="flex min-h-screen" x-data="{ 
+        sidebarOpen: window.innerWidth >= 1024,
+        sidebarSearch: '',
+        expandedApps: JSON.parse(localStorage.getItem('admin_expanded_apps') || '{}'),
+        toggleApp(label) {
+            this.expandedApps[label] = !this.expandedApps[label];
+            localStorage.setItem('admin_expanded_apps', JSON.stringify(this.expandedApps));
+        },
+        isAppExpanded(label) {
+            if (this.expandedApps[label] === undefined) return true;
+            return this.expandedApps[label];
+        }
+    }">
+        
+        <!-- Mobile overlay -->
+        <div x-show="sidebarOpen" 
+             x-cloak
+             @click="sidebarOpen = false" 
+             class="fixed inset-0 bg-black/30 z-30 lg:hidden"
+             x-transition:enter="transition-opacity ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition-opacity ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0">
+        </div>
         
         <!-- Sidebar -->
         {% block sidebar %}
         <aside 
-            class="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col"
+            class="fixed lg:static inset-y-0 left-0 z-40 w-[var(--admin-sidebar-width)] h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden"
             x-show="sidebarOpen"
-            x-transition
+            x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="-translate-x-full lg:translate-x-0 opacity-0 lg:opacity-100"
+            x-transition:enter-end="translate-x-0 opacity-100"
+            x-transition:leave="transition ease-in duration-150"
+            x-transition:leave-start="translate-x-0 opacity-100"
+            x-transition:leave-end="-translate-x-full lg:translate-x-0 opacity-0 lg:opacity-100"
         >
             <!-- Logo / Header -->
-            <div class="h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-700">
+            <div class="h-[var(--admin-header-height)] flex items-center px-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 {% if logo_url %}
-                <img src="{{ logo_url }}" alt="{{ site_header }}" class="h-8 mr-2">
+                <img src="{{ logo_url }}" alt="{{ site_header }}" class="h-8 mr-3">
+                {% else %}
+                <div class="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center mr-3 flex-shrink-0">
+                    <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                </div>
                 {% endif %}
-                <a href="{{ admin_prefix }}/" class="text-lg font-bold text-primary-600 dark:text-primary-400 truncate">
+                <a href="{{ admin_prefix }}/" class="text-base font-bold text-gray-900 dark:text-white truncate">
                     {{ site_header }}
                 </a>
             </div>
             
-            <!-- Navigation -->
-            <nav class="flex-1 px-3 py-4 overflow-y-auto">
+            <!-- Sidebar Search -->
+            <div class="px-4 pt-4 pb-2 flex-shrink-0">
+                <div class="relative">
+                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input 
+                        type="text" 
+                        x-model="sidebarSearch"
+                        placeholder="Search models..."
+                        class="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all placeholder-gray-400 dark:placeholder-gray-500"
+                    >
+                </div>
+            </div>
+            
+            <!-- Navigation (scrollable, takes remaining height) -->
+            <nav class="flex-1 min-h-0 px-3 py-2 overflow-y-auto sidebar-scroll">
                 <!-- Dashboard -->
                 <a href="{{ admin_prefix }}/" 
-                   class="flex items-center px-3 py-2 text-sm font-medium rounded-lg mb-1 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3"></i>
+                   class="flex items-center px-3 py-2 text-sm rounded-lg mb-1 transition-colors {{ 'nav-active' if current_path == admin_prefix or current_path == admin_prefix + '/' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <svg class="w-4 h-4 mr-3 nav-icon flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                    </svg>
                     Dashboard
                 </a>
                 
-                <!-- Apps and Models -->
+                <!-- Apps and Models (Accordion) -->
                 {% for app in apps %}
-                <div class="mt-4">
-                    <h3 class="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        {{ app.app_label }}
-                    </h3>
-                    <div class="mt-1 space-y-0.5">
+                <div class="mt-3"
+                     x-show="!sidebarSearch || {{ app.models | map(attribute='display_name_plural') | list | tojson }}.some(m => m.toLowerCase().includes(sidebarSearch.toLowerCase()))">
+                    <!-- App Header (Accordion Toggle) -->
+                    <button 
+                        @click="toggleApp('{{ app.app_label }}')"
+                        class="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider hover:text-gray-600 dark:hover:text-gray-300 transition-colors rounded-md group"
+                    >
+                        <span>{{ app.app_label }}</span>
+                        <svg class="w-3.5 h-3.5 transition-transform duration-200 opacity-0 group-hover:opacity-100"
+                             :class="{ 'rotate-180': isAppExpanded('{{ app.app_label }}') }"
+                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    
+                    <!-- Model Links -->
+                    <div x-show="isAppExpanded('{{ app.app_label }}')" x-collapse
+                         class="mt-0.5 space-y-0.5">
                         {% for model in app.models %}
                         <a href="{{ admin_prefix }}/{{ app.app_label }}/{{ model.model_name }}/"
-                           class="flex items-center px-3 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 {% if model.has_errors %}text-red-600 dark:text-red-400{% endif %}">
-                            <i data-lucide="{{ model.icon }}" class="w-4 h-4 mr-3 flex-shrink-0"></i>
+                           x-show="!sidebarSearch || '{{ model.display_name_plural }}'.toLowerCase().includes(sidebarSearch.toLowerCase())"
+                           class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ 'nav-active' if current_path == admin_prefix + '/' + app.app_label + '/' + model.model_name else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }} {% if model.has_errors %}!text-red-600 dark:!text-red-400{% endif %}">
+                            <i data-lucide="{{ model.icon }}" class="w-4 h-4 mr-3 nav-icon flex-shrink-0"></i>
                             <span class="truncate">{{ model.display_name_plural }}</span>
                             {% if model.has_errors %}
-                            <span class="ml-auto">
-                                <i data-lucide="alert-triangle" class="w-3 h-3 text-red-500"></i>
+                            <span class="ml-auto flex-shrink-0">
+                                <span class="w-2 h-2 block rounded-full bg-red-500"></span>
                             </span>
                             {% endif %}
                         </a>
@@ -93,59 +270,111 @@
                 {% endfor %}
             </nav>
             
-            <!-- User info -->
-            {% if user %}
-            <div class="border-t border-gray-200 dark:border-gray-700 p-4">
-                <div class="flex items-center">
-                    <div class="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
-                        <i data-lucide="user" class="w-4 h-4 text-primary-600 dark:text-primary-400"></i>
+            <!-- Sidebar Footer: User + Version -->
+            <div class="border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                {% if user %}
+                <div class="px-4 py-3 flex items-center">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center flex-shrink-0">
+                        <span class="text-xs font-bold text-white uppercase">{{ (user.email[0] if user.email else 'A') }}</span>
                     </div>
-                    <div class="ml-3 min-w-0">
-                        <p class="text-sm font-medium truncate">{{ user.email if user.email else user }}</p>
-                        <a href="{{ admin_prefix }}/logout" class="text-xs text-gray-500 hover:text-red-600">Logout</a>
+                    <div class="ml-3 min-w-0 flex-1">
+                        <p class="text-sm font-medium truncate text-gray-900 dark:text-gray-100">{{ user.email if user.email else user }}</p>
+                        <p class="text-xs text-gray-400 truncate">{% if user.is_superuser %}Superuser{% else %}Staff{% endif %}</p>
                     </div>
+                    <a href="{{ admin_prefix }}/logout" 
+                       class="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex-shrink-0"
+                       title="Sign out">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                    </a>
+                </div>
+                {% endif %}
+                <!-- Version badge -->
+                <div class="px-5 py-2 border-t border-gray-100 dark:border-gray-700/50">
+                    <span class="text-[10px] text-gray-400 dark:text-gray-500 font-mono">Core Framework v{{ core_version }}</span>
                 </div>
             </div>
-            {% endif %}
         </aside>
         {% endblock %}
         
         <!-- Main Content -->
         <div class="flex-1 flex flex-col min-w-0">
             <!-- Top bar -->
-            <header class="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-6">
-                <button @click="sidebarOpen = !sidebarOpen" class="mr-4 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                    <i data-lucide="menu" class="w-5 h-5"></i>
+            <header class="h-[var(--admin-header-height)] bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 sm:px-6 sticky top-0 z-20 flex-shrink-0">
+                <button @click="sidebarOpen = !sidebarOpen" 
+                        class="mr-3 p-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
                 </button>
-                <div class="flex-1">
+                
+                <div class="flex-1 min-w-0">
                     {% block page_header %}
-                    <h1 class="text-xl font-semibold">{% block page_title %}Dashboard{% endblock %}</h1>
+                    <!-- Breadcrumbs -->
+                    {% block breadcrumbs %}
+                    <div class="flex items-center gap-1.5 text-sm">
+                        <a href="{{ admin_prefix }}/" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        </a>
+                        <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        <span class="font-semibold text-gray-900 dark:text-gray-100">{% block page_title %}Dashboard{% endblock %}</span>
+                    </div>
+                    {% endblock %}
                     {% endblock %}
                 </div>
-                {% block page_actions %}{% endblock %}
+                
+                <div class="flex items-center gap-2">
+                    {% block page_actions %}{% endblock %}
+                </div>
             </header>
             
             <!-- Error banners -->
             {% if errors and errors.has_warnings %}
-            <div class="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-3">
+            <div class="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-2.5 flex-shrink-0">
                 <div class="flex items-center">
-                    <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 dark:text-amber-400 mr-2"></i>
+                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 mr-2 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                     <span class="text-sm text-amber-800 dark:text-amber-200">
                         {{ errors.warning_count }} warning(s) detected.
-                        <a href="{{ admin_prefix }}/" class="underline font-medium">View on dashboard</a>
+                        <a href="{{ admin_prefix }}/" class="underline font-medium hover:text-amber-900 dark:hover:text-amber-100">View on dashboard</a>
                     </span>
                 </div>
             </div>
             {% endif %}
             
             <!-- Page content -->
-            <main class="flex-1 p-6 overflow-auto">
+            <main class="flex-1 p-4 sm:p-6 overflow-auto">
                 {% block content %}{% endblock %}
             </main>
         </div>
     </div>
     
     <script>
+        // Toast notification manager
+        function toastManager() {
+            return {
+                toasts: [],
+                counter: 0,
+                add({ type = 'info', title = '', message = '', duration = 4000 }) {
+                    const id = ++this.counter;
+                    this.toasts.push({ id, type, title, message });
+                    if (duration > 0) {
+                        setTimeout(() => this.remove(id), duration);
+                    }
+                },
+                remove(id) {
+                    this.toasts = this.toasts.filter(t => t.id !== id);
+                }
+            };
+        }
+        
+        // Helper to dispatch toast events from anywhere
+        window.showToast = function(type, title, message, duration) {
+            window.dispatchEvent(new CustomEvent('toast', { 
+                detail: { type, title, message, duration } 
+            }));
+        };
+        
         // Initialize Lucide icons
         document.addEventListener('DOMContentLoaded', () => {
             if (window.lucide) lucide.createIcons();
