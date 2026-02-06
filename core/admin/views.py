@@ -279,7 +279,12 @@ def create_api_views(site: Any) -> APIRouter:
         try:
             db = await get_session()
             async with db:
-                qs = admin_instance.get_queryset(db)
+                from core.querysets import QuerySet as _QS
+                base = admin_instance.get_queryset(db)
+                if isinstance(base, _QS):
+                    qs = base
+                else:
+                    qs = _QS(model, getattr(base, '_session', db))
                 
                 # Busca por texto se query fornecida
                 if q and q.strip():
@@ -319,12 +324,8 @@ def create_api_views(site: Any) -> APIRouter:
                                     pass
                         
                         if conditions:
-                            from core.querysets import QuerySet as _QS
-                            if isinstance(qs, _QS):
-                                qs = qs._clone()
-                                qs._filters.append(or_(*conditions))
-                            else:
-                                qs = qs.filter(or_(*conditions))
+                            qs = qs._clone()
+                            qs._filters.append(or_(*conditions))
                 
                 items_raw = await qs[:limit]
                 
