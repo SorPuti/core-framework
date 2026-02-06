@@ -53,6 +53,11 @@ def _make_partial_model(schema: type[BaseModel]) -> type[BaseModel]:
     Usado para endpoints PATCH onde apenas alguns campos são enviados.
     O resultado é cacheado por classe de schema.
     
+    Herda do schema original para preservar:
+    - model_config (extra="forbid", str_strip_whitespace, etc.)
+    - Validators customizados
+    - Métodos e propriedades
+    
     Args:
         schema: Modelo Pydantic original com campos obrigatórios
     
@@ -70,8 +75,10 @@ def _make_partial_model(schema: type[BaseModel]) -> type[BaseModel]:
         else:
             fields[field_name] = (Optional[Any], None)
     
+    # Herda do schema original para preservar model_config e validators
     partial_model = create_model(
         f"Partial{schema.__name__}",
+        __base__=schema,
         **fields,
     )
     

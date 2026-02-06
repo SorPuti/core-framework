@@ -253,10 +253,16 @@ class ModelSerializer(Serializer[ModelT, InputT, OutputT]):
         return instance
 
 
-# Schemas utilitários comuns
-class PaginatedResponse(BaseModel, Generic[OutputT]):
+# =========================================================================
+# Schemas utilitários comuns (herdam de OutputSchema para compatibilidade)
+# =========================================================================
+
+class PaginatedResponse(OutputSchema, Generic[OutputT]):
     """
     Schema para respostas paginadas.
+    
+    Herda de OutputSchema para ser compatível com response_model
+    do ViewSet e validação automática de schemas.
     
     Exemplo:
         @router.get("/users", response_model=PaginatedResponse[UserOutput])
@@ -280,7 +286,7 @@ class PaginatedResponse(BaseModel, Generic[OutputT]):
             self.pages = (self.total + self.page_size - 1) // self.page_size
 
 
-class ErrorResponse(BaseModel):
+class ErrorResponse(OutputSchema):
     """Schema padrão para respostas de erro."""
     
     detail: str
@@ -288,7 +294,7 @@ class ErrorResponse(BaseModel):
     errors: list[dict[str, Any]] | None = None
 
 
-class ValidationErrorDetail(BaseModel):
+class ValidationErrorDetail(OutputSchema):
     """Detalhe de um erro de validação individual."""
     
     loc: list[str | int]
@@ -297,7 +303,7 @@ class ValidationErrorDetail(BaseModel):
     input: Any | None = None
 
 
-class ValidationErrorResponse(BaseModel):
+class ValidationErrorResponse(OutputSchema):
     """Schema para respostas de erro de validação (422)."""
     
     detail: str = "Validation error"
@@ -305,13 +311,13 @@ class ValidationErrorResponse(BaseModel):
     errors: list[ValidationErrorDetail]
 
 
-class NotFoundResponse(BaseModel):
+class NotFoundResponse(OutputSchema):
     """Schema para respostas de recurso não encontrado (404)."""
     
     detail: str
 
 
-class ConflictResponse(BaseModel):
+class ConflictResponse(OutputSchema):
     """Schema para respostas de conflito/duplicidade (409)."""
     
     detail: str
@@ -320,14 +326,14 @@ class ConflictResponse(BaseModel):
     value: str | None = None
 
 
-class SuccessResponse(BaseModel):
+class SuccessResponse(OutputSchema):
     """Schema padrão para respostas de sucesso simples."""
     
     message: str
     data: dict[str, Any] | None = None
 
 
-class DeleteResponse(BaseModel):
+class DeleteResponse(OutputSchema):
     """Schema para resposta de deleção bem-sucedida."""
     
     message: str

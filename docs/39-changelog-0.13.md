@@ -95,12 +95,34 @@
 - **NEW**: `HEALTH_CHECK_ENABLED` setting (default: `true`)
 - Endpoints excluded from OpenAPI schema (`include_in_schema=False`)
 
+## Serializer Fixes (Schemas)
+
+### Response Presets — Correct Inheritance
+
+- **FIXED**: `PaginatedResponse` now inherits from `OutputSchema` (was `BaseModel`)
+- **FIXED**: `ErrorResponse` now inherits from `OutputSchema` (was `BaseModel`)
+- **FIXED**: `SuccessResponse` now inherits from `OutputSchema` (was `BaseModel`)
+- **FIXED**: `DeleteResponse` now inherits from `OutputSchema` (was `BaseModel`)
+- **FIXED**: `ValidationErrorResponse` now inherits from `OutputSchema` (was `BaseModel`)
+- **FIXED**: `NotFoundResponse` now inherits from `OutputSchema` (was `BaseModel`)
+- **FIXED**: `ConflictResponse` now inherits from `OutputSchema` (was `BaseModel`)
+- **FIXED**: `ValidationErrorDetail` now inherits from `OutputSchema` (was `BaseModel`)
+- All presets now have `from_attributes=True` via `OutputSchema.model_config`
+- Compatible with `issubclass(schema, OutputSchema)` checks in ViewSet validation
+
+### Partial Models — Preserve Inheritance
+
+- **FIXED**: `_make_partial_model()` in routing now creates partial models inheriting from the original schema (was `BaseModel`)
+- Partial models preserve `extra="forbid"`, `str_strip_whitespace=True`, custom validators
+
 ## Files Changed
 
 | File | Type |
 |------|------|
 | `core/config.py` | **Rewritten** |
 | `core/app.py` | Modified |
+| `core/serializers.py` | Modified (preset inheritance fix) |
+| `core/routing.py` | Modified (partial model inheritance fix) |
 | `core/middleware.py` | **Rewritten** |
 | `core/dependencies.py` | Modified |
 | `core/cli/main.py` | Modified |
