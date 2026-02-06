@@ -270,7 +270,9 @@
                                         
                                         <!-- FK / Foreign Key — searchable dropdown -->
                                         <template x-if="field.widget === 'fk'">
-                                            <div x-data="fkField(field)" class="relative">
+                                            <div x-data="fkField(field)" class="relative"
+                                                 @focusout="handleFocusOut($event)"
+                                                 @mousedown="handleMouseDown($event)">
                                                 <!-- Selected value display + clear -->
                                                 <div class="relative">
                                                     <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
@@ -278,10 +280,13 @@
                                                     </div>
                                                     <input
                                                         type="text"
+                                                        x-ref="fkInput"
                                                         x-model="searchQuery"
                                                         @focus="openDropdown()"
+                                                        @mousedown="openDropdown()"
                                                         @input="onSearchInput()"
                                                         @keydown.escape="closeDropdown()"
+                                                        @keydown.tab="closeDropdown()"
                                                         @keydown.arrow-down.prevent="highlightNext()"
                                                         @keydown.arrow-up.prevent="highlightPrev()"
                                                         @keydown.enter.prevent="selectHighlighted()"
@@ -308,7 +313,6 @@
                                                 
                                                 <!-- Dropdown -->
                                                 <div x-show="isOpen" x-cloak
-                                                     @click.outside="closeDropdown()"
                                                      x-transition:enter="transition ease-out duration-150"
                                                      x-transition:enter-start="opacity-0 -translate-y-1"
                                                      x-transition:enter-end="opacity-100 translate-y-0"
@@ -328,6 +332,7 @@
                                                         <div class="py-1">
                                                             <template x-for="(opt, idx) in options" :key="opt.pk">
                                                                 <button type="button"
+                                                                        @mousedown.prevent
                                                                         @click="selectOption(opt)"
                                                                         @mouseenter="highlightedIdx = idx"
                                                                         class="w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2"
@@ -854,7 +859,31 @@ function fkField(field) {
             }
         },
         
+        // Tracks if a mousedown happened inside the component
+        // (prevents focusout from closing dropdown when clicking options)
+        _mouseInsideComponent: false,
+        
+        handleMouseDown(event) {
+            // Flag that the click is inside the component
+            this._mouseInsideComponent = true;
+            setTimeout(() => { this._mouseInsideComponent = false; }, 200);
+        },
+        
+        handleFocusOut(event) {
+            // Only close if focus left the entire component
+            // Use setTimeout to let the new focus target settle
+            setTimeout(() => {
+                if (this._mouseInsideComponent) return;
+                // Check if the new active element is still inside this component
+                const container = this.$el;
+                if (!container.contains(document.activeElement)) {
+                    this.closeDropdown();
+                }
+            }, 150);
+        },
+        
         openDropdown() {
+            // Always open, never toggle
             this.isOpen = true;
             this.highlightedIdx = -1;
             if (this.options.length === 0) {
@@ -864,7 +893,6 @@ function fkField(field) {
         
         closeDropdown() {
             this.isOpen = false;
-            // Restore search query to selected label if nothing was picked
             if (this.selectedLabel) {
                 this.searchQuery = '';
             }
