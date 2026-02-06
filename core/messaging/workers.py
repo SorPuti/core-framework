@@ -282,10 +282,8 @@ class Worker(ABC):
             return ""
         if isinstance(topic, str):
             return topic
-        # Topic class or similar with .name attribute
         if hasattr(topic, 'name'):
             return topic.name
-        # Topic class or similar with .value attribute (Enum)
         if hasattr(topic, 'value'):
             return topic.value
         return str(topic)

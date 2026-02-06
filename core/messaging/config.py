@@ -1,50 +1,69 @@
 """
 Messaging configuration.
 
-Usa o Settings centralizado automaticamente - não precisa configurar nada.
-Basta definir no .env:
+DEPRECATED: Este módulo existe apenas para retrocompatibilidade.
+Use core.config.get_settings() diretamente.
+
+Todas as configurações de messaging estão centralizadas em core.config.Settings:
 
     KAFKA_ENABLED=true
     KAFKA_BACKEND=confluent
     KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
-E tudo funciona automaticamente.
+Acesse via:
+    from core.config import get_settings
+    settings = get_settings()
+    print(settings.kafka_backend)
 """
 
 from __future__ import annotations
 
-from core.config import get_settings
+import warnings
+
+from core.config import get_settings, configure
 
 
 def get_messaging_settings():
     """
-    Retorna configurações de messaging.
+    DEPRECATED: Use get_settings() diretamente.
     
-    Simplesmente retorna o Settings global que já carrega do .env.
+    Retorna configurações centralizadas (que incluem messaging).
     
-    Exemplo:
-        settings = get_messaging_settings()
+    Exemplo (novo):
+        from core.config import get_settings
+        settings = get_settings()
         print(settings.kafka_backend)
-        print(settings.kafka_bootstrap_servers)
     """
+    warnings.warn(
+        "get_messaging_settings() is deprecated. "
+        "Use get_settings() from core.config instead. "
+        "All messaging settings are in the centralized Settings class.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return get_settings()
 
 
 def configure_messaging(**kwargs):
     """
-    DEPRECATED: Não precisa mais chamar isso.
+    DEPRECATED: Use configure() ou .env diretamente.
     
     Configure diretamente no .env:
         KAFKA_BACKEND=confluent
         KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     
-    Ou se precisar via código:
-        from core import configure
+    Ou via código:
+        from core.config import configure
         configure(kafka_backend="confluent")
     """
-    from core.config import configure
+    warnings.warn(
+        "configure_messaging() is deprecated. "
+        "Use configure() from core.config instead, or set values in .env.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return configure(**kwargs)
 
 
-# Alias para compatibilidade
-MessagingSettings = type(get_settings())
+# Alias para compatibilidade (deprecated)
+MessagingSettings = type(get_settings()) if get_settings else None

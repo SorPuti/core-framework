@@ -8,7 +8,7 @@ from typing import Any
 import json
 
 from core.messaging.base import Producer, Event
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 
 
 class RedisProducer(Producer):
@@ -33,7 +33,7 @@ class RedisProducer(Producer):
             redis_url: Redis connection URL
             **kwargs: Additional redis options
         """
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self._redis_url = redis_url or self._settings.redis_url
         self._extra_config = kwargs
         self._redis = None

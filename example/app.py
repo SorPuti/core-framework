@@ -2,10 +2,13 @@
 Aplicação de exemplo completa.
 
 Demonstra como usar o Core Framework para criar uma API REST completa.
+
+Configuração:
+    Todas as settings ficam em example/settings.py (único local).
+    Variáveis de ambiente carregadas de .env e .env.{ENVIRONMENT}.
 """
 
 from core.app import CoreApp, create_app
-from core.config import Settings
 from core.routing import Router, AutoRouter
 
 from example.models import User, Post, Comment, Tag
@@ -17,13 +20,7 @@ from example.views import (
     HealthCheckView,
 )
 from example.auth import auth_router, setup_auth
-
-
-class AppSettings(Settings):
-    """Configurações específicas da aplicação."""
-    
-    jwt_secret: str = "your-secret-key-change-in-production"
-    jwt_expiration_hours: int = 24
+from example.settings import settings
 
 
 def create_example_app() -> CoreApp:
@@ -33,8 +30,6 @@ def create_example_app() -> CoreApp:
     Retorna:
         Instância configurada do CoreApp
     """
-    # Configurações
-    settings = AppSettings()
     
     # Cria auto-router para ViewSets
     api_router = AutoRouter(prefix="/api/v1")
@@ -103,7 +98,7 @@ if __name__ == "__main__":
     
     uvicorn.run(
         "example.app:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
     )

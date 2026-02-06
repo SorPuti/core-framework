@@ -12,7 +12,7 @@ import json
 import asyncio
 
 from core.messaging.base import Producer, Event
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 
 
 class KafkaProducer(Producer):
@@ -57,7 +57,7 @@ class KafkaProducer(Producer):
             client_id: Client identifier
             **kwargs: Additional aiokafka producer options
         """
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self._bootstrap_servers = bootstrap_servers or self._settings.kafka_bootstrap_servers
         self._client_id = client_id or self._settings.kafka_client_id
         self._extra_config = kwargs

@@ -172,9 +172,9 @@ def check_kafka_connection(bootstrap_servers: str = None) -> bool:
     Returns:
         True if connection successful, False otherwise (prints error message)
     """
-    from core.messaging.config import get_messaging_settings
+    from core.config import get_settings
     
-    settings = get_messaging_settings()
+    settings = get_settings()
     servers = bootstrap_servers or settings.kafka_bootstrap_servers
     kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
     
@@ -258,56 +258,77 @@ def check_required_package(package_name: str, install_cmd: str = None) -> bool:
 
 
 # =============================================================================
-# Configuração padrão
+# Configuração — delegada ao Settings centralizado
 # =============================================================================
 
-# Configuração padrão
-DEFAULT_CONFIG = {
-    "database_url": "sqlite+aiosqlite:///./app.db",
-    "migrations_dir": "./migrations",
-    "app_label": "main",
-    "models_module": "app.models",
-    "workers_module": None,  # Auto-discover if not set
-    "tasks_module": None,  # Auto-discover if not set
-    "app_module": "app.main",
-    "host": "0.0.0.0",
-    "port": 8000,
-}
-
-
 def load_config() -> dict[str, Any]:
-    """Carrega configuração do projeto."""
-    config = DEFAULT_CONFIG.copy()
+    """
+    Carrega configuração do projeto via Settings centralizado.
     
-    # Tenta carregar de core.toml ou pyproject.toml
+    Fonte única de verdade: core.config.Settings
+    
+    Retrocompatibilidade: se core.toml ou pyproject.toml existirem,
+    seus valores são lidos como fallback (Settings sempre prevalece).
+    
+    Retorna dict para compatibilidade com código existente do CLI.
+    """
+    from core.config import get_settings
+    
+    settings = get_settings()
+    
+    # Base: valores do Settings centralizado
+    config: dict[str, Any] = {
+        "database_url": settings.database_url,
+        "migrations_dir": settings.migrations_dir,
+        "app_label": settings.app_label,
+        "models_module": settings.models_module,
+        "workers_module": settings.workers_module,
+        "tasks_module": settings.tasks_module,
+        "app_module": settings.app_module,
+        "host": settings.host,
+        "port": settings.port,
+    }
+    
+    # Retrocompatibilidade: merge TOML como fallback para campos
+    # não configurados via env vars (Settings prevalece)
+    _toml_fallback = _load_toml_config()
+    for key, value in _toml_fallback.items():
+        if key not in config or config[key] is None:
+            config[key] = value
+    
+    return config
+
+
+def _load_toml_config() -> dict[str, Any]:
+    """
+    Carrega configuração de core.toml ou pyproject.toml (fallback).
+    
+    Mantido para retrocompatibilidade com projetos que usam TOML.
+    Settings (.env) é a fonte primária recomendada.
+    """
+    toml_config: dict[str, Any] = {}
+    
     config_file = Path("core.toml")
     if config_file.exists():
         try:
             import tomllib
             with open(config_file, "rb") as f:
                 file_config = tomllib.load(f)
-                config.update(file_config.get("core", {}))
+                toml_config.update(file_config.get("core", {}))
         except ImportError:
             pass
     
-    # Tenta pyproject.toml
     pyproject = Path("pyproject.toml")
     if pyproject.exists():
         try:
             import tomllib
             with open(pyproject, "rb") as f:
                 file_config = tomllib.load(f)
-                config.update(file_config.get("tool", {}).get("core", {}))
+                toml_config.update(file_config.get("tool", {}).get("core", {}))
         except ImportError:
             pass
     
-    # Variáveis de ambiente sobrescrevem
-    if os.environ.get("DATABASE_URL"):
-        config["database_url"] = os.environ["DATABASE_URL"]
-    if os.environ.get("MIGRATIONS_DIR"):
-        config["migrations_dir"] = os.environ["MIGRATIONS_DIR"]
-    
-    return config
+    return toml_config
 
 
 MODELS_CACHE_FILE = ".core_models_cache.json"
@@ -3336,9 +3357,9 @@ def cmd_topics_list(args: argparse.Namespace) -> int:
     print("=" * 50)
     
     async def list_topics():
-        from core.messaging.config import get_messaging_settings
+        from core.config import get_settings
         
-        settings = get_messaging_settings()
+        settings = get_settings()
         kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
         
         if kafka_backend == "confluent":

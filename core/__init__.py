@@ -48,8 +48,8 @@ from core.views import (
 )
 from core.routing import Router, AutoRouter
 from core.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
-from core.dependencies import Depends, get_db, get_current_user
-from core.config import Settings, get_settings, configure, is_configured, reset_settings
+from core.dependencies import Depends, get_db, get_current_user, set_session_factory
+from core.config import Settings, get_settings, configure, is_configured, reset_settings, on_settings_loaded
 from core.app import CoreApp
 
 # Validation
@@ -120,13 +120,14 @@ from core.datetime import (
 
 # Middleware - Sistema Django-style
 from core.middleware import (
+    ASGIMiddleware,
     BaseMiddleware,
     configure_middleware,
     register_middleware,
     apply_middlewares,
     get_middleware_stack_info,
     print_middleware_stack,
-    # Pre-built middlewares
+    # Pre-built middlewares (Pure ASGI)
     TimingMiddleware,
     RequestIDMiddleware,
     LoggingMiddleware,
@@ -298,7 +299,7 @@ from core.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.12.32"
+__version__ = "0.13.0"
 __all__ = [
     # Models
     "Model",
@@ -345,15 +346,18 @@ __all__ = [
     "Depends",
     "get_db",
     "get_current_user",
+    "set_session_factory",
     # Config
     "Settings",
     "get_settings",
     "configure",
     "is_configured",
     "reset_settings",
+    "on_settings_loaded",
     # App
     "CoreApp",
     # Middleware
+    "ASGIMiddleware",
     "BaseMiddleware",
     "configure_middleware",
     "register_middleware",

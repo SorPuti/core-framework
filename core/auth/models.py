@@ -970,7 +970,7 @@ class PermissionsMixin:
 # User Model Helper
 # =============================================================================
 
-def get_user_model() -> type[AbstractUser]:
+def get_user_model() -> type | Any:
     """
     Retorna o modelo de usuário configurado no projeto.
     

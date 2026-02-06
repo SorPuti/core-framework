@@ -10,7 +10,7 @@ import asyncio
 import logging
 
 from core.messaging.base import Consumer, Event
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 from core.messaging.registry import get_event_handlers
 
 
@@ -47,7 +47,7 @@ class RabbitMQConsumer(Consumer):
             message_handler: Optional custom handler
             **kwargs: Additional options
         """
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self.group_id = group_id
         self.topics = topics
         self._url = url or self._settings.rabbitmq_url

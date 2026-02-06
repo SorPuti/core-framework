@@ -10,7 +10,7 @@ from typing import Any
 from dataclasses import dataclass
 import logging
 
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class KafkaAdmin:
             bootstrap_servers: Kafka servers (comma-separated)
             **kwargs: Additional admin client options
         """
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self._bootstrap_servers = bootstrap_servers or self._settings.kafka_bootstrap_servers
         self._extra_config = kwargs
         self._admin = None

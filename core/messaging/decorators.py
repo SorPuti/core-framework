@@ -18,7 +18,7 @@ from core.messaging.registry import (
     register_event_handler,
     get_producer,
 )
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 
 
 F = TypeVar("F", bound=Callable[..., Awaitable[Any]])
@@ -65,7 +65,7 @@ def event(
             result = await func(*args, **kwargs)
             
             # Get settings
-            settings = get_messaging_settings()
+            settings = get_settings()
             
             if not settings.messaging_enabled:
                 return result
@@ -234,7 +234,7 @@ def emit_event(
         asyncio.create_task(emit_event("cleanup.completed", {"count": 100})())
     """
     async def _emit() -> None:
-        settings = get_messaging_settings()
+        settings = get_settings()
         
         if not settings.messaging_enabled:
             return

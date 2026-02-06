@@ -42,7 +42,14 @@ def register_broker(broker: "MessageBroker", default: bool = False) -> None:
 
 def get_broker(name: str | None = None) -> "MessageBroker":
     """
-    Get a registered broker by name.
+    Get a registered broker (auto-creates if not exists).
+    
+    Automatically creates the appropriate broker based on settings:
+    - kafka_backend="confluent" -> ConfluentBroker
+    - kafka_backend="aiokafka" -> KafkaBroker (default)
+    
+    Configuração via .env:
+        KAFKA_BACKEND=confluent
     
     Args:
         name: Broker name (uses default if None)
@@ -50,15 +57,30 @@ def get_broker(name: str | None = None) -> "MessageBroker":
     Returns:
         MessageBroker instance
     
-    Raises:
-        ValueError: If broker not found
+    Example:
+        broker = get_broker()
+        await broker.connect()
+        await broker.publish("topic", {"key": "value"})
     """
+    global _default_broker
     broker_name = name or _default_broker
-    if broker_name is None:
-        raise ValueError("No broker registered. Call register_broker() first.")
     
-    if broker_name not in _brokers:
-        raise ValueError(f"Broker '{broker_name}' not found. Available: {list(_brokers.keys())}")
+    # Auto-create broker if none registered
+    if broker_name is None or broker_name not in _brokers:
+        from core.config import get_settings
+        
+        settings = get_settings()
+        kafka_backend = getattr(settings, "kafka_backend", "aiokafka")
+        
+        if kafka_backend == "confluent":
+            from core.messaging.confluent import ConfluentBroker
+            broker = ConfluentBroker()
+        else:
+            from core.messaging.kafka import KafkaBroker
+            broker = KafkaBroker()
+        
+        register_broker(broker, default=True)
+        return broker
     
     return _brokers[broker_name]
 
@@ -390,9 +412,9 @@ async def publish_event(
         )
     """
     from core.messaging.base import Event
-    from core.messaging.config import get_messaging_settings
+    from core.config import get_settings
     
-    settings = get_messaging_settings()
+    settings = get_settings()
     
     event = Event(
         name=event_name,

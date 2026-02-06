@@ -6,17 +6,15 @@ Consumes task messages from queues and executes them.
 
 from __future__ import annotations
 
-from typing import Any, Callable
 import asyncio
 import logging
 import signal
-import traceback
+from typing import Any, Callable
 
-from core.tasks.base import TaskMessage, TaskResult, TaskStatus
-from core.tasks.config import get_task_settings
-from core.tasks.registry import get_task, get_all_tasks
 from core.datetime import timezone
-
+from core.tasks.base import TaskMessage, TaskResult, TaskStatus
+from core.config import get_settings
+from core.tasks.registry import get_task
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +52,7 @@ class TaskWorker:
             concurrency: Number of concurrent tasks
             db_session_factory: Factory for database sessions
         """
-        self._settings = get_task_settings()
+        self._settings = get_settings()
         self._queues = queues or [self._settings.task_default_queue]
         self._concurrency = concurrency or self._settings.task_worker_concurrency
         self._db_session_factory = db_session_factory
@@ -79,8 +77,8 @@ class TaskWorker:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, self._handle_signal)
         
-        # Start consumer with retry
-        from core.messaging.kafka import KafkaConsumer
+        # Start consumer with retry — respects kafka_backend setting
+        from core.messaging.registry import create_consumer
         
         topics = [f"tasks.{q}" for q in self._queues]
         
@@ -91,8 +89,8 @@ class TaskWorker:
         
         for attempt in range(max_retries):
             try:
-                # Create new consumer for each attempt
-                self._consumer = KafkaConsumer(
+                # Create consumer using the configured backend (aiokafka or confluent)
+                self._consumer = create_consumer(
                     group_id=f"worker-{'-'.join(self._queues)}",
                     topics=topics,
                     message_handler=self._handle_message,
@@ -252,7 +250,7 @@ class TaskWorker:
         from core.tasks.registry import get_task_producer
         from datetime import timedelta
         
-        settings = get_task_settings()
+        settings = get_settings()
         
         # Calculate retry delay with exponential backoff
         delay = task_msg.retry_delay

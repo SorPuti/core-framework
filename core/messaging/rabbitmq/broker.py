@@ -8,7 +8,7 @@ from typing import Any, Callable, Awaitable
 import logging
 
 from core.messaging.base import MessageBroker
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 from core.messaging.rabbitmq.producer import RabbitMQProducer
 from core.messaging.rabbitmq.consumer import RabbitMQConsumer
 
@@ -40,7 +40,7 @@ class RabbitMQBroker(MessageBroker):
             url: RabbitMQ connection URL
             **kwargs: Additional configuration
         """
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self._url = url or self._settings.rabbitmq_url
         self._extra_config = kwargs
         

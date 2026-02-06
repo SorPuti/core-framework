@@ -13,7 +13,7 @@ import threading
 import atexit
 
 from core.messaging.base import Producer, Event
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 
 
 class ConfluentProducer(Producer):
@@ -71,7 +71,7 @@ class ConfluentProducer(Producer):
         if hasattr(self, "_initialized") and self._initialized:
             return
         
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self._bootstrap_servers = bootstrap_servers or self._settings.kafka_bootstrap_servers
         self._schema_registry_url = schema_registry_url or getattr(
             self._settings, "kafka_schema_registry_url", None

@@ -13,7 +13,7 @@ import logging
 import signal
 
 from core.tasks.base import PeriodicTask, TaskMessage
-from core.tasks.config import get_task_settings
+from core.config import get_settings
 from core.tasks.registry import get_periodic_tasks, get_task_producer
 from core.datetime import timezone
 
@@ -38,7 +38,7 @@ class TaskScheduler:
     
     def __init__(self):
         """Initialize scheduler."""
-        self._settings = get_task_settings()
+        self._settings = get_settings()
         self._running = False
         self._shutdown_event = asyncio.Event()
         self._task: asyncio.Task | None = None

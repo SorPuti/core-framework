@@ -6,16 +6,21 @@ Execute com:
 
 Ou com uvicorn:
     uvicorn main:app --reload
+
+Configuração:
+    Todas as settings ficam em example/settings.py
+    Variáveis de ambiente em .env e .env.{ENVIRONMENT}
 """
 
 from example.app import app
 
 if __name__ == "__main__":
     import uvicorn
+    from example.settings import settings
     
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
     )

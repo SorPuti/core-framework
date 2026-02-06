@@ -8,7 +8,7 @@ from typing import Any, Callable, Awaitable
 import logging
 
 from core.messaging.base import MessageBroker
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 from core.messaging.redis.producer import RedisProducer
 from core.messaging.redis.consumer import RedisConsumer
 
@@ -40,7 +40,7 @@ class RedisBroker(MessageBroker):
             redis_url: Redis connection URL
             **kwargs: Additional configuration
         """
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self._redis_url = redis_url or self._settings.redis_url
         self._extra_config = kwargs
         

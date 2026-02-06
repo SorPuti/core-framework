@@ -10,7 +10,7 @@ import asyncio
 import logging
 
 from core.messaging.base import Consumer, Event
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 from core.messaging.registry import get_event_handlers
 
 
@@ -52,7 +52,7 @@ class RedisConsumer(Consumer):
             consumer_name: Unique consumer name within group
             **kwargs: Additional redis options
         """
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self.group_id = group_id
         self.topics = topics
         self._redis_url = redis_url or self._settings.redis_url

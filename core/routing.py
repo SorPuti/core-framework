@@ -691,10 +691,16 @@ class AutoRouter:
     
     Similar ao DefaultRouter do DRF.
     
+    Tags são resolvidas UMA vez no register(), sem duplicação no OpenAPI:
+    - tags explícitas em register() → prioridade máxima
+    - tags do AutoRouter(tags=...) → fallback padrão
+    - ViewSet.tags → fallback da classe
+    - [basename] → último recurso
+    
     Exemplo:
-        auto_router = AutoRouter()
-        auto_router.register("/users", UserViewSet)
-        auto_router.register("/posts", PostViewSet)
+        auto_router = AutoRouter(tags=["Auth"])
+        auto_router.register("/login", LoginViewSet)                    # → tags=["Auth"]
+        auto_router.register("/users", UserViewSet, tags=["Users"])     # → tags=["Users"]
         
         app.include_router(auto_router.router)
     """
@@ -704,8 +710,32 @@ class AutoRouter:
         prefix: str = "",
         tags: list[str] | None = None,
     ) -> None:
-        self.router = Router(prefix=prefix, tags=tags or [])
+        self._default_tags = tags or []
+        # Tags NÃO são passadas ao Router — resolução acontece em register()
+        # para evitar que FastAPI acumule router-tags + route-tags no OpenAPI
+        self.router = Router(prefix=prefix)
         self._registry: list[tuple[str, type, dict[str, Any]]] = []
+    
+    def _resolve_tags(
+        self,
+        explicit_tags: list[str] | None,
+        viewset_or_view: type | None = None,
+    ) -> list[str] | None:
+        """
+        Resolve tags com prioridade, sem duplicação.
+        
+        Ordem: explicit > AutoRouter default > ViewSet/APIView.tags > None
+        Retorna None para deixar register_viewset usar [basename] como último recurso.
+        """
+        if explicit_tags is not None:
+            return explicit_tags
+        if self._default_tags:
+            return self._default_tags
+        if viewset_or_view is not None:
+            cls_tags = getattr(viewset_or_view, "tags", None)
+            if cls_tags:
+                return cls_tags
+        return None
     
     def register(
         self,
@@ -717,17 +747,25 @@ class AutoRouter:
         """
         Registra um ViewSet.
         
+        Tags são resolvidas aqui com prioridade:
+        1. tags (argumento explícito)
+        2. AutoRouter._default_tags
+        3. ViewSet.tags
+        4. [basename] (resolvido em register_viewset)
+        
         Args:
             prefix: Prefixo da URL
             viewset_class: Classe do ViewSet
             basename: Nome base para as rotas
-            tags: Tags para OpenAPI
+            tags: Tags para OpenAPI (prioridade máxima)
         """
+        resolved_tags = self._resolve_tags(tags, viewset_class)
+        
         self._registry.append((prefix, viewset_class, {
             "basename": basename,
-            "tags": tags,
+            "tags": resolved_tags,
         }))
-        self.router.register_viewset(prefix, viewset_class, basename, tags)
+        self.router.register_viewset(prefix, viewset_class, basename, resolved_tags)
     
     def register_view(
         self,
@@ -735,7 +773,11 @@ class AutoRouter:
         view_class: type["APIView"],
         **kwargs: Any,
     ) -> None:
-        """Registra uma APIView."""
+        """Registra uma APIView, aplicando tags padrão do AutoRouter se não fornecidas."""
+        if "tags" not in kwargs:
+            resolved = self._resolve_tags(None, view_class)
+            if resolved:
+                kwargs["tags"] = resolved
         self.router.register_view(path, view_class, **kwargs)
     
     def include_router(
@@ -758,7 +800,8 @@ class AutoRouter:
         else:
             inner_router = router
         
-        # Inclui no router interno
+        # Inclui no router interno — tags já foram resolvidas em register(),
+        # só passa tags aqui se explicitamente fornecidas pelo caller
         self.router.include_router(inner_router, prefix=prefix, tags=tags or [])
     
     @property

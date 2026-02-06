@@ -1,11 +1,12 @@
 """
 Configurações centralizadas do framework.
 
-ÚNICO local de configuração para toda a aplicação:
+UNICO local de configuração para toda a aplicação:
 - Database, Auth, API, CORS
 - Kafka (aiokafka ou confluent)
 - Tasks, Workers
 - Middleware, Logging
+- CLI, Migrations, Discovery
 
 Uso:
     # settings.py do projeto
@@ -30,13 +31,59 @@ Ou via código (antes de iniciar a app):
         kafka_backend="confluent",
         database_url="postgresql+asyncpg://localhost/myapp",
     )
+
+Resolução de .env por ambiente:
+    Precedência (maior para menor):
+    1. Variáveis de ambiente do OS
+    2. .env.{ENVIRONMENT} (ex: .env.production)
+    3. .env (base)
+    4. Defaults da classe Settings
 """
 
-from functools import lru_cache
-from typing import Any, Literal
+import logging
+import os
+import secrets
+import warnings
+from pathlib import Path
+from typing import Any, Literal, Self
 
-from pydantic import Field as PydanticField
+from pydantic import Field as PydanticField, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger("core.config")
+
+
+# =========================================================================
+# ENV FILE RESOLUTION
+# =========================================================================
+
+def _resolve_env_files() -> tuple[str, ...]:
+    """
+    Resolve .env files baseado na variável ENVIRONMENT.
+    
+    Precedência (maior para menor):
+    1. Variáveis de ambiente do OS (sempre lidas)
+    2. .env.{environment} (ex: .env.production) — sobrescreve .env base
+    3. .env (base)
+    4. Defaults da classe Settings
+    
+    Returns:
+        Tupla de paths de .env files para carregar
+    """
+    env = os.environ.get("ENVIRONMENT", "development")
+    files: list[str] = []
+    
+    # Base .env (carregado primeiro, menor precedência)
+    if Path(".env").is_file():
+        files.append(".env")
+    
+    # Environment-specific .env (carregado depois, maior precedência)
+    env_file = f".env.{env}"
+    if Path(env_file).is_file():
+        files.append(env_file)
+    
+    # Se nenhum arquivo existe, tenta .env mesmo assim (pydantic ignora se não existir)
+    return tuple(files) if files else (".env",)
 
 
 class Settings(BaseSettings):
@@ -49,6 +96,7 @@ class Settings(BaseSettings):
     - Kafka (aiokafka/confluent)
     - Tasks, Workers
     - Middleware
+    - CLI, Migrations, Discovery
     
     Exemplo:
         class AppSettings(Settings):
@@ -59,6 +107,13 @@ class Settings(BaseSettings):
     
     Variáveis de ambiente carregadas automaticamente:
         DATABASE_URL, KAFKA_BACKEND, SECRET_KEY, etc.
+    
+    Ambientes suportados (.env por ambiente):
+        .env                  # Base (sempre carregado)
+        .env.development      # Sobrescreve em development
+        .env.production       # Sobrescreve em production
+        .env.staging          # Sobrescreve em staging
+        .env.testing          # Sobrescreve em testing
     """
     
     model_config = SettingsConfigDict(
@@ -89,8 +144,19 @@ class Settings(BaseSettings):
         description="Modo debug (NUNCA use em produção)",
     )
     secret_key: str = PydanticField(
-        default="change-me-in-production",
-        description="Chave secreta para criptografia e tokens",
+        default="__auto_generate__",
+        description=(
+            "Chave secreta para criptografia e tokens. "
+            "OBRIGATÓRIA em production/staging. "
+            "Em development/testing, auto-gerada se não configurada."
+        ),
+    )
+    auto_create_tables: bool = PydanticField(
+        default=False,
+        description=(
+            "Se True, cria tabelas automaticamente no startup. "
+            "Use False em produção — prefira migrations."
+        ),
     )
     
     # =========================================================================
@@ -151,16 +217,25 @@ class Settings(BaseSettings):
         description="Prefixo das rotas da API",
     )
     docs_url: str | None = PydanticField(
-        default="/docs",
-        description="URL da documentação Swagger (None para desabilitar)",
+        default=None,
+        description=(
+            "URL da documentação Swagger (None para desabilitar). "
+            "Auto-habilitado em development se não configurado."
+        ),
     )
     redoc_url: str | None = PydanticField(
-        default="/redoc",
-        description="URL da documentação ReDoc (None para desabilitar)",
+        default=None,
+        description=(
+            "URL da documentação ReDoc (None para desabilitar). "
+            "Auto-habilitado em development se não configurado."
+        ),
     )
     openapi_url: str | None = PydanticField(
-        default="/openapi.json",
-        description="URL do schema OpenAPI (None para desabilitar)",
+        default=None,
+        description=(
+            "URL do schema OpenAPI (None para desabilitar). "
+            "Auto-habilitado em development se não configurado."
+        ),
     )
     
     # =========================================================================
@@ -168,11 +243,14 @@ class Settings(BaseSettings):
     # =========================================================================
     
     cors_origins: list[str] = PydanticField(
-        default=["*"],
-        description="Origens permitidas para CORS",
+        default=[],
+        description=(
+            "Origens permitidas para CORS. "
+            "Vazio por padrão (seguro). Configure explicitamente por ambiente."
+        ),
     )
     cors_allow_credentials: bool = PydanticField(
-        default=True,
+        default=False,
         description="Permitir credenciais em CORS",
     )
     cors_allow_methods: list[str] = PydanticField(
@@ -549,6 +627,105 @@ class Settings(BaseSettings):
     )
     
     # =========================================================================
+    # CLI / PROJECT DISCOVERY
+    # Campos usados pelo CLI e pelo sistema de discovery de módulos.
+    # Anteriormente dispersos em load_config() — agora centralizados.
+    # =========================================================================
+    
+    migrations_dir: str = PydanticField(
+        default="./migrations",
+        description="Diretório de migrations do projeto",
+    )
+    app_label: str = PydanticField(
+        default="main",
+        description="Label da aplicação (usado em migrations e CLI)",
+    )
+    models_module: str = PydanticField(
+        default="app.models",
+        description="Módulo Python dos models (ex: 'myapp.models')",
+    )
+    workers_module: str | None = PydanticField(
+        default=None,
+        description="Módulo Python dos workers (None para auto-discovery)",
+    )
+    tasks_module: str | None = PydanticField(
+        default=None,
+        description="Módulo Python das tasks (None para auto-discovery)",
+    )
+    app_module: str = PydanticField(
+        default="app.main",
+        description="Módulo Python da aplicação principal (ex: 'myapp.main')",
+    )
+    
+    # =========================================================================
+    # HEALTH CHECK
+    # =========================================================================
+    
+    health_check_enabled: bool = PydanticField(
+        default=True,
+        description="Habilita endpoints /healthz e /readyz automáticos",
+    )
+    
+    # =========================================================================
+    # VALIDATORS — Security & Environment-Aware Defaults
+    # =========================================================================
+    
+    @model_validator(mode="after")
+    def _apply_security_and_defaults(self) -> Self:
+        """
+        Aplica validações de segurança e defaults baseados no ambiente.
+        
+        Executado automaticamente após a criação do Settings:
+        1. Valida/gera secret_key baseado no ambiente
+        2. Auto-habilita docs em development
+        3. Emite warnings para configurações inseguras
+        """
+        # -- Secret key: obrigatória em production/staging --
+        if self.secret_key == "__auto_generate__":
+            if self.environment in ("production", "staging"):
+                raise ValueError(
+                    "SECRET_KEY is required in production/staging environments. "
+                    "Set SECRET_KEY in your .env file or as an environment variable."
+                )
+            # Auto-generate for development/testing
+            generated = secrets.token_urlsafe(64)
+            object.__setattr__(self, "secret_key", generated)
+            logger.warning(
+                "SECRET_KEY not configured — auto-generated random key for '%s'. "
+                "This key changes on every restart. Set SECRET_KEY for persistent tokens.",
+                self.environment,
+            )
+        
+        # -- Auto-enable docs in development --
+        if self.environment == "development":
+            if self.docs_url is None:
+                object.__setattr__(self, "docs_url", "/docs")
+            if self.redoc_url is None:
+                object.__setattr__(self, "redoc_url", "/redoc")
+            if self.openapi_url is None:
+                object.__setattr__(self, "openapi_url", "/openapi.json")
+        
+        # -- Warnings para configurações inseguras em production --
+        if self.environment == "production":
+            if self.debug:
+                logger.warning(
+                    "DEBUG=True in production environment. "
+                    "This exposes sensitive information. Set DEBUG=False."
+                )
+            if "*" in self.cors_origins:
+                logger.warning(
+                    "CORS_ORIGINS contains '*' in production. "
+                    "This allows any origin. Restrict to specific domains."
+                )
+            if self.auto_create_tables:
+                logger.warning(
+                    "AUTO_CREATE_TABLES=True in production. "
+                    "Use migrations instead. Set AUTO_CREATE_TABLES=False."
+                )
+        
+        return self
+    
+    # =========================================================================
     # Helpers
     # =========================================================================
     
@@ -589,10 +766,15 @@ class Settings(BaseSettings):
 _settings: Settings | None = None
 _settings_class: type[Settings] = Settings
 
+# Callbacks pós-carregamento
+_on_settings_loaded: list[Any] = []
+
 
 def get_settings() -> Settings:
     """
     Retorna instância singleton das configurações.
+    
+    Carrega automaticamente .env e .env.{ENVIRONMENT}.
     
     Exemplo:
         from core import get_settings
@@ -603,7 +785,14 @@ def get_settings() -> Settings:
     """
     global _settings
     if _settings is None:
-        _settings = _settings_class()
+        # Resolve env files baseado em ENVIRONMENT
+        env_files = _resolve_env_files()
+        _settings = _settings_class(_env_file=env_files)
+        
+        # Executa callbacks pós-carregamento
+        for callback in _on_settings_loaded:
+            callback(_settings)
+    
     return _settings
 
 
@@ -622,6 +811,9 @@ def configure(
     
     Returns:
         Settings configurado
+    
+    Raises:
+        ValueError: Se override key não existir na classe Settings
     
     Exemplo:
         from core import configure, Settings
@@ -650,21 +842,45 @@ def configure(
     if settings_class is not None:
         _settings_class = settings_class
     
+    # Valida que todas as override keys existem na classe Settings
     if overrides:
-        # Cria classe dinâmica com os overrides como defaults
-        class ConfiguredSettings(_settings_class):
-            pass
-        
-        for key, value in overrides.items():
-            if hasattr(_settings_class, key):
-                # Override via model_validator ou default
-                pass
-        
-        _settings = _settings_class(**overrides)
+        known_fields = set(_settings_class.model_fields.keys())
+        unknown = set(overrides.keys()) - known_fields
+        if unknown:
+            logger.warning(
+                "Unknown settings keys passed to configure(): %s. "
+                "Available keys: check Settings class fields.",
+                ", ".join(sorted(unknown)),
+            )
+    
+    # Resolve env files e cria instância
+    env_files = _resolve_env_files()
+    
+    if overrides:
+        _settings = _settings_class(_env_file=env_files, **overrides)
     else:
-        _settings = _settings_class()
+        _settings = _settings_class(_env_file=env_files)
+    
+    # Executa callbacks pós-carregamento
+    for callback in _on_settings_loaded:
+        callback(_settings)
     
     return _settings
+
+
+def on_settings_loaded(callback: Any) -> Any:
+    """
+    Registra callback executado após Settings ser carregado.
+    
+    O callback recebe a instância de Settings como argumento.
+    
+    Exemplo:
+        @on_settings_loaded
+        def setup_logging(settings):
+            logging.basicConfig(level=settings.log_level)
+    """
+    _on_settings_loaded.append(callback)
+    return callback
 
 
 def is_configured() -> bool:
@@ -676,9 +892,18 @@ def reset_settings() -> None:
     """
     Reseta configurações. Útil para testes.
     
-    AVISO: Não usar em produção.
+    AVISO: Apenas para uso em testes. Em produção, este método
+    emite um warning e não executa.
     """
     global _settings, _settings_class
+    
+    if _settings is not None and _settings.environment == "production":
+        logger.warning(
+            "reset_settings() called in production environment — ignored. "
+            "This function is intended for testing only."
+        )
+        return
+    
     _settings = None
     _settings_class = Settings
 
@@ -693,6 +918,12 @@ def get_settings_class_instance[T: Settings](settings_class: type[T]) -> T:
     
     Deprecated: Use configure(settings_class=MySettings) em vez disso.
     """
+    warnings.warn(
+        "get_settings_class_instance() is deprecated. "
+        "Use configure(settings_class=MySettings) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     global _settings, _settings_class
     if _settings is None or not isinstance(_settings, settings_class):
         _settings_class = settings_class

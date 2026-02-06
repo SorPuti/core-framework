@@ -13,7 +13,7 @@ import asyncio
 import logging
 
 from core.messaging.base import Consumer, Event, EventHandler
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 from core.messaging.registry import get_event_handlers
 
 
@@ -69,7 +69,7 @@ class ConfluentConsumer(Consumer):
             message_handler: Optional custom message handler
             **kwargs: Additional confluent-kafka config
         """
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self.group_id = group_id or ""
         self.topics = self._resolve_topics(topics or [])
         self._message_handler = message_handler

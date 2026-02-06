@@ -51,6 +51,12 @@ UserType = TypeVar("UserType")
 _user_loader: Callable[[str], Any] | None = None
 _token_decoder: Callable[[str], dict[str, Any]] | None = None
 
+# Session factory plugável (permite substituir get_db sem fork)
+_session_factory: Callable[[], AsyncGenerator[AsyncSession, None]] | None = None
+
+# Cache de has_replicas (resolvido no startup, evita check por request)
+_has_replicas: bool | None = None
+
 
 def configure_auth(
     user_loader: Callable[[str], Any],
@@ -77,11 +83,45 @@ def configure_auth(
     _token_decoder = token_decoder
 
 
+def set_session_factory(
+    factory: Callable[[], AsyncGenerator[AsyncSession, None]],
+) -> None:
+    """
+    Registra uma session factory customizada.
+    
+    Permite substituir a lógica de get_db() sem fork do core.
+    Útil para: read-replica seletiva por endpoint, custom execution
+    options, session middleware, etc.
+    
+    Args:
+        factory: Async generator que produz AsyncSession
+    
+    Exemplo:
+        async def my_session_factory():
+            async with my_custom_session_maker() as session:
+                yield session
+        
+        set_session_factory(my_session_factory)
+    """
+    global _session_factory
+    _session_factory = factory
+
+
+def _resolve_has_replicas() -> bool:
+    """Resolve se replicas estão configuradas (cacheado após primeiro call)."""
+    global _has_replicas
+    if _has_replicas is None:
+        settings = get_settings()
+        _has_replicas = settings.has_read_replica
+    return _has_replicas
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency que fornece uma sessão de banco de dados.
     
     Adapta-se automaticamente à configuração:
+    - Se session factory customizada: usa ela
     - Se replicas configuradas: retorna sessão de escrita (primary)
     - Se banco único: retorna sessão padrão
     
@@ -96,20 +136,19 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     
     A sessão é automaticamente fechada após a requisição.
     """
-    # Verifica se replicas estão configuradas
-    try:
-        from core.config import get_settings
-        settings = get_settings()
-        has_replicas = settings.has_read_replica
-    except Exception:
-        has_replicas = False
+    # Custom session factory (set via set_session_factory)
+    if _session_factory is not None:
+        async for session in _session_factory():
+            yield session
+        return
+    
+    # Resolve replicas (cached after first call)
+    has_replicas = _resolve_has_replicas()
     
     if has_replicas:
-        # Usa sistema de replicas - retorna sessão de escrita
         from core.database import get_write_session
         session = await get_write_session()
     else:
-        # Usa sistema padrão
         from core.models import get_session
         session = await get_session()
     
@@ -217,9 +256,13 @@ async def get_current_user(
     except HTTPException:
         raise
     except Exception as e:
+        # Never leak internal error details in auth responses
+        import logging
+        logging.getLogger("core.auth").debug("Token validation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {str(e)}",
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 

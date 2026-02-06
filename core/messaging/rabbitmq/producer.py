@@ -8,7 +8,7 @@ from typing import Any
 import json
 
 from core.messaging.base import Producer, Event
-from core.messaging.config import get_messaging_settings
+from core.config import get_settings
 
 
 class RabbitMQProducer(Producer):
@@ -30,7 +30,7 @@ class RabbitMQProducer(Producer):
             url: RabbitMQ connection URL
             **kwargs: Additional options
         """
-        self._settings = get_messaging_settings()
+        self._settings = get_settings()
         self._url = url or self._settings.rabbitmq_url
         self._extra_config = kwargs
         self._connection = None

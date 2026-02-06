@@ -1,47 +1,67 @@
 """
 Task configuration.
 
-Usa o Settings centralizado automaticamente - não precisa configurar nada.
-Basta definir no .env:
+DEPRECATED: Este módulo existe apenas para retrocompatibilidade.
+Use core.config.get_settings() diretamente.
+
+Todas as configurações de tasks estão centralizadas em core.config.Settings:
 
     TASK_ENABLED=true
     TASK_WORKER_CONCURRENCY=8
 
-E tudo funciona automaticamente.
+Acesse via:
+    from core.config import get_settings
+    settings = get_settings()
+    print(settings.task_worker_concurrency)
 """
 
 from __future__ import annotations
 
-from core.config import get_settings
+import warnings
+
+from core.config import get_settings, configure
 
 
 def get_task_settings():
     """
-    Retorna configurações de tasks.
+    DEPRECATED: Use get_settings() diretamente.
     
-    Simplesmente retorna o Settings global que já carrega do .env.
+    Retorna configurações centralizadas (que incluem tasks).
     
-    Exemplo:
-        settings = get_task_settings()
+    Exemplo (novo):
+        from core.config import get_settings
+        settings = get_settings()
         print(settings.task_worker_concurrency)
     """
+    warnings.warn(
+        "get_task_settings() is deprecated. "
+        "Use get_settings() from core.config instead. "
+        "All task settings are in the centralized Settings class.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return get_settings()
 
 
 def configure_tasks(**kwargs):
     """
-    DEPRECATED: Não precisa mais chamar isso.
+    DEPRECATED: Use configure() ou .env diretamente.
     
     Configure diretamente no .env:
         TASK_WORKER_CONCURRENCY=8
     
-    Ou se precisar via código:
-        from core import configure
+    Ou via código:
+        from core.config import configure
         configure(task_worker_concurrency=8)
     """
-    from core.config import configure
+    warnings.warn(
+        "configure_tasks() is deprecated. "
+        "Use configure() from core.config instead, or set values in .env.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return configure(**kwargs)
 
 
-# Alias para compatibilidade
-TaskSettings = type(get_settings())
+# Alias para compatibilidade (deprecated)
+TaskSettings = type(get_settings()) if get_settings else None

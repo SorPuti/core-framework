@@ -79,9 +79,8 @@ class ModelBackend(AuthBackend):
         if config.user_model:
             return config.user_model
         
-        # Fallback para User padrão
-        from core.auth.models import User
-        return User
+        from core.auth.models import AbstractUser
+        return AbstractUser
     
     @property
     def username_field(self) -> str:
@@ -202,8 +201,8 @@ class TokenAuthBackend(AuthBackend):
         if config.user_model:
             return config.user_model
         
-        from core.auth.models import User
-        return User
+        from core.auth.models import AbstractUser
+        return AbstractUser
     
     async def authenticate(
         self,

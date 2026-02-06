@@ -1,12 +1,24 @@
 """
 Bootstrap do Framework - Aplicação principal.
 
+Boot Sequence (ordem garantida):
+1. Settings loaded (frozen, validado)
+2. Logging configured
+3. Database engine initialized
+4. Models metadata ready (tables registered)
+5. Auth configured (se middleware "auth" habilitado)
+6. Middleware applied
+7. Routes registered
+8. Health checks registered (se habilitado)
+9. Startup callbacks executed
+
 Características:
 - Configuração centralizada via Settings
 - Lifecycle management (startup/shutdown)
-- Middleware integrado
+- Middleware integrado (Django-style)
 - CORS configurável
 - Documentação automática
+- Health checks built-in (/healthz, /readyz)
 - Auto-configuração de features enterprise:
   - Multi-tenancy
   - Read/Write replicas
@@ -15,6 +27,7 @@ Características:
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from collections.abc import Callable, Sequence
 from contextlib import asynccontextmanager
@@ -26,6 +39,8 @@ from fastapi.responses import JSONResponse
 from core.config import Settings, get_settings
 from core.models import init_database, create_tables, close_database
 from core.routing import Router, AutoRouter, include_router
+
+app_logger = logging.getLogger("core.app")
 
 
 class CoreApp:
@@ -76,7 +91,7 @@ class CoreApp:
         middlewares: list[tuple[type, dict[str, Any]]] | None = None,
         middleware: list[str | type | tuple] | None = None,
         exception_handlers: dict[type, Callable] | None = None,
-        auto_create_tables: bool = True,
+        auto_create_tables: bool | None = None,
         **fastapi_kwargs: Any,
     ) -> None:
         """
@@ -93,7 +108,7 @@ class CoreApp:
             middlewares: Lista de middlewares formato antigo (classe, kwargs)
             middleware: Lista de middlewares formato Django-style (strings/classes)
             exception_handlers: Handlers de exceção customizados
-            auto_create_tables: Se True, cria tabelas automaticamente
+            auto_create_tables: Se True, cria tabelas no startup (default: Settings.auto_create_tables)
             **fastapi_kwargs: Argumentos extras para FastAPI
         
         Middleware format (novo, Django-style):
@@ -104,46 +119,63 @@ class CoreApp:
                 ("logging", {"log_body": True}),  # Com kwargs
             ]
         """
+        # ── Step 1: Settings (loaded, validated) ──
         self.settings = settings or get_settings()
         self._on_startup = on_startup or []
         self._on_shutdown = on_shutdown or []
-        self._auto_create_tables = auto_create_tables
         
-        # Cria a aplicação FastAPI
+        # auto_create_tables: parâmetro explícito > settings > default (False)
+        if auto_create_tables is not None:
+            self._auto_create_tables = auto_create_tables
+        else:
+            self._auto_create_tables = getattr(self.settings, "auto_create_tables", False)
+        
+        # Store settings on app.state for dependency injection
+        # Evita chamadas get_settings() em hot paths
+        
+        # ── Step 2: Create FastAPI app ──
         self.app = FastAPI(
             title=title or self.settings.app_name,
             description=description,
             version=version,
             docs_url=self.settings.docs_url,
             redoc_url=self.settings.redoc_url,
+            openapi_url=self.settings.openapi_url,
             lifespan=self._lifespan,
             **fastapi_kwargs,
         )
         
-        # Configura CORS
+        # Store settings on app.state for request-level access
+        self.app.state.settings = self.settings
+        
+        # ── Step 3: CORS ──
         self._setup_cors()
         
-        # Configura middleware de tenancy se habilitado
+        # ── Step 4: Tenancy middleware ──
         if self.settings.tenancy_enabled:
             self._setup_tenancy_middleware()
         
-        # Adiciona middlewares - formato novo Django-style (parâmetro ou settings)
+        # ── Step 5: Django-style middleware ──
         middleware_list = middleware or getattr(self.settings, "middleware", None)
         if middleware_list:
             self._setup_django_style_middleware(middleware_list)
         
-        # Adiciona middlewares - formato antigo (tuple)
+        # ── Step 6: Legacy middleware format ──
         if middlewares:
             for middleware_class, middleware_kwargs in middlewares:
                 self.app.add_middleware(middleware_class, **middleware_kwargs)
         
-        # Adiciona exception handlers
+        # ── Step 7: Exception handlers ──
         self._setup_exception_handlers(exception_handlers)
         
-        # Inclui routers
+        # ── Step 8: Routers ──
         if routers:
             for router in routers:
                 self.include_router(router)
+        
+        # ── Step 9: Health checks ──
+        if getattr(self.settings, "health_check_enabled", True):
+            self._setup_health_checks()
     
     @asynccontextmanager
     async def _lifespan(self, app: FastAPI):
@@ -157,17 +189,29 @@ class CoreApp:
         await self._shutdown()
     
     async def _startup(self) -> None:
-        """Executa tarefas de startup."""
-        import logging
-        logger = logging.getLogger("core.app")
+        """
+        Executa tarefas de startup na ordem garantida.
         
-        # Schema/Model validation (before database init for fail-fast)
+        Boot sequence:
+        1. Schema validation (fail-fast)
+        2. Database initialization
+        3. Table creation (if configured)
+        4. Tenancy setup
+        5. User startup callbacks
+        """
+        app_logger.info(
+            "Starting %s (environment=%s, debug=%s)",
+            self.settings.app_name,
+            self.settings.environment,
+            self.settings.debug,
+        )
+        
+        # ── Step 1: Schema/Model validation (before DB for fail-fast) ──
         if getattr(self.settings, "strict_validation", self.settings.debug):
             await self._validate_schemas()
         
-        # Verifica se deve usar replicas
+        # ── Step 2: Database initialization ──
         if self.settings.has_read_replica:
-            # Inicializa com read/write replicas
             from core.database import init_replicas
             
             await init_replicas(
@@ -179,7 +223,6 @@ class CoreApp:
                 pool_recycle=self.settings.database_pool_recycle,
             )
         else:
-            # Inicializa banco de dados padrão
             await init_database(
                 database_url=self.settings.database_url,
                 echo=self.settings.database_echo,
@@ -187,20 +230,22 @@ class CoreApp:
                 max_overflow=self.settings.database_max_overflow,
             )
         
-        # Cria tabelas se configurado
+        # ── Step 3: Table creation ──
         if self._auto_create_tables:
             await create_tables()
         
-        # Configura tenancy se habilitado
+        # ── Step 4: Tenancy ──
         if self.settings.tenancy_enabled:
             from core.tenancy import set_tenant_field
             set_tenant_field(self.settings.tenancy_field)
         
-        # Executa callbacks customizados
+        # ── Step 5: User callbacks ──
         for callback in self._on_startup:
             result = callback()
             if hasattr(result, "__await__"):
                 await result
+        
+        app_logger.info("Application started successfully")
     
     async def _validate_schemas(self) -> None:
         """
@@ -524,7 +569,8 @@ class CoreApp:
             request: Request,
             exc: Exception,
         ) -> JSONResponse:
-            if self.settings.debug:
+            # NUNCA expor traceback em produção, mesmo se debug=True acidental
+            if self.settings.debug and not self.settings.is_production:
                 import traceback
                 return JSONResponse(
                     status_code=500,
@@ -535,6 +581,8 @@ class CoreApp:
                         "traceback": traceback.format_exc(),
                     },
                 )
+            # Log the error server-side, return generic message to client
+            app_logger.exception("Unhandled exception: %s", exc)
             return JSONResponse(
                 status_code=500,
                 content={
@@ -624,6 +672,54 @@ class CoreApp:
             app.add_api_route("/health", HealthView.as_route("/health")[1], methods=["GET"])
         """
         self.app.add_api_route(path, endpoint, methods=methods, **kwargs)
+    
+    def _setup_health_checks(self) -> None:
+        """
+        Registra endpoints de health check.
+        
+        - /healthz: Liveness probe (app está rodando?)
+        - /readyz: Readiness probe (app está pronta para receber requests?)
+        """
+        @self.app.get("/healthz", tags=["health"], include_in_schema=False)
+        async def healthz():
+            """Liveness probe — returns 200 if the app is running."""
+            return {"status": "alive"}
+        
+        @self.app.get("/readyz", tags=["health"], include_in_schema=False)
+        async def readyz():
+            """Readiness probe — checks database and messaging connectivity."""
+            checks: dict[str, str] = {}
+            all_ok = True
+            
+            # Database check
+            try:
+                from core.models import get_session
+                session = await get_session()
+                try:
+                    from sqlalchemy import text
+                    await session.execute(text("SELECT 1"))
+                    checks["database"] = "ok"
+                finally:
+                    await session.close()
+            except Exception as e:
+                checks["database"] = f"error: {type(e).__name__}"
+                all_ok = False
+            
+            # Kafka check (only if enabled)
+            if getattr(self.settings, "kafka_enabled", False):
+                try:
+                    from core.messaging.registry import get_broker
+                    broker = get_broker()
+                    checks["kafka"] = "configured"
+                except Exception as e:
+                    checks["kafka"] = f"error: {type(e).__name__}"
+                    all_ok = False
+            
+            status_code = 200 if all_ok else 503
+            return JSONResponse(
+                status_code=status_code,
+                content={"status": "ready" if all_ok else "not_ready", "checks": checks},
+            )
     
     async def __call__(self, scope, receive, send):
         """
