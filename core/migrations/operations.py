@@ -10,51 +10,17 @@ from sqlalchemy import text
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncConnection
+    from core.migrations.dialects.base import DialectCompiler
 
 
 # =============================================================================
-# Type Mapping
+# Compiler helper
 # =============================================================================
 
-TYPE_MAPPING: dict[str, dict[str, str]] = {
-    "postgresql": {
-        "DATETIME": "TIMESTAMP WITH TIME ZONE",
-        "TIMESTAMP": "TIMESTAMP WITH TIME ZONE",
-        "BOOLEAN": "BOOLEAN",
-        "TINYINT": "SMALLINT",
-        "LONGTEXT": "TEXT",
-        "DOUBLE": "DOUBLE PRECISION",
-        "ADAPTIVEJSON": "JSONB",
-        "JSON": "JSONB",
-    },
-    "mysql": {
-        "DATETIME": "DATETIME",
-        "TIMESTAMP": "TIMESTAMP",
-        "BOOLEAN": "TINYINT(1)",
-        "TEXT": "LONGTEXT",
-        "UUID": "CHAR(36)",
-        "ADAPTIVEJSON": "JSON",
-    },
-    "sqlite": {
-        "DATETIME": "DATETIME",
-        "TIMESTAMP": "DATETIME",
-        "BOOLEAN": "BOOLEAN",
-        "UUID": "TEXT",
-        "ADAPTIVEJSON": "JSON",
-    },
-}
-
-
-def map_type(sql_type: str, dialect: str) -> str:
-    """Convert generic SQL type to dialect-specific type."""
-    base = sql_type.split("(")[0].upper()
-    mapping = TYPE_MAPPING.get(dialect, {})
-    mapped = mapping.get(base)
-    if mapped:
-        if "(" in sql_type and "(" not in mapped:
-            return sql_type
-        return mapped
-    return sql_type
+def _get_compiler(dialect: str) -> "DialectCompiler":
+    """Get the dialect compiler — thin wrapper to keep imports lazy."""
+    from core.migrations.dialects import get_compiler
+    return get_compiler(dialect)
 
 
 # =============================================================================
@@ -124,28 +90,6 @@ def get_serialization_imports() -> list[str]:
     return imports
 
 
-def _format_sql_default(value: Any, dialect: str) -> str | None:
-    """Format value as SQL DEFAULT clause."""
-    from datetime import datetime, date, time
-    import json
-    
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        if dialect == "postgresql":
-            return f"DEFAULT {'TRUE' if value else 'FALSE'}"
-        return f"DEFAULT {1 if value else 0}"
-    if isinstance(value, (datetime, date, time)):
-        return f"DEFAULT '{value.isoformat()}'"
-    if isinstance(value, str):
-        return f"DEFAULT '{value.replace(chr(39), chr(39)+chr(39))}'"
-    if isinstance(value, (int, float)):
-        return f"DEFAULT {value}"
-    if isinstance(value, (dict, list)):
-        return f"DEFAULT '{json.dumps(value).replace(chr(39), chr(39)+chr(39))}'"
-    return f"DEFAULT '{str(value)}'"
-
-
 # =============================================================================
 # Data Classes
 # =============================================================================
@@ -163,11 +107,13 @@ class ColumnDef:
     index: bool = False
     
     def get_type(self, dialect: str) -> str:
-        return map_type(self.type, dialect)
+        compiler = _get_compiler(dialect)
+        return compiler.map_type(self.type)
     
     def get_default_sql(self, dialect: str) -> str | None:
         if self.default is None:
             return None
+        compiler = _get_compiler(dialect)
         if callable(self.default):
             try:
                 result = self.default()
@@ -178,39 +124,43 @@ class ColumnDef:
                     return None
             except Exception:
                 return None
-            return _format_sql_default(result, dialect)
-        return _format_sql_default(self.default, dialect)
+            return compiler.format_default(result)
+        return compiler.format_default(self.default)
     
     def to_sql(self, dialect: str = "sqlite", *, include_pk: bool = True) -> str:
         """Generate SQL for column definition.
+        
+        Delegates to the dialect compiler for correct, dialect-specific SQL.
         
         Args:
             dialect: Database dialect
             include_pk: If False, skip PRIMARY KEY clause (for composite PKs)
         """
-        parts = [f'"{self.name}"', self.get_type(dialect)]
+        compiler = _get_compiler(dialect)
         
-        # Handle primary key
-        if self.primary_key and include_pk:
-            parts.append("PRIMARY KEY")
-            if self.autoincrement and dialect == "sqlite":
-                parts.append("AUTOINCREMENT")
+        # Resolve callable defaults to their values for SQL generation
+        default_value = self.default
+        if callable(default_value):
+            try:
+                default_value = default_value()
+            except TypeError:
+                try:
+                    default_value = default_value(None)
+                except Exception:
+                    default_value = None
+            except Exception:
+                default_value = None
         
-        # NOT NULL (PKs are implicitly NOT NULL)
-        if not self.nullable and not self.primary_key:
-            parts.append("NOT NULL")
-        elif self.primary_key and not include_pk:
-            # For composite PK, column must be NOT NULL
-            parts.append("NOT NULL")
-        
-        default_sql = self.get_default_sql(dialect)
-        if default_sql:
-            parts.append(default_sql)
-        
-        if self.unique and not self.primary_key:
-            parts.append("UNIQUE")
-        
-        return " ".join(parts)
+        return compiler.column_to_sql(
+            name=self.name,
+            col_type=self.type,
+            nullable=self.nullable,
+            default=default_value,
+            primary_key=self.primary_key,
+            autoincrement=self.autoincrement,
+            unique=self.unique,
+            include_pk=include_pk,
+        )
 
 
 @dataclass
@@ -406,17 +356,21 @@ class AlterColumn(Operation):
     old_default: Any = None
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect == "sqlite":
-            raise NotImplementedError("SQLite does not support ALTER COLUMN")
+        compiler = _get_compiler(dialect)
+        if not compiler.supports_alter_column:
+            raise NotImplementedError(
+                f"{compiler.display_name} does not support ALTER COLUMN. "
+                f"Consider recreating the table instead."
+            )
         
         for alt in self._build_alterations(dialect):
             await conn.execute(text(f'ALTER TABLE "{self.table_name}" {alt}'))
     
     def _build_alterations(self, dialect: str) -> list[str]:
+        compiler = _get_compiler(dialect)
         alts = []
         if self.new_type:
-            # CRITICAL: Convert type to dialect-specific type
-            mapped = map_type(self.new_type, dialect)
+            mapped = compiler.map_type(self.new_type)
             alts.append(f'ALTER COLUMN "{self.column_name}" TYPE {mapped}')
         if self.new_nullable is not None:
             if self.new_nullable:
@@ -427,9 +381,8 @@ class AlterColumn(Operation):
             if self.new_default is None:
                 alts.append(f'ALTER COLUMN "{self.column_name}" DROP DEFAULT')
             else:
-                default_sql = _format_sql_default(
+                default_sql = compiler.format_default(
                     self.new_default() if callable(self.new_default) else self.new_default,
-                    dialect
                 )
                 if default_sql:
                     alts.append(f'ALTER COLUMN "{self.column_name}" SET {default_sql}')
@@ -544,8 +497,12 @@ class AddForeignKey(Operation):
     on_update: str = "CASCADE"
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect == "sqlite":
-            raise NotImplementedError("SQLite does not support ADD CONSTRAINT")
+        compiler = _get_compiler(dialect)
+        if not compiler.supports_add_constraint:
+            raise NotImplementedError(
+                f"{compiler.display_name} does not support ADD CONSTRAINT. "
+                f"Define foreign keys inline in CREATE TABLE instead."
+            )
         sql = (
             f'ALTER TABLE "{self.table_name}" '
             f'ADD CONSTRAINT "{self.constraint_name}" '
@@ -573,8 +530,12 @@ class DropForeignKey(Operation):
     on_delete: str = "CASCADE"
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect == "sqlite":
-            raise NotImplementedError("SQLite does not support DROP CONSTRAINT")
+        compiler = _get_compiler(dialect)
+        if not compiler.supports_drop_constraint:
+            raise NotImplementedError(
+                f"{compiler.display_name} does not support DROP CONSTRAINT. "
+                f"Consider recreating the table without the foreign key."
+            )
         await conn.execute(text(f'ALTER TABLE "{self.table_name}" DROP CONSTRAINT "{self.constraint_name}"'))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
@@ -650,8 +611,9 @@ class CreateEnum(Operation):
     values: list[str]
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect != "postgresql":
-            return
+        compiler = _get_compiler(dialect)
+        if not compiler.supports_enum:
+            return  # Silently skip for dialects without native ENUM
         check = await conn.execute(
             text("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :name)"),
             {"name": self.enum_name}
@@ -661,7 +623,8 @@ class CreateEnum(Operation):
             await conn.execute(text(f"CREATE TYPE {self.enum_name} AS ENUM ({vals})"))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect == "postgresql":
+        compiler = _get_compiler(dialect)
+        if compiler.supports_enum:
             await conn.execute(text(f"DROP TYPE IF EXISTS {self.enum_name}"))
     
     def describe(self) -> str:
@@ -679,7 +642,8 @@ class DropEnum(Operation):
     destructive: bool = True
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect == "postgresql":
+        compiler = _get_compiler(dialect)
+        if compiler.supports_enum:
             await conn.execute(text(f"DROP TYPE IF EXISTS {self.enum_name} CASCADE"))
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
@@ -704,7 +668,8 @@ class AlterEnum(Operation):
     new_values: list[str] = field(default_factory=list)
     
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect != "postgresql":
+        compiler = _get_compiler(dialect)
+        if not compiler.supports_enum:
             return
         if self.add_values and not self.remove_values:
             for v in self.add_values:
@@ -713,7 +678,8 @@ class AlterEnum(Operation):
             await self._recreate(conn, self.new_values)
     
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None:
-        if dialect != "postgresql" or not self.old_values:
+        compiler = _get_compiler(dialect)
+        if not compiler.supports_enum or not self.old_values:
             return
         await self._recreate(conn, self.old_values)
     

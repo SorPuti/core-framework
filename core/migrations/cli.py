@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from core.migrations.dialects import detect_dialect, get_compiler
 from core.migrations.engine import MigrationEngine
 
 if TYPE_CHECKING:
@@ -288,6 +289,59 @@ async def squash(
     return await engine.squash(start, end, name)
 
 
+def dbinfo(
+    database_url: str | None = None,
+) -> None:
+    """
+    Show database driver information and dialect capabilities.
+    
+    Useful for verifying which driver will be used for migrations.
+    
+    Args:
+        database_url: URL de conexão (default: settings.database_url)
+        
+    Example:
+        from core.migrations.cli import dbinfo
+        
+        dbinfo()
+        # Output:
+        # Database Driver Info
+        # ─────────────────────
+        #   Dialect:    postgresql
+        #   Driver:     postgresql+asyncpg
+        #   Display:    PostgreSQL
+        #
+        # Capabilities:
+        #   ALTER COLUMN:     ✓
+        #   ADD CONSTRAINT:   ✓
+        #   DROP CONSTRAINT:  ✓
+        #   Native ENUM:      ✓
+    """
+    url = _get_database_url(database_url)
+    dialect = detect_dialect(url)
+    driver = url.split("://")[0] if "://" in url else "unknown"
+    
+    try:
+        compiler = get_compiler(dialect)
+    except ValueError as e:
+        print(f"\nError: {e}")
+        return
+    
+    print("\nDatabase Driver Info")
+    print("─" * 30)
+    print(f"  Dialect:    {dialect}")
+    print(f"  Driver:     {driver}")
+    print(f"  Display:    {compiler.display_name}")
+    print()
+    print("Capabilities:")
+    _check = lambda v: "✓" if v else "✗"
+    print(f"  ALTER COLUMN:     {_check(compiler.supports_alter_column)}")
+    print(f"  ADD CONSTRAINT:   {_check(compiler.supports_add_constraint)}")
+    print(f"  DROP CONSTRAINT:  {_check(compiler.supports_drop_constraint)}")
+    print(f"  Native ENUM:      {_check(compiler.supports_enum)}")
+    print()
+
+
 # CLI runner
 def run_cli():
     """
@@ -298,6 +352,7 @@ def run_cli():
         python -m core.migrations migrate
         python -m core.migrations showmigrations
         python -m core.migrations rollback
+        python -m core.migrations dbinfo
     """
     import argparse
     
@@ -327,7 +382,7 @@ def run_cli():
     migrate_parser.add_argument("--dry-run", action="store_true", help="Show what would be applied")
     
     # showmigrations
-    subparsers.add_parser(
+    show_parser = subparsers.add_parser(
         "showmigrations",
         help="Show migration status",
     )
@@ -341,9 +396,15 @@ def run_cli():
     rollback_parser.add_argument("--fake", action="store_true", help="Unmark without running")
     rollback_parser.add_argument("--dry-run", action="store_true", help="Show what would be rolled back")
     
+    # dbinfo
+    dbinfo_parser = subparsers.add_parser(
+        "dbinfo",
+        help="Show database driver info and capabilities",
+    )
+    
     # Common arguments
-    for p in [make_parser, migrate_parser, rollback_parser]:
-        p.add_argument("--database", "-d", default="sqlite+aiosqlite:///./app.db", help="Database URL")
+    for p in [make_parser, migrate_parser, rollback_parser, show_parser, dbinfo_parser]:
+        p.add_argument("--database", "-d", default=None, help="Database URL (default: from settings)")
         p.add_argument("--migrations-dir", "-m", default="./migrations", help="Migrations directory")
         p.add_argument("--app", "-a", default="main", help="App label")
     
@@ -375,9 +436,9 @@ def run_cli():
     
     elif args.command == "showmigrations":
         asyncio.run(showmigrations(
-            database_url=getattr(args, "database", "sqlite+aiosqlite:///./app.db"),
-            migrations_dir=getattr(args, "migrations_dir", "./migrations"),
-            app_label=getattr(args, "app", "main"),
+            database_url=args.database,
+            migrations_dir=args.migrations_dir,
+            app_label=args.app,
         ))
     
     elif args.command == "rollback":
@@ -389,6 +450,9 @@ def run_cli():
             fake=args.fake,
             dry_run=args.dry_run,
         ))
+    
+    elif args.command == "dbinfo":
+        dbinfo(database_url=args.database)
 
 
 if __name__ == "__main__":

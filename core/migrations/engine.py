@@ -22,6 +22,7 @@ from core import timezone
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
+from core.migrations.dialects import get_compiler, detect_dialect
 from core.migrations.migration import Migration
 from core.migrations.operations import (
     Operation,
@@ -46,54 +47,11 @@ from core.migrations.state import (
 
 if TYPE_CHECKING:
     from core.models import Model
+    from core.migrations.dialects.base import DialectCompiler
 
 
 # Tabela para rastrear migrações aplicadas
 MIGRATIONS_TABLE = "_core_migrations"
-
-
-
-
-def _get_migrations_table_sql(dialect: str) -> str:
-    """
-    Returns dialect-specific SQL for creating migrations table.
-    
-    Args:
-        dialect: Database dialect (sqlite, postgresql, mysql)
-    
-    Returns:
-        CREATE TABLE SQL statement appropriate for the dialect
-    """
-    if dialect == "postgresql":
-        return f"""
-            CREATE TABLE IF NOT EXISTS "{MIGRATIONS_TABLE}" (
-                id SERIAL PRIMARY KEY,
-                app VARCHAR(255) NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(app, name)
-            )
-        """
-    elif dialect == "mysql":
-        return f"""
-            CREATE TABLE IF NOT EXISTS `{MIGRATIONS_TABLE}` (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                app VARCHAR(255) NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(app, name)
-            )
-        """
-    else:  # sqlite and others
-        return f"""
-            CREATE TABLE IF NOT EXISTS "{MIGRATIONS_TABLE}" (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                app VARCHAR(255) NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(app, name)
-            )
-        """
 
 
 class MigrationEngine:
@@ -129,21 +87,27 @@ class MigrationEngine:
         self.migrations_dir = Path(migrations_dir)
         self.app_label = app_label
         self._engine = create_async_engine(database_url, echo=False)
+        self._dialect = detect_dialect(database_url)
+        self._compiler = get_compiler(self._dialect)
     
     @property
     def dialect(self) -> str:
         """Retorna o dialeto do banco de dados."""
-        if "sqlite" in self.database_url:
-            return "sqlite"
-        elif "postgresql" in self.database_url:
-            return "postgresql"
-        elif "mysql" in self.database_url:
-            return "mysql"
-        return "unknown"
+        return self._dialect
+    
+    @property
+    def compiler(self) -> "DialectCompiler":
+        """Retorna o compiler do dialeto atual."""
+        return self._compiler
+    
+    def _print_driver_info(self) -> None:
+        """Exibe informações sobre o driver de banco de dados ativo."""
+        driver = self.database_url.split("://")[0] if "://" in self.database_url else "unknown"
+        print(f"  Database: {self._compiler.display_name} (driver: {driver})")
     
     async def _ensure_migrations_table(self, conn: AsyncConnection) -> None:
         """Garante que a tabela de migrações existe."""
-        sql = _get_migrations_table_sql(self.dialect)
+        sql = self._compiler.migrations_table_sql(MIGRATIONS_TABLE)
         await conn.execute(text(sql))
         await conn.commit()
     
@@ -538,6 +502,8 @@ migration = Migration(
         Returns:
             Caminho do arquivo gerado ou None se não houver mudanças
         """
+        self._print_driver_info()
+        
         if empty:
             operations = []
         else:
@@ -614,6 +580,8 @@ migration = Migration(
         )
         
         applied = []
+        
+        self._print_driver_info()
         
         async with self._engine.connect() as conn:
             await self._ensure_migrations_table(conn)
@@ -736,6 +704,8 @@ migration = Migration(
         """
         reverted = []
         
+        self._print_driver_info()
+        
         async with self._engine.connect() as conn:
             applied_migrations = await self._get_applied_migrations(conn)
             
@@ -797,6 +767,8 @@ migration = Migration(
             Dict com app_label -> lista de (nome, aplicada)
         """
         result: dict[str, list[tuple[str, bool]]] = {self.app_label: []}
+        
+        self._print_driver_info()
         
         async with self._engine.connect() as conn:
             await self._ensure_migrations_table(conn)

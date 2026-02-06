@@ -7,7 +7,7 @@ Características:
 - showmigrations: Lista status das migrações
 - rollback: Reverte migrações
 - check: Analisa migrações antes de aplicar (detecta problemas)
-- Suporte a operações: CreateTable, DropTable, AddColumn, DropColumn, AlterColumn, CreateIndex, etc.
+- Suporte multi-dialeto: SQLite, PostgreSQL, MySQL (via dialect compilers)
 - Detecção automática de mudanças
 - Migrações reversíveis
 - Suporte a migrações de dados (RunPython)
@@ -49,6 +49,11 @@ from core.migrations.analyzer import (
     IssueCode,
     analyze_migration,
 )
+from core.migrations.dialects import (
+    get_compiler,
+    detect_dialect,
+    register_compiler,
+)
 
 __all__ = [
     # Engine
@@ -85,4 +90,8 @@ __all__ = [
     "Severity",
     "IssueCode",
     "analyze_migration",
+    # Dialect compilers
+    "get_compiler",
+    "detect_dialect",
+    "register_compiler",
 ]

@@ -306,16 +306,21 @@ def model_to_table_state(model_class: type["Model"]) -> TableState:
     columns = {}
     for col in table.columns:
         # SQLAlchemy autoincrement pode ser True, False, ou "auto"
-        # Convertemos para bool: True se for True ou "auto" com primary_key
+        # "auto" significa autoincrement se for PK com tipo inteiro
+        # UUID/TEXT PKs NÃO devem ter autoincrement — isso causa erros no SQLite
         auto_inc = col.autoincrement
+        col_type_str = get_sqlalchemy_type_string(col.type)
         if auto_inc == "auto":
-            auto_inc = col.primary_key  # "auto" significa autoincrement se for PK
+            # Só marca autoincrement se for PK E tipo inteiro
+            auto_inc = col.primary_key and col_type_str.upper() in (
+                "INTEGER", "INT", "BIGINT", "SMALLINT", "SERIAL", "BIGSERIAL",
+            )
         else:
             auto_inc = bool(auto_inc)
         
         columns[col.name] = ColumnState(
             name=col.name,
-            type=get_sqlalchemy_type_string(col.type),
+            type=col_type_str,
             nullable=col.nullable,
             default=col.default.arg if col.default is not None else None,
             primary_key=col.primary_key,
@@ -455,14 +460,18 @@ def _table_to_state(table) -> TableState | None:
         columns = {}
         for col in table.columns:
             auto_inc = col.autoincrement
+            col_type_str = get_sqlalchemy_type_string(col.type)
             if auto_inc == "auto":
-                auto_inc = col.primary_key
+                # Só marca autoincrement se for PK E tipo inteiro
+                auto_inc = col.primary_key and col_type_str.upper() in (
+                    "INTEGER", "INT", "BIGINT", "SMALLINT", "SERIAL", "BIGSERIAL",
+                )
             else:
                 auto_inc = bool(auto_inc)
             
             columns[col.name] = ColumnState(
                 name=col.name,
-                type=get_sqlalchemy_type_string(col.type),
+                type=col_type_str,
                 nullable=col.nullable,
                 default=col.default.arg if col.default is not None else None,
                 primary_key=col.primary_key,

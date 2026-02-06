@@ -179,7 +179,9 @@ class MigrationAnalyzer:
     """
     
     def __init__(self, dialect: str = "sqlite"):
+        from core.migrations.dialects import get_compiler
         self.dialect = dialect
+        self.compiler = get_compiler(dialect)
     
     async def analyze(
         self,
@@ -217,15 +219,8 @@ class MigrationAnalyzer:
     ) -> None:
         """Coleta informações sobre o estado atual do banco."""
         try:
-            # Lista tabelas
-            if self.dialect == "sqlite":
-                tables_result = await conn.execute(text(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-                ))
-            else:
-                tables_result = await conn.execute(text(
-                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
-                ))
+            # Lista tabelas usando o compiler do dialeto
+            tables_result = await conn.execute(text(self.compiler.list_tables_sql()))
             
             tables = [row[0] for row in tables_result.fetchall()]
             
@@ -380,12 +375,12 @@ class MigrationAnalyzer:
                 # Coluna pode não existir ainda
                 pass
         
-        # SQLite: ALTER TABLE DROP COLUMN tem limitações
-        if self.dialect == "sqlite":
+        # Dialect limitations on DROP COLUMN
+        if not self.compiler.supports_alter_column:
             issues.append(MigrationIssue(
                 code=IssueCode.SQLITE_ALTER_LIMITATION,
                 severity=Severity.INFO,
-                message="SQLite has limitations on DROP COLUMN - may require table recreation",
+                message=f"{self.compiler.display_name} has limitations on DROP COLUMN - may require table recreation",
                 operation_index=idx,
                 operation_description=op_desc,
                 suggestion="SQLite 3.35.0+ supports DROP COLUMN directly",
@@ -428,20 +423,10 @@ class MigrationAnalyzer:
         
         # Verifica FKs apontando para esta tabela
         try:
-            if self.dialect == "sqlite":
-                # SQLite: verifica pragma
-                fk_result = await conn.execute(text(
-                    f"SELECT * FROM sqlite_master WHERE type='table' AND sql LIKE '%REFERENCES \"{table_name}\"%'"
-                ))
-            else:
-                fk_result = await conn.execute(text(f"""
-                    SELECT tc.table_name 
-                    FROM information_schema.table_constraints tc
-                    JOIN information_schema.constraint_column_usage ccu 
-                        ON tc.constraint_name = ccu.constraint_name
-                    WHERE tc.constraint_type = 'FOREIGN KEY' 
-                        AND ccu.table_name = '{table_name}'
-                """))
+            fk_sql = self.compiler.foreign_key_check_sql(table_name)
+            if fk_sql is None:
+                return issues
+            fk_result = await conn.execute(text(fk_sql))
             
             referencing_tables = [row[0] for row in fk_result.fetchall()]
             if referencing_tables:
@@ -559,12 +544,12 @@ class MigrationAnalyzer:
                     except Exception:
                         pass
         
-        # SQLite: ALTER COLUMN tem limitações
-        if self.dialect == "sqlite":
+        # Dialect limitations on ALTER COLUMN
+        if not self.compiler.supports_alter_column:
             issues.append(MigrationIssue(
                 code=IssueCode.SQLITE_ALTER_LIMITATION,
                 severity=Severity.WARNING,
-                message="SQLite has limited ALTER COLUMN support - may require table recreation",
+                message=f"{self.compiler.display_name} has limited ALTER COLUMN support - may require table recreation",
                 operation_index=idx,
                 operation_description=op_desc,
                 suggestion="This operation will recreate the table internally",

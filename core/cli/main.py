@@ -2243,6 +2243,15 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dbinfo(args: argparse.Namespace) -> int:
+    """Mostra informações do driver de banco de dados e capacidades."""
+    config = load_config()
+    
+    from core.migrations.cli import dbinfo
+    dbinfo(database_url=config["database_url"])
+    return 0
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     """Analisa migrações pendentes sem aplicar."""
     config = load_config()
@@ -3764,6 +3773,10 @@ For more information, visit: https://github.com/SorPuti/core-framework
     rollback_parser.add_argument("--fake", action="store_true", help="Unmark without running")
     rollback_parser.add_argument("--dry-run", action="store_true", help="Show what would be rolled back")
     rollback_parser.set_defaults(func=cmd_rollback)
+    
+    # dbinfo
+    dbinfo_parser = subparsers.add_parser("dbinfo", help="Show database driver info and capabilities")
+    dbinfo_parser.set_defaults(func=cmd_dbinfo)
     
     # run
     run_parser = subparsers.add_parser("run", help="Run development server")
