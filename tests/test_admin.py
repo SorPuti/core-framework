@@ -763,3 +763,169 @@ class TestDiscoveryAlwaysScans:
                         discover_admin_modules(site)
                         # Deve importar apenas 1x (via explicito), nao 2x
                         assert mock_import.call_count == 1
+
+
+# =========================================================================
+# Tests — Bug fixes (issue #7)
+# =========================================================================
+
+class TestSetupAdminUsesDefaultSite:
+    """Testa que _setup_admin() usa o default_site singleton."""
+    
+    def test_app_imports_default_site_not_admin_site_class(self):
+        """_setup_admin deve importar default_site, nao AdminSite."""
+        import ast
+        from pathlib import Path
+        
+        app_py = Path("/home/bugson/PycharmProjects/Elevator Pitch/core/app.py")
+        source = app_py.read_text()
+        
+        # Procura pelo corpo de _setup_admin
+        # Deve conter "from core.admin import default_site"
+        # E NAO deve conter "AdminSite(name="
+        in_setup = False
+        found_default_site_import = False
+        found_new_adminsite = False
+        
+        for line in source.split("\n"):
+            stripped = line.strip()
+            if "_setup_admin" in stripped and "def " in stripped:
+                in_setup = True
+                continue
+            if in_setup:
+                if stripped.startswith("def ") and "_setup_admin" not in stripped:
+                    break
+                if "from core.admin import default_site" in stripped:
+                    found_default_site_import = True
+                if "AdminSite(" in stripped and "name=" in stripped:
+                    found_new_adminsite = True
+        
+        assert found_default_site_import, "_setup_admin deve usar 'from core.admin import default_site'"
+        assert not found_new_adminsite, "_setup_admin NAO deve criar AdminSite() novo"
+    
+    def test_default_site_is_singleton(self):
+        """default_site deve ser o mesmo objeto que admin."""
+        from core.admin import default_site, admin
+        assert default_site is admin
+    
+    def test_register_goes_to_default_site(self):
+        """@admin.register() deve registrar no default_site."""
+        from core.admin import admin, default_site
+        from core.admin.site import AdminSite
+        
+        # Reset para teste isolado
+        original_registry = dict(default_site._registry)
+        
+        try:
+            # Registra no admin (alias de default_site)
+            admin.register(MockModel)
+            
+            # Deve estar no default_site
+            assert MockModel in default_site._registry
+            
+            # Uma instancia nova NAO deve ter o registro
+            new_site = AdminSite(name="test")
+            assert MockModel not in new_site._registry
+        finally:
+            default_site._registry = original_registry
+
+
+class TestAdminSessionMiddleware:
+    """Testa o AdminSessionMiddleware."""
+    
+    def test_middleware_importable(self):
+        """Middleware deve ser importavel."""
+        from core.admin.middleware import AdminSessionMiddleware
+        assert AdminSessionMiddleware is not None
+    
+    def test_middleware_in_exports(self):
+        """Middleware deve estar nos exports do admin."""
+        from core.admin import AdminSessionMiddleware
+        assert AdminSessionMiddleware is not None
+    
+    def test_middleware_skips_non_admin_paths(self):
+        """Middleware nao deve interceptar rotas fora do admin."""
+        from core.admin.middleware import AdminSessionMiddleware
+        import asyncio
+        
+        call_next_called = False
+        
+        async def mock_call_next(request):
+            nonlocal call_next_called
+            call_next_called = True
+            return MagicMock()
+        
+        middleware = AdminSessionMiddleware(app=MagicMock(), admin_prefix="/admin")
+        
+        request = MagicMock()
+        request.url.path = "/api/users/"
+        request.cookies = {}
+        
+        asyncio.run(middleware.dispatch(request, mock_call_next))
+        assert call_next_called
+    
+    def test_middleware_skips_login_path(self):
+        """Middleware nao deve tentar resolver sessao na rota de login."""
+        from core.admin.middleware import AdminSessionMiddleware
+        import asyncio
+        
+        call_next_called = False
+        
+        async def mock_call_next(request):
+            nonlocal call_next_called
+            call_next_called = True
+            return MagicMock()
+        
+        middleware = AdminSessionMiddleware(app=MagicMock(), admin_prefix="/admin")
+        
+        request = MagicMock()
+        request.url.path = "/admin/login"
+        request.cookies = {}
+        
+        asyncio.run(middleware.dispatch(request, mock_call_next))
+        assert call_next_called
+    
+    def test_middleware_skips_no_cookie(self):
+        """Middleware deve prosseguir se nao ha cookie admin_session."""
+        from core.admin.middleware import AdminSessionMiddleware
+        import asyncio
+        
+        call_next_called = False
+        
+        async def mock_call_next(request):
+            nonlocal call_next_called
+            call_next_called = True
+            return MagicMock()
+        
+        middleware = AdminSessionMiddleware(app=MagicMock(), admin_prefix="/admin")
+        
+        request = MagicMock()
+        request.url.path = "/admin/"
+        request.cookies = {}
+        
+        asyncio.run(middleware.dispatch(request, mock_call_next))
+        assert call_next_called
+    
+    def test_mount_registers_middleware(self):
+        """AdminSite.mount() deve registrar AdminSessionMiddleware."""
+        from core.admin.site import AdminSite
+        
+        site = AdminSite()
+        app = MagicMock()
+        settings = MagicMock()
+        settings.admin_url_prefix = "/admin"
+        settings.debug = False
+        settings.admin_site_title = "Admin"
+        settings.admin_site_header = "Core Admin"
+        settings.admin_theme = "default"
+        settings.admin_primary_color = "#3B82F6"
+        settings.admin_logo_url = None
+        settings.admin_cookie_secure = None
+        
+        site.mount(app, settings)
+        
+        # Verifica que add_middleware foi chamado com AdminSessionMiddleware
+        from core.admin.middleware import AdminSessionMiddleware
+        app.add_middleware.assert_called_once_with(
+            AdminSessionMiddleware, admin_prefix="/admin"
+        )

@@ -28,6 +28,7 @@ from core.admin.exceptions import (
     AdminRegistrationError,
     AdminRuntimeError,
 )
+from core.admin.middleware import AdminSessionMiddleware
 
 # Singleton default — usado na maioria dos projetos
 default_site = AdminSite(name="default")
@@ -68,4 +69,5 @@ __all__ = [
     "register",
     "unregister",
     "action",
+    "AdminSessionMiddleware",
 ]

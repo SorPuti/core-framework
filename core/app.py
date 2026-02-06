@@ -693,9 +693,9 @@ class CoreApp:
         - AdminRegistrationError: por model, não bloqueia outros
         """
         try:
-            from core.admin import AdminSite
+            from core.admin import default_site
             
-            self._admin_site = AdminSite(name="default")
+            self._admin_site = default_site
             self._admin_site.autodiscover()
             self._admin_site.mount(self.app, self.settings)
             

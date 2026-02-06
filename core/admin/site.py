@@ -249,11 +249,17 @@ class AdminSite:
         Monta o admin router no FastAPI app.
         
         Usa settings.admin_url_prefix para o prefixo da rota.
+        Registra AdminSessionMiddleware automaticamente para resolver
+        cookie admin_session → request.state.admin_user.
         """
         self._app = app
         self._settings = settings
         
         prefix = getattr(settings, "admin_url_prefix", "/admin").rstrip("/")
+        
+        # Registra middleware de sessão ANTES do router
+        from core.admin.middleware import AdminSessionMiddleware
+        app.add_middleware(AdminSessionMiddleware, admin_prefix=prefix)
         
         from core.admin.router import create_admin_router
         router = create_admin_router(self, settings)
