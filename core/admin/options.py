@@ -20,6 +20,47 @@ if TYPE_CHECKING:
 logger = logging.getLogger("core.admin")
 
 
+def _detect_enum(col: Any) -> list[dict[str, str]] | None:
+    """
+    Detecta se uma coluna é Enum e retorna as opções possíveis.
+    
+    Suporta:
+    - SQLAlchemy Enum com enum_class (Python Enum/TextChoices)
+    - SQLAlchemy Enum com strings diretas
+    
+    Retorna lista de {"value": str, "label": str} ou None.
+    """
+    try:
+        from sqlalchemy import Enum as SAEnum
+        col_type = col.type
+        if not isinstance(col_type, SAEnum):
+            return None
+        
+        # Python Enum class (ex: TextChoices, IntEnum, StrEnum)
+        if hasattr(col_type, 'enum_class') and col_type.enum_class is not None:
+            return [
+                {
+                    "value": str(e.value),
+                    "label": (
+                        e.label if hasattr(e, 'label')
+                        else e.name.replace('_', ' ').title()
+                    ),
+                }
+                for e in col_type.enum_class
+            ]
+        
+        # String enum direto: Enum('active', 'inactive', ...)
+        if hasattr(col_type, 'enums') and col_type.enums:
+            return [
+                {"value": v, "label": v.replace('_', ' ').title()}
+                for v in col_type.enums
+            ]
+    except Exception:
+        pass
+    
+    return None
+
+
 def _detect_widget(col_name: str, field_type: str, all_columns: list[str]) -> str:
     """
     Detecta o widget ideal para um campo baseado no nome e tipo.
@@ -168,6 +209,17 @@ class ModelAdmin:
     fieldsets: list[tuple[str, dict[str, Any]]] | None = None
     help_texts: dict[str, str] = {}
     
+    # -- Password field (virtual) --
+    # Auto-detected if model has set_password() and a hash column.
+    # Set explicitly to override. Set to "" to disable.
+    password_field: str | None = None
+    
+    # -- Widget overrides per field --
+    # Dict mapping field_name → override dict:
+    #   {"widget": "...", "label": "...", "help_text": "...",
+    #    "required_on_create": True, "required_on_edit": False}
+    widgets: dict[str, dict[str, Any]] = {}
+    
     # -- Permissions --
     permissions: tuple[str, ...] = ("view", "add", "change", "delete")
     exclude_actions: tuple[str, ...] = ()
@@ -258,6 +310,18 @@ class ModelAdmin:
         # Readonly inclui PK automaticamente
         if self._pk_field and self._pk_field not in self.readonly_fields:
             self.readonly_fields = (self._pk_field,) + tuple(self.readonly_fields)
+        
+        # Auto-detect password_field: model com set_password() + coluna hash
+        if self.password_field is None and self.model:
+            if hasattr(self.model, 'set_password') or hasattr(self.model, 'make_password'):
+                for candidate in ('password_hash', 'hashed_password', 'password_digest'):
+                    if candidate in columns:
+                        self.password_field = candidate
+                        logger.debug(
+                            "Auto-detected password_field='%s' for %s (model has set_password())",
+                            candidate, self.model.__name__,
+                        )
+                        break
         
         # Detecta campos auto_now_add como readonly
         if self.model and columns:
@@ -376,6 +440,8 @@ class ModelAdmin:
         - url/website → widget "url" (validação + link preview)
         - color/hex_color → widget "color" (color picker)
         - *_secret/*_token/*_key → widget "secret" (nunca exibe valor)
+        - Enum columns → widget "choices" (select dropdown)
+        - Virtual password → widget "virtual_password" (quando set_password() existe)
         """
         if not self.model:
             return []
@@ -415,8 +481,24 @@ class ModelAdmin:
                     and col.name not in self.readonly_fields
                 )
                 
+                # ── Enum detection (takes priority) ──
+                enum_choices = _detect_enum(col)
+                
                 # ── Smart widget detection ──
                 widget = _detect_widget(col.name, field_type, all_col_names)
+                
+                extra: dict[str, Any] = {}
+                
+                # Enum overrides widget to "choices"
+                if enum_choices:
+                    widget = "choices"
+                    extra["choices"] = enum_choices
+                
+                # If this column IS the password_field hash → mark as hidden
+                # (the virtual password field will replace it)
+                if self.password_field and col.name == self.password_field:
+                    widget = "password_hash"  # keep detection but will be hidden
+                    extra["_hidden_by_virtual"] = True
                 
                 # Slug source field: detect companion name/title field
                 slug_source = None
@@ -427,15 +509,28 @@ class ModelAdmin:
                             break
                 
                 # ── FK detection ──
-                fk_meta = _detect_fk(col, widget)
-                if fk_meta:
-                    widget = "fk"
+                if not enum_choices:
+                    fk_meta = _detect_fk(col, widget)
+                    if fk_meta:
+                        widget = "fk"
+                        extra.update(fk_meta)
                 
-                extra = {}
                 if slug_source:
                     extra["slug_source"] = slug_source
-                if fk_meta:
-                    extra.update(fk_meta)
+                
+                # ── Widget overrides from self.widgets ──
+                override = self.widgets.get(col.name, {})
+                if override:
+                    if "widget" in override:
+                        widget = override["widget"]
+                    if "help_text" in override:
+                        extra["help_text_override"] = override["help_text"]
+                    if "label" in override:
+                        extra["label"] = override["label"]
+                    if "required_on_create" in override:
+                        extra["required_on_create"] = override["required_on_create"]
+                    if "required_on_edit" in override:
+                        extra["required_on_edit"] = override["required_on_edit"]
                 
                 columns.append({
                     "name": col.name,
@@ -446,16 +541,51 @@ class ModelAdmin:
                     "has_default": has_default,
                     "required": is_required,
                     "readonly": col.name in self.readonly_fields,
-                    "help_text": self.help_texts.get(col.name, ""),
+                    "help_text": override.get("help_text", self.help_texts.get(col.name, "")),
                     **extra,
                 })
         except Exception:
             pass
         
+        # ── Inject virtual password field ──
+        if self.password_field and self.model:
+            has_setter = (
+                hasattr(self.model, 'set_password')
+                or hasattr(self.model, 'make_password')
+            )
+            if has_setter:
+                # Virtual "password" — not a real DB column
+                pw_override = self.widgets.get("password", {})
+                columns.append({
+                    "name": "password",
+                    "type": "string",
+                    "widget": "virtual_password",
+                    "nullable": True,
+                    "primary_key": False,
+                    "has_default": False,
+                    "required": False,  # Frontend handles create vs edit
+                    "required_on_create": pw_override.get("required_on_create", True),
+                    "required_on_edit": pw_override.get("required_on_edit", False),
+                    "readonly": False,
+                    "help_text": pw_override.get(
+                        "help_text",
+                        "Password will be hashed automatically via set_password()",
+                    ),
+                    "label": pw_override.get("label", "Password"),
+                    "virtual": True,
+                    "password_target": self.password_field,
+                })
+        
         return columns
     
     def get_editable_fields(self) -> list[str]:
-        """Retorna campos editáveis (não readonly, não excluídos)."""
+        """
+        Retorna campos editáveis (não readonly, não excluídos).
+        
+        Se password_field está definido:
+        - Exclui o campo hash do formulário (ex: password_hash)
+        - Adiciona campo virtual "password" (processado por set_password())
+        """
         if not self.model:
             return []
         
@@ -464,18 +594,35 @@ class ModelAdmin:
         else:
             base = list(self._model_fields)
         
-        return [
+        result = [
             f for f in base
             if f not in self.readonly_fields and f not in self.exclude
         ]
+        
+        # Virtual password: exclui hash column, adiciona "password" virtual
+        if self.password_field:
+            result = [f for f in result if f != self.password_field]
+            has_setter = (
+                hasattr(self.model, 'set_password')
+                or hasattr(self.model, 'make_password')
+            )
+            if has_setter and "password" not in result:
+                result.append("password")
+        
+        return result
     
     def get_display_fields(self) -> list[str]:
         """Retorna campos para exibição no detail view."""
         if self.fields is not None:
-            return list(self.fields)
+            base = list(self.fields)
+        else:
+            base = [f for f in self._model_fields if f not in self.exclude]
         
-        fields = [f for f in self._model_fields if f not in self.exclude]
-        return fields
+        # Exclui hash column se password_field está ativo
+        if self.password_field:
+            base = [f for f in base if f != self.password_field]
+        
+        return base
     
     def __repr__(self) -> str:
         model_name = self.model.__name__ if self.model else "Unbound"

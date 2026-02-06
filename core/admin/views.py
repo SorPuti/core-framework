@@ -458,6 +458,15 @@ def create_api_views(site: Any) -> APIRouter:
                 ):
                     required_fields.append(col.name)
             
+            # Virtual password: required on create if model has set_password()
+            if admin_instance.password_field:
+                col_info = {c["name"]: c for c in admin_instance.get_column_info()}
+                vp = col_info.get("password", {})
+                if vp.get("virtual") and vp.get("required_on_create", True):
+                    pw_val = safe_data.get("password")
+                    if not pw_val or pw_val in ("", "••••••••"):
+                        required_fields.append("password")
+            
             missing = [f for f in required_fields if f not in safe_data or safe_data[f] in (None, "")]
             if missing:
                 raise HTTPException(400, detail={
@@ -894,15 +903,30 @@ def _process_smart_fields(
     """
     Processa campos inteligentes antes de salvar:
     
-    - password → detecta set_password() no model e usa em vez de setar direto
-    - password_hash → se recebeu plain password, faz hash
+    - virtual_password → campo virtual "password" roteado via set_password()
+    - password/password_hash → se recebeu plain password, faz hash
     - Campos sensíveis com valor placeholder → remove do payload
     """
     column_info = {c["name"]: c for c in admin_instance.get_column_info()}
     processed = dict(data)
     
+    # ── Handle virtual password field first ──
+    virtual_pw = column_info.get("password")
+    if virtual_pw and virtual_pw.get("virtual") and virtual_pw.get("widget") == "virtual_password":
+        pw_value = processed.pop("password", None)
+        if pw_value and pw_value not in (None, "", "••••••••"):
+            target_field = virtual_pw.get("password_target", "password_hash")
+            if hasattr(model, "set_password") or hasattr(model, "make_password"):
+                processed["__plain_password__"] = pw_value
+                processed["__password_field__"] = target_field
+    
+    # ── Handle regular smart fields ──
     for field_name, meta in column_info.items():
         widget = meta.get("widget", "default")
+        
+        # Skip virtual fields (already handled above)
+        if meta.get("virtual"):
+            continue
         
         if widget in ("password", "password_hash", "secret"):
             value = processed.get(field_name)
@@ -916,9 +940,8 @@ def _process_smart_fields(
             if widget in ("password", "password_hash") and value:
                 if hasattr(model, "set_password") or hasattr(model, "make_password"):
                     # Marca para processamento posterior (precisa do obj)
-                    processed[f"__plain_password__"] = value
-                    processed[f"__password_field__"] = field_name
-                    # Não remove — o before_save vai lidar
+                    processed["__plain_password__"] = value
+                    processed["__password_field__"] = field_name
                     continue
     
     return processed
@@ -962,6 +985,30 @@ def _cast_and_clean_data(
             else:
                 continue
             continue
+        
+        # Cast Enum — converte string value para Python Enum member se necessário
+        try:
+            from sqlalchemy import Enum as SAEnum
+            if isinstance(col.type, SAEnum):
+                if hasattr(col.type, 'enum_class') and col.type.enum_class is not None:
+                    # Python Enum: converte string value para enum member
+                    enum_cls = col.type.enum_class
+                    try:
+                        cleaned[field_name] = enum_cls(value)
+                    except (ValueError, KeyError):
+                        # Tenta pelo name se value não funcionar
+                        try:
+                            cleaned[field_name] = enum_cls[value]
+                        except (ValueError, KeyError):
+                            cleaned[field_name] = value
+                else:
+                    # String enum: passa direto
+                    cleaned[field_name] = value
+                continue
+        except ImportError:
+            pass
+        except Exception:
+            pass
         
         # Cast UUID
         if "UUID" in col_type and isinstance(value, str) and value:

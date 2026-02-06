@@ -117,16 +117,23 @@
                                     <div :class="{ 'md:col-span-2': field.type === 'text' || field.type === 'json' }">
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                                             <span x-text="getFieldLabel(field)"></span>
-                                            <template x-if="field.required && field.widget !== 'password_hash'">
+                                            <!-- Required indicator — respects create/edit context for virtual_password -->
+                                            <template x-if="isFieldRequired(field)">
                                                 <span class="text-red-400 ml-0.5">*</span>
                                             </template>
-                                            <template x-if="!field.required && field.widget !== 'password_hash'">
+                                            <template x-if="!isFieldRequired(field) && !['password', 'password_hash', 'virtual_password'].includes(field.widget)">
                                                 <span class="text-gray-400 dark:text-gray-500 text-xs font-normal ml-1">(optional)</span>
                                             </template>
-                                            <template x-if="field.widget === 'password' || field.widget === 'password_hash'">
+                                            <!-- Lock icon for password/secret fields -->
+                                            <template x-if="['password', 'password_hash', 'virtual_password'].includes(field.widget)">
                                                 <span class="text-gray-400 dark:text-gray-500 text-xs font-normal ml-1">
                                                     <svg class="w-3 h-3 inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                                    <span x-show="!isNewItem" class="text-[11px]">optional</span>
                                                 </span>
+                                            </template>
+                                            <!-- Enum badge -->
+                                            <template x-if="field.widget === 'choices'">
+                                                <span class="text-indigo-400 dark:text-indigo-500 text-[10px] font-normal ml-1 uppercase tracking-wider">enum</span>
                                             </template>
                                         </label>
                                         
@@ -156,6 +163,32 @@
                                                     >
                                                 </div>
                                                 <p class="text-xs text-gray-400 mt-1" x-text="isNewItem ? 'Password will be hashed automatically' : 'Enter new password to change, or leave empty'"></p>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Virtual Password — campo virtual para models com set_password() -->
+                                        <template x-if="field.widget === 'virtual_password'">
+                                            <div>
+                                                <div class="relative">
+                                                    <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                                    </div>
+                                                    <input 
+                                                        type="password"
+                                                        x-model="formData[field.name]"
+                                                        @input="markDirty()"
+                                                        :required="isNewItem && field.required_on_create"
+                                                        :placeholder="isNewItem ? 'Enter password (required)' : 'New password (leave empty to keep current)'"
+                                                        autocomplete="new-password"
+                                                        class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                    >
+                                                </div>
+                                                <div class="flex items-center gap-1.5 mt-1">
+                                                    <svg class="w-3 h-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                                    <p class="text-xs text-gray-400" x-text="isNewItem 
+                                                        ? 'Password will be hashed via set_password()' 
+                                                        : 'Leave empty to keep current password. Only fill to change.'"></p>
+                                                </div>
                                             </div>
                                         </template>
                                         
@@ -361,6 +394,40 @@
                                             </div>
                                         </template>
                                         
+                                        <!-- Choices / Enum — select dropdown with predefined values -->
+                                        <template x-if="field.widget === 'choices' && field.choices">
+                                            <div>
+                                                <div class="relative">
+                                                    <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+                                                    </div>
+                                                    <select 
+                                                        x-model="formData[field.name]"
+                                                        @change="markDirty()"
+                                                        :required="field.required"
+                                                        class="w-full pl-10 pr-10 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all appearance-none cursor-pointer"
+                                                    >
+                                                        <template x-if="!field.required || !formData[field.name]">
+                                                            <option value="">— Select —</option>
+                                                        </template>
+                                                        <template x-for="choice in field.choices" :key="choice.value">
+                                                            <option :value="choice.value" x-text="choice.label" :selected="formData[field.name] == choice.value"></option>
+                                                        </template>
+                                                    </select>
+                                                    <!-- Custom dropdown arrow -->
+                                                    <div class="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                                    </div>
+                                                </div>
+                                                <!-- Current value chip -->
+                                                <template x-if="formData[field.name]">
+                                                    <div class="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                                                        <span x-text="(field.choices.find(c => c.value == formData[field.name]) || {}).label || formData[field.name]"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        
                                         <!-- ═══ STANDARD WIDGETS ═══ -->
                                         
                                         <!-- Boolean field (toggle switch) -->
@@ -409,7 +476,7 @@
                                             >
                                         </template>
                                         
-                                        <!-- Default input (string, integer, float, uuid, ip) -->
+                                        <!-- Default input (string, integer, float, uuid, ip) — excludes special widgets -->
                                         <template x-if="field.widget === 'default' && !['boolean', 'text', 'json', 'datetime'].includes(field.type)">
                                             <input 
                                                 :type="field.type === 'integer' || field.type === 'float' ? 'number' : 'text'"
@@ -423,7 +490,7 @@
                                         </template>
                                         
                                         <!-- Validation hint -->
-                                        <template x-if="field.required && field.widget !== 'password' && field.widget !== 'password_hash' && (!formData[field.name] && formData[field.name] !== false && formData[field.name] !== 0)">
+                                        <template x-if="isFieldRequired(field) && !['password', 'password_hash', 'secret'].includes(field.widget) && (!formData[field.name] && formData[field.name] !== false && formData[field.name] !== 0)">
                                             <p class="text-xs text-amber-500 mt-1">This field is required</p>
                                         </template>
                                     </div>
@@ -496,7 +563,7 @@
                                 <div>
                                     <dt class="text-[11px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider" 
                                         x-text="getFieldLabel(field).toLowerCase()"></dt>
-                                    <template x-if="field.widget === 'password' || field.widget === 'password_hash' || field.widget === 'secret'">
+                                    <template x-if="['password', 'password_hash', 'secret', 'virtual_password'].includes(field.widget)">
                                         <dd class="mt-0.5 text-sm text-gray-400 dark:text-gray-500 italic">
                                             <span class="inline-flex items-center gap-1">
                                                 <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -504,9 +571,9 @@
                                             </span>
                                         </dd>
                                     </template>
-                                    <template x-if="field.widget !== 'password' && field.widget !== 'password_hash' && field.widget !== 'secret'">
+                                    <template x-if="!['password', 'password_hash', 'secret', 'virtual_password'].includes(field.widget)">
                                         <dd class="mt-0.5 text-sm text-gray-900 dark:text-gray-100 font-mono break-all"
-                                            x-text="formatDisplayValue(formData[field.name])"></dd>
+                                            x-text="formatDisplayValue(formData[field.name], field)"></dd>
                                     </template>
                                 </div>
                             </template>
@@ -535,12 +602,36 @@ function detailView() {
         _originalData: null,
         isNewItem: isNew,
         
-        /** Retorna label amigável para campo — trata password_hash como "Password" */
+        /** Determina se campo é obrigatório no contexto atual (create vs edit) */
+        isFieldRequired(field) {
+            const widget = field.widget || 'default';
+            // Virtual password: required on create, optional on edit
+            if (widget === 'virtual_password') {
+                return this.isNewItem && (field.required_on_create !== false);
+            }
+            // Regular password/hash: never visually required (optional placeholder handles it)
+            if (widget === 'password' || widget === 'password_hash') {
+                return false;
+            }
+            // Widget override: required_on_create / required_on_edit
+            if ('required_on_create' in field || 'required_on_edit' in field) {
+                return this.isNewItem 
+                    ? (field.required_on_create !== false)
+                    : (field.required_on_edit === true);
+            }
+            return field.required;
+        },
+        
+        /** Retorna label amigável para campo — suporta override via metadata */
         getFieldLabel(field) {
+            // Explicit label override from widgets config
+            if (field.label) return field.label;
+            
             const name = field.name;
             const widget = field.widget || 'default';
+            
             // Password fields: show friendly label
-            if (widget === 'password_hash' || widget === 'password') {
+            if (widget === 'password_hash' || widget === 'password' || widget === 'virtual_password') {
                 return 'Password';
             }
             // Default: humanize field name
@@ -577,10 +668,15 @@ function detailView() {
             }
         },
         
-        formatDisplayValue(val) {
+        formatDisplayValue(val, field) {
             if (val === null || val === undefined) return '—';
             if (typeof val === 'boolean') return val ? 'Yes' : 'No';
             if (val === '••••••••') return '••••••••';
+            // Enum: show label instead of raw value
+            if (field && field.widget === 'choices' && field.choices) {
+                const match = field.choices.find(c => c.value == val);
+                if (match) return match.label;
+            }
             return String(val);
         },
         
@@ -627,7 +723,8 @@ function detailView() {
                 const defaults = {};
                 for (const f of this.editableFields) {
                     if (f.type === 'boolean') defaults[f.name] = false;
-                    else if (f.widget === 'password' || f.widget === 'password_hash' || f.widget === 'secret') defaults[f.name] = '';
+                    else if (f.widget === 'password' || f.widget === 'password_hash' || f.widget === 'secret' || f.widget === 'virtual_password') defaults[f.name] = '';
+                    else if (f.widget === 'choices' && f.choices && f.choices.length > 0 && f.required) defaults[f.name] = f.choices[0].value;
                     else defaults[f.name] = '';
                 }
                 this.formData = defaults;
@@ -699,7 +796,7 @@ function detailView() {
                 const widget = f.widget || 'default';
                 
                 // Password/secret fields: skip if placeholder or empty (keep current)
-                if (widget === 'password' || widget === 'password_hash' || widget === 'secret') {
+                if (widget === 'password' || widget === 'password_hash' || widget === 'secret' || widget === 'virtual_password') {
                     if (!val || val === '••••••••' || val === '') continue;
                     payload[f.name] = val;
                     continue;
