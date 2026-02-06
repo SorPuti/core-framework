@@ -101,7 +101,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         except RuntimeError:
             return RedirectResponse(
                 f"{prefix}/login?error=Admin+not+configured",
-                status_code=302,
+                status_code=303,
             )
         
         from core.models import get_session
@@ -114,7 +114,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
                 if user is None:
                     return RedirectResponse(
                         f"{prefix}/login?error=Invalid+credentials",
-                        status_code=302,
+                        status_code=303,
                     )
                 
                 # Verificar senha
@@ -131,13 +131,13 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
                 if not valid:
                     return RedirectResponse(
                         f"{prefix}/login?error=Invalid+credentials",
-                        status_code=302,
+                        status_code=303,
                     )
                 
                 if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
                     return RedirectResponse(
                         f"{prefix}/login?error=Admin+access+required",
-                        status_code=302,
+                        status_code=303,
                     )
                 
                 # Criar sessão
@@ -159,11 +159,8 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
                 except Exception as e:
                     logger.warning("Could not save admin session to DB: %s", e)
                 
-                response = RedirectResponse(f"{prefix}/", status_code=302)
+                response = RedirectResponse(f"{prefix}/", status_code=303)
                 
-                # Resolve cookie Secure flag:
-                # 1. Setting explicita (admin_cookie_secure) vence
-                # 2. Senao, auto-detect pelo scheme do request
                 cookie_secure = getattr(settings, "admin_cookie_secure", None)
                 if cookie_secure is None:
                     cookie_secure = request.url.scheme == "https"
@@ -182,7 +179,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             logger.error("Login error: %s", e)
             return RedirectResponse(
                 f"{prefix}/login?error=Internal+error",
-                status_code=302,
+                status_code=303,
             )
     
     @router.get("/logout")

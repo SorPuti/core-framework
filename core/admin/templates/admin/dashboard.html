@@ -243,14 +243,14 @@ function dashboardView() {
         async loadStats() {
             // Try to load recent audit log entries
             try {
-                const resp = await fetch('{{ admin_prefix }}/api/core/auditlog?per_page=8&ordering=-created_at');
+                const resp = await fetch('{{ admin_prefix }}/api/admin/auditlog?per_page=8&ordering=-timestamp');
                 if (resp.ok) {
                     const data = await resp.json();
                     this.recentActions = (data.items || []).map(item => ({
                         id: item.id,
                         action: item.action || 'update',
                         description: (item.action || 'Action') + ' on ' + (item.model_name || 'Unknown') + (item.object_id ? ' #' + item.object_id : ''),
-                        timestamp: item.created_at ? new Date(item.created_at).toLocaleString() : ''
+                        timestamp: item.timestamp ? new Date(item.timestamp).toLocaleString() : (item.created_at ? new Date(item.created_at).toLocaleString() : '')
                     }));
                 }
             } catch (e) {
