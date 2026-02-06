@@ -3529,6 +3529,143 @@ def cmd_collectstatic(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_createsuperuser(args: argparse.Namespace) -> int:
+    """Create a superuser account interactively or via flags."""
+    import asyncio
+    import getpass
+
+    config = load_config()
+
+    if not check_database_connection(config["database_url"]):
+        return 1
+
+    print()
+    print(bold("Create Superuser"))
+    print("=" * 50)
+
+    # ── Resolve User model ──────────────────────────────────────────────
+    try:
+        from core.auth.models import get_user_model
+        User = get_user_model()
+    except RuntimeError:
+        # Fallback: tenta importar app do usuario para registrar o model
+        try:
+            app_module = config.get("app_module")
+            if app_module:
+                import importlib
+                importlib.import_module(app_module)
+            from core.auth.models import get_user_model
+            User = get_user_model()
+        except Exception as exc:
+            print()
+            print(error(f"Could not resolve User model: {exc}"))
+            print()
+            print("Make sure your project defines a User model and configures it via:")
+            print(f"  {info('configure_auth(user_model=YourUser)')}")
+            print(f"  or {info('settings.user_model = \"myapp.models.User\"')}")
+            return 1
+
+    username_field = getattr(User, "USERNAME_FIELD", "email")
+    required_fields = getattr(User, "REQUIRED_FIELDS", [])
+
+    # ── Non-interactive mode (--noinput) ────────────────────────────────
+    noinput = getattr(args, "noinput", False)
+
+    # Collect username field (email by default)
+    email_value = getattr(args, "email", None) or getattr(args, username_field, None)
+    password_value = getattr(args, "password", None)
+
+    if noinput:
+        if not email_value:
+            print(error(f"--{username_field} is required when using --noinput"))
+            return 1
+        if not password_value:
+            print(error("--password is required when using --noinput"))
+            return 1
+    else:
+        # Interactive mode
+        if not email_value:
+            while True:
+                email_value = input(f"  {username_field.capitalize()}: ").strip()
+                if email_value:
+                    break
+                print(warning(f"  {username_field.capitalize()} cannot be empty."))
+
+        if not password_value:
+            while True:
+                password_value = getpass.getpass("  Password: ")
+                if not password_value:
+                    print(warning("  Password cannot be empty."))
+                    continue
+                if len(password_value) < 8:
+                    print(warning("  Password must be at least 8 characters."))
+                    continue
+                password_confirm = getpass.getpass("  Password (confirm): ")
+                if password_value != password_confirm:
+                    print(warning("  Passwords do not match. Try again."))
+                    continue
+                break
+
+    # ── Collect extra required fields ───────────────────────────────────
+    extra_fields: dict[str, Any] = {}
+    for field_name in required_fields:
+        val = getattr(args, field_name, None)
+        if not val and not noinput:
+            val = input(f"  {field_name.replace('_', ' ').capitalize()}: ").strip()
+        if val:
+            extra_fields[field_name] = val
+
+    # ── Create superuser ────────────────────────────────────────────────
+    async def create():
+        from core.models import init_database, get_session
+
+        await init_database(config["database_url"])
+        session = get_session()
+
+        async with await session as db:
+            # Check if user already exists
+            existing = await User.get_by_email(email_value, db)
+            if existing:
+                print()
+                print(warning(f"  User with {username_field}='{email_value}' already exists."))
+                if noinput:
+                    return 1
+
+                overwrite = input("  Overwrite and make superuser? [y/N]: ").strip().lower()
+                if overwrite != "y":
+                    print(info("  Aborted."))
+                    return 0
+
+                existing.is_staff = True
+                existing.is_superuser = True
+                existing.is_active = True
+                existing.set_password(password_value)
+                db.add(existing)
+                await db.commit()
+                print()
+                print(success(f"  Superuser '{email_value}' updated successfully."))
+                return 0
+
+            # Create new superuser
+            await User.create_superuser(
+                email=email_value,
+                password=password_value,
+                db=db,
+                **extra_fields,
+            )
+            await db.commit()
+
+        return 0
+
+    result = asyncio.run(create())
+
+    if result == 0:
+        print()
+        print(success(f"  Superuser '{email_value}' created successfully."))
+    
+    return result
+
+
 def cmd_deploy(args: argparse.Namespace) -> int:
     """Generate deployment files."""
     print()
@@ -3963,6 +4100,26 @@ For more information, visit: https://github.com/SorPuti/core-framework
         help="List registered tasks"
     )
     tasks_parser.set_defaults(func=cmd_tasks)
+    
+    # createsuperuser
+    superuser_parser = subparsers.add_parser(
+        "createsuperuser",
+        help="Create a superuser account for the admin panel"
+    )
+    superuser_parser.add_argument(
+        "--email",
+        help="Email for the superuser (non-interactive)"
+    )
+    superuser_parser.add_argument(
+        "--password",
+        help="Password for the superuser (non-interactive)"
+    )
+    superuser_parser.add_argument(
+        "--noinput",
+        action="store_true",
+        help="Non-interactive mode (requires --email and --password)"
+    )
+    superuser_parser.set_defaults(func=cmd_createsuperuser)
     
     # collectstatic
     collectstatic_parser = subparsers.add_parser(

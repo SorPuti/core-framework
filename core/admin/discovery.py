@@ -35,7 +35,7 @@ def discover_admin_modules(site: "AdminSite") -> list[str]:
     
     Estratégia:
     1. Verifica core.toml / pyproject.toml por 'admin_modules' explícito
-    2. Scan recursivo por */admin.py excluindo diretórios ignorados
+    2. SEMPRE faz scan recursivo por */admin.py (complementa config explícita)
     3. Importa cada módulo encontrado (import dispara registrations)
     
     Erros de import NÃO são engolidos — são registrados no site.errors
@@ -44,34 +44,37 @@ def discover_admin_modules(site: "AdminSite") -> list[str]:
     Returns:
         Lista de módulos importados com sucesso
     """
-    imported: list[str] = []
+    import sys
     
-    # 1. Tenta carregar de configuração explícita
+    imported: list[str] = []
+    already_imported: set[str] = set()
+    
+    cwd = Path(os.getcwd())
+    
+    # Garante que CWD está no sys.path
+    cwd_str = str(cwd)
+    if cwd_str not in sys.path:
+        sys.path.insert(0, cwd_str)
+    
+    # 1. Carrega módulos explícitos (core.toml / pyproject.toml)
     explicit_modules = _get_explicit_admin_modules()
     if explicit_modules:
         for module_path in explicit_modules:
             success = _import_admin_module(site, module_path)
             if success:
                 imported.append(module_path)
-        return imported
+            already_imported.add(module_path)
     
-    # 2. Scan recursivo
-    cwd = Path(os.getcwd())
-    
-    # Garante que CWD está no sys.path
-    import sys
-    cwd_str = str(cwd)
-    if cwd_str not in sys.path:
-        sys.path.insert(0, cwd_str)
-    
+    # 2. SEMPRE faz scan recursivo (complementa config explícita)
     admin_files = _scan_for_admin_files(cwd)
     
     for admin_file in admin_files:
         module_path = _file_to_module(admin_file, cwd)
-        if module_path:
+        if module_path and module_path not in already_imported:
             success = _import_admin_module(site, module_path)
             if success:
                 imported.append(module_path)
+            already_imported.add(module_path)
     
     if imported:
         logger.info("Discovered %d admin module(s): %s", len(imported), ", ".join(imported))

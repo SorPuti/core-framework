@@ -153,13 +153,21 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
                     logger.warning("Could not save admin session to DB: %s", e)
                 
                 response = RedirectResponse(f"{prefix}/", status_code=302)
+                
+                # Resolve cookie Secure flag:
+                # 1. Setting explicita (admin_cookie_secure) vence
+                # 2. Senao, auto-detect pelo scheme do request
+                cookie_secure = getattr(settings, "admin_cookie_secure", None)
+                if cookie_secure is None:
+                    cookie_secure = request.url.scheme == "https"
+                
                 response.set_cookie(
                     key="admin_session",
                     value=session_key,
                     httponly=True,
                     samesite="lax",
                     max_age=86400,  # 24 hours
-                    secure=not debug,
+                    secure=cookie_secure,
                 )
                 return response
                 

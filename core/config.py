@@ -706,6 +706,15 @@ class Settings(BaseSettings):
         default=None,
         description="Path para CSS customizado adicional (relativo ao projeto)",
     )
+    admin_cookie_secure: bool | None = PydanticField(
+        default=None,
+        description=(
+            "Flag Secure do cookie de sessao do admin. "
+            "None = auto-detect pelo scheme do request (HTTPS → True, HTTP → False). "
+            "True = forcar Secure (requer HTTPS). "
+            "False = nunca Secure (uso local/Docker via HTTP)."
+        ),
+    )
     
     # =========================================================================
     # VALIDATORS — Security & Environment-Aware Defaults
