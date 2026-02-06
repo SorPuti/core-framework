@@ -173,6 +173,11 @@ class CoreApp:
             for router in routers:
                 self.include_router(router)
         
+        # ── Step 8.5: Admin Panel ──
+        self._admin_site = None
+        if getattr(self.settings, "admin_enabled", True):
+            self._setup_admin()
+        
         # ── Step 9: Health checks ──
         if getattr(self.settings, "health_check_enabled", True):
             self._setup_health_checks()
@@ -672,6 +677,38 @@ class CoreApp:
             app.add_api_route("/health", HealthView.as_route("/health")[1], methods=["GET"])
         """
         self.app.add_api_route(path, endpoint, methods=methods, **kwargs)
+    
+    def _setup_admin(self) -> None:
+        """
+        Configura o Admin Panel.
+        
+        Boot sequence do admin:
+        1. Instancia AdminSite com settings
+        2. Executa autodiscover (registra core models + scan admin.py)
+        3. Monta router sob settings.admin_url_prefix
+        4. Em debug, serve static files diretamente
+        
+        Erros de configuração são logados profissionalmente:
+        - AdminConfigurationError: fatal, impede mount
+        - AdminRegistrationError: por model, não bloqueia outros
+        """
+        try:
+            from core.admin import AdminSite
+            
+            self._admin_site = AdminSite(name="default")
+            self._admin_site.autodiscover()
+            self._admin_site.mount(self.app, self.settings)
+            
+            prefix = getattr(self.settings, "admin_url_prefix", "/admin")
+            app_logger.info("Admin panel enabled at %s", prefix)
+            
+        except Exception as e:
+            app_logger.error(
+                "Failed to setup admin panel: %s: %s. "
+                "Admin will be unavailable. Fix the error and restart.",
+                type(e).__name__, e,
+            )
+            self._admin_site = None
     
     def _setup_health_checks(self) -> None:
         """

@@ -3495,6 +3495,40 @@ def cmd_topics_delete(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_collectstatic(args: argparse.Namespace) -> int:
+    """Collect static assets for admin panel."""
+    print()
+    print(bold("Collecting Static Assets"))
+    print("=" * 50)
+    
+    from core.admin.collectstatic import collectstatic
+    
+    output_dir = args.output if hasattr(args, "output") else None
+    no_hash = args.no_hash if hasattr(args, "no_hash") else False
+    verbose_flag = args.verbose if hasattr(args, "verbose") else False
+    
+    result = collectstatic(
+        output_dir=output_dir,
+        no_hash=no_hash,
+        verbose=verbose_flag,
+    )
+    
+    print()
+    print(f"  Output: {info(result['output_dir'])}")
+    print(f"  Files copied: {success(str(result['files_copied']))}")
+    
+    if result["conflicts"]:
+        print(f"  Conflicts: {warning(str(len(result['conflicts'])))}")
+        for conflict in result["conflicts"]:
+            print(f"    {warning('⚠')} {conflict}")
+    
+    print(f"  Manifest: {info(result['manifest_path'])}")
+    print()
+    print(success("Static assets collected successfully!"))
+    
+    return 0
+
+
 def cmd_deploy(args: argparse.Namespace) -> int:
     """Generate deployment files."""
     print()
@@ -3929,6 +3963,27 @@ For more information, visit: https://github.com/SorPuti/core-framework
         help="List registered tasks"
     )
     tasks_parser.set_defaults(func=cmd_tasks)
+    
+    # collectstatic
+    collectstatic_parser = subparsers.add_parser(
+        "collectstatic",
+        help="Collect static assets for admin panel (CSS, JS, images)"
+    )
+    collectstatic_parser.add_argument(
+        "-o", "--output",
+        help="Output directory (default: ./static/core-admin)"
+    )
+    collectstatic_parser.add_argument(
+        "--no-hash",
+        action="store_true",
+        help="Disable cache busting hash in filenames"
+    )
+    collectstatic_parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Show each file as it is copied"
+    )
+    collectstatic_parser.set_defaults(func=cmd_collectstatic)
     
     # test
     test_parser = subparsers.add_parser(

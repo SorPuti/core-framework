@@ -667,6 +667,47 @@ class Settings(BaseSettings):
     )
     
     # =========================================================================
+    # ADMIN PANEL
+    # =========================================================================
+    
+    admin_enabled: bool = PydanticField(
+        default=True,
+        description="Habilita o admin panel nativo",
+    )
+    admin_url_prefix: str = PydanticField(
+        default="/admin",
+        description=(
+            "Prefixo da URL do admin panel. Customizável para segurança "
+            "por obscuridade ou convenção interna. "
+            'Ex: "/admin", "/backoffice", "/ops-c7a3e1b2"'
+        ),
+    )
+    admin_site_title: str = PydanticField(
+        default="Admin",
+        description="Título exibido na aba do browser",
+    )
+    admin_site_header: str = PydanticField(
+        default="Core Admin",
+        description="Header exibido no sidebar do admin",
+    )
+    admin_theme: str = PydanticField(
+        default="default",
+        description='Tema visual: "default" ou "dark"',
+    )
+    admin_logo_url: str | None = PydanticField(
+        default=None,
+        description="URL do logo custom no sidebar (None para ícone padrão)",
+    )
+    admin_primary_color: str = PydanticField(
+        default="#3B82F6",
+        description="Cor primária do admin (hex). Default: blue-500",
+    )
+    admin_custom_css: str | None = PydanticField(
+        default=None,
+        description="Path para CSS customizado adicional (relativo ao projeto)",
+    )
+    
+    # =========================================================================
     # VALIDATORS — Security & Environment-Aware Defaults
     # =========================================================================
     

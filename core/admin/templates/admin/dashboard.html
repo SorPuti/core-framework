@@ -1,0 +1,100 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    
+    <!-- Error / Warning Cards -->
+    {% if errors and (errors.has_errors or errors.has_warnings) %}
+    <div class="space-y-3">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">System Status</h2>
+        
+        {% for error in errors.errors %}
+        <div class="border rounded-lg p-4 
+            {% if error.level == 'error' %}
+            bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800
+            {% elif error.level == 'warning' %}
+            bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800
+            {% else %}
+            bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800
+            {% endif %}
+        ">
+            <div class="flex items-start">
+                {% if error.level == 'error' %}
+                <i data-lucide="x-circle" class="w-5 h-5 text-red-600 dark:text-red-400 mr-3 mt-0.5 flex-shrink-0"></i>
+                {% elif error.level == 'warning' %}
+                <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 dark:text-amber-400 mr-3 mt-0.5 flex-shrink-0"></i>
+                {% else %}
+                <i data-lucide="info" class="w-5 h-5 text-blue-600 dark:text-blue-400 mr-3 mt-0.5 flex-shrink-0"></i>
+                {% endif %}
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-sm font-semibold 
+                        {% if error.level == 'error' %}text-red-800 dark:text-red-200
+                        {% elif error.level == 'warning' %}text-amber-800 dark:text-amber-200
+                        {% else %}text-blue-800 dark:text-blue-200{% endif %}
+                    ">
+                        {% if error.model %}{{ error.model }} — {% endif %}{{ error.title }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{{ error.detail }}</p>
+                    {% if error.hint %}
+                    <p class="mt-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        <i data-lucide="lightbulb" class="w-3 h-3 inline mr-1"></i>
+                        {{ error.hint }}
+                    </p>
+                    {% endif %}
+                    {% if debug and error.source %}
+                    <details class="mt-2">
+                        <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-700">Show traceback</summary>
+                        <pre class="mt-1 text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded overflow-x-auto">{{ error.source }}</pre>
+                    </details>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <!-- Model Overview Cards -->
+    <div>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Registered Models</h2>
+        
+        {% for app in apps %}
+        <div class="mb-6">
+            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                {{ app.app_label }}
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {% for model in app.models %}
+                <a href="{{ admin_prefix }}/{{ app.app_label }}/{{ model.model_name }}/"
+                   class="block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md hover:border-primary-300 dark:hover:border-primary-600 transition-all group">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center group-hover:bg-primary-100 dark:group-hover:bg-primary-900/50 transition-colors">
+                            <i data-lucide="{{ model.icon }}" class="w-5 h-5 text-primary-600 dark:text-primary-400"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                {{ model.display_name_plural }}
+                            </h4>
+                            {% if model.has_errors %}
+                            <p class="text-xs text-red-600 dark:text-red-400">Has errors</p>
+                            {% else %}
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                {% if 'add' in model.permissions %}Add{% endif %}
+                                {% if 'change' in model.permissions %} / Edit{% endif %}
+                                {% if 'delete' in model.permissions %} / Delete{% endif %}
+                            </p>
+                            {% endif %}
+                        </div>
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400 ml-auto"></i>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

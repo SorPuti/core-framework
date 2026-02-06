@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" class="{{ 'dark' if theme == 'dark' else '' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ site_title }}{% endblock %} — {{ site_header }}</title>
+    
+    <!-- Tailwind CSS (CDN for dev, collectstatic for prod) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe',
+                            300: '#93c5fd', 400: '#60a5fa', 500: '{{ primary_color }}',
+                            600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+    
+    <!-- Alpine.js -->
+    <script src="https://unpkg.com/alpinejs@3.14.3/dist/cdn.min.js" defer></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+    
+    <style>
+        [x-cloak] { display: none !important; }
+        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+        .htmx-request .htmx-indicator { opacity: 1; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+    <div class="flex min-h-screen" x-data="{ sidebarOpen: true }">
+        
+        <!-- Sidebar -->
+        {% block sidebar %}
+        <aside 
+            class="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col"
+            x-show="sidebarOpen"
+            x-transition
+        >
+            <!-- Logo / Header -->
+            <div class="h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-700">
+                {% if logo_url %}
+                <img src="{{ logo_url }}" alt="{{ site_header }}" class="h-8 mr-2">
+                {% endif %}
+                <a href="{{ admin_prefix }}/" class="text-lg font-bold text-primary-600 dark:text-primary-400 truncate">
+                    {{ site_header }}
+                </a>
+            </div>
+            
+            <!-- Navigation -->
+            <nav class="flex-1 px-3 py-4 overflow-y-auto">
+                <!-- Dashboard -->
+                <a href="{{ admin_prefix }}/" 
+                   class="flex items-center px-3 py-2 text-sm font-medium rounded-lg mb-1 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3"></i>
+                    Dashboard
+                </a>
+                
+                <!-- Apps and Models -->
+                {% for app in apps %}
+                <div class="mt-4">
+                    <h3 class="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {{ app.app_label }}
+                    </h3>
+                    <div class="mt-1 space-y-0.5">
+                        {% for model in app.models %}
+                        <a href="{{ admin_prefix }}/{{ app.app_label }}/{{ model.model_name }}/"
+                           class="flex items-center px-3 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 {% if model.has_errors %}text-red-600 dark:text-red-400{% endif %}">
+                            <i data-lucide="{{ model.icon }}" class="w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span class="truncate">{{ model.display_name_plural }}</span>
+                            {% if model.has_errors %}
+                            <span class="ml-auto">
+                                <i data-lucide="alert-triangle" class="w-3 h-3 text-red-500"></i>
+                            </span>
+                            {% endif %}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </nav>
+            
+            <!-- User info -->
+            {% if user %}
+            <div class="border-t border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex items-center">
+                    <div class="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
+                        <i data-lucide="user" class="w-4 h-4 text-primary-600 dark:text-primary-400"></i>
+                    </div>
+                    <div class="ml-3 min-w-0">
+                        <p class="text-sm font-medium truncate">{{ user.email if user.email else user }}</p>
+                        <a href="{{ admin_prefix }}/logout" class="text-xs text-gray-500 hover:text-red-600">Logout</a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </aside>
+        {% endblock %}
+        
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-w-0">
+            <!-- Top bar -->
+            <header class="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-6">
+                <button @click="sidebarOpen = !sidebarOpen" class="mr-4 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+                <div class="flex-1">
+                    {% block page_header %}
+                    <h1 class="text-xl font-semibold">{% block page_title %}Dashboard{% endblock %}</h1>
+                    {% endblock %}
+                </div>
+                {% block page_actions %}{% endblock %}
+            </header>
+            
+            <!-- Error banners -->
+            {% if errors and errors.has_warnings %}
+            <div class="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-3">
+                <div class="flex items-center">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 dark:text-amber-400 mr-2"></i>
+                    <span class="text-sm text-amber-800 dark:text-amber-200">
+                        {{ errors.warning_count }} warning(s) detected.
+                        <a href="{{ admin_prefix }}/" class="underline font-medium">View on dashboard</a>
+                    </span>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Page content -->
+            <main class="flex-1 p-6 overflow-auto">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize Lucide icons
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.lucide) lucide.createIcons();
+        });
+        // Reinitialize after HTMX swaps
+        document.addEventListener('htmx:afterSwap', () => {
+            if (window.lucide) lucide.createIcons();
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
