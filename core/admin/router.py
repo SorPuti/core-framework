@@ -142,7 +142,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
                     
                     session = AdminSession(
                         session_key=session_key,
-                        user_id=user.id,
+                        user_id=str(user.id),
                         ip_address=request.client.host if request.client else None,
                         user_agent=request.headers.get("user-agent", "")[:500],
                         expires_at=timezone.now() + timedelta(hours=24),

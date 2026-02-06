@@ -31,7 +31,8 @@ class AuditLog(Model):
     __tablename__ = "admin_audit_log"
     
     id: Mapped[int] = Field.pk()
-    user_id: Mapped[int] = Field.integer(index=True)
+    # VARCHAR para aceitar qualquer tipo de PK do User (int, UUID, string)
+    user_id: Mapped[str] = Field.string(max_length=255, index=True)
     user_email: Mapped[str] = Field.string(max_length=255)
     action: Mapped[str] = Field.string(max_length=20)  # create, update, delete, bulk_delete
     app_label: Mapped[str] = Field.string(max_length=100)
@@ -77,7 +78,7 @@ class AuditLog(Model):
             user_agent: User-Agent do browser
         """
         log = cls(
-            user_id=getattr(user, "id", 0),
+            user_id=str(getattr(user, "id", "0")),
             user_email=getattr(user, "email", str(user)),
             action=action,
             app_label=app_label,
@@ -103,7 +104,8 @@ class AdminSession(Model):
     
     id: Mapped[int] = Field.pk()
     session_key: Mapped[str] = Field.string(max_length=64, unique=True, index=True)
-    user_id: Mapped[int] = Field.integer(index=True)
+    # VARCHAR para aceitar qualquer tipo de PK do User (int, UUID, string)
+    user_id: Mapped[str] = Field.string(max_length=255, index=True)
     ip_address: Mapped[str | None] = Field.string(max_length=45, nullable=True)
     user_agent: Mapped[str | None] = Field.string(max_length=500, nullable=True)
     created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
