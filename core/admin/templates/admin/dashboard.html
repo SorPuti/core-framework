@@ -16,7 +16,7 @@
                 </svg>
             </div>
             <div class="ml-4">
-                <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ apps | sum(attribute='models') if apps else 0 }}</p>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ apps | map(attribute='models') | map('length') | sum if apps else 0 }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Registered Models</p>
             </div>
         </div>
