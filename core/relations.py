@@ -52,6 +52,7 @@ Example:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 from uuid import UUID
 
@@ -63,6 +64,8 @@ if TYPE_CHECKING:
     from core.models import Model
 
 T = TypeVar("T", bound="Model")
+
+logger = logging.getLogger("core.relations")
 
 
 # =============================================================================
@@ -187,16 +190,71 @@ def _resolve_target(target: str) -> str:
     When target is "User" (no dots), there may be multiple User classes
     in the registry (core.auth, project). Use configure_auth's user_model
     to disambiguate.
+    
+    Usa cache do ModelRegistry para evitar resoluções duplicadas.
+    
+    Raises:
+        ValueError: Se não conseguir resolver ambiguidade com mensagem clara de correção.
     """
+    # Paths completos não precisam de resolução
     if "." in target:
         return target  # Already fully qualified
+    
+    # Obtém registry para cache
+    try:
+        from core.registry import ModelRegistry
+        registry = ModelRegistry.get_instance()
+        
+        # Verifica cache primeiro
+        cached = registry.get_cached_relationship(target)
+        if cached is not None:
+            logger.debug("Using cached resolution for '%s' -> '%s'", target, cached)
+            return cached
+    except Exception:
+        # Se registry não disponível, continua sem cache
+        pass
+    
+    # Resolve normalmente
+    resolved = _resolve_target_impl(target)
+    
+    # Cache resultado se registry disponível
+    try:
+        from core.registry import ModelRegistry
+        registry = ModelRegistry.get_instance()
+        registry.cache_relationship(target, resolved)
+    except Exception:
+        pass
+    
+    return resolved
+
+
+def _resolve_target_impl(target: str) -> str:
+    """
+    Implementação interna de resolução de target.
+    
+    Separada de _resolve_target() para permitir cache sem recursão.
+    """
     if target != "User":
         return target
+    
+    # Tenta resolver "User" via configure_auth
     try:
         from core.auth.models import get_user_model
         User = get_user_model()
-        return f"{User.__module__}.{User.__name__}"
-    except Exception:
+        resolved = f"{User.__module__}.{User.__name__}"
+        logger.debug("Resolved 'User' to '%s'", resolved)
+        return resolved
+    except Exception as e:
+        # Mensagem de erro clara com sugestão de correção
+        logger.warning(
+            "Could not auto-resolve 'User' model. "
+            "Use fully-qualified path, e.g. 'src.apps.users.models.User' "
+            "or configure via configure_auth(user_model=User). "
+            "Error: %s",
+            e,
+        )
+        # Retorna o target original para não quebrar código existente
+        # mas emite warning para o desenvolvedor corrigir
         return target
 
 

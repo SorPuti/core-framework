@@ -199,10 +199,12 @@ class CoreApp:
         
         Boot sequence:
         1. Schema validation (fail-fast)
+        1.5. Load models via registry (lazy, apenas se necessário)
         2. Database initialization
         3. Table creation (if configured)
         4. Tenancy setup
-        5. User startup callbacks
+        5. Auto-collect permissions (if configured)
+        6. User startup callbacks
         """
         app_logger.info(
             "Starting %s (environment=%s, debug=%s)",
@@ -214,6 +216,23 @@ class CoreApp:
         # ── Step 1: Schema/Model validation (before DB for fail-fast) ──
         if getattr(self.settings, "strict_validation", self.settings.debug):
             await self._validate_schemas()
+        
+        # ── Step 1.5: Load models via registry (lazy, apenas se necessário) ──
+        # Carrega modelos apenas se necessário para table creation ou permissions
+        if self._auto_create_tables or getattr(self.settings, "auto_collect_permissions", False):
+            from core.registry import ModelRegistry
+            
+            registry = ModelRegistry.get_instance()
+            models_module = self.settings.models_module
+            
+            # Descobre modelos usando registry (cache evita re-imports)
+            models = registry.discover_models(models_module=models_module)
+            
+            if models:
+                app_logger.debug(
+                    "Loaded %d model(s) via registry for startup",
+                    len(models),
+                )
         
         # ── Step 2: Database initialization ──
         if self.settings.has_read_replica:
@@ -781,16 +800,28 @@ class CoreApp:
     
     def _setup_health_checks(self) -> None:
         """
-        Registra endpoints de health check.
+        Registra endpoints de health check padronizados.
         
-        - /healthz: Liveness probe (app está rodando?)
+        Endpoints registrados:
+        - /healthz: Liveness probe (app está rodando?) - padrão Kubernetes
+        - /health: Alias para /healthz (compatibilidade)
         - /readyz: Readiness probe (app está pronta para receber requests?)
+        
+        Todos retornam 200 se OK, 503 se não pronto.
         """
+        # Liveness probe (app está rodando?)
         @self.app.get("/healthz", tags=["health"], include_in_schema=False)
         async def healthz():
             """Liveness probe — returns 200 if the app is running."""
             return {"status": "alive"}
         
+        # Alias /health para compatibilidade (alguns load balancers esperam /health)
+        @self.app.get("/health", tags=["health"], include_in_schema=False)
+        async def health():
+            """Health check alias — same as /healthz."""
+            return {"status": "alive"}
+        
+        # Readiness probe (app está pronta para receber requests?)
         @self.app.get("/readyz", tags=["health"], include_in_schema=False)
         async def readyz():
             """Readiness probe — checks database and messaging connectivity."""

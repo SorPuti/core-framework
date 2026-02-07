@@ -1301,12 +1301,58 @@ def _cast_and_clean_data(
 
 
 def _get_error_hint(error: Exception) -> str:
-    """Gera hint de resolução para erro de runtime."""
+    """
+    Gera hint de resolução para erro de runtime com sugestões claras.
+    
+    Fornece mensagens de erro úteis que ajudam o desenvolvedor a resolver
+    problemas rapidamente, seguindo boas práticas de UX.
+    """
     error_str = str(error).lower()
+    error_type = type(error).__name__
+    
+    # Database errors
     if "no such table" in error_str or ("relation" in error_str and "does not exist" in error_str):
-        return "Execute 'core migrate' para criar as tabelas."
-    if "connection" in error_str:
-        return "Verifique se o banco de dados está acessível."
+        return (
+            "Tabela não encontrada. Execute 'core migrate' para criar as tabelas. "
+            "Se já executou, verifique se DATABASE_URL está correto."
+        )
+    if "connection" in error_str or "could not connect" in error_str:
+        return (
+            "Não foi possível conectar ao banco de dados. "
+            "Verifique se o servidor está rodando e se DATABASE_URL está correto no .env"
+        )
     if "timeout" in error_str:
-        return "Verifique a conectividade com o banco de dados."
-    return "Verifique os logs para mais detalhes."
+        return (
+            "Timeout ao conectar ao banco de dados. "
+            "Verifique a conectividade e se o servidor está acessível."
+        )
+    if "authentication failed" in error_str or "password" in error_str:
+        return (
+            "Falha de autenticação. Verifique usuário e senha em DATABASE_URL."
+        )
+    
+    # Import errors
+    if "import" in error_str or "module" in error_str or error_type == "ModuleNotFoundError":
+        return (
+            "Módulo não encontrado. Verifique se o path está correto e se o módulo existe. "
+            "Use paths completos, ex: 'src.apps.users.models.User'"
+        )
+    
+    # Model/relationship errors
+    if "multiple classes found" in error_str or "ambiguous" in error_str:
+        return (
+            "Múltiplas classes encontradas. Use path completo, "
+            "ex: 'src.apps.users.models.User' em vez de apenas 'User'"
+        )
+    
+    # Permission errors
+    if "permission" in error_str or "access" in error_str:
+        return (
+            "Erro de permissão. Verifique se o usuário tem acesso ao recurso."
+        )
+    
+    # Generic fallback
+    return (
+        "Verifique os logs para mais detalhes. "
+        "Se o problema persistir, consulte a documentação em docs/SIMPLIFICACAO.md"
+    )

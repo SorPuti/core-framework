@@ -2235,7 +2235,9 @@ echo "  Run 'core run' to start the server"
 
 
 def cmd_makemigrations(args: argparse.Namespace) -> int:
-    """Gera arquivos de migração."""
+    """Gera arquivos de migração usando registry centralizado."""
+    from core.registry import ModelRegistry
+    
     config = load_config()
     
     print(info("Detecting model changes..."))
@@ -2243,15 +2245,16 @@ def cmd_makemigrations(args: argparse.Namespace) -> int:
     # Adiciona diretório atual ao path
     sys.path.insert(0, os.getcwd())
     
-    # Descobre models - usa config se definido, senão auto-descobre
+    # Usa registry centralizado para descobrir modelos
+    registry = ModelRegistry.get_instance()
     models_module = config.get("models_module")
     rescan = getattr(args, "rescan", False)
     
-    # Se models_module não está definido ou é o default, usa auto-descoberta
+    # Descobre modelos via registry (cache evita re-imports)
     if not models_module or models_module == "app.models":
-        models = discover_models(models_module=None, rescan=rescan)
+        models = registry.discover_models(models_module=None, force_rescan=rescan)
     else:
-        models = discover_models(models_module=models_module, rescan=rescan)
+        models = registry.discover_models(models_module=models_module, force_rescan=rescan)
     
     if not models and not args.empty:
         print(warning("No models found."))

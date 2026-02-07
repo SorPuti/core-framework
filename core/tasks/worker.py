@@ -73,6 +73,9 @@ class TaskWorker:
         self._offline_ttl_hours = getattr(self._settings, "ops_worker_offline_ttl", 24)
         self._heartbeat_task: asyncio.Task | None = None
         self._cleanup_counter = 0
+        
+        # Registry para lazy loading de modelos (carregado apenas quando necessário)
+        self._registry = None
     
     async def start(self) -> None:
         """Start the worker."""
@@ -219,6 +222,8 @@ class TaskWorker:
         logger.info(f"Executing task: {task_msg.task_name} ({task_msg.task_id})")
         
         # ── Persist start (ops) ──
+        # Lazy load de modelos apenas se necessário
+        await self._ensure_models_loaded()
         await self._persist_task_start(task_msg)
         
         try:
@@ -295,6 +300,24 @@ class TaskWorker:
         return result
     
     # ─── Ops: Task Persistence ────────────────────────────────────
+    
+    async def _ensure_models_loaded(self) -> None:
+        """
+        Lazy load de modelos via registry apenas quando necessário.
+        
+        Carrega modelos apenas se persistência estiver habilitada.
+        """
+        if not self._persist_enabled:
+            return
+        
+        if self._registry is None:
+            from core.registry import ModelRegistry
+            self._registry = ModelRegistry.get_instance()
+            
+            # Carrega modelos apenas se necessário para persistência
+            # Registry usa cache, então não há overhead se já foram carregados
+            models_module = getattr(self._settings, "models_module", None)
+            self._registry.discover_models(models_module=models_module)
     
     async def _persist_task_start(self, task_msg: TaskMessage) -> None:
         """Persist task execution start to the database."""

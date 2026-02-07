@@ -32,17 +32,20 @@ Ou via código (antes de iniciar a app):
         database_url="postgresql+asyncpg://localhost/myapp",
     )
 
-Resolução de .env por ambiente:
+Resolução de .env simplificada (12-Factor App):
     Precedência (maior para menor):
-    1. Variáveis de ambiente do OS
-    2. .env.{ENVIRONMENT} (ex: .env.production)
-    3. .env (base)
+    1. Variáveis de ambiente do OS (sempre prevalecem)
+    2. .env.local (gitignored, apenas em development)
+    3. .env (base, único arquivo recomendado)
     4. Defaults da classe Settings
+    
+    Para diferentes ambientes: use ENVIRONMENT env var + variáveis de ambiente do OS.
 """
 
 import logging
 import os
 import secrets
+import threading
 import warnings
 from importlib import import_module
 from importlib.metadata import entry_points
@@ -61,28 +64,30 @@ logger = logging.getLogger("core.config")
 
 def _resolve_env_files() -> tuple[str, ...]:
     """
-    Resolve .env files baseado na variável ENVIRONMENT.
+    Resolve .env files de forma simplificada (12-Factor App style).
     
     Precedência (maior para menor):
     1. Variáveis de ambiente do OS (sempre lidas)
-    2. .env.{environment} (ex: .env.production) — sobrescreve .env base
-    3. .env (base)
+    2. .env.local (gitignored, para overrides locais - apenas em development)
+    3. .env (base, único arquivo recomendado)
     4. Defaults da classe Settings
+    
+    NOTA: Para simplificar, removemos suporte a .env.{environment}.
+    Use ENVIRONMENT env var + um único .env, ou .env.local para overrides locais.
     
     Returns:
         Tupla de paths de .env files para carregar
     """
-    env = os.environ.get("ENVIRONMENT", "development")
     files: list[str] = []
     
     # Base .env (carregado primeiro, menor precedência)
     if Path(".env").is_file():
         files.append(".env")
     
-    # Environment-specific .env (carregado depois, maior precedência)
-    env_file = f".env.{env}"
-    if Path(env_file).is_file():
-        files.append(env_file)
+    # .env.local (gitignored, apenas em development, maior precedência)
+    env = os.environ.get("ENVIRONMENT", "development")
+    if env == "development" and Path(".env.local").is_file():
+        files.append(".env.local")
     
     # Se nenhum arquivo existe, tenta .env mesmo assim (pydantic ignora se não existir)
     return tuple(files) if files else (".env",)
@@ -110,12 +115,13 @@ class Settings(BaseSettings):
     Variáveis de ambiente carregadas automaticamente:
         DATABASE_URL, KAFKA_BACKEND, SECRET_KEY, etc.
     
-    Ambientes suportados (.env por ambiente):
-        .env                  # Base (sempre carregado)
-        .env.development      # Sobrescreve em development
-        .env.production       # Sobrescreve em production
-        .env.staging          # Sobrescreve em staging
-        .env.testing          # Sobrescreve em testing
+    Configuração simplificada (12-Factor App):
+        .env                  # Base (único arquivo recomendado)
+        .env.local            # Overrides locais (gitignored, apenas em development)
+        
+    NOTA: Para diferentes ambientes, use ENVIRONMENT env var + variáveis de ambiente
+    do sistema operacional (recomendado para produção) ou um único .env com valores
+    apropriados para cada ambiente.
     """
     
     model_config = SettingsConfigDict(
@@ -866,6 +872,12 @@ class Settings(BaseSettings):
 _settings: Settings | None = None
 _settings_class: type[Settings] = Settings
 
+# Flag para evitar múltiplos bootstraps
+_settings_loaded: bool = False
+
+# Lock para thread safety durante carregamento
+_settings_loading_lock: threading.Lock = threading.Lock()
+
 # Callbacks pós-carregamento
 _on_settings_loaded: list[Any] = []
 
@@ -991,17 +1003,35 @@ def _auto_configure_auth_from_user_model() -> None:
 
 
 def get_settings() -> Settings:
-    """Return the global Settings singleton after bootstrapping project settings."""
-    global _settings
+    """
+    Return the global Settings singleton after bootstrapping project settings.
+    
+    Thread-safe singleton com lock para evitar múltiplos bootstraps.
+    Usa double-checked locking pattern para performance.
+    """
+    global _settings, _settings_loaded
 
-    if _settings is None:
-        bootstrap_project_settings()
+    # Fast path: settings já carregado
+    if _settings is not None:
+        return _settings
+
+    # Adquire lock apenas se necessário
+    with _settings_loading_lock:
+        # Double-check após adquirir lock
+        if _settings is not None:
+            return _settings
+
+        # Bootstrap apenas uma vez
+        if not _settings_loaded:
+            bootstrap_project_settings()
+            _settings_loaded = True
 
         # Settings mod may have called configure() during bootstrap; don't overwrite
         if _settings is None:
             env_files = _resolve_env_files()
             _settings = _settings_class(_env_file=env_files)
 
+        # Executa callbacks apenas uma vez
         for callback in _on_settings_loaded:
             callback(_settings)
 
@@ -1110,7 +1140,7 @@ def reset_settings() -> None:
     AVISO: Apenas para uso em testes. Em produção, este método
     emite um warning e não executa.
     """
-    global _settings, _settings_class
+    global _settings, _settings_class, _settings_loaded
     
     if _settings is not None and _settings.environment == "production":
         logger.warning(
@@ -1119,8 +1149,10 @@ def reset_settings() -> None:
         )
         return
     
-    _settings = None
-    _settings_class = Settings
+    with _settings_loading_lock:
+        _settings = None
+        _settings_class = Settings
+        _settings_loaded = False
 
 
 # =========================================================================

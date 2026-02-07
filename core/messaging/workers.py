@@ -496,6 +496,8 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     logger = logging.getLogger(f"worker.{config.name}")
     
     _db_available = False
+    _registry = None  # Registry para lazy loading de modelos
+    
     try:
         from core.config import get_settings
         _settings = get_settings()
@@ -511,6 +513,26 @@ async def _run_worker_config(config: WorkerConfig) -> None:
             logger.debug("Database initialized for heartbeat reporting")
     except Exception as e:
         logger.warning("Could not initialize database for heartbeats: %s", e)
+    
+    async def _ensure_models_loaded() -> None:
+        """
+        Lazy load de modelos via registry apenas quando necessário.
+        
+        Carrega modelos apenas se database estiver disponível e for necessário.
+        """
+        nonlocal _registry
+        
+        if not _db_available:
+            return
+        
+        if _registry is None:
+            from core.registry import ModelRegistry
+            _registry = ModelRegistry.get_instance()
+            
+            # Carrega modelos apenas se necessário para heartbeats
+            # Registry usa cache, então não há overhead se já foram carregados
+            models_module = getattr(_settings, "models_module", None)
+            _registry.discover_models(models_module=models_module)
     
     # ── Heartbeat state (in-memory counters, zero I/O overhead) ──
     worker_id = str(uuid.uuid4())
@@ -546,6 +568,10 @@ async def _run_worker_config(config: WorkerConfig) -> None:
         """
         if not _db_available:
             return
+        
+        # Lazy load de modelos apenas quando necessário
+        await _ensure_models_loaded()
+        
         try:
             import json as _json
             from core.admin.models import WorkerHeartbeat
