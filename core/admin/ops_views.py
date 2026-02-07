@@ -398,6 +398,18 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         user: Any = Depends(check_admin_access),
     ) -> dict:
         """List all registered message workers (from registry)."""
+        def _safe_topic(val: Any) -> str | None:
+            """Resolve TopicMeta/Topic classes para string (fallback defensivo)."""
+            if val is None:
+                return None
+            if isinstance(val, str):
+                return val
+            if hasattr(val, "name"):
+                return val.name
+            if hasattr(val, "value"):
+                return val.value
+            return str(val)
+        
         try:
             from core.messaging.workers import get_all_workers
             workers = get_all_workers()
@@ -405,8 +417,8 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             for name, cfg in workers.items():
                 items.append({
                     "name": name,
-                    "input_topic": cfg.input_topic,
-                    "output_topic": cfg.output_topic,
+                    "input_topic": _safe_topic(cfg.input_topic),
+                    "output_topic": _safe_topic(cfg.output_topic),
                     "concurrency": cfg.concurrency,
                     "group_id": cfg.group_id,
                 })

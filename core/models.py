@@ -662,13 +662,118 @@ async def init_database(
     )
 
 
+def _sync_missing_columns(connection, _log) -> None:
+    """
+    Detecta e adiciona colunas faltantes em tabelas existentes.
+    
+    Usa SQLAlchemy Inspector para comparar o schema do banco com
+    o metadata dos models e executa ALTER TABLE ADD COLUMN para
+    cada coluna nova detectada.
+    
+    Chamado dentro de conn.run_sync() — roda em contexto síncrono.
+    """
+    from sqlalchemy import inspect as sa_inspect, text
+    
+    try:
+        inspector = sa_inspect(connection)
+    except Exception as e:
+        _log.debug("Could not create inspector for schema sync: %s", e)
+        return
+    
+    existing_tables = set(inspector.get_table_names())
+    
+    for table_name, table in Base.metadata.tables.items():
+        if table_name not in existing_tables:
+            continue  # Tabela nova — já foi criada pelo create_all
+        
+        try:
+            db_columns = {col["name"] for col in inspector.get_columns(table_name)}
+        except Exception:
+            continue
+        
+        model_columns = {col.name for col in table.columns}
+        missing = model_columns - db_columns
+        
+        if not missing:
+            continue
+        
+        _log.info(
+            "Schema sync: table '%s' has %d missing column(s): %s",
+            table_name, len(missing), ", ".join(sorted(missing)),
+        )
+        
+        for col_name in missing:
+            col = table.c[col_name]
+            try:
+                # Compilar o tipo da coluna para o dialeto atual
+                col_type = col.type.compile(dialect=connection.dialect)
+                
+                # Montar ALTER TABLE
+                nullable = "" if col.nullable else " NOT NULL"
+                default = ""
+                
+                # Para NOT NULL sem default, precisamos de um default temporário
+                if not col.nullable and col.default is None and col.server_default is None:
+                    # Inferir default seguro por tipo
+                    type_str = str(col_type).upper()
+                    if "INT" in type_str or "SERIAL" in type_str:
+                        default = " DEFAULT 0"
+                    elif "BOOL" in type_str:
+                        default = " DEFAULT false"
+                    elif "FLOAT" in type_str or "DOUBLE" in type_str or "NUMERIC" in type_str or "DECIMAL" in type_str:
+                        default = " DEFAULT 0.0"
+                    elif "TIMESTAMP" in type_str or "DATETIME" in type_str or "DATE" in type_str:
+                        # Para datetime NOT NULL, usar nullable como fallback
+                        nullable = ""
+                        default = ""
+                        # ALTER TABLE com NOT NULL em coluna nova sem default falha
+                        # em muitos DBs — tornar nullable nesse caso
+                    else:
+                        default = " DEFAULT ''"
+                
+                # SQLite não suporta DEFAULT em ALTER TABLE com NOT NULL de forma confiável
+                # Tornar a coluna nullable se não tem default explícito
+                dialect_name = connection.dialect.name
+                if dialect_name == "sqlite" and not col.nullable and default:
+                    nullable = ""
+                    default = ""
+                
+                sql = f'ALTER TABLE "{table_name}" ADD COLUMN "{col_name}" {col_type}{nullable}{default}'
+                
+                connection.execute(text(sql))
+                _log.info("  + Added column '%s.%s' (%s)", table_name, col_name, col_type)
+                
+            except Exception as e:
+                _log.warning(
+                    "  ! Could not add column '%s.%s': %s",
+                    table_name, col_name, e,
+                )
+
+
 async def create_tables() -> None:
-    """Cria todas as tabelas no banco de dados."""
+    """
+    Cria tabelas no banco de dados e sincroniza colunas faltantes.
+    
+    Além de criar tabelas novas (comportamento padrão do create_all),
+    detecta colunas que foram adicionadas aos models mas não existem
+    nas tabelas do banco e executa ALTER TABLE ADD COLUMN automaticamente.
+    
+    Isso resolve o problema de schema mismatch quando o framework é
+    atualizado e novos campos são adicionados aos models internos
+    (ex: TaskExecution, WorkerHeartbeat) sem migration explícita.
+    """
+    import logging
+    _log = logging.getLogger("core.database")
+    
     if _engine is None:
         raise RuntimeError("Database não inicializado. Chame init_database() primeiro.")
     
     async with _engine.begin() as conn:
+        # 1. Criar tabelas novas
         await conn.run_sync(Base.metadata.create_all)
+        
+        # 2. Sincronizar colunas faltantes em tabelas existentes
+        await conn.run_sync(_sync_missing_columns, _log)
 
 
 async def drop_tables() -> None:

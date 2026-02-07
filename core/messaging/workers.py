@@ -152,11 +152,13 @@ def worker(
         Decorated function registered as worker
     """
     def decorator(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+        # Resolve Topic classes (TopicMeta) para strings — Issue #15
+        _resolve = Worker._resolve_topic
         config = WorkerConfig(
             name=func.__name__,
             handler=func,
-            input_topic=topic,
-            output_topic=output_topic,
+            input_topic=_resolve(topic),
+            output_topic=_resolve(output_topic) if output_topic else None,
             group_id=group_id or func.__name__,
             concurrency=concurrency,
             retry_policy=RetryPolicy(
@@ -165,7 +167,7 @@ def worker(
             ),
             input_schema=input_schema,
             output_schema=output_schema,
-            dlq_topic=dlq_topic,
+            dlq_topic=_resolve(dlq_topic) if dlq_topic else None,
         )
         
         # Register worker
