@@ -3991,6 +3991,118 @@ def cmd_tasks(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_collectpermissions(args: argparse.Namespace) -> int:
+    """
+    Auto-generate CRUD permissions for all registered models.
+    
+    Scans all models (same discovery as makemigrations) and creates
+    the 4 standard permissions for each:
+    - {app_label}.view_{model_name}
+    - {app_label}.add_{model_name}
+    - {app_label}.change_{model_name}
+    - {app_label}.delete_{model_name}
+    
+    Idempotent: only creates permissions that don't already exist.
+    """
+    import asyncio
+
+    config = load_config()
+
+    if not check_database_connection(config["database_url"]):
+        return 1
+
+    print()
+    print(bold("Collect Permissions"))
+    print("=" * 50)
+
+    # ── Discover all models ──
+    models_module = config.get("models_module")
+    if not models_module or models_module == "app.models":
+        models = discover_models(models_module=None)
+    else:
+        models = discover_models(models_module=models_module)
+
+    if not models:
+        print(warning("No models found. Nothing to do."))
+        return 0
+
+    # ── Derive app_label and model_name ──
+    ACTIONS = ("view", "add", "change", "delete")
+    ACTION_LABELS = {
+        "view": "Can view",
+        "add": "Can add",
+        "change": "Can change",
+        "delete": "Can delete",
+    }
+
+    def resolve_app_label(model: type) -> str:
+        """Resolve app_label from model's module (same logic as ModelAdmin)."""
+        module = model.__module__
+        parts = module.split(".")
+        if len(parts) >= 2:
+            return parts[-2]
+        return parts[0]
+
+    permissions_to_create: list[tuple[str, str]] = []  # (codename, name)
+
+    # Skip abstract models and models without __table__
+    concrete_models = [m for m in models if hasattr(m, "__table__") and not getattr(m, "__abstract__", False)]
+
+    print(info(f"Found {len(concrete_models)} model(s) from {len(set(resolve_app_label(m) for m in concrete_models))} app(s)"))
+    print()
+
+    for model in concrete_models:
+        app_label = resolve_app_label(model)
+        model_name = model.__name__.lower()
+        for action in ACTIONS:
+            codename = f"{app_label}.{action}_{model_name}"
+            display_name = f"{ACTION_LABELS[action]} {model.__name__}"
+            permissions_to_create.append((codename, display_name))
+
+    print(info(f"Generating {len(permissions_to_create)} permission(s)..."))
+    print()
+
+    # ── Create in database ──
+    created_count = 0
+    existed_count = 0
+
+    async def run():
+        nonlocal created_count, existed_count
+        from core.models import init_database, get_session
+        from core.auth.models import Permission
+        from sqlalchemy import select
+
+        await init_database(config["database_url"])
+        session = get_session()
+
+        async with await session as db:
+            # Fetch all existing codenames in one query
+            stmt = select(Permission.codename)
+            result = await db.execute(stmt)
+            existing_codenames = {row[0] for row in result}
+
+            for codename, display_name in permissions_to_create:
+                if codename in existing_codenames:
+                    existed_count += 1
+                    print(f"  {success('✓')} {codename} {info('(already exists)')}")
+                else:
+                    perm = Permission(
+                        codename=codename,
+                        name=display_name,
+                    )
+                    db.add(perm)
+                    created_count += 1
+                    print(f"  {success('✓')} {codename} {success('(created)')}")
+
+            await db.commit()
+
+    asyncio.run(run())
+
+    print()
+    print(success(f"Done! Created {created_count} permission(s) ({existed_count} already existed)"))
+    return 0
+
+
 # ============================================================
 # Parser principal
 # ============================================================
@@ -4264,6 +4376,13 @@ For more information, visit: https://github.com/SorPuti/core-framework
         help="Show each file as it is copied"
     )
     collectstatic_parser.set_defaults(func=cmd_collectstatic)
+    
+    # collectpermissions
+    collectperms_parser = subparsers.add_parser(
+        "collectpermissions",
+        help="Auto-generate CRUD permissions (view, add, change, delete) for all models",
+    )
+    collectperms_parser.set_defaults(func=cmd_collectpermissions)
     
     # test
     test_parser = subparsers.add_parser(

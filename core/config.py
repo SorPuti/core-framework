@@ -740,6 +740,10 @@ class Settings(BaseSettings):
         default=24,
         description="Hours to keep OFFLINE worker records before auto-cleanup (0 = disabled)",
     )
+    auto_collect_permissions: bool = PydanticField(
+        default=False,
+        description="Auto-generate CRUD permissions for all models on startup (default: False)",
+    )
     ops_log_buffer_size: int = PydanticField(
         default=5000,
         description="Maximum entries in the admin log ring buffer",

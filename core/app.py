@@ -244,13 +244,82 @@ class CoreApp:
             from core.tenancy import set_tenant_field
             set_tenant_field(self.settings.tenancy_field)
         
-        # ── Step 5: User callbacks ──
+        # ── Step 5: Auto-collect permissions ──
+        if getattr(self.settings, "auto_collect_permissions", False):
+            await self._auto_collect_permissions()
+        
+        # ── Step 6: User callbacks ──
         for callback in self._on_startup:
             result = callback()
             if hasattr(result, "__await__"):
                 await result
         
         app_logger.info("Application started successfully")
+    
+    async def _auto_collect_permissions(self) -> None:
+        """
+        Auto-generate CRUD permissions for all registered models on startup.
+        
+        Discovers all concrete Model subclasses (same as admin registry) and
+        creates view/add/change/delete permissions for each. Idempotent.
+        """
+        try:
+            from core.models import Model, get_session
+            from core.auth.models import Permission
+            from sqlalchemy import select
+            
+            # Collect all concrete models from the admin registry (if available)
+            models: list[type] = []
+            if self._admin_site:
+                for model_cls in self._admin_site._registry:
+                    if hasattr(model_cls, "__table__") and not getattr(model_cls, "__abstract__", False):
+                        models.append(model_cls)
+            
+            # Fallback: scan Base subclasses
+            if not models:
+                for cls in Model.__subclasses__():
+                    if hasattr(cls, "__table__") and not getattr(cls, "__abstract__", False):
+                        if cls not in models:
+                            models.append(cls)
+            
+            if not models:
+                return
+            
+            ACTIONS = ("view", "add", "change", "delete")
+            ACTION_LABELS = {"view": "Can view", "add": "Can add", "change": "Can change", "delete": "Can delete"}
+            
+            def resolve_app_label(m: type) -> str:
+                parts = m.__module__.split(".")
+                return parts[-2] if len(parts) >= 2 else parts[0]
+            
+            permissions_to_create: list[tuple[str, str]] = []
+            for m in models:
+                app_label = resolve_app_label(m)
+                model_name = m.__name__.lower()
+                for action in ACTIONS:
+                    codename = f"{app_label}.{action}_{model_name}"
+                    display_name = f"{ACTION_LABELS[action]} {m.__name__}"
+                    permissions_to_create.append((codename, display_name))
+            
+            session = await get_session()
+            async with session:
+                # Fetch existing
+                stmt = select(Permission.codename)
+                result = await session.execute(stmt)
+                existing = {row[0] for row in result}
+                
+                created = 0
+                for codename, display_name in permissions_to_create:
+                    if codename not in existing:
+                        session.add(Permission(codename=codename, name=display_name))
+                        created += 1
+                
+                if created:
+                    await session.commit()
+                    app_logger.info("Auto-collected %d permission(s) for %d model(s)", created, len(models))
+                    
+        except Exception as e:
+            app_logger.debug("Auto-collect permissions skipped: %s", e)
     
     async def _validate_schemas(self) -> None:
         """
