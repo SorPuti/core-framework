@@ -478,14 +478,122 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     """
     Run a worker from its config.
     
+    Includes heartbeat reporting to admin_worker_heartbeats for the
+    Operations Center (same pattern as TaskWorker). Zero overhead on
+    the hot path — counters are in-memory, DB writes happen in a
+    separate asyncio task every N seconds.
+    
     Args:
         config: Worker configuration
     """
     import logging
+    import os
+    import socket
+    import uuid
     from core.messaging import get_producer
     from core.messaging.registry import create_consumer
     
     logger = logging.getLogger(f"worker.{config.name}")
+    
+    # ── Heartbeat state (in-memory counters, zero I/O overhead) ──
+    worker_id = str(uuid.uuid4())
+    _total_processed = 0
+    _total_errors = 0
+    _active = 0
+    _running = True
+    
+    # Heartbeat settings
+    try:
+        from core.config import get_settings
+        _hb_interval = getattr(get_settings(), "ops_worker_heartbeat_interval", 30)
+    except Exception:
+        _hb_interval = 30
+    
+    async def _register_heartbeat() -> None:
+        """Register this worker in the heartbeat table. Fire-and-forget."""
+        try:
+            import json as _json
+            from core.models import get_session
+            from core.admin.models import WorkerHeartbeat
+            
+            db = await get_session()
+            async with db:
+                hb = WorkerHeartbeat(
+                    worker_id=worker_id,
+                    worker_type="message",
+                    worker_name=config.name,
+                    hostname=socket.gethostname(),
+                    pid=os.getpid(),
+                    status="ONLINE",
+                    concurrency=config.concurrency,
+                    queues_json=_json.dumps([config.input_topic]),
+                )
+                await hb.save(db)
+                await db.commit()
+            logger.info(f"Heartbeat registered: {worker_id[:12]}...")
+        except Exception as e:
+            logger.debug("Failed to register heartbeat: %s", e)
+    
+    async def _heartbeat_loop() -> None:
+        """Periodic heartbeat update. Isolated task, fire-and-forget writes."""
+        while _running:
+            try:
+                await asyncio.sleep(_hb_interval)
+                await _update_heartbeat()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug("Heartbeat update failed: %s", e)
+    
+    async def _update_heartbeat() -> None:
+        """Flush in-memory counters to DB. Non-blocking, fire-and-forget."""
+        try:
+            from core.models import get_session
+            from core.admin.models import WorkerHeartbeat
+            from core.datetime import timezone
+            from sqlalchemy import update
+            
+            db = await get_session()
+            async with db:
+                stmt = (
+                    update(WorkerHeartbeat)
+                    .where(WorkerHeartbeat.worker_id == worker_id)
+                    .values(
+                        active_tasks=_active,
+                        total_processed=_total_processed,
+                        total_errors=_total_errors,
+                        last_heartbeat=timezone.now(),
+                        status="ONLINE",
+                    )
+                )
+                await db.execute(stmt)
+                await db.commit()
+        except Exception:
+            pass  # Fire-and-forget — never affect consumer
+    
+    async def _mark_offline() -> None:
+        """Mark this worker as OFFLINE in the heartbeat table."""
+        try:
+            from core.models import get_session
+            from core.admin.models import WorkerHeartbeat
+            from sqlalchemy import update
+            
+            db = await get_session()
+            async with db:
+                stmt = (
+                    update(WorkerHeartbeat)
+                    .where(WorkerHeartbeat.worker_id == worker_id)
+                    .values(
+                        status="OFFLINE",
+                        total_processed=_total_processed,
+                        total_errors=_total_errors,
+                    )
+                )
+                await db.execute(stmt)
+                await db.commit()
+            logger.info(f"Worker marked OFFLINE. Processed {_total_processed}, errors {_total_errors}")
+        except Exception:
+            pass
     
     # Get producer if output topic or DLQ configured
     producer = None
@@ -500,7 +608,7 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     
     async def flush_batch() -> None:
         """Flush accumulated batch."""
-        nonlocal batch, last_batch_time
+        nonlocal batch, last_batch_time, _total_processed, _total_errors
         
         if not batch:
             return
@@ -522,6 +630,7 @@ async def _run_worker_config(config: WorkerConfig) -> None:
                 else:
                     for msg in messages_to_process:
                         await config.handler(msg)
+                _total_processed += len(messages_to_process)
                 return  # Success
                 
             except Exception as e:
@@ -532,6 +641,7 @@ async def _run_worker_config(config: WorkerConfig) -> None:
                     await asyncio.sleep(delay)
         
         # All retries failed
+        _total_errors += len(messages_to_process)
         logger.error(f"Batch failed after {config.retry_policy.max_retries} retries: {last_error}")
         
         if config.dlq_topic and producer:
@@ -552,8 +662,8 @@ async def _run_worker_config(config: WorkerConfig) -> None:
                     await flush_batch()
     
     async def process_message(message: dict) -> None:
-        """Process single message or add to batch."""
-        nonlocal batch
+        """Process single message or add to batch. Counters are in-memory only."""
+        nonlocal batch, _total_processed, _total_errors, _active
         
         # Validate input
         if config.input_schema:
@@ -561,6 +671,7 @@ async def _run_worker_config(config: WorkerConfig) -> None:
                 validated = config.input_schema.model_validate(message)
                 message = validated.model_dump()
             except Exception as e:
+                _total_errors += 1
                 logger.error(f"Input validation failed: {e}")
                 if config.dlq_topic and producer:
                     await producer.send(config.dlq_topic, {
@@ -579,38 +690,44 @@ async def _run_worker_config(config: WorkerConfig) -> None:
             return
         
         # Single message mode with retries
+        _active += 1
         last_error = None
-        for attempt in range(config.retry_policy.max_retries + 1):
-            try:
-                result = await config.handler(message)
-                
-                # Validate output
-                if config.output_schema and result:
-                    result = config.output_schema.model_validate(result).model_dump()
-                
-                # Publish result
-                if config.output_topic and producer and result:
-                    await producer.send(config.output_topic, result)
-                
-                return  # Success
-                
-            except Exception as e:
-                last_error = e
-                if attempt < config.retry_policy.max_retries:
-                    delay = config.retry_policy.get_delay(attempt)
-                    logger.warning(f"Retry {attempt + 1}/{config.retry_policy.max_retries} in {delay}s: {e}")
-                    await asyncio.sleep(delay)
-        
-        # All retries failed
-        logger.error(f"Failed after {config.retry_policy.max_retries} retries: {last_error}")
-        
-        if config.dlq_topic and producer:
-            await producer.send(config.dlq_topic, {
-                "original": message,
-                "error": str(last_error),
-                "worker": config.name,
-                "retries": config.retry_policy.max_retries,
-            })
+        try:
+            for attempt in range(config.retry_policy.max_retries + 1):
+                try:
+                    result = await config.handler(message)
+                    
+                    # Validate output
+                    if config.output_schema and result:
+                        result = config.output_schema.model_validate(result).model_dump()
+                    
+                    # Publish result
+                    if config.output_topic and producer and result:
+                        await producer.send(config.output_topic, result)
+                    
+                    _total_processed += 1
+                    return  # Success
+                    
+                except Exception as e:
+                    last_error = e
+                    if attempt < config.retry_policy.max_retries:
+                        delay = config.retry_policy.get_delay(attempt)
+                        logger.warning(f"Retry {attempt + 1}/{config.retry_policy.max_retries} in {delay}s: {e}")
+                        await asyncio.sleep(delay)
+            
+            # All retries failed
+            _total_errors += 1
+            logger.error(f"Failed after {config.retry_policy.max_retries} retries: {last_error}")
+            
+            if config.dlq_topic and producer:
+                await producer.send(config.dlq_topic, {
+                    "original": message,
+                    "error": str(last_error),
+                    "worker": config.name,
+                    "retries": config.retry_policy.max_retries,
+                })
+        finally:
+            _active -= 1
     
     # Create consumer with message handler
     consumer = create_consumer(
@@ -621,9 +738,11 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     
     # Log startup
     logger.info(f"Starting worker: {config.name}")
+    logger.info(f"  Worker ID: {worker_id[:12]}...")
     logger.info(f"  Input topic: {config.input_topic}")
     logger.info(f"  Output topic: {config.output_topic or 'None'}")
     logger.info(f"  Concurrency: {config.concurrency}")
+    logger.info(f"  Heartbeat interval: {_hb_interval}s")
     if config.batch_size > 1:
         logger.info(f"  Batch size: {config.batch_size}")
         logger.info(f"  Batch timeout: {config.batch_timeout}s")
@@ -633,6 +752,10 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     if config.batch_timeout > 0 and (config.batch_size > 1 or config.batch_handler):
         timer_task = asyncio.create_task(batch_timer())
     
+    # Register heartbeat & start heartbeat loop (separate task, fire-and-forget)
+    await _register_heartbeat()
+    heartbeat_task = asyncio.create_task(_heartbeat_loop())
+    
     # Start consumer
     await consumer.start()
     
@@ -641,12 +764,17 @@ async def _run_worker_config(config: WorkerConfig) -> None:
         while True:
             await asyncio.sleep(1)
     except asyncio.CancelledError:
+        _running = False
+        
         # Flush remaining batch
         if batch:
             await flush_batch()
         
         if timer_task:
             timer_task.cancel()
+        
+        heartbeat_task.cancel()
+        await _mark_offline()
         
         await consumer.stop()
         

@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-02-06T21:47:20.611698",
+  "modules": [
+    "example.models",
+    "core.relations",
+    "core.auth.models",
+    "core.admin.models",
+    "core.cli.main"
+  ]
+}
