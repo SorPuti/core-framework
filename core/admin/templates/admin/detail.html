@@ -478,6 +478,41 @@
                                             >
                                         </template>
                                         
+                                        <!-- M2M Multi-Select (Issue #21) -->
+                                        <template x-if="field.widget === 'm2m_select'">
+                                            <div x-data="m2mField(field)" x-init="loadOptions()">
+                                                <div class="border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 overflow-hidden">
+                                                    <!-- Search -->
+                                                    <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-600">
+                                                        <input type="text" x-model="search" placeholder="Search..." 
+                                                               class="w-full text-sm bg-transparent border-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400">
+                                                    </div>
+                                                    <!-- Options grid -->
+                                                    <div class="max-h-48 overflow-y-auto p-2 space-y-0.5">
+                                                        <template x-for="opt in filteredOptions" :key="opt.id">
+                                                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600/50 cursor-pointer text-sm">
+                                                                <input type="checkbox" 
+                                                                       :value="opt.id" 
+                                                                       :checked="isSelected(opt.id)"
+                                                                       @change="toggleOption(opt.id)"
+                                                                       class="rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0">
+                                                                <span class="text-gray-900 dark:text-gray-100 truncate" x-text="opt.label"></span>
+                                                                <template x-if="opt.description">
+                                                                    <span class="text-[10px] text-gray-400 truncate ml-auto" x-text="opt.description"></span>
+                                                                </template>
+                                                            </label>
+                                                        </template>
+                                                        <div x-show="loading" class="text-center py-3 text-gray-400 text-xs">Loading...</div>
+                                                        <div x-show="!loading && filteredOptions.length === 0" class="text-center py-3 text-gray-400 text-xs">No options found</div>
+                                                    </div>
+                                                    <!-- Footer -->
+                                                    <div class="px-3 py-1.5 border-t border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+                                                        <span class="text-[10px] text-gray-400" x-text="selectedCount + ' selected'"></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        
                                         <!-- Default input (string, integer, float, uuid, ip) — excludes special widgets -->
                                         <template x-if="field.widget === 'default' && !['boolean', 'text', 'json', 'datetime'].includes(field.type)">
                                             <input 
@@ -674,6 +709,10 @@ function detailView() {
             if (val === null || val === undefined) return '—';
             if (typeof val === 'boolean') return val ? 'Yes' : 'No';
             if (val === '••••••••') return '••••••••';
+            // M2M: show count of items
+            if (field && field.widget === 'm2m_select' && Array.isArray(val)) {
+                return val.length > 0 ? `${val.length} item(s)` : '—';
+            }
             // Enum: mostra "Label (value)" para referência completa
             if (field && field.widget === 'choices' && field.choices) {
                 const match = field.choices.find(c => c.value == val);
@@ -728,7 +767,8 @@ function detailView() {
                 
                 const defaults = {};
                 for (const f of this.editableFields) {
-                    if (f.type === 'boolean') defaults[f.name] = false;
+                    if (f.widget === 'm2m_select') defaults[f.name] = [];
+                    else if (f.type === 'boolean') defaults[f.name] = false;
                     else if (f.widget === 'password' || f.widget === 'password_hash' || f.widget === 'secret' || f.widget === 'virtual_password') defaults[f.name] = '';
                     else if (f.widget === 'choices' && f.choices && f.choices.length > 0 && f.required) defaults[f.name] = f.choices[0].value;
                     else defaults[f.name] = '';
@@ -800,6 +840,12 @@ function detailView() {
             for (const f of this.editableFields) {
                 const val = this.formData[f.name];
                 const widget = f.widget || 'default';
+                
+                // M2M fields: always include (Issue #21)
+                if (widget === 'm2m_select') {
+                    payload[f.name] = Array.isArray(val) ? val : [];
+                    continue;
+                }
                 
                 // Password/secret fields: skip if placeholder or empty (keep current)
                 if (widget === 'password' || widget === 'password_hash' || widget === 'secret' || widget === 'virtual_password') {
@@ -1082,6 +1128,83 @@ function fkField(field) {
         selectHighlighted() {
             if (this.highlightedIdx >= 0 && this.highlightedIdx < this.options.length) {
                 this.selectOption(this.options[this.highlightedIdx]);
+            }
+        }
+    };
+}
+
+function m2mField(field) {
+    const adminPrefix = '{{ admin_prefix }}';
+    return {
+        search: '',
+        options: [],
+        loading: false,
+        
+        get selectedIds() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData && field.name in data.formData) {
+                        const val = data.formData[field.name];
+                        return Array.isArray(val) ? val : [];
+                    }
+                }
+            } catch(e) {}
+            return [];
+        },
+        
+        get filteredOptions() {
+            if (!this.search) return this.options;
+            const q = this.search.toLowerCase();
+            return this.options.filter(o => 
+                o.label.toLowerCase().includes(q) || 
+                (o.description && o.description.toLowerCase().includes(q))
+            );
+        },
+        
+        get selectedCount() {
+            return this.selectedIds.length;
+        },
+        
+        isSelected(id) {
+            // Compare with loose equality to handle int/string mismatch
+            return this.selectedIds.some(v => String(v) === String(id));
+        },
+        
+        toggleOption(id) {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        let current = Array.isArray(data.formData[field.name]) ? [...data.formData[field.name]] : [];
+                        const idx = current.findIndex(v => String(v) === String(id));
+                        if (idx >= 0) {
+                            current.splice(idx, 1);
+                        } else {
+                            current.push(id);
+                        }
+                        data.formData[field.name] = current;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        async loadOptions() {
+            this.loading = true;
+            try {
+                const resp = await fetch(
+                    `${adminPrefix}/api/{{ app_label }}/{{ model_name }}/m2m-options?field=${encodeURIComponent(field.name)}`
+                );
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.options = data.items || [];
+                }
+            } catch(e) {
+                console.error('M2M options load error:', e);
+            } finally {
+                this.loading = false;
             }
         }
     };

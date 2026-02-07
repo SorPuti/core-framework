@@ -389,6 +389,95 @@ def create_api_views(site: Any) -> APIRouter:
             logger.error("Autocomplete error for %s.%s: %s", app_label, model_name, e)
             return {"items": [], "total": 0, "error": str(e)}
     
+    @router.get("/{app_label}/{model_name}/m2m-options")
+    async def m2m_options_view(
+        request: Request,
+        app_label: str,
+        model_name: str,
+        field: str = Query(..., description="M2M field name"),
+        q: str = Query("", description="Search query"),
+        user: Any = Depends(check_admin_access),
+    ) -> dict:
+        """
+        Fetch available options for a M2M field (Issue #21).
+        
+        Returns all options from the target model for rendering
+        multi-select checkboxes in the admin form.
+        """
+        result = site.get_model_by_name(app_label, model_name)
+        if not result:
+            raise HTTPException(404, f"Model '{app_label}.{model_name}' not found")
+        
+        model, admin_instance = result
+        
+        # Find M2M field info from column_info
+        m2m_info = None
+        for col in admin_instance.get_column_info():
+            if col.get("name") == field and col.get("widget") == "m2m_select":
+                m2m_info = col
+                break
+        
+        if not m2m_info:
+            raise HTTPException(400, f"Field '{field}' is not a M2M field on {model_name}")
+        
+        target_model_name = m2m_info.get("m2m_target_model", "")
+        display_field = m2m_info.get("m2m_display_field", "id")
+        value_field = m2m_info.get("m2m_value_field", "id")
+        
+        # Resolve target model class
+        target_model = None
+        try:
+            from sqlalchemy import inspect as sa_inspect
+            from sqlalchemy.orm import RelationshipProperty
+            mapper = sa_inspect(model)
+            rel = mapper.relationships.get(field)
+            if rel and isinstance(rel, RelationshipProperty):
+                target_model = rel.mapper.class_
+        except Exception:
+            pass
+        
+        if not target_model:
+            raise HTTPException(500, f"Could not resolve target model for {field}")
+        
+        from core.models import get_session
+        
+        try:
+            db = await get_session()
+            async with db:
+                from core.querysets import QuerySet as _QS
+                qs = _QS(target_model, db)
+                
+                # Apply search if provided
+                if q and q.strip():
+                    from sqlalchemy import or_, cast, String
+                    display_col = getattr(target_model, display_field, None)
+                    if display_col is not None:
+                        try:
+                            qs = qs._clone()
+                            qs._filters.append(display_col.ilike(f"%{q}%"))
+                        except Exception:
+                            pass
+                
+                items_raw = await qs.order_by(display_field).limit(500).all()
+                
+                items = []
+                for obj in items_raw:
+                    pk_val = getattr(obj, value_field, None)
+                    display_val = getattr(obj, display_field, None)
+                    # For permissions: show name (description) if available
+                    name_val = getattr(obj, "name", None) if display_field != "name" else None
+                    
+                    items.append({
+                        "id": pk_val if not hasattr(pk_val, "hex") else str(pk_val),
+                        "label": str(display_val) if display_val else str(pk_val),
+                        "description": str(name_val) if name_val else "",
+                    })
+                
+                return {"items": items, "total": len(items)}
+        except Exception as e:
+            logger.error("M2M options error for %s.%s.%s: %s", app_label, model_name, field, e)
+            return {"items": [], "total": 0, "error": str(e)}
+    
     # =========================================================================
     # Detail / CRUD endpoints (rotas com {pk} — devem vir DEPOIS das literais)
     # =========================================================================
@@ -524,6 +613,18 @@ def create_api_views(site: Any) -> APIRouter:
         from core.models import get_session
         db = await get_session()
         
+        # Extract M2M data before creating (Issue #21)
+        m2m_data = {}
+        m2m_field_names = set()
+        for col in admin_instance.get_column_info():
+            if col.get("widget") == "m2m_select":
+                m2m_field_names.add(col["name"])
+        
+        for fname in m2m_field_names:
+            if fname in body:
+                m2m_data[fname] = body[fname]
+            safe_data.pop(fname, None)
+        
         try:
             async with db:
                 # Se tem password, remove o campo hash do kwargs (set_password cuida)
@@ -536,6 +637,11 @@ def create_api_views(site: Any) -> APIRouter:
                 
                 await admin_instance.before_save(db, obj, is_new=True)
                 await obj.save(db)
+                
+                # Apply M2M relationships (Issue #21)
+                if m2m_data:
+                    await _apply_m2m_data(db, obj, model, m2m_data)
+                
                 await admin_instance.after_save(db, obj, is_new=True)
                 
                 await db.commit()
@@ -603,6 +709,18 @@ def create_api_views(site: Any) -> APIRouter:
         plain_password = safe_data.pop("__plain_password__", None)
         password_field = safe_data.pop("__password_field__", None)
         
+        # Extract M2M data 
+        m2m_data = {}
+        m2m_field_names = set()
+        for col in admin_instance.get_column_info():
+            if col.get("widget") == "m2m_select":
+                m2m_field_names.add(col["name"])
+        
+        for fname in m2m_field_names:
+            if fname in body:
+                m2m_data[fname] = body[fname]
+            safe_data.pop(fname, None)
+        
         from core.models import get_session
         db = await get_session()
         
@@ -630,6 +748,11 @@ def create_api_views(site: Any) -> APIRouter:
                 
                 await admin_instance.before_save(db, obj, is_new=False)
                 await obj.save(db)
+                
+                # Apply M2M relationships (Issue #21)
+                if m2m_data:
+                    await _apply_m2m_data(db, obj, model, m2m_data)
+                
                 await admin_instance.after_save(db, obj, is_new=False)
                 
                 await db.commit()
@@ -641,6 +764,9 @@ def create_api_views(site: Any) -> APIRouter:
                     for k in safe_data
                     if old_data.get(k) != new_data.get(k)
                 }
+                # Include M2M changes in audit
+                for fname in m2m_data:
+                    changes[fname] = {"old": "...", "new": f"{len(m2m_data[fname])} item(s)"}
                 
                 await _log_action(
                     db, user, request, "update",
@@ -924,6 +1050,67 @@ async def _apply_password(obj: Any, plain_password: str) -> None:
                     obj.hashed_password = hashed
             except Exception:
                 logger.warning("Could not hash password — no hashing method available")
+
+
+async def _apply_m2m_data(
+    db: Any,
+    obj: Any,
+    model: type,
+    m2m_data: dict[str, list],
+) -> None:
+    """
+    Apply M2M relationship data to an object (Issue #21).
+    
+    For each M2M field, resolves the target model and replaces
+    the current relationship with the provided IDs.
+    """
+    from sqlalchemy import inspect as sa_inspect, select
+    from sqlalchemy.orm import RelationshipProperty
+    
+    try:
+        mapper = sa_inspect(model)
+    except Exception:
+        return
+    
+    for field_name, ids in m2m_data.items():
+        rel = mapper.relationships.get(field_name)
+        if not rel or not isinstance(rel, RelationshipProperty) or rel.secondary is None:
+            continue
+        
+        target_cls = rel.mapper.class_
+        
+        if not ids:
+            # Clear the relationship
+            current = getattr(obj, field_name, [])
+            if hasattr(current, 'clear'):
+                current.clear()
+            continue
+        
+        # Fetch target objects by ID
+        pk_col = list(target_cls.__table__.primary_key.columns)[0]
+        
+        # Cast IDs to the right type
+        typed_ids = []
+        for id_val in ids:
+            try:
+                col_type = str(pk_col.type).upper()
+                if "INT" in col_type:
+                    typed_ids.append(int(id_val))
+                else:
+                    typed_ids.append(id_val)
+            except (ValueError, TypeError):
+                typed_ids.append(id_val)
+        
+        stmt = select(target_cls).where(pk_col.in_(typed_ids))
+        result = await db.execute(stmt)
+        target_objects = list(result.scalars().all())
+        
+        # Replace the relationship
+        current = getattr(obj, field_name, [])
+        if hasattr(current, 'clear'):
+            current.clear()
+        for target_obj in target_objects:
+            current.append(target_obj)
 
 
 def _process_smart_fields(

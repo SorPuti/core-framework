@@ -198,6 +198,78 @@ def _camel_to_title(name: str) -> str:
     return s.title()
 
 
+def _detect_m2m_relationships(model: type) -> list[dict[str, Any]]:
+    """
+    Detect Many-to-Many relationships on a model (Issue #21).
+    
+    Inspects SQLAlchemy relationship() attributes that use a secondary
+    association table (typical M2M pattern).
+    
+    Returns a list of dicts with:
+    - name: relationship attribute name (e.g. "groups", "user_permissions")
+    - target_model: target model name (e.g. "Group", "Permission")
+    - target_table: target table name (e.g. "auth_groups")
+    - display_field: best field to display (name, codename, email, etc.)
+    - value_field: field to use as value (usually "id" or "codename")
+    - label: human-readable label
+    """
+    from sqlalchemy import inspect as sa_inspect
+    from sqlalchemy.orm import RelationshipProperty
+    
+    results: list[dict[str, Any]] = []
+    
+    try:
+        mapper = sa_inspect(model)
+    except Exception:
+        return results
+    
+    for rel_name, rel_prop in mapper.relationships.items():
+        if not isinstance(rel_prop, RelationshipProperty):
+            continue
+        # Only M2M: has a secondary (association) table
+        if rel_prop.secondary is None:
+            continue
+        
+        target_cls = rel_prop.mapper.class_
+        target_table = ""
+        try:
+            target_table = target_cls.__tablename__
+        except Exception:
+            pass
+        
+        # Determine best display field
+        display_field = "id"
+        value_field = "id"
+        try:
+            target_cols = [c.name for c in target_cls.__table__.columns]
+            # For Permission model: use codename
+            if "codename" in target_cols:
+                display_field = "codename"
+                value_field = "id"
+            elif "name" in target_cols:
+                display_field = "name"
+            elif "email" in target_cols:
+                display_field = "email"
+            elif "title" in target_cols:
+                display_field = "title"
+        except Exception:
+            pass
+        
+        # Human-readable label
+        label = rel_name.replace("_", " ").title()
+        
+        results.append({
+            "name": rel_name,
+            "target_model": target_cls.__name__,
+            "target_table": target_table,
+            "display_field": display_field,
+            "value_field": value_field,
+            "label": label,
+        })
+    
+    return results
+
+
 class ModelAdmin:
     """
     Classe base para configuração de exibição de um model no admin.
@@ -614,6 +686,32 @@ class ModelAdmin:
                     "password_target": self.password_field,
                 })
         
+        # ── Inject M2M relationship fields (Issue #21) ──
+        if self.model:
+            m2m_fields = _detect_m2m_relationships(self.model)
+            for m2m in m2m_fields:
+                # Skip if explicitly excluded
+                if m2m["name"] in self.exclude:
+                    continue
+                override = self.widgets.get(m2m["name"], {})
+                columns.append({
+                    "name": m2m["name"],
+                    "type": "m2m",
+                    "widget": override.get("widget", "m2m_select"),
+                    "nullable": True,
+                    "primary_key": False,
+                    "has_default": True,
+                    "required": False,
+                    "readonly": m2m["name"] in self.readonly_fields,
+                    "help_text": override.get("help_text", self.help_texts.get(m2m["name"], "")),
+                    "label": override.get("label", m2m.get("label", "")),
+                    "virtual": True,
+                    "m2m_target_model": m2m["target_model"],
+                    "m2m_target_table": m2m["target_table"],
+                    "m2m_display_field": m2m["display_field"],
+                    "m2m_value_field": m2m["value_field"],
+                })
+        
         return columns
     
     def get_editable_fields(self) -> list[str]:
@@ -623,6 +721,8 @@ class ModelAdmin:
         Se password_field está definido:
         - Exclui o campo hash do formulário (ex: password_hash)
         - Adiciona campo virtual "password" (processado por set_password())
+        
+        Também inclui M2M relationship fields (Issue #21).
         """
         if not self.model:
             return []
@@ -647,10 +747,18 @@ class ModelAdmin:
             if has_setter and "password" not in result:
                 result.append("password")
         
+        # M2M fields (Issue #21)
+        if self.model:
+            m2m_fields = _detect_m2m_relationships(self.model)
+            for m2m in m2m_fields:
+                if m2m["name"] not in self.exclude and m2m["name"] not in self.readonly_fields:
+                    if m2m["name"] not in result:
+                        result.append(m2m["name"])
+        
         return result
     
     def get_display_fields(self) -> list[str]:
-        """Retorna campos para exibição no detail view."""
+        """Retorna campos para exibição no detail view (includes M2M)."""
         if self.fields is not None:
             base = list(self.fields)
         else:
@@ -659,6 +767,13 @@ class ModelAdmin:
         # Exclui hash column se password_field está ativo
         if self.password_field:
             base = [f for f in base if f != self.password_field]
+        
+        # M2M fields (Issue #21)
+        if self.model:
+            m2m_fields = _detect_m2m_relationships(self.model)
+            for m2m in m2m_fields:
+                if m2m["name"] not in self.exclude and m2m["name"] not in base:
+                    base.append(m2m["name"])
         
         return base
     

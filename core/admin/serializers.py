@@ -196,6 +196,16 @@ def serialize_instance(obj: Any, schema_fields: list[str], admin: Any = None) ->
         # Tenta campo do model primeiro
         if hasattr(obj, field_name):
             value = getattr(obj, field_name)
+            # M2M relationships — serialize as list of IDs (Issue #21)
+            if isinstance(value, (list, set)):
+                serialized = []
+                for item in value:
+                    if hasattr(item, "id"):
+                        serialized.append(item.id if not isinstance(item.id, UUID) else str(item.id))
+                    else:
+                        serialized.append(str(item))
+                data[field_name] = serialized
+                continue
             # Converte tipos não serializáveis
             if isinstance(value, datetime):
                 value = value.isoformat()
