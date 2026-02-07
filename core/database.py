@@ -182,6 +182,14 @@ async def init_replicas(
         _read_engine = _write_engine
         _read_session_factory = _write_session_factory
 
+    try:
+        import core.models as _cm
+        if _cm._engine is None:
+            _cm._engine = _write_engine
+            _cm._session_factory = _write_session_factory
+    except Exception:
+        pass
+
 
 async def close_replicas() -> None:
     """

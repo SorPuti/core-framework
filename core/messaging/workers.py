@@ -495,6 +495,23 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     
     logger = logging.getLogger(f"worker.{config.name}")
     
+    _db_available = False
+    try:
+        from core.config import get_settings
+        _settings = get_settings()
+        db_url = getattr(_settings, "database_url", None)
+        if db_url:
+            if getattr(_settings, "has_read_replica", False):
+                from core.database import init_replicas
+                await init_replicas()
+            else:
+                from core.models import init_database
+                await init_database(db_url)
+            _db_available = True
+            logger.debug("Database initialized for heartbeat reporting")
+    except Exception as e:
+        logger.warning("Could not initialize database for heartbeats: %s", e)
+    
     # ── Heartbeat state (in-memory counters, zero I/O overhead) ──
     worker_id = str(uuid.uuid4())
     _total_processed = 0
@@ -504,19 +521,29 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     
     # Heartbeat settings
     try:
-        from core.config import get_settings
-        _hb_interval = getattr(get_settings(), "ops_worker_heartbeat_interval", 30)
+        _hb_interval = getattr(_settings, "ops_worker_heartbeat_interval", 30)
     except Exception:
         _hb_interval = 30
     
+    async def _get_session():
+        """Get a DB session, trying both session factories. (Issue #18)"""
+        try:
+            from core.database import get_write_session
+            return await get_write_session()
+        except (RuntimeError, Exception):
+            pass
+        from core.models import get_session
+        return await get_session()
+    
     async def _register_heartbeat() -> None:
         """Register this worker in the heartbeat table. Fire-and-forget."""
+        if not _db_available:
+            return
         try:
             import json as _json
-            from core.models import get_session
             from core.admin.models import WorkerHeartbeat
             
-            db = await get_session()
+            db = await _get_session()
             async with db:
                 hb = WorkerHeartbeat(
                     worker_id=worker_id,
@@ -532,7 +559,7 @@ async def _run_worker_config(config: WorkerConfig) -> None:
                 await db.commit()
             logger.info(f"Heartbeat registered: {worker_id[:12]}...")
         except Exception as e:
-            logger.debug("Failed to register heartbeat: %s", e)
+            logger.warning("Failed to register heartbeat: %s", e)
     
     async def _heartbeat_loop() -> None:
         """Periodic heartbeat update. Isolated task, fire-and-forget writes."""
@@ -547,13 +574,14 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     
     async def _update_heartbeat() -> None:
         """Flush in-memory counters to DB. Non-blocking, fire-and-forget."""
+        if not _db_available:
+            return
         try:
-            from core.models import get_session
             from core.admin.models import WorkerHeartbeat
             from core.datetime import timezone
             from sqlalchemy import update
             
-            db = await get_session()
+            db = await _get_session()
             async with db:
                 stmt = (
                     update(WorkerHeartbeat)
@@ -573,12 +601,13 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     
     async def _mark_offline() -> None:
         """Mark this worker as OFFLINE in the heartbeat table."""
+        if not _db_available:
+            return
         try:
-            from core.models import get_session
             from core.admin.models import WorkerHeartbeat
             from sqlalchemy import update
             
-            db = await get_session()
+            db = await _get_session()
             async with db:
                 stmt = (
                     update(WorkerHeartbeat)
