@@ -1,0 +1,150 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Logs — {{ site_header }}{% endblock %}
+
+{% block content %}
+<div class="p-6 h-full flex flex-col" x-data="logViewer()" x-init="loadRecent(); connect()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4 flex-shrink-0">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Log Viewer</h1>
+            <div class="flex items-center gap-3 mt-1">
+                <span class="inline-flex items-center gap-1.5 text-xs">
+                    <span class="w-2 h-2 rounded-full" :class="connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'"></span>
+                    <span class="text-gray-500" x-text="connected ? 'Streaming' : 'Disconnected'"></span>
+                </span>
+                <span class="text-xs text-gray-400" x-text="entries.length + ' entries'"></span>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button @click="paused = !paused" class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-xl border transition-colors"
+                    :class="paused ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200'">
+                <svg x-show="!paused" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                <svg x-show="paused" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span x-text="paused ? 'Resume' : 'Pause'"></span>
+            </button>
+            <button @click="entries = []" class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex items-center gap-3 mb-4 flex-shrink-0">
+        <select x-model="filterLevel" @change="reconnect()" class="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <option value="DEBUG">DEBUG+</option>
+            <option value="INFO" selected>INFO+</option>
+            <option value="WARNING">WARNING+</option>
+            <option value="ERROR">ERROR+</option>
+            <option value="CRITICAL">CRITICAL</option>
+        </select>
+        <input type="text" x-model="filterLogger" @input.debounce.500ms="reconnect()" placeholder="Logger filter..." class="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 w-48">
+        <input type="text" x-model="filterSearch" @input.debounce.500ms="reconnect()" placeholder="Search..." class="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 flex-1 max-w-xs">
+    </div>
+
+    <!-- Log Output -->
+    <div class="flex-1 min-h-0 bg-gray-900 rounded-xl overflow-hidden border border-gray-700 flex flex-col">
+        <div x-ref="logContainer" class="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed" @scroll="handleScroll()">
+            <template x-for="(entry, idx) in entries" :key="idx">
+                <div class="py-0.5 flex items-start gap-2 hover:bg-gray-800/50 px-1 rounded">
+                    <span class="text-gray-500 flex-shrink-0 select-none w-[140px]" x-text="entry.timestamp.substring(11, 23)"></span>
+                    <span class="flex-shrink-0 w-[60px] text-center font-semibold rounded px-1"
+                          :class="{
+                              'text-gray-500': entry.level === 'DEBUG',
+                              'text-green-400': entry.level === 'INFO',
+                              'text-amber-400': entry.level === 'WARNING',
+                              'text-red-400': entry.level === 'ERROR',
+                              'text-red-300 bg-red-900/50 font-bold': entry.level === 'CRITICAL'
+                          }" x-text="entry.level"></span>
+                    <span class="text-cyan-400 flex-shrink-0 w-[160px] truncate" x-text="entry.logger"></span>
+                    <span class="text-gray-200 break-all" x-text="entry.message"></span>
+                </div>
+            </template>
+            <template x-if="entries.length === 0">
+                <div class="text-gray-600 text-center py-12">
+                    <p>Waiting for log entries...</p>
+                    <p class="text-xs mt-1">Logs will appear here in real-time</p>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function logViewer() {
+    return {
+        entries: [],
+        connected: false,
+        paused: false,
+        autoScroll: true,
+        filterLevel: 'INFO',
+        filterLogger: '',
+        filterSearch: '',
+        _eventSource: null,
+        _maxEntries: 2000,
+
+        async loadRecent() {
+            try {
+                let url = '{{ admin_prefix }}/api/ops/logs/recent?limit=200';
+                if (this.filterLevel) url += '&level=' + this.filterLevel;
+                if (this.filterLogger) url += '&logger=' + encodeURIComponent(this.filterLogger);
+                if (this.filterSearch) url += '&search=' + encodeURIComponent(this.filterSearch);
+                const resp = await fetch(url);
+                const data = await resp.json();
+                this.entries = (data.entries || []).map(e => typeof e === 'string' ? JSON.parse(e) : e);
+                this.$nextTick(() => this.scrollToBottom());
+            } catch (e) { console.error('Failed to load recent logs:', e); }
+        },
+
+        connect() {
+            if (this._eventSource) {
+                this._eventSource.close();
+            }
+            let url = '{{ admin_prefix }}/api/ops/logs/stream?level=' + this.filterLevel;
+            if (this.filterLogger) url += '&logger=' + encodeURIComponent(this.filterLogger);
+            if (this.filterSearch) url += '&search=' + encodeURIComponent(this.filterSearch);
+
+            this._eventSource = new EventSource(url);
+            this._eventSource.onopen = () => { this.connected = true; };
+            this._eventSource.onerror = () => {
+                this.connected = false;
+                // Auto-reconnect after 3s
+                setTimeout(() => this.connect(), 3000);
+            };
+            this._eventSource.onmessage = (event) => {
+                if (this.paused) return;
+                try {
+                    const entry = JSON.parse(event.data);
+                    this.entries.push(entry);
+                    // Trim buffer
+                    if (this.entries.length > this._maxEntries) {
+                        this.entries = this.entries.slice(-this._maxEntries);
+                    }
+                    if (this.autoScroll) {
+                        this.$nextTick(() => this.scrollToBottom());
+                    }
+                } catch (e) {}
+            };
+        },
+
+        reconnect() {
+            this.entries = [];
+            this.loadRecent();
+            this.connect();
+        },
+
+        scrollToBottom() {
+            const el = this.$refs.logContainer;
+            if (el) el.scrollTop = el.scrollHeight;
+        },
+
+        handleScroll() {
+            const el = this.$refs.logContainer;
+            if (!el) return;
+            // Disable auto-scroll if user scrolled up
+            this.autoScroll = (el.scrollTop + el.clientHeight) >= (el.scrollHeight - 40);
+        }
+    };
+}
+</script>
+{% endblock %}

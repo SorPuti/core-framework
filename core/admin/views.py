@@ -210,20 +210,51 @@ def create_api_views(site: Any) -> APIRouter:
                         except Exception:
                             filter_options[filter_field] = []
                 
+                # ── Metadata de choices/enum para colunas da list view ──
+                from core.admin.options import _detect_enum
+                columns_meta = []
+                for f in display_fields:
+                    col_meta = {
+                        "name": f,
+                        "label": admin_instance.help_texts.get(f, f.replace("_", " ").title()),
+                        "is_link": f in admin_instance.list_display_links,
+                    }
+                    # Detectar enum choices na coluna
+                    col_obj = getattr(model, f, None)
+                    if col_obj is not None:
+                        try:
+                            sa_col = col_obj.property.columns[0]
+                            enum_choices = _detect_enum(sa_col)
+                            if enum_choices:
+                                col_meta["choices"] = enum_choices
+                        except Exception:
+                            pass
+                    columns_meta.append(col_meta)
+                
+                # ── Melhorar filter_options para enums — usar labels ──
+                for filter_field in admin_instance.list_filter:
+                    col_obj = getattr(model, filter_field, None)
+                    if col_obj is not None and filter_field in filter_options:
+                        try:
+                            sa_col = col_obj.property.columns[0]
+                            enum_choices = _detect_enum(sa_col)
+                            if enum_choices:
+                                # Substituir filter_options por choices com labels legíveis
+                                choices_map = {c["value"]: c["label"] for c in enum_choices}
+                                filter_options[filter_field] = [
+                                    {"value": c["value"], "label": c["label"]}
+                                    for c in enum_choices
+                                ]
+                        except Exception:
+                            pass
+                
                 return {
                     "items": serialized,
                     "total": total,
                     "page": page,
                     "per_page": per_page,
                     "total_pages": (total + per_page - 1) // per_page if per_page else 1,
-                    "columns": [
-                        {
-                            "name": f,
-                            "label": admin_instance.help_texts.get(f, f.replace("_", " ").title()),
-                            "is_link": f in admin_instance.list_display_links,
-                        }
-                        for f in display_fields
-                    ],
+                    "columns": columns_meta,
                     "filter_options": filter_options,
                     "model_meta": {
                         "display_name": admin_instance.display_name,

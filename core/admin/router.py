@@ -41,6 +41,17 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
     api_router = create_api_views(site)
     router.include_router(api_router)
     
+    # Registra Operations Center API
+    ops_enabled = getattr(settings, "ops_enabled", True)
+    if ops_enabled:
+        from core.admin.ops_views import create_ops_api
+        ops_router = create_ops_api(site)
+        router.include_router(ops_router)
+        
+        # Initialize log buffer
+        from core.admin.log_handler import setup_log_buffer
+        setup_log_buffer()
+    
     # Template rendering
     _templates = _setup_templates(settings)
     
@@ -70,6 +81,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             "logo_url": getattr(settings, "admin_logo_url", None),
             "core_version": core_version,
             "current_path": current_path,
+            "ops_enabled": ops_enabled,
             **extra,
         }
     
@@ -198,6 +210,69 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         
         ctx = _base_context(request, user=user)
         return _templates.TemplateResponse("admin/dashboard.html", ctx)
+    
+    # =========================================================================
+    # Operations Center Routes (HTML) — BEFORE model routes
+    # =========================================================================
+    
+    if ops_enabled:
+        @router.get("/ops/", response_class=HTMLResponse)
+        async def ops_dashboard(request: Request) -> Response:
+            """Operations Center dashboard."""
+            user = _get_admin_user(request)
+            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            ctx = _base_context(request, user=user)
+            return _templates.TemplateResponse("admin/ops/dashboard.html", ctx)
+        
+        @router.get("/ops/infrastructure/", response_class=HTMLResponse)
+        async def ops_infrastructure(request: Request) -> Response:
+            """Infrastructure panel."""
+            user = _get_admin_user(request)
+            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            ctx = _base_context(request, user=user)
+            return _templates.TemplateResponse("admin/ops/infrastructure.html", ctx)
+        
+        @router.get("/ops/tasks/", response_class=HTMLResponse)
+        async def ops_tasks(request: Request) -> Response:
+            """Task Manager."""
+            user = _get_admin_user(request)
+            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            ctx = _base_context(request, user=user)
+            return _templates.TemplateResponse("admin/ops/tasks.html", ctx)
+        
+        @router.get("/ops/workers/", response_class=HTMLResponse)
+        async def ops_workers(request: Request) -> Response:
+            """Worker Manager."""
+            user = _get_admin_user(request)
+            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            ctx = _base_context(request, user=user)
+            return _templates.TemplateResponse("admin/ops/workers.html", ctx)
+        
+        @router.get("/ops/logs/", response_class=HTMLResponse)
+        async def ops_logs(request: Request) -> Response:
+            """Log Viewer with streaming."""
+            user = _get_admin_user(request)
+            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            ctx = _base_context(request, user=user)
+            return _templates.TemplateResponse("admin/ops/logs.html", ctx)
+        
+        @router.get("/ops/periodic/", response_class=HTMLResponse)
+        async def ops_periodic(request: Request) -> Response:
+            """Periodic Tasks."""
+            user = _get_admin_user(request)
+            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            ctx = _base_context(request, user=user)
+            return _templates.TemplateResponse("admin/ops/periodic.html", ctx)
+    
+    # =========================================================================
+    # Model Routes (HTML)
+    # =========================================================================
     
     @router.get("/{app_label}/{model_name}/", response_class=HTMLResponse)
     async def model_list(

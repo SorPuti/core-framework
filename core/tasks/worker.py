@@ -63,6 +63,14 @@ class TaskWorker:
         self._semaphore: asyncio.Semaphore | None = None
         self._active_tasks: set[asyncio.Task] = set()
         self._tasks_processed = 0
+        self._tasks_errors = 0
+        
+        # Worker identity for heartbeat
+        import uuid
+        self._worker_id = str(uuid.uuid4())
+        self._persist_enabled = getattr(self._settings, "ops_task_persist", True)
+        self._heartbeat_interval = getattr(self._settings, "ops_worker_heartbeat_interval", 30)
+        self._heartbeat_task: asyncio.Task | None = None
     
     async def start(self) -> None:
         """Start the worker."""
@@ -126,6 +134,10 @@ class TaskWorker:
         logger.info(
             f"Worker started: queues={self._queues}, concurrency={self._concurrency}"
         )
+        
+        # Register heartbeat
+        await self._register_heartbeat()
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
     
     async def stop(self) -> None:
         """Stop the worker gracefully."""
@@ -139,6 +151,12 @@ class TaskWorker:
         if self._active_tasks:
             logger.info(f"Waiting for {len(self._active_tasks)} active tasks...")
             await asyncio.gather(*self._active_tasks, return_exceptions=True)
+        
+        # Stop heartbeat
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            self._heartbeat_task = None
+        await self._mark_offline()
         
         # Stop consumer
         if self._consumer:
@@ -186,6 +204,9 @@ class TaskWorker:
     
     async def _execute_task(self, task_msg: TaskMessage) -> TaskResult:
         """Execute a single task."""
+        import json as _json
+        import traceback as _tb
+        
         result = TaskResult(
             task_id=task_msg.task_id,
             task_name=task_msg.task_name,
@@ -194,6 +215,9 @@ class TaskWorker:
         )
         
         logger.info(f"Executing task: {task_msg.task_name} ({task_msg.task_id})")
+        
+        # ── Persist start (ops) ──
+        await self._persist_task_start(task_msg)
         
         try:
             # Get task function
@@ -227,7 +251,7 @@ class TaskWorker:
             
         except Exception as e:
             result.status = TaskStatus.FAILURE
-            result.error = str(e)
+            result.error = f"{type(e).__name__}: {e}\n{_tb.format_exc()}"
             result.retries = task_msg.retry_count
             
             logger.error(
@@ -242,9 +266,177 @@ class TaskWorker:
         
         result.finished_at = timezone.now()
         self._tasks_processed += 1
+        if result.status == TaskStatus.FAILURE:
+            self._tasks_errors += 1
+        
+        # ── Persist finish (ops) ──
+        duration_ms = None
+        if result.started_at and result.finished_at:
+            duration_ms = int((result.finished_at - result.started_at).total_seconds() * 1000)
+        
+        result_json = None
+        if result.result is not None:
+            try:
+                result_json = _json.dumps(result.result, default=str)[:5000]
+            except Exception:
+                result_json = str(result.result)[:5000]
+        
+        await self._persist_task_finish(
+            task_id=task_msg.task_id,
+            status=result.status.value.upper(),
+            result_json=result_json,
+            error=result.error,
+            retries=result.retries,
+            duration_ms=duration_ms,
+        )
         
         return result
     
+    # ─── Ops: Task Persistence ────────────────────────────────────
+    
+    async def _persist_task_start(self, task_msg: TaskMessage) -> None:
+        """Persist task execution start to the database."""
+        if not self._persist_enabled:
+            return
+        try:
+            import json as _json
+            from core.models import get_session
+            from core.admin.models import TaskExecution
+            
+            db = await get_session()
+            async with db:
+                await TaskExecution.record_start(
+                    db,
+                    task_name=task_msg.task_name,
+                    task_id=task_msg.task_id,
+                    queue=task_msg.queue,
+                    args_json=_json.dumps(list(task_msg.args), default=str)[:5000] if task_msg.args else None,
+                    kwargs_json=_json.dumps(task_msg.kwargs, default=str)[:5000] if task_msg.kwargs else None,
+                    max_retries=task_msg.max_retries,
+                    worker_id=self._worker_id,
+                )
+                await db.commit()
+        except Exception as e:
+            logger.debug("Failed to persist task start: %s", e)
+    
+    async def _persist_task_finish(
+        self,
+        *,
+        task_id: str,
+        status: str,
+        result_json: str | None = None,
+        error: str | None = None,
+        retries: int = 0,
+        duration_ms: int | None = None,
+    ) -> None:
+        """Persist task execution finish to the database."""
+        if not self._persist_enabled:
+            return
+        try:
+            from core.models import get_session
+            from core.admin.models import TaskExecution
+            
+            db = await get_session()
+            async with db:
+                await TaskExecution.record_finish(
+                    db,
+                    task_id=task_id,
+                    status=status,
+                    result_json=result_json,
+                    error=error[:5000] if error else None,
+                    retries=retries,
+                    duration_ms=duration_ms,
+                )
+        except Exception as e:
+            logger.debug("Failed to persist task finish: %s", e)
+    
+    # ─── Ops: Worker Heartbeat ──────────────────────────────────
+    
+    async def _register_heartbeat(self) -> None:
+        """Register this worker in the heartbeat table."""
+        try:
+            import json as _json
+            import socket
+            from core.models import get_session
+            from core.admin.models import WorkerHeartbeat
+            
+            db = await get_session()
+            async with db:
+                hb = WorkerHeartbeat(
+                    worker_id=self._worker_id,
+                    worker_type="task_worker",
+                    worker_name=f"task-worker-{'-'.join(self._queues)}",
+                    hostname=socket.gethostname(),
+                    pid=__import__("os").getpid(),
+                    status="ONLINE",
+                    concurrency=self._concurrency,
+                    queues_json=_json.dumps(self._queues),
+                )
+                await hb.save(db)
+                await db.commit()
+        except Exception as e:
+            logger.debug("Failed to register heartbeat: %s", e)
+    
+    async def _heartbeat_loop(self) -> None:
+        """Periodic heartbeat update loop."""
+        while self._running:
+            try:
+                await asyncio.sleep(self._heartbeat_interval)
+                await self._update_heartbeat()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug("Heartbeat update failed: %s", e)
+    
+    async def _update_heartbeat(self) -> None:
+        """Update heartbeat record."""
+        try:
+            from core.models import get_session
+            from core.admin.models import WorkerHeartbeat
+            from core.datetime import timezone
+            from sqlalchemy import update
+            
+            db = await get_session()
+            async with db:
+                stmt = (
+                    update(WorkerHeartbeat)
+                    .where(WorkerHeartbeat.worker_id == self._worker_id)
+                    .values(
+                        active_tasks=len(self._active_tasks),
+                        total_processed=self._tasks_processed,
+                        total_errors=self._tasks_errors,
+                        last_heartbeat=timezone.now(),
+                        status="ONLINE",
+                    )
+                )
+                await db.execute(stmt)
+                await db.commit()
+        except Exception:
+            pass
+    
+    async def _mark_offline(self) -> None:
+        """Mark this worker as offline."""
+        try:
+            from core.models import get_session
+            from core.admin.models import WorkerHeartbeat
+            from sqlalchemy import update
+            
+            db = await get_session()
+            async with db:
+                stmt = (
+                    update(WorkerHeartbeat)
+                    .where(WorkerHeartbeat.worker_id == self._worker_id)
+                    .values(
+                        status="OFFLINE",
+                        total_processed=self._tasks_processed,
+                        total_errors=self._tasks_errors,
+                    )
+                )
+                await db.execute(stmt)
+                await db.commit()
+        except Exception:
+            pass
+
     async def _retry_task(self, task_msg: TaskMessage) -> None:
         """Retry a failed task."""
         from core.tasks.registry import get_task_producer

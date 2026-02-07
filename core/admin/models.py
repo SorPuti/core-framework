@@ -93,6 +93,150 @@ class AuditLog(Model):
         return log
 
 
+class TaskExecution(Model):
+    """
+    Persists task execution history for monitoring in the admin panel.
+
+    Created automatically by the TaskWorker when ops_task_persist is enabled.
+    """
+    __tablename__ = "admin_task_executions"
+
+    id: Mapped[int] = Field.pk()
+    task_name: Mapped[str] = Field.string(max_length=255, index=True)
+    task_id: Mapped[str] = Field.string(max_length=64, unique=True, index=True)
+    queue: Mapped[str] = Field.string(max_length=100, default="default")
+    status: Mapped[str] = Field.string(max_length=20, index=True)  # PENDING, RUNNING, SUCCESS, FAILURE, RETRY, CANCELLED
+    args_json: Mapped[str | None] = Field.string(max_length=5000, nullable=True)
+    kwargs_json: Mapped[str | None] = Field.string(max_length=5000, nullable=True)
+    result_json: Mapped[str | None] = Field.string(max_length=5000, nullable=True)
+    error: Mapped[str | None] = Field.string(max_length=5000, nullable=True)
+    retries: Mapped[int] = Field.integer(default=0)
+    max_retries: Mapped[int] = Field.integer(default=3)
+    duration_ms: Mapped[int | None] = Field.integer(nullable=True)
+    worker_id: Mapped[str | None] = Field.string(max_length=64, nullable=True)
+    started_at: Mapped[DateTime | None] = Field.datetime(nullable=True)
+    finished_at: Mapped[DateTime | None] = Field.datetime(nullable=True)
+    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+
+    def __repr__(self) -> str:
+        return f"<TaskExecution {self.task_name} [{self.status}] {self.task_id[:8]}>"
+
+    @classmethod
+    async def record_start(
+        cls,
+        db: "AsyncSession",
+        *,
+        task_name: str,
+        task_id: str,
+        queue: str = "default",
+        args_json: str | None = None,
+        kwargs_json: str | None = None,
+        max_retries: int = 3,
+        worker_id: str | None = None,
+    ) -> "TaskExecution":
+        """Record task execution start."""
+        from core.datetime import timezone
+        execution = cls(
+            task_name=task_name,
+            task_id=task_id,
+            queue=queue,
+            status="RUNNING",
+            args_json=args_json,
+            kwargs_json=kwargs_json,
+            max_retries=max_retries,
+            worker_id=worker_id,
+            started_at=timezone.now(),
+        )
+        await execution.save(db)
+        return execution
+
+    @classmethod
+    async def record_finish(
+        cls,
+        db: "AsyncSession",
+        *,
+        task_id: str,
+        status: str,
+        result_json: str | None = None,
+        error: str | None = None,
+        retries: int = 0,
+        duration_ms: int | None = None,
+    ) -> None:
+        """Record task execution completion."""
+        from core.datetime import timezone
+        from sqlalchemy import update
+        stmt = (
+            update(cls)
+            .where(cls.task_id == task_id)
+            .values(
+                status=status,
+                result_json=result_json,
+                error=error,
+                retries=retries,
+                duration_ms=duration_ms,
+                finished_at=timezone.now(),
+            )
+        )
+        await db.execute(stmt)
+        await db.commit()
+
+
+class PeriodicTaskSchedule(Model):
+    """
+    Persisted state of periodic tasks for admin management.
+
+    Synced from the in-memory periodic task registry on startup.
+    Allows admin to enable/disable periodic tasks.
+    """
+    __tablename__ = "admin_periodic_tasks"
+
+    id: Mapped[int] = Field.pk()
+    task_name: Mapped[str] = Field.string(max_length=255, unique=True, index=True)
+    cron: Mapped[str | None] = Field.string(max_length=100, nullable=True)
+    interval_seconds: Mapped[int | None] = Field.integer(nullable=True)
+    queue: Mapped[str] = Field.string(max_length=100, default="scheduled")
+    is_enabled: Mapped[bool] = Field.boolean(default=True)
+    last_run: Mapped[DateTime | None] = Field.datetime(nullable=True)
+    next_run: Mapped[DateTime | None] = Field.datetime(nullable=True)
+    run_count: Mapped[int] = Field.integer(default=0)
+    last_status: Mapped[str | None] = Field.string(max_length=20, nullable=True)
+    last_duration_ms: Mapped[int | None] = Field.integer(nullable=True)
+    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+
+    def __repr__(self) -> str:
+        schedule = self.cron or f"every {self.interval_seconds}s"
+        return f"<PeriodicTaskSchedule {self.task_name} ({schedule})>"
+
+
+class WorkerHeartbeat(Model):
+    """
+    Tracks active workers via periodic heartbeat.
+
+    Workers create a record on boot and update it periodically.
+    Admin marks workers as OFFLINE if heartbeat is stale.
+    """
+    __tablename__ = "admin_worker_heartbeats"
+
+    id: Mapped[int] = Field.pk()
+    worker_id: Mapped[str] = Field.string(max_length=64, unique=True, index=True)
+    worker_type: Mapped[str] = Field.string(max_length=30)  # task_worker, message_worker
+    worker_name: Mapped[str] = Field.string(max_length=255)
+    hostname: Mapped[str] = Field.string(max_length=255)
+    pid: Mapped[int] = Field.integer()
+    status: Mapped[str] = Field.string(max_length=20, default="ONLINE")  # ONLINE, OFFLINE, DRAINING
+    concurrency: Mapped[int] = Field.integer(default=1)
+    active_tasks: Mapped[int] = Field.integer(default=0)
+    total_processed: Mapped[int] = Field.integer(default=0)
+    total_errors: Mapped[int] = Field.integer(default=0)
+    queues_json: Mapped[str | None] = Field.string(max_length=1000, nullable=True)
+    started_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+    last_heartbeat: Mapped[DateTime] = Field.datetime(auto_now=True)
+    metadata_json: Mapped[str | None] = Field.string(max_length=2000, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<WorkerHeartbeat {self.worker_name} [{self.status}] pid={self.pid}>"
+
+
 class AdminSession(Model):
     """
     Sessão do admin panel (browser-based).
@@ -104,7 +248,6 @@ class AdminSession(Model):
     
     id: Mapped[int] = Field.pk()
     session_key: Mapped[str] = Field.string(max_length=64, unique=True, index=True)
-    # VARCHAR para aceitar qualquer tipo de PK do User (int, UUID, string)
     user_id: Mapped[str] = Field.string(max_length=255, index=True)
     ip_address: Mapped[str | None] = Field.string(max_length=45, nullable=True)
     user_agent: Mapped[str | None] = Field.string(max_length=500, nullable=True)

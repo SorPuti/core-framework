@@ -20,6 +20,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger("core.admin")
 
 
+def _enum_to_choices(enum_class: Any) -> list[dict[str, str]]:
+    """
+    Converte uma classe Enum/TextChoices para lista de choices do frontend.
+    
+    Cada choice contém:
+    - value: valor armazenado no banco (ex: "email")
+    - label: texto legível para o usuário (ex: "Email/Password")
+    - name: nome do enum member (ex: "EMAIL") — referência técnica
+    """
+    choices = []
+    for e in enum_class:
+        value = str(e.value)
+        # Label: usa .label (TextChoices) se disponível, senão humaniza .name
+        label = (
+            e.label if hasattr(e, 'label')
+            else e.name.replace('_', ' ').title()
+        )
+        name = e.name  # Nome do enum member (UPPER_CASE)
+        choices.append({"value": value, "label": label, "name": name})
+    return choices
+
+
 def _detect_enum(col: Any) -> list[dict[str, str]] | None:
     """
     Detecta se uma coluna é Enum e retorna as opções possíveis.
@@ -29,21 +51,13 @@ def _detect_enum(col: Any) -> list[dict[str, str]] | None:
     2. SQLAlchemy Enum com enum_class (Python Enum/TextChoices)
     3. SQLAlchemy Enum com strings diretas
     
-    Retorna lista de {"value": str, "label": str} ou None.
+    Retorna lista de {"value": str, "label": str, "name": str} ou None.
     """
     try:
+        # ── 1. Field.choice() — metadata em col.info["choices_class"] ──
         choices_class = getattr(col, 'info', {}).get('choices_class')
         if choices_class is not None:
-            return [
-                {
-                    "value": str(e.value),
-                    "label": (
-                        e.label if hasattr(e, 'label')
-                        else e.name.replace('_', ' ').title()
-                    ),
-                }
-                for e in choices_class
-            ]
+            return _enum_to_choices(choices_class)
         
         # ── 2. SQLAlchemy Enum nativo ──
         from sqlalchemy import Enum as SAEnum
@@ -53,21 +67,16 @@ def _detect_enum(col: Any) -> list[dict[str, str]] | None:
         
         # Python Enum class (ex: TextChoices, IntEnum, StrEnum)
         if hasattr(col_type, 'enum_class') and col_type.enum_class is not None:
-            return [
-                {
-                    "value": str(e.value),
-                    "label": (
-                        e.label if hasattr(e, 'label')
-                        else e.name.replace('_', ' ').title()
-                    ),
-                }
-                for e in col_type.enum_class
-            ]
+            return _enum_to_choices(col_type.enum_class)
         
         # ── 3. String enum direto: Enum('active', 'inactive', ...) ──
         if hasattr(col_type, 'enums') and col_type.enums:
             return [
-                {"value": v, "label": v.replace('_', ' ').title()}
+                {
+                    "value": v,
+                    "label": v.replace('_', ' ').title(),
+                    "name": v.upper().replace('-', '_'),
+                }
                 for v in col_type.enums
             ]
     except Exception:

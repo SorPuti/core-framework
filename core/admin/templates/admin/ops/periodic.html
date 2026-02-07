@@ -1,0 +1,108 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Periodic Tasks — {{ site_header }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="periodicView()" x-init="loadData()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Periodic Tasks</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Scheduled tasks with cron/interval configuration</p>
+        </div>
+        <button @click="loadData()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+            <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+            Refresh
+        </button>
+    </div>
+
+    <!-- Task Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="task in items" :key="task.name">
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                <div class="flex items-start justify-between mb-3">
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-900 dark:text-white" x-text="task.name.split('.').pop()"></h4>
+                        <p class="text-[10px] font-mono text-gray-400 mt-0.5" x-text="task.name"></p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="toggleTask(task)" class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors" :class="task.enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'">
+                            <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform" :class="task.enabled ? 'translate-x-4' : 'translate-x-1'"></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-xs mb-3">
+                    <div>
+                        <span class="text-gray-400">Schedule</span>
+                        <p class="font-mono text-gray-700 dark:text-gray-300" x-text="task.cron ? ('cron: ' + task.cron) : ('every ' + task.interval + 's')"></p>
+                    </div>
+                    <div>
+                        <span class="text-gray-400">Queue</span>
+                        <p class="text-gray-700 dark:text-gray-300" x-text="task.queue"></p>
+                    </div>
+                    <div>
+                        <span class="text-gray-400">Run Count</span>
+                        <p class="font-semibold text-gray-900 dark:text-white" x-text="task.run_count"></p>
+                    </div>
+                    <div>
+                        <span class="text-gray-400">Last Run</span>
+                        <p class="text-gray-700 dark:text-gray-300 text-[10px]" x-text="task.last_run ? new Date(task.last_run).toLocaleString() : 'Never'"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-700">
+                    <button @click="runNow(task)" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors">
+                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Run Now
+                    </button>
+                    <template x-if="task.next_run">
+                        <span class="text-[10px] text-gray-400 ml-auto">Next: <span x-text="new Date(task.next_run).toLocaleString()"></span></span>
+                    </template>
+                </div>
+            </div>
+        </template>
+        <template x-if="!loading && items.length === 0">
+            <div class="col-span-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-3 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <p>No periodic tasks registered</p>
+                <p class="text-xs mt-1">Use <code class="font-mono text-primary-500">@periodic_task(cron="...")</code> to register</p>
+            </div>
+        </template>
+    </div>
+</div>
+
+<script>
+function periodicView() {
+    return {
+        loading: true,
+        items: [],
+        async loadData() {
+            this.loading = true;
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/periodic');
+                const data = await resp.json();
+                this.items = data.items || [];
+            } catch (e) { console.error(e); } finally { this.loading = false; }
+        },
+        async toggleTask(task) {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/periodic/' + encodeURIComponent(task.name) + '/toggle', { method: 'POST' });
+                const data = await resp.json();
+                task.enabled = data.enabled;
+                window.showToast('success', 'Task Updated', task.name + ' is now ' + (data.enabled ? 'enabled' : 'disabled'));
+            } catch (e) {
+                window.showToast('error', 'Error', e.message);
+            }
+        },
+        async runNow(task) {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/periodic/' + encodeURIComponent(task.name) + '/run', { method: 'POST' });
+                const data = await resp.json();
+                window.showToast('success', 'Task Dispatched', 'Task ID: ' + data.task_id);
+            } catch (e) {
+                window.showToast('error', 'Error', e.message);
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

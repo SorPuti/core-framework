@@ -200,3 +200,39 @@ def register_core_models(site: "AdminSite") -> None:
         site.register(AdminSession, AdminSessionAdmin)
     except Exception as e:
         logger.warning("Could not register AdminSession in admin: %s", e)
+    
+    # -- TaskExecution (Operations Center) --
+    try:
+        from core.admin.models import TaskExecution
+        
+        class TaskExecutionAdmin(ModelAdmin):
+            display_name = "Task Execution"
+            display_name_plural = "Task Executions"
+            icon = "list-checks"
+            list_display = ("id", "task_name", "status", "queue", "duration_ms", "created_at")
+            search_fields = ("task_name", "task_id")
+            list_filter = ("status", "queue")
+            ordering = ("-created_at",)
+            permissions = ("view", "delete")
+        
+        site.register(TaskExecution, TaskExecutionAdmin)
+    except Exception as e:
+        logger.debug("Could not register TaskExecution in admin: %s", e)
+    
+    # -- WorkerHeartbeat (Operations Center) --
+    try:
+        from core.admin.models import WorkerHeartbeat
+        
+        class WorkerHeartbeatAdmin(ModelAdmin):
+            display_name = "Worker Heartbeat"
+            display_name_plural = "Worker Heartbeats"
+            icon = "activity"
+            list_display = ("id", "worker_name", "worker_type", "status", "hostname", "total_processed", "last_heartbeat")
+            search_fields = ("worker_name", "hostname")
+            list_filter = ("status", "worker_type")
+            ordering = ("-last_heartbeat",)
+            permissions = ("view", "delete")
+        
+        site.register(WorkerHeartbeat, WorkerHeartbeatAdmin)
+    except Exception as e:
+        logger.debug("Could not register WorkerHeartbeat in admin: %s", e)

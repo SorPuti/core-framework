@@ -186,11 +186,13 @@
                                 </td>
                                 <template x-for="col in columns" :key="col.name">
                                     <td class="px-4 py-3">
+                                        <!-- Link column -->
                                         <template x-if="col.is_link">
                                             <a :href="'{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/' + item[pkField] + '/'"
                                                class="text-primary-600 hover:text-primary-800 dark:text-primary-400 font-medium transition-colors"
-                                               x-text="formatValue(item[col.name])"></a>
+                                               x-text="formatValue(item[col.name], col)"></a>
                                         </template>
+                                        <!-- Boolean chip -->
                                         <template x-if="!col.is_link && typeof item[col.name] === 'boolean'">
                                             <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md"
                                                   :class="item[col.name] ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'">
@@ -198,8 +200,17 @@
                                                 <span x-text="item[col.name] ? 'Yes' : 'No'"></span>
                                             </span>
                                         </template>
-                                        <template x-if="!col.is_link && typeof item[col.name] !== 'boolean'">
-                                            <span class="text-gray-700 dark:text-gray-300" x-text="formatValue(item[col.name])"></span>
+                                        <!-- Enum chip — label legível + valor como tooltip -->
+                                        <template x-if="!col.is_link && typeof item[col.name] !== 'boolean' && col.choices && col.choices.length > 0">
+                                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-md bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50"
+                                                  :title="'Enum: ' + item[col.name]">
+                                                <svg class="w-3 h-3 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+                                                <span x-text="formatValue(item[col.name], col)"></span>
+                                            </span>
+                                        </template>
+                                        <!-- Regular text -->
+                                        <template x-if="!col.is_link && typeof item[col.name] !== 'boolean' && !(col.choices && col.choices.length > 0)">
+                                            <span class="text-gray-700 dark:text-gray-300" x-text="formatValue(item[col.name], col)"></span>
                                         </template>
                                     </td>
                                 </template>
@@ -366,9 +377,14 @@ function listView() {
             }
         },
         
-        formatValue(val) {
+        formatValue(val, col) {
             if (val === null || val === undefined) return '—';
             if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+            // Enum: resolver valor para label legível
+            if (col && col.choices && col.choices.length > 0) {
+                const match = col.choices.find(c => c.value == val);
+                if (match) return match.label;
+            }
             if (typeof val === 'string' && val.length > 80) return val.substring(0, 80) + '...';
             return String(val);
         }

@@ -717,6 +717,39 @@ class Settings(BaseSettings):
     )
     
     # =========================================================================
+    # Operations Center
+    # =========================================================================
+    
+    ops_enabled: bool = PydanticField(
+        default=True,
+        description="Enable the Operations Center in the admin panel",
+    )
+    ops_task_persist: bool = PydanticField(
+        default=True,
+        description="Persist task execution results to the database",
+    )
+    ops_task_retention_days: int = PydanticField(
+        default=30,
+        description="Days to retain task execution records before purge",
+    )
+    ops_worker_heartbeat_interval: int = PydanticField(
+        default=30,
+        description="Worker heartbeat interval in seconds",
+    )
+    ops_log_buffer_size: int = PydanticField(
+        default=5000,
+        description="Maximum entries in the admin log ring buffer",
+    )
+    ops_log_stream_enabled: bool = PydanticField(
+        default=True,
+        description="Enable SSE log streaming endpoint",
+    )
+    ops_infrastructure_poll_interval: int = PydanticField(
+        default=60,
+        description="Infrastructure metrics poll interval in seconds",
+    )
+    
+    # =========================================================================
     # VALIDATORS — Security & Environment-Aware Defaults
     # =========================================================================
     
