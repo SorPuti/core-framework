@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 
 core.toml
-migrations/
 .core_models_cache.json
 
 # C extensions
