@@ -498,11 +498,18 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         async def event_generator():
             queue = buffer.subscribe()
             try:
+                # Send initial connection event
+                yield f"data: {json.dumps({'type': 'connected', 'message': 'Log stream connected'})}\n\n"
+                
                 while True:
+                    # Check if client disconnected
+                    if await request.is_disconnected():
+                        break
+                    
                     try:
-                        entry = await asyncio.wait_for(queue.get(), timeout=30.0)
+                        entry = await asyncio.wait_for(queue.get(), timeout=15.0)
                     except asyncio.TimeoutError:
-                        # Send keepalive
+                        # Send keepalive to keep connection alive
                         yield ": keepalive\n\n"
                         continue
 
@@ -516,7 +523,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
 
                     yield f"data: {entry.to_json()}\n\n"
 
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, GeneratorExit):
                 pass
             finally:
                 buffer.unsubscribe(queue)

@@ -102,11 +102,12 @@
                     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 flex items-start gap-4">
                         <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
                              :class="svc.status === 'healthy' ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : svc.status === 'unhealthy' ? 'bg-red-100 dark:bg-red-900/30 text-red-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'">
-                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <template x-if="svc.status === 'healthy'"><polyline points="20 6 9 17 4 12"/></template>
-                                <template x-if="svc.status === 'unhealthy'"><g><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></g></template>
-                                <template x-if="svc.status === 'not_configured'"><g><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></g></template>
-                            </svg>
+                            <!-- Healthy: checkmark -->
+                            <svg x-show="svc.status === 'healthy'" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            <!-- Unhealthy: X circle -->
+                            <svg x-show="svc.status === 'unhealthy'" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                            <!-- Not configured: minus circle -->
+                            <svg x-show="svc.status === 'not_configured'" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">

@@ -142,9 +142,16 @@ class InfraDetector:
             info["_source"] = "psutil"
 
         except ImportError:
-            # Fallback: parse /proc on Linux
             info["_source"] = "proc"
             info["cpu_count"] = os.cpu_count() or 0
+
+            try:
+                with open("/proc/loadavg") as f:
+                    load_1min = float(f.read().split()[0])
+                    cores = os.cpu_count() or 1
+                    info["cpu_percent"] = round(min(load_1min / cores * 100, 100), 1)
+            except (OSError, ValueError, IndexError):
+                info["cpu_percent"] = 0
 
             try:
                 meminfo = Path("/proc/meminfo").read_text()

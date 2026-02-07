@@ -3,6 +3,9 @@ Admin Log Buffer — captures Python logging for streaming in the admin panel.
 
 Uses a ring buffer (deque) with configurable max size.
 Supports SSE subscribers for real-time log streaming.
+
+Thread-safety: emit() is called from any thread (uvicorn, background workers).
+We use loop.call_soon_threadsafe() to push entries to asyncio.Queue subscribers.
 """
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 import time
 from collections import deque
 from dataclasses import asdict, dataclass, field
@@ -45,7 +49,7 @@ class AdminLogBuffer(logging.Handler):
     Features:
     - Ring buffer with configurable max size
     - Async subscriber queues for SSE streaming
-    - Thread-safe (uses logging's internal lock)
+    - Thread-safe: uses threading.Lock for buffer + call_soon_threadsafe for queues
 
     Usage:
         buffer = AdminLogBuffer(max_size=5000)
@@ -63,12 +67,18 @@ class AdminLogBuffer(logging.Handler):
     def __init__(self, max_size: int = 5000, level: int = logging.DEBUG) -> None:
         super().__init__(level)
         self._buffer: deque[LogEntry] = deque(maxlen=max_size)
-        self._subscribers: set[asyncio.Queue[LogEntry]] = set()
+        self._subscribers: dict[asyncio.Queue[LogEntry], asyncio.AbstractEventLoop] = {}
         self._max_size = max_size
         self._total_count = 0
+        self._lock = threading.Lock()
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Process a log record — called by Python logging."""
+        """
+        Process a log record — called by Python logging from ANY thread.
+        
+        Thread-safe: uses threading.Lock for buffer access and
+        loop.call_soon_threadsafe() for asyncio queue notification.
+        """
         try:
             entry = LogEntry(
                 timestamp=datetime.fromtimestamp(record.created).isoformat(),
@@ -81,43 +91,61 @@ class AdminLogBuffer(logging.Handler):
                 lineno=record.lineno or 0,
                 exc_text=record.exc_text,
             )
-            self._buffer.append(entry)
-            self._total_count += 1
+            
+            with self._lock:
+                self._buffer.append(entry)
+                self._total_count += 1
+                # Snapshot subscribers to avoid holding lock during notification
+                subs = dict(self._subscribers)
 
-            # Notify SSE subscribers (non-blocking)
+            # Notify SSE subscribers — thread-safe via call_soon_threadsafe
             dead: list[asyncio.Queue[LogEntry]] = []
-            for q in self._subscribers:
+            for q, loop in subs.items():
                 try:
-                    q.put_nowait(entry)
-                except asyncio.QueueFull:
-                    # Subscriber too slow — drop oldest
-                    try:
-                        q.get_nowait()
-                        q.put_nowait(entry)
-                    except (asyncio.QueueEmpty, asyncio.QueueFull):
-                        dead.append(q)
+                    loop.call_soon_threadsafe(self._safe_put, q, entry)
+                except RuntimeError:
+                    # Event loop closed
+                    dead.append(q)
                 except Exception:
                     dead.append(q)
 
-            for q in dead:
-                self._subscribers.discard(q)
+            if dead:
+                with self._lock:
+                    for q in dead:
+                        self._subscribers.pop(q, None)
 
         except Exception:
             self.handleError(record)
+
+    @staticmethod
+    def _safe_put(q: asyncio.Queue[LogEntry], entry: LogEntry) -> None:
+        """Put entry into queue, dropping oldest if full. Runs in event loop thread."""
+        try:
+            q.put_nowait(entry)
+        except asyncio.QueueFull:
+            try:
+                q.get_nowait()
+                q.put_nowait(entry)
+            except (asyncio.QueueEmpty, asyncio.QueueFull):
+                pass
 
     def subscribe(self, max_queue: int = 500) -> asyncio.Queue[LogEntry]:
         """
         Create a subscriber queue for SSE streaming.
 
         Returns an asyncio.Queue that receives new LogEntry objects.
+        Must be called from within an async context (event loop running).
         """
         q: asyncio.Queue[LogEntry] = asyncio.Queue(maxsize=max_queue)
-        self._subscribers.add(q)
+        loop = asyncio.get_event_loop()
+        with self._lock:
+            self._subscribers[q] = loop
         return q
 
     def unsubscribe(self, queue: asyncio.Queue[LogEntry]) -> None:
         """Remove a subscriber queue."""
-        self._subscribers.discard(queue)
+        with self._lock:
+            self._subscribers.pop(queue, None)
 
     def get_recent(
         self,

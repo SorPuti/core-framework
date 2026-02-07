@@ -115,6 +115,9 @@ function logViewer() {
                 if (this.paused) return;
                 try {
                     const entry = JSON.parse(event.data);
+                    // Skip control messages (connected, keepalive, etc.)
+                    if (entry.type === 'connected') return;
+                    if (!entry.level || !entry.message) return;
                     this.entries.push(entry);
                     // Trim buffer
                     if (this.entries.length > this._maxEntries) {
