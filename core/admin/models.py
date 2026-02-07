@@ -213,12 +213,14 @@ class WorkerHeartbeat(Model):
     Tracks active workers via periodic heartbeat.
 
     Workers create a record on boot and update it periodically.
-    Admin marks workers as OFFLINE if heartbeat is stale.
+    Uses a deterministic worker_hash for UPSERT so restarts reuse
+    the same row instead of creating duplicates (Issue #19).
     """
     __tablename__ = "admin_worker_heartbeats"
 
     id: Mapped[int] = Field.pk()
     worker_id: Mapped[str] = Field.string(max_length=64, unique=True, index=True)
+    worker_hash: Mapped[str | None] = Field.string(max_length=64, unique=True, nullable=True, index=True)
     worker_type: Mapped[str] = Field.string(max_length=30)  # task_worker, message_worker
     worker_name: Mapped[str] = Field.string(max_length=255)
     hostname: Mapped[str] = Field.string(max_length=255)
@@ -235,6 +237,23 @@ class WorkerHeartbeat(Model):
 
     def __repr__(self) -> str:
         return f"<WorkerHeartbeat {self.worker_name} [{self.status}] pid={self.pid}>"
+
+    @staticmethod
+    def compute_hash(worker_name: str, worker_type: str, identity_key: str) -> str:
+        """
+        Compute a deterministic hash for a worker identity.
+
+        This ensures restarts/redeploys reuse the same DB row
+        instead of creating duplicates.
+
+        Args:
+            worker_name: Name of the worker (class name or task-worker-{queues})
+            worker_type: "message" or "task_worker"
+            identity_key: Unique key (e.g. input_topic:group_id or queue list)
+        """
+        import hashlib
+        identity = f"{worker_type}:{worker_name}:{identity_key}"
+        return hashlib.sha256(identity.encode()).hexdigest()[:32]
 
 
 class AdminSession(Model):

@@ -26,11 +26,18 @@
                         <h4 class="text-sm font-semibold text-gray-900 dark:text-white" x-text="w.worker_name"></h4>
                         <p class="text-[10px] font-mono text-gray-400 mt-0.5" x-text="w.worker_id.substring(0, 12) + '...'"></p>
                     </div>
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full"
-                          :class="w.status === 'ONLINE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : w.status === 'DRAINING' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'">
-                        <span class="w-1.5 h-1.5 rounded-full" :class="w.status === 'ONLINE' ? 'bg-green-500' : w.status === 'DRAINING' ? 'bg-amber-500' : 'bg-gray-400'"></span>
-                        <span x-text="w.status"></span>
-                    </span>
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full"
+                              :class="w.status === 'ONLINE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : w.status === 'DRAINING' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'">
+                            <span class="w-1.5 h-1.5 rounded-full" :class="w.status === 'ONLINE' ? 'bg-green-500' : w.status === 'DRAINING' ? 'bg-amber-500' : 'bg-gray-400'"></span>
+                            <span x-text="w.status"></span>
+                        </span>
+                        <template x-if="w.status === 'OFFLINE'">
+                            <button @click="removeWorker(w.worker_id)" class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors" title="Remove offline worker">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                            </button>
+                        </template>
+                    </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3 text-xs">
                     <div>
@@ -143,6 +150,18 @@ function workersView() {
                 const data = await resp.json();
                 this.registeredWorkers = data.items || [];
             } catch (e) {}
+        },
+        async removeWorker(workerId) {
+            if (!confirm('Remove this offline worker from the list?')) return;
+            try {
+                const resp = await fetch(`{{ admin_prefix }}/api/ops/workers/${workerId}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    this.activeWorkers = this.activeWorkers.filter(w => w.worker_id !== workerId);
+                } else {
+                    const data = await resp.json();
+                    alert(data.detail || 'Failed to remove worker');
+                }
+            } catch (e) { console.error(e); }
         }
     };
 }

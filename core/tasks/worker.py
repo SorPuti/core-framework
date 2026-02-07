@@ -70,7 +70,9 @@ class TaskWorker:
         self._worker_id = str(uuid.uuid4())
         self._persist_enabled = getattr(self._settings, "ops_task_persist", True)
         self._heartbeat_interval = getattr(self._settings, "ops_worker_heartbeat_interval", 30)
+        self._offline_ttl_hours = getattr(self._settings, "ops_worker_offline_ttl", 24)
         self._heartbeat_task: asyncio.Task | None = None
+        self._cleanup_counter = 0
     
     async def start(self) -> None:
         """Start the worker."""
@@ -353,27 +355,62 @@ class TaskWorker:
     # ─── Ops: Worker Heartbeat ──────────────────────────────────
     
     async def _register_heartbeat(self) -> None:
-        """Register this worker in the heartbeat table."""
+        """
+        Register this worker via UPSERT using a deterministic hash.
+        
+        Restarts/redeploys reuse the same row instead of creating
+        duplicates (Issue #19).
+        """
         try:
             import json as _json
             import socket
             from core.models import get_session
             from core.admin.models import WorkerHeartbeat
+            from core.datetime import timezone
+            from sqlalchemy import select
+            
+            worker_name = f"task-worker-{'-'.join(self._queues)}"
+            identity_key = ":".join(sorted(self._queues))
+            w_hash = WorkerHeartbeat.compute_hash(worker_name, "task_worker", identity_key)
             
             db = await get_session()
             async with db:
-                hb = WorkerHeartbeat(
-                    worker_id=self._worker_id,
-                    worker_type="task_worker",
-                    worker_name=f"task-worker-{'-'.join(self._queues)}",
-                    hostname=socket.gethostname(),
-                    pid=__import__("os").getpid(),
-                    status="ONLINE",
-                    concurrency=self._concurrency,
-                    queues_json=_json.dumps(self._queues),
-                )
-                await hb.save(db)
-                await db.commit()
+                # Try to find existing row by hash
+                stmt = select(WorkerHeartbeat).where(WorkerHeartbeat.worker_hash == w_hash)
+                result = await db.execute(stmt)
+                existing = result.scalar_one_or_none()
+                
+                if existing:
+                    # UPSERT: reuse existing row
+                    existing.worker_id = self._worker_id
+                    existing.hostname = socket.gethostname()
+                    existing.pid = __import__("os").getpid()
+                    existing.status = "ONLINE"
+                    existing.concurrency = self._concurrency
+                    existing.queues_json = _json.dumps(self._queues)
+                    existing.total_processed = 0
+                    existing.total_errors = 0
+                    existing.active_tasks = 0
+                    existing.started_at = timezone.now()
+                    existing.last_heartbeat = timezone.now()
+                    await db.commit()
+                    logger.info(f"Heartbeat reused (hash={w_hash[:12]}...): {self._worker_id[:12]}...")
+                else:
+                    # First time: insert new row
+                    hb = WorkerHeartbeat(
+                        worker_id=self._worker_id,
+                        worker_hash=w_hash,
+                        worker_type="task_worker",
+                        worker_name=worker_name,
+                        hostname=socket.gethostname(),
+                        pid=__import__("os").getpid(),
+                        status="ONLINE",
+                        concurrency=self._concurrency,
+                        queues_json=_json.dumps(self._queues),
+                    )
+                    await hb.save(db)
+                    await db.commit()
+                    logger.info(f"Heartbeat registered (hash={w_hash[:12]}...): {self._worker_id[:12]}...")
         except Exception as e:
             logger.debug("Failed to register heartbeat: %s", e)
     
@@ -383,6 +420,11 @@ class TaskWorker:
             try:
                 await asyncio.sleep(self._heartbeat_interval)
                 await self._update_heartbeat()
+                # Cleanup stale OFFLINE workers every 10 cycles
+                self._cleanup_counter += 1
+                if self._cleanup_counter >= 10:
+                    self._cleanup_counter = 0
+                    await self._cleanup_stale_workers()
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -436,6 +478,33 @@ class TaskWorker:
                 await db.commit()
         except Exception:
             pass
+
+    async def _cleanup_stale_workers(self) -> None:
+        """Remove OFFLINE workers older than the configured TTL (Issue #19)."""
+        if self._offline_ttl_hours <= 0:
+            return
+        try:
+            from core.models import get_session
+            from core.admin.models import WorkerHeartbeat
+            from core.datetime import timezone
+            from datetime import timedelta
+            from sqlalchemy import delete as sa_delete
+            
+            cutoff = timezone.now() - timedelta(hours=self._offline_ttl_hours)
+            
+            db = await get_session()
+            async with db:
+                stmt = (
+                    sa_delete(WorkerHeartbeat)
+                    .where(WorkerHeartbeat.status == "OFFLINE")
+                    .where(WorkerHeartbeat.last_heartbeat < cutoff)
+                )
+                result = await db.execute(stmt)
+                await db.commit()
+                if result.rowcount > 0:
+                    logger.info(f"Cleaned up {result.rowcount} stale OFFLINE worker(s) (TTL={self._offline_ttl_hours}h)")
+        except Exception:
+            pass  # Fire-and-forget
 
     async def _retry_task(self, task_msg: TaskMessage) -> None:
         """Retry a failed task."""

@@ -427,6 +427,44 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             logger.warning("Failed to list registered workers: %s", e)
             return {"items": [], "total": 0}
 
+    @router.delete("/workers/{worker_id}")
+    async def worker_delete(
+        request: Request,
+        worker_id: str,
+        user: Any = Depends(check_admin_access),
+    ) -> dict:
+        """
+        Delete an OFFLINE worker record (Issue #19).
+        
+        Only allows deletion of workers with OFFLINE status.
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import WorkerHeartbeat
+            from sqlalchemy import delete as sa_delete
+
+            db = await get_session()
+            async with db:
+                stmt = (
+                    sa_delete(WorkerHeartbeat)
+                    .where(WorkerHeartbeat.worker_id == worker_id)
+                    .where(WorkerHeartbeat.status == "OFFLINE")
+                )
+                result = await db.execute(stmt)
+                await db.commit()
+
+                if result.rowcount == 0:
+                    raise HTTPException(
+                        400,
+                        "Worker not found or is not OFFLINE. Only OFFLINE workers can be removed.",
+                    )
+
+                return {"status": "deleted", "worker_id": worker_id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
     @router.get("/workers/{worker_id}")
     async def worker_detail(
         request: Request,

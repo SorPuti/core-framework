@@ -736,6 +736,10 @@ class Settings(BaseSettings):
         default=30,
         description="Worker heartbeat interval in seconds",
     )
+    ops_worker_offline_ttl: int = PydanticField(
+        default=24,
+        description="Hours to keep OFFLINE worker records before auto-cleanup (0 = disabled)",
+    )
     ops_log_buffer_size: int = PydanticField(
         default=5000,
         description="Maximum entries in the admin log ring buffer",
