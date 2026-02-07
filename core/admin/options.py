@@ -714,6 +714,21 @@ class ModelAdmin:
         
         return columns
     
+    def _get_base_fields_from_config(self) -> list[str]:
+        """
+        Extrai campos base de fields, fieldsets ou _model_fields.
+        Quando fieldsets está definido, usa os campos de todas as seções (Issue #24).
+        """
+        if self.fieldsets:
+            base: list[str] = []
+            for _section_name, section_dict in self.fieldsets:
+                fields = section_dict.get("fields", [])
+                base.extend(f for f in fields if f not in base)
+            return base
+        if self.fields is not None:
+            return list(self.fields)
+        return list(self._model_fields)
+
     def get_editable_fields(self) -> list[str]:
         """
         Retorna campos editáveis (não readonly, não excluídos).
@@ -723,20 +738,18 @@ class ModelAdmin:
         - Adiciona campo virtual "password" (processado por set_password())
         
         Também inclui M2M relationship fields (Issue #21).
+        Quando fieldsets está definido, inclui M2M mesmo se não estiver em nenhum fieldset (Issue #24).
         """
         if not self.model:
             return []
-        
-        if self.fields is not None:
-            base = list(self.fields)
-        else:
-            base = list(self._model_fields)
-        
+
+        base = self._get_base_fields_from_config()
+
         result = [
             f for f in base
             if f not in self.readonly_fields and f not in self.exclude
         ]
-        
+
         # Virtual password: exclui hash column, adiciona "password" virtual
         if self.password_field:
             result = [f for f in result if f != self.password_field]
@@ -746,35 +759,32 @@ class ModelAdmin:
             )
             if has_setter and "password" not in result:
                 result.append("password")
-        
-        # M2M fields (Issue #21)
+
+        # M2M fields (Issue #21, #24) — sempre incluir se não excluídos
         if self.model:
             m2m_fields = _detect_m2m_relationships(self.model)
             for m2m in m2m_fields:
                 if m2m["name"] not in self.exclude and m2m["name"] not in self.readonly_fields:
                     if m2m["name"] not in result:
                         result.append(m2m["name"])
-        
+
         return result
-    
+
     def get_display_fields(self) -> list[str]:
         """Retorna campos para exibição no detail view (includes M2M)."""
-        if self.fields is not None:
-            base = list(self.fields)
-        else:
-            base = [f for f in self._model_fields if f not in self.exclude]
-        
+        base = [f for f in self._get_base_fields_from_config() if f not in self.exclude]
+
         # Exclui hash column se password_field está ativo
         if self.password_field:
             base = [f for f in base if f != self.password_field]
-        
-        # M2M fields (Issue #21)
+
+        # M2M fields (Issue #21, #24)
         if self.model:
             m2m_fields = _detect_m2m_relationships(self.model)
             for m2m in m2m_fields:
                 if m2m["name"] not in self.exclude and m2m["name"] not in base:
                     base.append(m2m["name"])
-        
+
         return base
     
     def __repr__(self) -> str:
