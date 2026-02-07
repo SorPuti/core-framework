@@ -30,7 +30,7 @@ from typing import Any, ClassVar, TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import Table, Column, Integer, ForeignKey, inspect
-from sqlalchemy.orm import Mapped, relationship, declared_attr
+from sqlalchemy.orm import Mapped, relationship, declared_attr, class_mapper
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from core.models import Model, Field
@@ -788,6 +788,37 @@ class AbstractUser(Model):
     ) -> "AbstractUser | None":
         """Obtém usuário por email."""
         return await cls.objects.using(db).filter(email=email.lower()).first()
+
+    @classmethod
+    def cli_required_fields(cls) -> list[str]:
+        """Return required column names for safe CLI user creation."""
+        mapper = class_mapper(cls)
+        required: list[str] = []
+
+        for column in mapper.columns:
+            name = column.key
+
+            if column.primary_key:
+                continue
+
+            if column.nullable:
+                continue
+
+            if column.default is not None or column.server_default is not None:
+                continue
+
+            if name in {"password_hash"}:
+                continue
+
+            required.append(name)
+
+        return required
+
+    @classmethod
+    def cli_base_fields(cls) -> set[str]:
+        """Return column names declared on AbstractUser."""
+        base_mapper = class_mapper(cls)
+        return {c.key for c in base_mapper.columns}
 
 
 # =============================================================================

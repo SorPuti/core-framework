@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import getpass
 import importlib
 import importlib.util
 import os
@@ -3654,8 +3655,6 @@ def cmd_collectstatic(args: argparse.Namespace) -> int:
 
 def cmd_createsuperuser(args: argparse.Namespace) -> int:
     """Create a superuser account interactively or via flags."""
-    import asyncio
-    import getpass
 
     config = load_config()
 
@@ -3671,30 +3670,31 @@ def cmd_createsuperuser(args: argparse.Namespace) -> int:
         from core.auth.models import get_user_model
         User = get_user_model()
     except RuntimeError:
-        # Fallback: tenta importar app do usuario para registrar o model
         try:
             app_module = config.get("app_module")
             if app_module:
                 import importlib
                 importlib.import_module(app_module)
+
             from core.auth.models import get_user_model
             User = get_user_model()
         except Exception as exc:
-            print()
             print(error(f"Could not resolve User model: {exc}"))
-            print()
-            print("Make sure your project defines a User model and configures it via:")
-            print(f"  {info('configure_auth(user_model=YourUser)')}")
-            print(f"  or {info('settings.user_model = \"myapp.models.User\"')}")
             return 1
 
     username_field = getattr(User, "USERNAME_FIELD", "email")
-    required_fields = getattr(User, "REQUIRED_FIELDS", [])
+
+    # ── CLI field governance ───────────────────────────────────────────
+    cli_required: list[str] = []
+    cli_base_fields: set[str] = set()
+
+    if hasattr(User, "cli_required_fields"):
+        cli_required = User.cli_required_fields()
+        cli_base_fields = User.cli_base_fields()
 
     # ── Non-interactive mode (--noinput) ────────────────────────────────
     noinput = getattr(args, "noinput", False)
 
-    # Collect username field (email by default)
     email_value = getattr(args, "email", None) or getattr(args, username_field, None)
     password_value = getattr(args, "password", None)
 
@@ -3706,7 +3706,6 @@ def cmd_createsuperuser(args: argparse.Namespace) -> int:
             print(error("--password is required when using --noinput"))
             return 1
     else:
-        # Interactive mode
         if not email_value:
             while True:
                 email_value = input(f"  {username_field.capitalize()}: ").strip()
@@ -3717,26 +3716,37 @@ def cmd_createsuperuser(args: argparse.Namespace) -> int:
         if not password_value:
             while True:
                 password_value = getpass.getpass("  Password: ")
-                if not password_value:
-                    print(warning("  Password cannot be empty."))
-                    continue
                 if len(password_value) < 8:
                     print(warning("  Password must be at least 8 characters."))
                     continue
-                password_confirm = getpass.getpass("  Password (confirm): ")
-                if password_value != password_confirm:
-                    print(warning("  Passwords do not match. Try again."))
+
+                confirm = getpass.getpass("  Password (confirm): ")
+                if password_value != confirm:
+                    print(warning("  Passwords do not match."))
                     continue
                 break
 
-    # ── Collect extra required fields ───────────────────────────────────
+    # ── Collect required base fields only ──────────────────────────────
     extra_fields: dict[str, Any] = {}
-    for field_name in required_fields:
+
+    for field_name in cli_required:
+        if field_name not in cli_base_fields:
+            # Campo customizado do projeto → fora do escopo do CLI
+            continue
+
+        if field_name == username_field:
+            continue  # já coletado
+
         val = getattr(args, field_name, None)
+
         if not val and not noinput:
             val = input(f"  {field_name.replace('_', ' ').capitalize()}: ").strip()
-        if val:
-            extra_fields[field_name] = val
+
+        if not val:
+            print(error(f"{field_name} is required."))
+            return 1
+
+        extra_fields[field_name] = val
 
     # ── Create superuser ────────────────────────────────────────────────
     async def create():
@@ -3746,30 +3756,26 @@ def cmd_createsuperuser(args: argparse.Namespace) -> int:
         session = get_session()
 
         async with await session as db:
-            # Check if user already exists
             existing = await User.get_by_email(email_value, db)
             if existing:
-                print()
-                print(warning(f"  User with {username_field}='{email_value}' already exists."))
+                print(warning(f"User '{email_value}' already exists."))
+
                 if noinput:
                     return 1
 
-                overwrite = input("  Overwrite and make superuser? [y/N]: ").strip().lower()
+                overwrite = input("Overwrite and grant superuser? [y/N]: ").lower()
                 if overwrite != "y":
-                    print(info("  Aborted."))
+                    print(info("Aborted."))
                     return 0
 
                 existing.is_staff = True
                 existing.is_superuser = True
                 existing.is_active = True
                 existing.set_password(password_value)
-                db.add(existing)
                 await db.commit()
-                print()
-                print(success(f"  Superuser '{email_value}' updated successfully."))
+                print(success("Superuser updated."))
                 return 0
 
-            # Create new superuser
             await User.create_superuser(
                 email=email_value,
                 password=password_value,
@@ -3783,9 +3789,8 @@ def cmd_createsuperuser(args: argparse.Namespace) -> int:
     result = asyncio.run(create())
 
     if result == 0:
-        print()
-        print(success(f"  Superuser '{email_value}' created successfully."))
-    
+        print(success(f"Superuser '{email_value}' ready."))
+
     return result
 
 
@@ -4188,7 +4193,7 @@ For more information, visit: https://github.com/SorPuti/core-framework
     run_parser = subparsers.add_parser("run", help="Run development server")
     run_parser.add_argument("--host", help="Host to bind (default: 0.0.0.0)")
     run_parser.add_argument("-p", "--port", type=int, help="Port to bind (default: 8000)")
-    run_parser.add_argument("--app", help="App module (default: app.main)")
+    run_parser.add_argument("--app", help="App module (default: src.main)")
     run_parser.add_argument("--reload", action="store_true", default=True, help="Enable auto-reload")
     run_parser.add_argument("--no-reload", action="store_false", dest="reload", help="Disable auto-reload")
     run_parser.set_defaults(func=cmd_run)

@@ -9,8 +9,9 @@ Variáveis de ambiente carregadas automaticamente de:
     .env.development    (sobrescreve em dev)
     .env.production     (sobrescreve em prod)
 """
-
-from core.config import Settings, PydanticField
+from core import configure_auth
+from core.config import Settings, PydanticField, configure
+from example.models import User
 
 
 class AppSettings(Settings):
@@ -27,5 +28,9 @@ class AppSettings(Settings):
     )
 
 
-# Instância singleton — importada por toda a aplicação
-settings = AppSettings()
+configure_auth(
+    user_model=User,
+)
+
+# Registrar AppSettings globalmente no core-framework.
+settings = configure(settings_class=AppSettings)

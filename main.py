@@ -12,8 +12,6 @@ Configuração:
     Variáveis de ambiente em .env e .env.{ENVIRONMENT}
 """
 
-from example.app import app
-
 if __name__ == "__main__":
     import uvicorn
     from example.settings import settings

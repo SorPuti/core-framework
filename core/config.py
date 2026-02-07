@@ -655,7 +655,7 @@ class Settings(BaseSettings):
         description="Módulo Python das tasks (None para auto-discovery)",
     )
     app_module: str = PydanticField(
-        default="app.main",
+        default="src.main",
         description="Módulo Python da aplicação principal (ex: 'myapp.main')",
     )
     
@@ -874,10 +874,10 @@ def bootstrap_project_settings() -> None:
         _import_settings_module(module_name)
         return
 
-    if _import_legacy_src_settings():
+    if _import_entrypoint_settings():
         return
 
-    _import_entrypoint_settings()
+    _import_legacy_src_settings()
 
 
 def _import_settings_module(module_name: str) -> None:
@@ -893,7 +893,7 @@ def _import_settings_module(module_name: str) -> None:
 
 def _import_legacy_src_settings() -> bool:
     try:
-        import_module("src.settings")
+        import_module("example.settings")
         return True
     except ModuleNotFoundError as exc:
         logger.error(

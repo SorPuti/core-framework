@@ -13,13 +13,14 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Mapped, relationship
 
+from core import AbstractUser
 from core.models import Model, Field
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-class User(Model):
+class User(AbstractUser):
     """
     Model de usuário.
     
