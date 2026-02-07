@@ -44,6 +44,8 @@ import logging
 import os
 import secrets
 import warnings
+from importlib import import_module
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Any, Literal, Self
 
@@ -861,29 +863,78 @@ _settings_class: type[Settings] = Settings
 _on_settings_loaded: list[Any] = []
 
 
+def bootstrap_project_settings() -> None:
+    """Bootstrap project settings module using explicit resolution rules."""
+    if is_configured():
+        return
+
+    module_name = os.getenv("APP_SETTINGS_MODULE")
+
+    if module_name:
+        _import_settings_module(module_name)
+        return
+
+    if _import_legacy_src_settings():
+        return
+
+    _import_entrypoint_settings()
+
+
+def _import_settings_module(module_name: str) -> None:
+    try:
+        import_module(module_name)
+    except ModuleNotFoundError as exc:
+        logger.error(
+            "Failed to import settings module '%s' from APP_SETTINGS_MODULE.",
+            module_name,
+            exc_info=exc,
+        )
+
+
+def _import_legacy_src_settings() -> bool:
+    try:
+        import_module("src.settings")
+        return True
+    except ModuleNotFoundError as exc:
+        logger.error(
+            "Legacy settings module 'src.settings' not found; "
+            "default core Settings will be used.",
+            exc_info=exc,
+        )
+        return False
+
+def _import_entrypoint_settings() -> bool:
+    try:
+        eps = entry_points(group="core_framework.settings")
+    except Exception:
+        return False
+
+    for ep in eps:
+        try:
+            ep.load()
+            return True
+        except Exception as exc:
+            logger.error(
+                "Failed to load settings from entrypoint '%s'.",
+                ep.name,
+                exc_info=exc,
+            )
+
+    return False
+
 def get_settings() -> Settings:
-    """
-    Retorna instância singleton das configurações.
-    
-    Carrega automaticamente .env e .env.{ENVIRONMENT}.
-    
-    Exemplo:
-        from core import get_settings
-        
-        settings = get_settings()
-        print(settings.database_url)
-        print(settings.kafka_backend)
-    """
+    """Return the global Settings singleton after bootstrapping project settings."""
     global _settings
+
     if _settings is None:
-        # Resolve env files baseado em ENVIRONMENT
+        bootstrap_project_settings()
+
         env_files = _resolve_env_files()
         _settings = _settings_class(_env_file=env_files)
-        
-        # Executa callbacks pós-carregamento
+
         for callback in _on_settings_loaded:
             callback(_settings)
-    
+
     return _settings
 
 

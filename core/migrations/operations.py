@@ -1,6 +1,8 @@
 """Migration operations."""
 from __future__ import annotations
 
+import hashlib
+import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable, ClassVar, TYPE_CHECKING
@@ -12,6 +14,17 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncConnection
     from core.migrations.dialects.base import DialectCompiler
 
+
+def fingerprint(operations: list[Operation]) -> str:
+    """Generate fingersprint for migrations"""
+    payload = json.dumps(
+        sorted(
+            (op.to_fingerprint() for op in operations),
+            key=lambda o: (o["op"], json.dumps(o, sort_keys=True))
+        ),
+        sort_keys=True,
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 # =============================================================================
 # Compiler helper
@@ -105,7 +118,27 @@ class ColumnDef:
     autoincrement: bool = False
     unique: bool = False
     index: bool = False
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        default = self.default
+
+        if callable(default):
+            default_repr = getattr(default, "__name__", repr(default))
+        else:
+            default_repr = default
+
+        return {
+            "name": self.name,
+            "type": self.type,
+            "nullable": self.nullable,
+            "primary_key": self.primary_key,
+            "autoincrement": self.autoincrement,
+            "unique": self.unique,
+            "index": self.index,
+            "default": default_repr,
+        }
+
     def get_type(self, dialect: str) -> str:
         compiler = _get_compiler(dialect)
         return compiler.map_type(self.type)
@@ -172,12 +205,24 @@ class ForeignKeyDef:
     on_delete: str = "CASCADE"
     on_update: str = "CASCADE"
     
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "column": self.column,
+            "references_table": self.references_table,
+            "references_column": self.references_column,
+            "on_delete": self.on_delete,
+            "on_update": self.on_update,
+        }
+
     def to_sql(self, table_name: str) -> str:
         return (
             f'FOREIGN KEY ("{self.column}") '
             f'REFERENCES "{self.references_table}" ("{self.references_column}") '
             f"ON DELETE {self.on_delete} ON UPDATE {self.on_update}"
         )
+
+
 
 
 # =============================================================================
@@ -188,16 +233,20 @@ class Operation(ABC):
     """Base migration operation."""
     destructive: bool = False
     reversible: bool = True
-    
+
+    @abstractmethod
+    def to_fingerprint(self) -> dict | None:
+        """Stable, semantic representation for hashing."""
+
     @abstractmethod
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None: ...
-    
+
     @abstractmethod
     async def backward(self, conn: "AsyncConnection", dialect: str) -> None: ...
-    
+
     @abstractmethod
     def describe(self) -> str: ...
-    
+
     def to_code(self) -> str:
         return repr(self)
 
@@ -212,7 +261,20 @@ class CreateTable(Operation):
     table_name: str
     columns: list[ColumnDef] = field(default_factory=list)
     foreign_keys: list[ForeignKeyDef] = field(default_factory=list)
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "CreateTable",
+            "table": self.table_name,
+            "columns": [
+                col.to_fingerprint() for col in self.columns
+            ],
+            "foreign_keys": [
+                fk.to_fingerprint() for fk in self.foreign_keys
+            ],
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         # Detect composite primary key
         pk_columns = [c for c in self.columns if c.primary_key]
@@ -278,6 +340,19 @@ class DropTable(Operation):
     columns: list[ColumnDef] = field(default_factory=list)
     foreign_keys: list[ForeignKeyDef] = field(default_factory=list)
     
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "CreateTable",
+            "table": self.table_name,
+            "columns": [
+                col.to_fingerprint() for col in self.columns
+            ],
+            "foreign_keys": [
+                fk.to_fingerprint() for fk in self.foreign_keys
+            ],
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         await conn.execute(text(f'DROP TABLE IF EXISTS "{self.table_name}"'))
     
@@ -299,7 +374,15 @@ class AddColumn(Operation):
     """Add a column to a table."""
     table_name: str
     column: ColumnDef
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "CreateTable",
+            "table": self.table_name,
+            "columns": [self.column.to_fingerprint() if self.column else None],
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         sql = f'ALTER TABLE "{self.table_name}" ADD COLUMN {self.column.to_sql(dialect)}'
         await conn.execute(text(sql))
@@ -330,6 +413,14 @@ class DropColumn(Operation):
     destructive: bool = True
     column_def: ColumnDef | None = None
     
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "CreateTable",
+            "table": self.table_name,
+            "columns": [self.column_def.to_fingerprint() if self.column_def else None],
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         await conn.execute(text(f'ALTER TABLE "{self.table_name}" DROP COLUMN "{self.column_name}"'))
     
@@ -354,7 +445,33 @@ class AlterColumn(Operation):
     old_type: str | None = None
     old_nullable: bool | None = None
     old_default: Any = None
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        def normalize_default(val):
+            if callable(val):
+                return getattr(val, "__name__", repr(val))
+            return val
+
+        return {
+            "op": "AlterColumn",
+            "table": self.table_name,
+            "column": self.column_name,
+
+            "new": {
+                "type": self.new_type,
+                "nullable": self.new_nullable,
+                "default": normalize_default(self.new_default) if self.set_default else None,
+                "set_default": self.set_default,
+            },
+
+            "old": {
+                "type": self.old_type,
+                "nullable": self.old_nullable,
+                "default": normalize_default(self.old_default) if self.set_default else None,
+            },
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         compiler = _get_compiler(dialect)
         if not compiler.supports_alter_column:
@@ -424,7 +541,16 @@ class RenameColumn(Operation):
     table_name: str
     old_name: str
     new_name: str
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "RenameColumn",
+            "table": self.table_name,
+            "from": self.old_name,
+            "to": self.new_name,
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         sql = f'ALTER TABLE "{self.table_name}" RENAME COLUMN "{self.old_name}" TO "{self.new_name}"'
         await conn.execute(text(sql))
@@ -447,7 +573,17 @@ class CreateIndex(Operation):
     index_name: str
     columns: list[str]
     unique: bool = False
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "CreateIndex",
+            "table": self.table_name,
+            "name": self.index_name,
+            "columns": list(self.columns),
+            "unique": self.unique,
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         unique = "UNIQUE " if self.unique else ""
         cols = ", ".join(f'"{c}"' for c in self.columns)
@@ -468,7 +604,17 @@ class DropIndex(Operation):
     index_name: str
     columns: list[str] = field(default_factory=list)
     unique: bool = False
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "DropIndex",
+            "table": self.table_name,
+            "name": self.index_name,
+            "columns": list(self.columns),
+            "unique": self.unique,
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         await conn.execute(text(f'DROP INDEX IF EXISTS "{self.index_name}"'))
     
@@ -495,7 +641,22 @@ class AddForeignKey(Operation):
     references_column: str = "id"
     on_delete: str = "CASCADE"
     on_update: str = "CASCADE"
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "AddForeignKey",
+            "table": self.table_name,
+            "constraint": self.constraint_name,
+            "column": self.column,
+            "references": {
+                "table": self.references_table,
+                "column": self.references_column,
+            },
+            "on_delete": self.on_delete,
+            "on_update": self.on_update,
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         compiler = _get_compiler(dialect)
         if not compiler.supports_add_constraint:
@@ -528,7 +689,21 @@ class DropForeignKey(Operation):
     references_table: str | None = None
     references_column: str = "id"
     on_delete: str = "CASCADE"
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "DropForeignKey",
+            "table": self.table_name,
+            "constraint": self.constraint_name,
+            "column": self.column,
+            "references": {
+                "table": self.references_table,
+                "column": self.references_column,
+            } if self.references_table else None,
+            "on_delete": self.on_delete,
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         compiler = _get_compiler(dialect)
         if not compiler.supports_drop_constraint:
@@ -561,7 +736,14 @@ class RunPython(Operation):
     backward_func: Callable[["AsyncConnection"], Awaitable[None]] | None = None
     description: str = "Run Python"
     reversible: bool = field(init=False)
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "RunPython",
+            "description": self.description,
+        }
+
     def __post_init__(self):
         self.reversible = self.backward_func is not None
     
@@ -584,7 +766,15 @@ class RunSQL(Operation):
     backward_sql: str | None = None
     description: str = "Run SQL"
     reversible: bool = field(init=False)
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "RunSQL",
+            "forward": self.forward_sql.strip(),
+            "backward": self.backward_sql.strip() if self.backward_sql else None,
+        }
+
     def __post_init__(self):
         self.reversible = self.backward_sql is not None
     
@@ -609,7 +799,15 @@ class CreateEnum(Operation):
     """Create PostgreSQL ENUM type."""
     enum_name: str
     values: list[str]
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "CreateEnum",
+            "name": self.enum_name,
+            "values": list(self.values),
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         compiler = _get_compiler(dialect)
         if not compiler.supports_enum:
@@ -640,7 +838,15 @@ class DropEnum(Operation):
     enum_name: str
     values: list[str] = field(default_factory=list)
     destructive: bool = True
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "DropEnum",
+            "name": self.enum_name,
+            "values": list(self.values),
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         compiler = _get_compiler(dialect)
         if compiler.supports_enum:
@@ -666,7 +872,18 @@ class AlterEnum(Operation):
     remove_values: list[str] = field(default_factory=list)
     old_values: list[str] = field(default_factory=list)
     new_values: list[str] = field(default_factory=list)
-    
+
+    def to_fingerprint(self) -> dict:
+        """Generate fingersprin from object."""
+        return {
+            "op": "AlterEnum",
+            "name": self.enum_name,
+            "add": sorted(self.add_values),
+            "remove": sorted(self.remove_values),
+            "old": list(self.old_values),
+            "new": list(self.new_values),
+        }
+
     async def forward(self, conn: "AsyncConnection", dialect: str) -> None:
         compiler = _get_compiler(dialect)
         if not compiler.supports_enum:

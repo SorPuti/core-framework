@@ -32,7 +32,7 @@ from core.migrations.operations import (
     DropColumn,
     AlterColumn,
     ColumnDef,
-    ForeignKeyDef,
+    ForeignKeyDef, fingerprint,
 )
 from core.migrations.state import (
     SchemaState,
@@ -316,7 +316,22 @@ class MigrationEngine:
                         queue.append(other)
         
         return result
-    
+
+    def _load_last_migration_fingerprint(self) -> str | None:
+        files = self._get_migration_files()
+        if not files:
+            return None
+
+        last_file = files[-1]
+        content = last_file.read_text()
+
+        for line in content.splitlines():
+            if line.startswith("FINGERPRINT"):
+                _, value = line.split(":", 1)
+                return value.strip().strip('"').strip("'")
+
+        return None
+
     def _diff_to_operations(self, diff: SchemaDiff) -> list[Operation]:
         """Converte SchemaDiff em lista de operações."""
         from core.migrations.operations import CreateEnum, DropEnum, AlterEnum
@@ -406,17 +421,18 @@ class MigrationEngine:
             if table_name in INTERNAL_TABLES:
                 continue
             operations.append(DropTable(table_name=table_name))
-        
+
         for enum_name in diff.enums_to_drop:
             operations.append(DropEnum(enum_name=enum_name))
-        
+
         return operations
-    
+
     def _generate_migration_code(
-        self,
-        name: str,
-        operations: list[Operation],
-        dependencies: list[tuple[str, str]] | None = None,
+            self,
+            name: str,
+            operations: list[Operation],
+            dependencies: list[tuple[str, str]] | None = None,
+            fp_new: str | None = None,
     ) -> str:
         """Gera código Python para uma migração."""
         deps = dependencies or []
@@ -438,6 +454,7 @@ class MigrationEngine:
         return f'''"""
 Migration: {name}
 Generated at: {timezone.now().isoformat()}
+FINGERPRINT: {fp_new or "NO_FINGERPRINT"}
 """
 
 from core.migrations import (
@@ -506,6 +523,7 @@ migration = Migration(
         
         if empty:
             operations = []
+            new_fp = fingerprint(operations)
         else:
             diff = await self.detect_changes(models)
             
@@ -514,11 +532,22 @@ migration = Migration(
                 return None
             
             operations = self._diff_to_operations(diff)
-            
+
             if not operations:
                 print("No changes detected.")
                 return None
-        
+
+            new_fp = fingerprint(operations)
+            last_fp = self._load_last_migration_fingerprint()
+
+            if new_fp == last_fp:
+                print("No new changes since last migration.")
+                return None
+
+        if not name and operations:
+            verbs = {op.__class__.__name__.lower() for op in operations}
+            name = "auto_" + "_".join(sorted(verbs))
+
         number = self._get_next_migration_number()
         migration_name = f"{number}_{name or 'auto'}"
         
@@ -528,7 +557,7 @@ migration = Migration(
             last_migration = files[-1].stem
             dependencies = [(self.app_label, last_migration)]
         
-        code = self._generate_migration_code(migration_name, operations, dependencies)
+        code = self._generate_migration_code(migration_name, operations, dependencies, new_fp)
         
         if dry_run:
             print(f"Would create migration: {migration_name}")
@@ -837,12 +866,14 @@ migration = Migration(
         
         # Otimiza operações (remove redundâncias)
         optimized = self._optimize_operations(all_operations)
+
+        new_fp = fingerprint(optimized)
         
         # Gera nova migração
         number = self._get_next_migration_number()
         squash_name = f"{number}_{name or 'squashed'}"
         
-        code = self._generate_migration_code(squash_name, optimized, [])
+        code = self._generate_migration_code(squash_name, optimized, [], new_fp)
         
         file_path = self.migrations_dir / f"{squash_name}.py"
         file_path.write_text(code)
