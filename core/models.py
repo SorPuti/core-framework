@@ -671,16 +671,20 @@ def _sync_missing_columns(connection, _log) -> None:
     cada coluna nova detectada.
     
     Chamado dentro de conn.run_sync() — roda em contexto síncrono.
+    
+    Compatível com PostgreSQL, SQLite, MySQL.
     """
     from sqlalchemy import inspect as sa_inspect, text
     
     try:
         inspector = sa_inspect(connection)
     except Exception as e:
-        _log.debug("Could not create inspector for schema sync: %s", e)
+        _log.warning("Schema sync: could not create inspector: %s", e)
         return
     
     existing_tables = set(inspector.get_table_names())
+    dialect_name = connection.dialect.name
+    total_added = 0
     
     for table_name, table in Base.metadata.tables.items():
         if table_name not in existing_tables:
@@ -697,57 +701,37 @@ def _sync_missing_columns(connection, _log) -> None:
         if not missing:
             continue
         
-        _log.info(
-            "Schema sync: table '%s' has %d missing column(s): %s",
+        _log.warning(
+            "Schema sync: table '%s' needs %d new column(s): %s",
             table_name, len(missing), ", ".join(sorted(missing)),
         )
         
-        for col_name in missing:
+        for col_name in sorted(missing):
             col = table.c[col_name]
             try:
-                # Compilar o tipo da coluna para o dialeto atual
                 col_type = col.type.compile(dialect=connection.dialect)
                 
-                # Montar ALTER TABLE
-                nullable = "" if col.nullable else " NOT NULL"
-                default = ""
-                
-                # Para NOT NULL sem default, precisamos de um default temporário
-                if not col.nullable and col.default is None and col.server_default is None:
-                    # Inferir default seguro por tipo
-                    type_str = str(col_type).upper()
-                    if "INT" in type_str or "SERIAL" in type_str:
-                        default = " DEFAULT 0"
-                    elif "BOOL" in type_str:
-                        default = " DEFAULT false"
-                    elif "FLOAT" in type_str or "DOUBLE" in type_str or "NUMERIC" in type_str or "DECIMAL" in type_str:
-                        default = " DEFAULT 0.0"
-                    elif "TIMESTAMP" in type_str or "DATETIME" in type_str or "DATE" in type_str:
-                        # Para datetime NOT NULL, usar nullable como fallback
-                        nullable = ""
-                        default = ""
-                        # ALTER TABLE com NOT NULL em coluna nova sem default falha
-                        # em muitos DBs — tornar nullable nesse caso
-                    else:
-                        default = " DEFAULT ''"
-                
-                # SQLite não suporta DEFAULT em ALTER TABLE com NOT NULL de forma confiável
-                # Tornar a coluna nullable se não tem default explícito
-                dialect_name = connection.dialect.name
-                if dialect_name == "sqlite" and not col.nullable and default:
-                    nullable = ""
-                    default = ""
-                
-                sql = f'ALTER TABLE "{table_name}" ADD COLUMN "{col_name}" {col_type}{nullable}{default}'
+                # Estratégia: adicionar sempre como NULL primeiro, depois
+                # podemos aplicar NOT NULL se necessário. Isso evita erros
+                # com "column cannot be NOT NULL without default" em todos DBs.
+                # Para tabelas internas do framework, NULL é aceitável para
+                # colunas legadas (já tinham dados antes da coluna existir).
+                sql = f'ALTER TABLE "{table_name}" ADD COLUMN "{col_name}" {col_type}'
                 
                 connection.execute(text(sql))
-                _log.info("  + Added column '%s.%s' (%s)", table_name, col_name, col_type)
+                total_added += 1
+                _log.warning("  + Added column '%s.%s' (%s)", table_name, col_name, col_type)
                 
             except Exception as e:
-                _log.warning(
-                    "  ! Could not add column '%s.%s': %s",
+                _log.error(
+                    "  ! Failed to add column '%s.%s': %s",
                     table_name, col_name, e,
                 )
+    
+    if total_added:
+        _log.warning("Schema sync: added %d column(s) total.", total_added)
+    else:
+        _log.debug("Schema sync: all tables up to date.")
 
 
 async def create_tables() -> None:
@@ -768,12 +752,16 @@ async def create_tables() -> None:
     if _engine is None:
         raise RuntimeError("Database não inicializado. Chame init_database() primeiro.")
     
+    _log.info("create_tables: creating missing tables + syncing columns...")
+    
     async with _engine.begin() as conn:
-        # 1. Criar tabelas novas
+        # 1. Criar tabelas novas (create_all só cria, nunca altera existentes)
         await conn.run_sync(Base.metadata.create_all)
         
         # 2. Sincronizar colunas faltantes em tabelas existentes
         await conn.run_sync(_sync_missing_columns, _log)
+    
+    _log.info("create_tables: done.")
 
 
 async def drop_tables() -> None:
