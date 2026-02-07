@@ -30,6 +30,16 @@ from core.admin.exceptions import (
 )
 from core.admin.middleware import AdminSessionMiddleware
 
+# ── Models internos do Admin — importados no module-level para garantir ──
+# que são registrados no Base.metadata e visíveis ao sistema de migrações.
+from core.admin.models import (  # noqa: F401
+    AuditLog,
+    AdminSession,
+    TaskExecution,
+    PeriodicTaskSchedule,
+    WorkerHeartbeat,
+)
+
 # Singleton default — usado na maioria dos projetos
 default_site = AdminSite(name="default")
 
@@ -70,4 +80,10 @@ __all__ = [
     "unregister",
     "action",
     "AdminSessionMiddleware",
+    # Models internos
+    "AuditLog",
+    "AdminSession",
+    "TaskExecution",
+    "PeriodicTaskSchedule",
+    "WorkerHeartbeat",
 ]

@@ -405,14 +405,103 @@ def _save_models_cache(cache_file: Path, modules: list[str]) -> None:
     cache_file.write_text(json.dumps(data, indent=2))
 
 
+def _get_core_internal_models() -> list[str]:
+    """
+    Retorna a lista de módulos internos do core-framework que contêm models.
+    
+    Esses módulos vivem dentro do pacote core (possivelmente em site-packages)
+    e NÃO são encontrados pelo scanner de projeto do usuário. Devem sempre
+    ser incluídos no discover_models() para que makemigrations/migrate
+    detectem automaticamente tabelas internas do framework.
+    """
+    return [
+        "core.admin.models",      # AuditLog, AdminSession, TaskExecution, etc.
+        "core.auth.models",       # User, Group, Permission (se existirem)
+    ]
+
+
+def _import_core_module(module_path: str):
+    """
+    Importa um módulo interno do core-framework com fallback robusto.
+    
+    Problema: quando o CLI é instalado via pipx ou num venv isolado,
+    o pacote `core` já está em sys.modules apontando para o venv,
+    e subpacotes como `core.admin` podem não existir nesse venv
+    (versão antiga). Nesse caso, tentamos importar diretamente
+    do filesystem usando spec_from_file_location.
+    """
+    import importlib.util
+    
+    # Tentativa 1: import normal
+    try:
+        return importlib.import_module(module_path)
+    except (ImportError, ModuleNotFoundError):
+        pass
+    
+    # Tentativa 2: localizar o arquivo no pacote core real
+    # Resolve o path do core já importado e busca o submodule
+    try:
+        import core as core_pkg
+        core_dir = Path(core_pkg.__file__).parent
+        
+        # "core.admin.models" → "admin/models.py"
+        relative = module_path.replace("core.", "", 1).replace(".", os.sep) + ".py"
+        target_file = core_dir / relative
+        
+        if target_file.exists():
+            spec = importlib.util.spec_from_file_location(module_path, target_file)
+            if spec and spec.loader:
+                # Garantir que o pacote pai está em sys.modules
+                parts = module_path.split(".")
+                for i in range(1, len(parts)):
+                    parent = ".".join(parts[:i])
+                    if parent not in sys.modules:
+                        parent_path = core_dir / os.sep.join(parts[1:i])
+                        parent_init = parent_path / "__init__.py"
+                        if parent_init.exists():
+                            parent_spec = importlib.util.spec_from_file_location(
+                                parent, parent_init,
+                                submodule_search_locations=[str(parent_path)]
+                            )
+                            if parent_spec and parent_spec.loader:
+                                parent_mod = importlib.util.module_from_spec(parent_spec)
+                                sys.modules[parent] = parent_mod
+                                parent_spec.loader.exec_module(parent_mod)
+                
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules[module_path] = mod
+                spec.loader.exec_module(mod)
+                return mod
+    except Exception:
+        pass
+    
+    # Tentativa 3: procurar no diretório de trabalho atual (editable install)
+    try:
+        cwd_file = Path.cwd() / module_path.replace(".", os.sep) + ".py"
+        if cwd_file.exists():
+            spec = importlib.util.spec_from_file_location(module_path, cwd_file)
+            if spec and spec.loader:
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules[module_path] = mod
+                spec.loader.exec_module(mod)
+                return mod
+    except Exception:
+        pass
+    
+    return None
+
+
 def discover_models(models_module: str | list[str] | None = None, rescan: bool = False) -> list[type]:
     """
     Discover all Model subclasses in the project.
     
     Strategy:
-    1. If models_module provided (string or list), use it directly
-    2. Otherwise, check cache file
-    3. If no cache or rescan=True, scan project recursively and cache results
+    1. Always import core-framework internal models (admin, auth, etc.)
+       — these live in site-packages and are invisible to the project scanner.
+       Uses _import_core_module() with robust fallback for pipx/isolated venvs.
+    2. If models_module provided (string or list), use it directly
+    3. Otherwise, check cache file
+    4. If no cache or rescan=True, scan project recursively and cache results
     
     Args:
         models_module: Explicit module(s) to import. Can be string or list.
@@ -427,7 +516,19 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
     root_dir = _get_project_root()
     cache_file = root_dir / MODELS_CACHE_FILE
     
-    # Determine which modules to check
+    # ── 1. Sempre inclui os models internos do core-framework ──
+    # Estes módulos estão dentro do pacote core (ex: site-packages/core/admin/models.py)
+    # e não são encontrados pelo _scan_for_models() que varre apenas o projeto do usuário.
+    # Usa _import_core_module() para lidar com pipx, venvs isolados, etc.
+    core_modules = _get_core_internal_models()
+    core_loaded = {}  # module_path → module (já importado)
+    
+    for mod_path in core_modules:
+        mod = _import_core_module(mod_path)
+        if mod is not None:
+            core_loaded[mod_path] = mod
+    
+    # Determine which modules to check (user project)
     if models_module:
         # Explicit config - use it
         if isinstance(models_module, str):
@@ -450,9 +551,31 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
             else:
                 print(warning("No model modules found. Make sure your models inherit from core.models.Model"))
     
-    # Import and collect Model classes
+    # ── Coletar models dos módulos core já carregados ──
     models = []
+    core_model_count = 0
+    
+    for mod_path, module in core_loaded.items():
+        for name in dir(module):
+            obj = getattr(module, name)
+            if (
+                isinstance(obj, type)
+                and issubclass(obj, Model)
+                and obj is not Model
+                and hasattr(obj, "__table__")
+            ):
+                if obj not in models:
+                    models.append(obj)
+                    core_model_count += 1
+    
+    if core_model_count:
+        print(info(f"Included {core_model_count} core-framework internal model(s)"))
+    
+    # ── Coletar models do projeto do usuário ──
     for module_path in modules_to_check:
+        # Skip se já foi carregado como core module
+        if module_path in core_loaded:
+            continue
         try:
             module = importlib.import_module(module_path)
             for name in dir(module):

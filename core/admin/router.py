@@ -36,12 +36,12 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
     """
     router = APIRouter(tags=["admin"])
     
-    # Registra API views
-    from core.admin.views import create_api_views
-    api_router = create_api_views(site)
-    router.include_router(api_router)
+    # ── IMPORTANTE: ordem de registro de routers ──
+    # Rotas literais PRIMEIRO, rotas com path params genéricos DEPOIS.
+    # FastAPI avalia rotas por ordem de registro — se /api/{app}/{model}
+    # vier antes de /api/ops/*, o "ops" é capturado como app_label. (Issue #10, #14)
     
-    # Registra Operations Center API
+    # 1. Operations Center API (rotas literais: /api/ops/*)
     ops_enabled = getattr(settings, "ops_enabled", True)
     if ops_enabled:
         from core.admin.ops_views import create_ops_api
@@ -51,6 +51,11 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         # Initialize log buffer
         from core.admin.log_handler import setup_log_buffer
         setup_log_buffer()
+    
+    # 2. API views genéricas (rotas com path params: /api/{app_label}/{model_name})
+    from core.admin.views import create_api_views
+    api_router = create_api_views(site)
+    router.include_router(api_router)
     
     # Template rendering
     _templates = _setup_templates(settings)
