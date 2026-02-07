@@ -180,6 +180,26 @@ class AssociationTable:
 # Relationship Helpers
 # =============================================================================
 
+def _resolve_target(target: str) -> str:
+    """
+    Resolve ambiguous model names to full module path (Issue #25).
+    
+    When target is "User" (no dots), there may be multiple User classes
+    in the registry (core.auth, project). Use configure_auth's user_model
+    to disambiguate.
+    """
+    if "." in target:
+        return target  # Already fully qualified
+    if target != "User":
+        return target
+    try:
+        from core.auth.models import get_user_model
+        User = get_user_model()
+        return f"{User.__module__}.{User.__name__}"
+    except Exception:
+        return target
+
+
 class Rel:
     """
     Relationship helper class providing Django-like relationship definitions.
@@ -323,8 +343,9 @@ class Rel:
         Note:
             Also known as: belongs_to, ForeignKey relationship
         """
+        resolved = _resolve_target(target)
         return relationship(
-            target,
+            resolved,
             back_populates=back_populates,
             backref=backref,
             lazy=lazy,
@@ -382,6 +403,7 @@ class Rel:
         Note:
             Also known as: has_many, reverse ForeignKey
         """
+        resolved = _resolve_target(target)
         kwargs: dict[str, Any] = {
             "back_populates": back_populates,
             "backref": backref,
@@ -394,7 +416,7 @@ class Rel:
         if order_by:
             kwargs["order_by"] = order_by
         
-        return relationship(target, **kwargs)
+        return relationship(resolved, **kwargs)
     
     # Alias for Rails users
     has_many = one_to_many
@@ -449,8 +471,9 @@ class Rel:
                     back_populates="profile",
                 )
         """
+        resolved = _resolve_target(target)
         return relationship(
-            target,
+            resolved,
             back_populates=back_populates,
             backref=backref,
             lazy=lazy,
@@ -531,6 +554,7 @@ class Rel:
             if cached_table is not None:
                 secondary = cached_table
         
+        resolved = _resolve_target(target)
         kwargs: dict[str, Any] = {
             "secondary": secondary,
             "back_populates": back_populates,
@@ -543,7 +567,7 @@ class Rel:
         if order_by:
             kwargs["order_by"] = order_by
         
-        return relationship(target, **kwargs)
+        return relationship(resolved, **kwargs)
     
     # -------------------------------------------------------------------------
     # Self-referential relationships
