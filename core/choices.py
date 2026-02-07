@@ -56,19 +56,25 @@ class ChoicesMeta(type(Enum)):
         # Create the enum class
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)
         
-        # Extract labels from members - the value is stored as tuple (value, label)
-        # but the enum's actual value should be just the first element
+        # Extract labels from members.
+        # When TextChoices/IntegerChoices __new__ runs first, it stores
+        # the explicit label in member._label_ (Issue #22 fix).
+        # For raw Enum values that are tuples, we extract from _value_.
         labels = {}
         
         for member in cls:
+            # Priority 1: label explicitly stored by __new__ (TextChoices/IntegerChoices)
+            stored_label = getattr(member, '_label_', None)
+            if stored_label is not None:
+                labels[member.value] = stored_label
+                continue
+            
+            # Priority 2: _value_ is still a tuple (plain Choices without custom __new__)
             value = member._value_
             if isinstance(value, (list, tuple)) and len(value) >= 2:
-                # Extract label from tuple
-                actual_value = value[0]
-                label = value[1]
-                labels[actual_value] = label
+                labels[value[0]] = value[1]
             else:
-                # Auto-generate label from name
+                # Fallback: auto-generate label from name
                 labels[value] = member.name.replace("_", " ").title()
         
         cls._labels = labels
@@ -206,9 +212,11 @@ class TextChoices(str, Choices):
     def __new__(cls, value, label=None):
         """Create enum member, extracting value from tuple if needed."""
         if isinstance(value, (list, tuple)):
+            label = value[1] if len(value) >= 2 else label
             value = value[0]
         obj = str.__new__(cls, value)
         obj._value_ = value
+        obj._label_ = label  # Store explicit label for ChoicesMeta (Issue #22)
         return obj
     
     def _generate_next_value_(name, start, count, last_values):
@@ -244,9 +252,11 @@ class IntegerChoices(int, Choices):
     def __new__(cls, value, label=None):
         """Create enum member, extracting value from tuple if needed."""
         if isinstance(value, (list, tuple)):
+            label = value[1] if len(value) >= 2 else label
             value = value[0]
         obj = int.__new__(cls, value)
         obj._value_ = value
+        obj._label_ = label  # Store explicit label for ChoicesMeta (Issue #22)
         return obj
     
     def _generate_next_value_(name, start, count, last_values):
