@@ -525,7 +525,8 @@ class Model(Base, metaclass=ModelMeta):
     """
     
     __abstract__ = True
-    
+    __table_args__ = {"extend_existing": True}
+
     # Manager será adicionado pela metaclass
     objects: ClassVar[Manager[Self]]
     

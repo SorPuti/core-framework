@@ -288,7 +288,14 @@ class Settings(BaseSettings):
         default="pbkdf2_sha256",
         description="Algoritmo de hash de senha (pbkdf2_sha256, argon2, bcrypt, scrypt)",
     )
-    
+    user_model: str | None = PydanticField(
+        default=None,
+        description=(
+            "Path do modelo User (ex: 'src.apps.users.models.User'). "
+            "Também via USER_MODEL env, core.toml [core] user_model, ou configure_auth."
+        ),
+    )
+
     # =========================================================================
     # Middleware (Django-style)
     # =========================================================================
@@ -892,16 +899,21 @@ def _import_settings_module(module_name: str) -> None:
 
 
 def _import_legacy_src_settings() -> bool:
-    try:
-        import_module("example.settings")
-        return True
-    except ModuleNotFoundError as exc:
-        logger.error(
-            "Legacy settings module 'src.settings' not found; "
-            "default core Settings will be used.",
-            exc_info=exc,
-        )
-        return False
+    """
+    Try conventional settings modules in order.
+    Projects typically use src.settings; core-framework example uses example.settings.
+    """
+    for module_name in ("src.settings", "example.settings"):
+        try:
+            import_module(module_name)
+            return True
+        except ModuleNotFoundError:
+            continue
+    logger.debug(
+        "No conventional settings module found (tried src.settings, example.settings). "
+        "Default core Settings will be used."
+    )
+    return False
 
 def _import_entrypoint_settings() -> bool:
     try:
@@ -922,6 +934,62 @@ def _import_entrypoint_settings() -> bool:
 
     return False
 
+def _auto_configure_auth_from_user_model() -> None:
+    """
+    Auto-register user_model via configure_auth if not yet configured.
+    Reads from: AuthConfig (already set), Settings.user_model, USER_MODEL env, TOML.
+    """
+    from core.auth.base import get_auth_config, configure_auth
+
+    if get_auth_config().user_model is not None:
+        return
+
+    user_model_path: str | None = None
+
+    # 1. Settings (AppSettings.user_model or env USER_MODEL)
+    try:
+        s = get_settings()
+        if hasattr(s, "user_model") and s.user_model:
+            user_model_path = s.user_model if isinstance(s.user_model, str) else None
+    except Exception:
+        pass
+
+    # 2. Env USER_MODEL
+    if not user_model_path:
+        user_model_path = os.environ.get("USER_MODEL")
+
+    # 3. TOML (core.toml [core] user_model or pyproject.toml [tool.core] user_model)
+    if not user_model_path:
+        try:
+            import tomllib
+            for candidate in [Path("core.toml"), Path("pyproject.toml")]:
+                if candidate.exists():
+                    with open(candidate, "rb") as f:
+                        data = tomllib.load(f)
+                    cfg = data.get("core", {}) or data.get("tool", {}).get("core", {}) or {}
+                    if cfg.get("user_model"):
+                        user_model_path = str(cfg["user_model"])
+                        break
+        except Exception:
+            pass
+
+    if not user_model_path:
+        return
+
+    try:
+        module_path, class_name = user_model_path.rsplit(".", 1)
+        module = import_module(module_path)
+        User = getattr(module, class_name)
+        configure_auth(user_model=User)
+        logger.debug("Auto-configured user_model from %s", user_model_path)
+    except Exception as exc:
+        logger.warning(
+            "Could not auto-configure user_model from %s: %s",
+            user_model_path,
+            exc,
+        )
+
+
 def get_settings() -> Settings:
     """Return the global Settings singleton after bootstrapping project settings."""
     global _settings
@@ -929,11 +997,16 @@ def get_settings() -> Settings:
     if _settings is None:
         bootstrap_project_settings()
 
-        env_files = _resolve_env_files()
-        _settings = _settings_class(_env_file=env_files)
+        # Settings mod may have called configure() during bootstrap; don't overwrite
+        if _settings is None:
+            env_files = _resolve_env_files()
+            _settings = _settings_class(_env_file=env_files)
 
         for callback in _on_settings_loaded:
             callback(_settings)
+
+        # Auto-register user_model from Settings/env/TOML if configure_auth wasn't called
+        _auto_configure_auth_from_user_model()
 
     return _settings
 
