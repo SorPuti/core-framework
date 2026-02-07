@@ -24,13 +24,28 @@ def _detect_enum(col: Any) -> list[dict[str, str]] | None:
     """
     Detecta se uma coluna é Enum e retorna as opções possíveis.
     
-    Suporta:
-    - SQLAlchemy Enum com enum_class (Python Enum/TextChoices)
-    - SQLAlchemy Enum com strings diretas
+    Suporta (em ordem de prioridade):
+    1. Field.choice(TextChoices) — metadata em col.info["choices_class"]
+    2. SQLAlchemy Enum com enum_class (Python Enum/TextChoices)
+    3. SQLAlchemy Enum com strings diretas
     
     Retorna lista de {"value": str, "label": str} ou None.
     """
     try:
+        choices_class = getattr(col, 'info', {}).get('choices_class')
+        if choices_class is not None:
+            return [
+                {
+                    "value": str(e.value),
+                    "label": (
+                        e.label if hasattr(e, 'label')
+                        else e.name.replace('_', ' ').title()
+                    ),
+                }
+                for e in choices_class
+            ]
+        
+        # ── 2. SQLAlchemy Enum nativo ──
         from sqlalchemy import Enum as SAEnum
         col_type = col.type
         if not isinstance(col_type, SAEnum):
@@ -49,7 +64,7 @@ def _detect_enum(col: Any) -> list[dict[str, str]] | None:
                 for e in col_type.enum_class
             ]
         
-        # String enum direto: Enum('active', 'inactive', ...)
+        # ── 3. String enum direto: Enum('active', 'inactive', ...) ──
         if hasattr(col_type, 'enums') and col_type.enums:
             return [
                 {"value": v, "label": v.replace('_', ' ').title()}
@@ -546,6 +561,20 @@ class ModelAdmin:
                 })
         except Exception:
             pass
+        
+        # ── Remove hash column when virtual password replaces it ──
+        if self.password_field:
+            columns = [
+                c for c in columns
+                if not c.get("_hidden_by_virtual")
+            ]
+        
+        # ── Also respect self.exclude in column info ──
+        if self.exclude:
+            columns = [
+                c for c in columns
+                if c["name"] not in self.exclude
+            ]
         
         # ── Inject virtual password field ──
         if self.password_field and self.model:

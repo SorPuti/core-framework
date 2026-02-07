@@ -404,7 +404,64 @@
         // Initialize Lucide icons
         document.addEventListener('DOMContentLoaded', () => {
             if (window.lucide) lucide.createIcons();
+            
+            // ── Restore sidebar state from sessionStorage ──
+            const sidebarNav = document.querySelector('.sidebar-scroll');
+            if (sidebarNav) {
+                // Restore scroll position
+                const savedScroll = sessionStorage.getItem('admin_sidebar_scroll');
+                if (savedScroll) {
+                    sidebarNav.scrollTop = parseInt(savedScroll, 10);
+                }
+                
+                // Save scroll position on every scroll
+                sidebarNav.addEventListener('scroll', () => {
+                    sessionStorage.setItem('admin_sidebar_scroll', String(sidebarNav.scrollTop));
+                }, { passive: true });
+            }
+            
+            // Restore sidebar search query
+            const savedSearch = sessionStorage.getItem('admin_sidebar_search');
+            if (savedSearch) {
+                // Alpine needs a tick to be ready
+                requestAnimationFrame(() => {
+                    const searchInput = document.querySelector('[x-model="sidebarSearch"]');
+                    if (searchInput) {
+                        searchInput.value = savedSearch;
+                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
+            }
+            
+            // Scroll the active sidebar item into view if no saved scroll
+            if (!sessionStorage.getItem('admin_sidebar_scroll')) {
+                requestAnimationFrame(() => {
+                    const activeItem = document.querySelector('.nav-active');
+                    if (activeItem && activeItem.closest('.sidebar-scroll')) {
+                        activeItem.scrollIntoView({ block: 'center', behavior: 'instant' });
+                    }
+                });
+            }
         });
+        
+        // Save sidebar search on input
+        document.addEventListener('input', (e) => {
+            if (e.target && e.target.matches('[x-model="sidebarSearch"]')) {
+                sessionStorage.setItem('admin_sidebar_search', e.target.value);
+            }
+        });
+        
+        // Save sidebar state before navigation
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a[href]');
+            if (link && !link.hasAttribute('hx-get')) {
+                const sidebarNav = document.querySelector('.sidebar-scroll');
+                if (sidebarNav) {
+                    sessionStorage.setItem('admin_sidebar_scroll', String(sidebarNav.scrollTop));
+                }
+            }
+        });
+        
         // Reinitialize after HTMX swaps
         document.addEventListener('htmx:afterSwap', () => {
             if (window.lucide) lucide.createIcons();
