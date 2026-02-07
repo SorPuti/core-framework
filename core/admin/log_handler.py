@@ -220,5 +220,22 @@ def get_log_buffer() -> AdminLogBuffer:
 
 
 def setup_log_buffer() -> AdminLogBuffer:
-    """Initialize the log buffer on admin startup."""
-    return get_log_buffer()
+    """
+    Initialize the log buffer on admin startup.
+    
+    Besides attaching to the root logger (done by get_log_buffer()),
+    we also attach directly to uvicorn loggers which have
+    propagate=False by default — otherwise HTTP access logs
+    never reach the admin log viewer.
+    """
+    buffer = get_log_buffer()
+
+    # Uvicorn sets propagate=False on its loggers, so access logs
+    # (GET /healthz, POST /api/...) never reach the root logger.
+    # Attach the buffer directly to capture them.  (Issue #17)
+    for logger_name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+        lgr = logging.getLogger(logger_name)
+        if buffer not in lgr.handlers:
+            lgr.addHandler(buffer)
+
+    return buffer
