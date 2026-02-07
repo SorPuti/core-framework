@@ -288,6 +288,7 @@ def load_config() -> dict[str, Any]:
         "app_module": settings.app_module,
         "host": settings.host,
         "port": settings.port,
+        "user_model": getattr(settings, "user_model", None),
     }
     
     # Retrocompatibilidade: merge TOML como fallback para campos
@@ -2723,6 +2724,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(info("Press CTRL+C to stop"))
     print()
     
+    # Bootstrap settings + models BEFORE uvicorn loads the app.
+    # Ensures configure_auth() and project settings load first, avoiding
+    # "Table already defined" from circular imports when app loads models.
+    from core.config import get_settings
+    get_settings()
+    
     try:
         import uvicorn
         uvicorn.run(
@@ -4012,6 +4019,11 @@ def cmd_collectpermissions(args: argparse.Namespace) -> int:
     import asyncio
 
     config = load_config()
+
+    root = _get_project_root()
+    root_str = str(root)
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
 
     if not check_database_connection(config["database_url"]):
         return 1
