@@ -2600,6 +2600,44 @@ def cmd_createsuperuser(args: argparse.Namespace) -> int:
     if not check_database_connection(config["database_url"]):
         return 1
 
+    # ── Check if migrations have been applied ──────────────────────────
+    async def check_tables_exist():
+        from core.models import init_database
+        from sqlalchemy import text
+        
+        engine = await init_database(config["database_url"])
+        
+        async with engine.connect() as conn:
+            # Check for users table (or equivalent)
+            db_url = config["database_url"]
+            if "sqlite" in db_url:
+                result = await conn.execute(
+                    text("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+                )
+            elif "postgresql" in db_url:
+                result = await conn.execute(
+                    text("SELECT tablename FROM pg_tables WHERE tablename='users'")
+                )
+            elif "mysql" in db_url:
+                result = await conn.execute(
+                    text("SHOW TABLES LIKE 'users'")
+                )
+            else:
+                # Assume table exists for unknown dialects
+                return True
+            
+            return result.fetchone() is not None
+    
+    if not asyncio.run(check_tables_exist()):
+        print()
+        print(error("Database tables not found."))
+        print()
+        print(info("Run migrations first:"))
+        print(f"  {bold('core makemigrations --name initial')}")
+        print(f"  {bold('core migrate')}")
+        print()
+        return 1
+
     print()
     print(bold("Create Superuser"))
     print("=" * 50)
