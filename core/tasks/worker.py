@@ -194,8 +194,8 @@ class TaskWorker:
             logger.error(f"Invalid task message: {e}")
             return
         
-        # Check ETA
-        if task_msg.eta and task_msg.eta > timezone.now():
+        # Check ETA (usa is_future para comparação segura naive/aware)
+        if task_msg.eta and timezone.is_future(task_msg.eta):
             # Re-queue for later
             # TODO: Implement delayed queue
             logger.debug(f"Task {task_msg.task_id} scheduled for {task_msg.eta}")

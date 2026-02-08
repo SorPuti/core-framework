@@ -78,10 +78,10 @@ class AdminSessionMiddleware(BaseHTTPMiddleware):
             if session is None:
                 return None
             
-            # Verifica expiração
+            # Verifica expiração (usa is_past para comparação segura naive/aware)
             from core.datetime import timezone
             if hasattr(session, "expires_at") and session.expires_at:
-                if session.expires_at < timezone.now():
+                if timezone.is_past(session.expires_at):
                     return None
             
             # Busca User

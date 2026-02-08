@@ -736,29 +736,85 @@ def diff_days(dt1: _datetime, dt2: _datetime) -> float:
 # Comparações
 # =============================================================================
 
+def normalize_for_comparison(dt: _datetime) -> _datetime:
+    """
+    Normaliza datetime para comparação segura.
+    
+    Se naive, assume UTC. Se aware, converte para UTC.
+    Isso garante comparações consistentes entre datetimes
+    naive e aware.
+    
+    Args:
+        dt: Datetime a normalizar
+        
+    Returns:
+        Datetime em UTC (aware)
+    """
+    if dt.tzinfo is None:
+        # Naive - assume UTC
+        return dt.replace(tzinfo=UTC)
+    else:
+        # Aware - converte para UTC
+        return dt.astimezone(UTC)
+
+
+def safe_compare(dt1: _datetime, dt2: _datetime) -> int:
+    """
+    Compara dois datetimes de forma segura, mesmo se um for naive e outro aware.
+    
+    Normaliza ambos para UTC antes de comparar.
+    
+    Args:
+        dt1: Primeiro datetime
+        dt2: Segundo datetime
+        
+    Returns:
+        -1 se dt1 < dt2, 0 se iguais, 1 se dt1 > dt2
+    """
+    norm1 = normalize_for_comparison(dt1)
+    norm2 = normalize_for_comparison(dt2)
+    
+    if norm1 < norm2:
+        return -1
+    elif norm1 > norm2:
+        return 1
+    return 0
+
+
 def is_past(dt: _datetime) -> bool:
-    """Verifica se datetime está no passado."""
-    return dt < now(dt.tzinfo)
+    """
+    Verifica se datetime está no passado.
+    
+    Funciona com datetimes naive ou aware.
+    """
+    return safe_compare(dt, now()) < 0
 
 
 def is_future(dt: _datetime) -> bool:
-    """Verifica se datetime está no futuro."""
-    return dt > now(dt.tzinfo)
+    """
+    Verifica se datetime está no futuro.
+    
+    Funciona com datetimes naive ou aware.
+    """
+    return safe_compare(dt, now()) > 0
 
 
 def is_today(dt: _datetime) -> bool:
     """Verifica se datetime é hoje."""
-    return dt.date() == today(dt.tzinfo)
+    dt_normalized = normalize_for_comparison(dt)
+    return dt_normalized.date() == today(UTC)
 
 
 def is_yesterday(dt: _datetime) -> bool:
     """Verifica se datetime é ontem."""
-    return dt.date() == today(dt.tzinfo) - timedelta(days=1)
+    dt_normalized = normalize_for_comparison(dt)
+    return dt_normalized.date() == today(UTC) - timedelta(days=1)
 
 
 def is_tomorrow(dt: _datetime) -> bool:
     """Verifica se datetime é amanhã."""
-    return dt.date() == today(dt.tzinfo) + timedelta(days=1)
+    dt_normalized = normalize_for_comparison(dt)
+    return dt_normalized.date() == today(UTC) + timedelta(days=1)
 
 
 # =============================================================================
@@ -946,18 +1002,59 @@ class timezone:
         """Verifica se datetime não tem timezone."""
         return is_naive(dt)
     
+    @staticmethod
+    def normalize(dt: _datetime) -> DateTime:
+        """
+        Normaliza datetime para UTC.
+        
+        Se naive, assume UTC. Se aware, converte para UTC.
+        Útil para comparações seguras.
+        
+        Args:
+            dt: Datetime a normalizar
+            
+        Returns:
+            DateTime em UTC (aware)
+        """
+        return DateTime.from_datetime(normalize_for_comparison(dt))
+    
+    @staticmethod
+    def safe_compare(dt1: _datetime, dt2: _datetime) -> int:
+        """
+        Compara dois datetimes de forma segura.
+        
+        Funciona mesmo se um for naive e outro aware.
+        Normaliza ambos para UTC antes de comparar.
+        
+        Args:
+            dt1: Primeiro datetime
+            dt2: Segundo datetime
+            
+        Returns:
+            -1 se dt1 < dt2, 0 se iguais, 1 se dt1 > dt2
+        """
+        return safe_compare(dt1, dt2)
+    
     # =========================================================================
     # Verificações
     # =========================================================================
     
     @staticmethod
     def is_past(dt: _datetime) -> bool:
-        """Verifica se datetime está no passado."""
+        """
+        Verifica se datetime está no passado.
+        
+        Funciona com datetimes naive ou aware.
+        """
         return is_past(dt)
     
     @staticmethod
     def is_future(dt: _datetime) -> bool:
-        """Verifica se datetime está no futuro."""
+        """
+        Verifica se datetime está no futuro.
+        
+        Funciona com datetimes naive ou aware.
+        """
         return is_future(dt)
     
     @staticmethod

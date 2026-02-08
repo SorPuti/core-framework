@@ -1,6 +1,6 @@
 [project]
 name = "core-framework"
-version = "0.17.11"
+version = "0.17.12"
 description = "Core Framework - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.10,<4.0"
 readme = "README.md"
@@ -128,3 +128,9 @@ ignore = [
 
 [tool.ruff.isort]
 known-first-party = ["core", "example"]
+
+[dependency-groups]
+dev = [
+    "build>=1.4.0",
+    "twine>=6.2.0",
+]
