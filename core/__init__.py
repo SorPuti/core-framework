@@ -254,6 +254,7 @@ from core.choices import (
     TextChoices,
     IntegerChoices,
     # Common choices
+    ThemeOptions,
     CommonStatus,
     PublishStatus,
     OrderStatus,
@@ -511,6 +512,7 @@ __all__ = [
     "Choices",
     "TextChoices",
     "IntegerChoices",
+    "ThemeOptions",
     "CommonStatus",
     "PublishStatus",
     "OrderStatus",

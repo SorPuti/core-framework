@@ -37,6 +37,7 @@ from core.models import Model, Field
 from core.fields import AdvancedField
 from core.auth.base import get_password_hasher, get_auth_config
 from core.datetime import timezone, DateTime
+from core.choices import ThemeOptions
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -581,7 +582,7 @@ class AbstractUser(Model):
     last_login: Mapped[DateTime | None] = Field.datetime(nullable=True)
     
     # Admin preferences
-    admin_theme: Mapped[str | None] = Field.string(max_length=10, nullable=True, default=None)
+    admin_theme: Mapped[ThemeOptions | None] = Field.choice(ThemeOptions, default=ThemeOptions.LIGHT)
     
     # Configuração
     USERNAME_FIELD: ClassVar[str] = "email"

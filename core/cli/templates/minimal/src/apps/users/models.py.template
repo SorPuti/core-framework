@@ -15,4 +15,4 @@ class User(AbstractUser, Model):
     """
     
     __tablename__ = "users"
-     __abstract__ = False  # Ensure this model is not abstract
+    __abstract__ = False  # Ensure this model is not abstract

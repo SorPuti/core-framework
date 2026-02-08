@@ -223,7 +223,6 @@ class TextChoices(str, Choices):
         """Auto-generate value from name (lowercase with underscores)."""
         return name.lower()
 
-
 class IntegerChoices(int, Choices):
     """
     Choices class for integer values.
@@ -269,11 +268,19 @@ class IntegerChoices(int, Choices):
 # =============================================================================
 
 class CommonStatus(TextChoices):
-    """Common status choices for general use."""
-    ACTIVE = "active", "Active"
-    INACTIVE = "inactive", "Inactive"
-    PENDING = "pending", "Pending"
-    SUSPENDED = "suspended", "Suspended"
+        """Common status choices for general use."""
+        ACTIVE = "active", "Active"
+        INACTIVE = "inactive", "Inactive"
+        PENDING = "pending", "Pending"
+        SUSPENDED = "suspended", "Suspended"
+
+
+class ThemeOptions(TextChoices):
+    """Theme options choices."""
+    LIGHT = "light", "Light"
+    DARK = "dark", "Dark"
+    SYSTEM = "system", "System"
+    CUSTOM = "custom", "Custom"
 
 
 class PublishStatus(TextChoices):

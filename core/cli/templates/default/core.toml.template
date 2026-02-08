@@ -13,7 +13,7 @@ migrations_dir = "migrations"
 app_label = "app"
 
 # Models discovery (optional - auto-discovered by default)
-# models_module = "src.apps.users.models"
+models_module = "src.apps.models"
 
 # Application
 app_module = "src.main:app"

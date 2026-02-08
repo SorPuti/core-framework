@@ -13,7 +13,7 @@ migrations_dir = "migrations"
 app_label = "app"
 
 # Models discovery (optional - auto-discovered by default)
-# models_module = "src.apps.tasks.models"
+models_module = "src.apps.models"
 
 # Workers module (for background tasks)
 workers_module = "src.apps.tasks.workers"
