@@ -2,6 +2,55 @@
 
 JWT-based authentication with login, register, and token refresh.
 
+## Auth Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as Auth API
+    participant DB as Database
+    
+    Note over C,DB: Login Flow
+    C->>A: POST /auth/login {email, password}
+    A->>DB: Find user by email
+    DB-->>A: User record
+    A->>A: Verify password hash
+    A-->>C: {access_token, refresh_token}
+    
+    Note over C,DB: Authenticated Request
+    C->>A: GET /posts (Bearer token)
+    A->>A: Verify JWT signature
+    A->>DB: Get user from token.sub
+    A-->>C: Response data
+    
+    Note over C,DB: Token Refresh
+    C->>A: POST /auth/refresh {refresh_token}
+    A->>A: Verify refresh token
+    A-->>C: {new_access_token}
+```
+
+## Token Lifecycle
+
+```mermaid
+flowchart LR
+    subgraph Tokens
+        AT[Access Token<br/>30 min TTL]
+        RT[Refresh Token<br/>7 days TTL]
+    end
+    
+    LOGIN[Login] --> AT
+    LOGIN --> RT
+    
+    AT --> |expired| REFRESH[Refresh]
+    RT --> REFRESH
+    REFRESH --> AT2[New Access Token]
+    
+    RT --> |expired| LOGIN2[Re-login]
+    
+    style AT fill:#fff3e0
+    style RT fill:#e3f2fd
+```
+
 ## Setup
 
 ### 1. Configure Settings

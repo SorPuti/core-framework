@@ -2,6 +2,63 @@
 
 Django-style framework for FastAPI. Models, ViewSets, Auth, Admin — batteries included.
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph "Client Layer"
+        WEB[Web/Mobile]
+        CLI[CLI Tools]
+    end
+    
+    subgraph "Core Framework"
+        subgraph "API Layer"
+            RT[AutoRouter]
+            VS[ViewSets]
+            AUTH[Auth/JWT]
+        end
+        
+        subgraph "Business Layer"
+            PERM[Permissions]
+            VALID[Validators]
+            SER[Serializers]
+        end
+        
+        subgraph "Data Layer"
+            MOD[Models]
+            QS[QuerySets]
+            REL[Relations]
+        end
+        
+        subgraph "Infrastructure"
+            MW[Middleware]
+            MSG[Messaging]
+            TASK[Workers]
+        end
+    end
+    
+    subgraph "Storage"
+        DB[(PostgreSQL)]
+        CACHE[(Redis)]
+        MQ[Kafka]
+    end
+    
+    WEB --> RT
+    CLI --> RT
+    RT --> VS --> PERM --> MOD --> DB
+    VS --> VALID
+    VS --> SER
+    MOD --> QS
+    MOD --> REL
+    MW --> AUTH
+    MSG --> MQ
+    TASK --> CACHE
+    
+    style VS fill:#e3f2fd
+    style MOD fill:#c8e6c9
+    style AUTH fill:#fff3e0
+```
+
 ## Install
 
 ```bash

@@ -2,6 +2,30 @@
 
 Auto-generate CRUD endpoints from models.
 
+## Request Lifecycle
+
+```mermaid
+flowchart TB
+    REQ[Request] --> PERM{Permission<br/>Check}
+    PERM -->|Denied| R403[403 Forbidden]
+    PERM -->|OK| ACTION{Action Type}
+    
+    ACTION -->|list| LIST[get_queryset → serialize_list]
+    ACTION -->|create| CREATE[validate → perform_create → serialize]
+    ACTION -->|retrieve| GET[get_object → serialize]
+    ACTION -->|update| UPDATE[get_object → validate → perform_update]
+    ACTION -->|destroy| DELETE[get_object → perform_destroy]
+    
+    LIST --> RESP[Response]
+    CREATE --> RESP
+    GET --> RESP
+    UPDATE --> RESP
+    DELETE --> RESP
+    
+    style PERM fill:#fff3e0
+    style RESP fill:#c8e6c9
+```
+
 ## Basic ViewSet
 
 ```python

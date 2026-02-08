@@ -2,6 +2,49 @@
 
 Access control for ViewSets and actions.
 
+## Permission Check Flow
+
+```mermaid
+flowchart TB
+    REQ[Request] --> HP{has_permission?}
+    HP -->|No| DENY1[403 Forbidden]
+    HP -->|Yes| DETAIL{Detail View?}
+    
+    DETAIL -->|No| ALLOW[✓ Allow]
+    DETAIL -->|Yes| HOP{has_object_permission?}
+    
+    HOP -->|No| DENY2[403 Forbidden]
+    HOP -->|Yes| ALLOW
+    
+    style HP fill:#fff3e0
+    style HOP fill:#fff3e0
+    style ALLOW fill:#c8e6c9
+    style DENY1 fill:#ffcdd2
+    style DENY2 fill:#ffcdd2
+```
+
+## Permission Hierarchy
+
+```mermaid
+flowchart LR
+    subgraph "Permission Classes"
+        AA[AllowAny]
+        IA[IsAuthenticated]
+        IAU[IsAdminUser]
+        ISU[IsSuperUser]
+    end
+    
+    AA --> |"No auth"| PUBLIC[Public Access]
+    IA --> |"Logged in"| USER[User Access]
+    IAU --> |"is_staff"| STAFF[Staff Access]
+    ISU --> |"is_superuser"| SUPER[Full Access]
+    
+    style AA fill:#e8f5e9
+    style IA fill:#e3f2fd
+    style IAU fill:#fff3e0
+    style ISU fill:#ffcdd2
+```
+
 ## Built-in Permissions
 
 | Class | Description |

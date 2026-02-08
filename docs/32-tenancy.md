@@ -2,6 +2,62 @@
 
 Data isolation for multi-tenant applications.
 
+## Data Isolation
+
+```mermaid
+flowchart TB
+    subgraph "Request"
+        REQ[Request + X-Tenant-ID]
+    end
+    
+    subgraph "Middleware"
+        TM[TenantMiddleware]
+        CTX[set_tenant_context]
+    end
+    
+    subgraph "Data Layer"
+        QS[QuerySet]
+        FILTER[Auto-filter by tenant_id]
+    end
+    
+    subgraph "Database"
+        T1[(Tenant A Data)]
+        T2[(Tenant B Data)]
+        T3[(Tenant C Data)]
+    end
+    
+    REQ --> TM
+    TM --> CTX
+    CTX --> QS
+    QS --> FILTER
+    FILTER --> |tenant_id=A| T1
+    
+    style TM fill:#fff3e0
+    style FILTER fill:#e3f2fd
+```
+
+## Tenant Resolution
+
+```mermaid
+flowchart LR
+    subgraph "Resolution Methods"
+        H[Header<br/>X-Tenant-ID]
+        S[Subdomain<br/>tenant.app.com]
+        P[Path<br/>/tenant/...]
+        T[Token<br/>JWT claim]
+    end
+    
+    H --> MW[TenantMiddleware]
+    S --> MW
+    P --> MW
+    T --> MW
+    
+    MW --> CTX[Tenant Context]
+    
+    style MW fill:#fff3e0
+    style CTX fill:#c8e6c9
+```
+
 ## Setup
 
 ```python

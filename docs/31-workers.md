@@ -2,6 +2,61 @@
 
 Background task processing.
 
+## Worker Flow
+
+```mermaid
+flowchart LR
+    subgraph "Producer"
+        API[API Request]
+        PUB[Publish Task]
+    end
+    
+    subgraph "Queue"
+        TOPIC[Kafka Topic]
+    end
+    
+    subgraph "Worker"
+        POLL[Poll Messages]
+        PROC[Process]
+        RETRY{Retry?}
+        DLQ[Dead Letter Queue]
+    end
+    
+    API --> PUB --> TOPIC
+    TOPIC --> POLL --> PROC
+    PROC --> |error| RETRY
+    RETRY --> |yes| TOPIC
+    RETRY --> |max retries| DLQ
+    PROC --> |success| COMMIT[Commit Offset]
+    
+    style TOPIC fill:#fff3e0
+    style DLQ fill:#ffcdd2
+    style COMMIT fill:#c8e6c9
+```
+
+## Retry Strategy
+
+```mermaid
+flowchart TB
+    subgraph "Retry with Backoff"
+        E1[Error 1] --> |wait 1s| R1[Retry 1]
+        R1 --> |error| E2[Error 2]
+        E2 --> |wait 2s| R2[Retry 2]
+        R2 --> |error| E3[Error 3]
+        E3 --> |wait 4s| R3[Retry 3]
+        R3 --> |error| DLQ[Dead Letter Queue]
+        
+        R1 --> |success| OK1[✓]
+        R2 --> |success| OK2[✓]
+        R3 --> |success| OK3[✓]
+    end
+    
+    style DLQ fill:#ffcdd2
+    style OK1 fill:#c8e6c9
+    style OK2 fill:#c8e6c9
+    style OK3 fill:#c8e6c9
+```
+
 ## Setup
 
 ```python
