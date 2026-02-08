@@ -1027,27 +1027,71 @@ def _find_display_field(model: Any) -> str:
     return "id"
 
 
+def _cast_pk_value(column: Any, value: Any) -> Any:
+    """
+    Converte um valor para o tipo nativo de uma coluna SQLAlchemy.
+    
+    Suporta:
+    - INTEGER / BIGINTEGER → int
+    - UUID → UUID object
+    - VARCHAR / TEXT / CHAR → str
+    
+    Args:
+        column: Coluna SQLAlchemy (ou objeto com .type)
+        value: Valor a converter
+        
+    Returns:
+        Valor convertido, ou None se conversão falhar
+    """
+    from uuid import UUID as UUIDType
+    import sqlalchemy as sa
+    
+    if value is None:
+        return None
+    
+    try:
+        # Obtém o tipo da coluna
+        col_type = column.type if hasattr(column, "type") else column
+        type_name = type(col_type).__name__.upper()
+        col_type_str = str(col_type).upper()
+        
+        # UUID
+        if "UUID" in type_name or "UUID" in col_type_str or isinstance(col_type, sa.Uuid):
+            if isinstance(value, UUIDType):
+                return value
+            return UUIDType(str(value))
+        
+        # Integer / BigInteger
+        if "INT" in type_name or "INT" in col_type_str or isinstance(col_type, (sa.Integer, sa.BigInteger)):
+            if isinstance(value, int):
+                return value
+            return int(value)
+        
+        # String / Text / VARCHAR
+        if any(t in type_name or t in col_type_str for t in ("STRING", "VARCHAR", "TEXT", "CHAR")):
+            return str(value)
+        
+        # Fallback: retorna como está
+        return value
+        
+    except (ValueError, TypeError):
+        return None
+
+
 def _cast_pk(model: Any, pk_field: str, pk_value: str) -> Any:
     """
     Converte PK string do URL para o tipo nativo da coluna.
     
     - INTEGER → int
-    - UUID → UUID (ou str se falhar)
+    - UUID → UUID
     - Outros → str (passthrough)
     """
     try:
         col = model.__table__.c[pk_field]
-        col_type = str(col.type).upper()
-        
-        if "INT" in col_type:
-            return int(pk_value)
-        elif "UUID" in col_type:
-            from uuid import UUID
-            return UUID(pk_value)
-    except (ValueError, KeyError, TypeError):
-        pass
-    
-    return pk_value
+        result = _cast_pk_value(col, pk_value)
+        return result if result is not None else pk_value
+    except (KeyError, AttributeError):
+        return pk_value
 
 
 async def _apply_password(obj: Any, plain_password: str) -> None:
@@ -1156,17 +1200,12 @@ async def _apply_m2m_data(
             # No new associations to add
             continue
         
-        # Step 2: Cast IDs to the right type
+        # Step 2: Cast IDs to the right type (supports INT, UUID, etc.)
         typed_ids = []
         for id_val in ids:
-            try:
-                col_type = str(target_pk_col.type).upper()
-                if "INT" in col_type:
-                    typed_ids.append(int(id_val))
-                else:
-                    typed_ids.append(id_val)
-            except (ValueError, TypeError):
-                typed_ids.append(id_val)
+            typed_id = _cast_pk_value(target_pk_col, id_val)
+            if typed_id is not None:
+                typed_ids.append(typed_id)
         
         # Step 3: Verify target IDs exist (optional but safer)
         verify_stmt = select(target_pk_col).where(target_pk_col.in_(typed_ids))
