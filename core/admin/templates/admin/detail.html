@@ -559,15 +559,24 @@
                                                                     <template x-for="(group, groupName) in groupedOptions" :key="groupName">
                                                                         <div class="rounded-lg overflow-hidden">
                                                                             <!-- Group Header -->
-                                                                            <button type="button" 
-                                                                                    @click="toggleGroup(groupName)"
-                                                                                    class="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
-                                                                                <svg class="w-3.5 h-3.5 transition-transform" :class="{ 'rotate-90': expandedGroups[groupName] }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-                                                                                <span class="uppercase tracking-wide" x-text="groupName"></span>
-                                                                                <span class="ml-auto text-[10px] font-normal">
-                                                                                    <span x-text="getGroupSelectedCount(groupName)" class="text-primary-500"></span>/<span x-text="group.length"></span>
-                                                                                </span>
-                                                                            </button>
+                                                                            <div class="flex items-center gap-1">
+                                                                                <!-- Group checkbox (select/deselect all in group) -->
+                                                                                <input type="checkbox"
+                                                                                       :checked="isGroupFullySelected(groupName)"
+                                                                                       :indeterminate="isGroupPartiallySelected(groupName)"
+                                                                                       @change="toggleAllGroup(groupName)"
+                                                                                       @click.stop
+                                                                                       class="rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 ml-2">
+                                                                                <button type="button" 
+                                                                                        @click="toggleGroup(groupName)"
+                                                                                        class="flex-1 flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
+                                                                                    <svg class="w-3.5 h-3.5 transition-transform" :class="{ 'rotate-90': expandedGroups[groupName] }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                                                                                    <span class="uppercase tracking-wide" x-text="groupName"></span>
+                                                                                    <span class="ml-auto text-[10px] font-normal">
+                                                                                        <span x-text="getGroupSelectedCount(groupName)" class="text-primary-500"></span>/<span x-text="group.length"></span>
+                                                                                    </span>
+                                                                                </button>
+                                                                            </div>
                                                                             
                                                                             <!-- Group Items -->
                                                                             <div x-show="expandedGroups[groupName]" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="ml-4 space-y-0.5 mt-0.5">
@@ -1343,6 +1352,65 @@ function m2mField(field) {
                     }
                 }
             } catch(e) {}
+        },
+        
+        selectAllGroup(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        let current = Array.isArray(data.formData[field.name]) ? [...data.formData[field.name]] : [];
+                        for (const opt of group) {
+                            if (!current.some(v => String(v) === String(opt.id))) {
+                                current.push(opt.id);
+                            }
+                        }
+                        data.formData[field.name] = current;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        deselectAllGroup(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            const groupIds = group.map(o => String(o.id));
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        let current = Array.isArray(data.formData[field.name]) ? [...data.formData[field.name]] : [];
+                        current = current.filter(v => !groupIds.includes(String(v)));
+                        data.formData[field.name] = current;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        toggleAllGroup(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            const selectedCount = this.getGroupSelectedCount(groupName);
+            if (selectedCount === group.length) {
+                this.deselectAllGroup(groupName);
+            } else {
+                this.selectAllGroup(groupName);
+            }
+        },
+        
+        isGroupFullySelected(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            if (group.length === 0) return false;
+            return this.getGroupSelectedCount(groupName) === group.length;
+        },
+        
+        isGroupPartiallySelected(groupName) {
+            const count = this.getGroupSelectedCount(groupName);
+            const group = this.groupedOptions[groupName] || [];
+            return count > 0 && count < group.length;
         },
         
         clearAll() {
