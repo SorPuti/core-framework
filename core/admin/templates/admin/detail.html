@@ -559,14 +559,14 @@
                                                                     <template x-for="(group, groupName) in groupedOptions" :key="groupName">
                                                                         <div class="rounded-lg overflow-hidden">
                                                                             <!-- Group Header -->
-                                                                            <div class="flex items-center gap-1">
+                                                                            <div class="flex items-center gap-1.5">
                                                                                 <!-- Group checkbox (select/deselect all in group) -->
                                                                                 <input type="checkbox"
                                                                                        :checked="isGroupFullySelected(groupName)"
-                                                                                       :indeterminate="isGroupPartiallySelected(groupName)"
+                                                                                       x-effect="$el.indeterminate = isGroupPartiallySelected(groupName)"
                                                                                        @change="toggleAllGroup(groupName)"
                                                                                        @click.stop
-                                                                                       class="rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 ml-2">
+                                                                                       class="ml-2 w-4 h-4 rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer">
                                                                                 <button type="button" 
                                                                                         @click="toggleGroup(groupName)"
                                                                                         class="flex-1 flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
