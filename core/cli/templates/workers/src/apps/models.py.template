@@ -1,0 +1,4 @@
+"""
+Model imports - Barrel file for migrations.
+"""
+from src.apps.tasks.models import Task  # noqa

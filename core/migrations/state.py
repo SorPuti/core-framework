@@ -503,17 +503,8 @@ def _table_to_state(table) -> TableState | None:
 INTERNAL_TABLES = {
     # Sistema de migrações
     "_core_migrations",
-    
     # SQLite interno
     "sqlite_sequence",
-    
-    # Sistema de autenticação (quando usando auth nativo)
-    "auth_users",
-    "auth_groups", 
-    "auth_permissions",
-    "auth_users_groups",
-    "auth_users_permissions",
-    "auth_group_permissions",
 }
 
 # Tabelas que NUNCA podem ser dropadas via migrate

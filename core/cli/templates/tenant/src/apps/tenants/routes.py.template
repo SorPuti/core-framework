@@ -1,0 +1,8 @@
+"""
+Tenant routes. Docs: docs/23-routing.md
+"""
+from core import AutoRouter
+from .views import TenantViewSet
+
+router = AutoRouter(prefix="/tenants", tags=["Tenants"])
+router.register("", TenantViewSet)

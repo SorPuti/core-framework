@@ -1,0 +1,21 @@
+[project]
+name = "{{project_name}}"
+version = "0.1.0"
+description = "Event-driven API with Kafka, PostgreSQL, and Redis"
+requires-python = ">={{python_version}}"
+dependencies = [
+    "core-framework",
+    "aiokafka",
+    "redis",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,6 +1,8 @@
 # Settings
 
-O sistema de configuracao e baseado em Pydantic Settings. Variaveis de ambiente sao carregadas automaticamente e validadas com tipagem forte.
+O sistema de configuracao e baseado em Pydantic Settings com fonte unica de verdade.
+
+**IMPORTANTE:** Toda configuracao vem de `src/settings.py`. Nao ha fallbacks, auto-discovery ou multiplas fontes.
 
 ## Estrutura de Arquivos
 
@@ -8,18 +10,20 @@ O sistema de configuracao e baseado em Pydantic Settings. Variaveis de ambiente 
 /my-project
   /.env                    # Variaveis de ambiente - NAO commitar
   /src
-    /api
-      config.py            # Classe de configuracao
+    settings.py            # UNICA fonte de configuracao (obrigatorio)
+    __init__.py
+  /app
     main.py
+    models.py
 ```
 
-## Criar config.py
+## Criar src/settings.py (OBRIGATORIO)
 
-A classe `AppSettings` herda de `Settings` e define configuracoes especificas da aplicacao.
+O arquivo `src/settings.py` e a fonte unica de configuracao. O framework o carrega automaticamente no bootstrap.
 
 ```python
-# src/api/config.py
-from core import Settings
+# src/settings.py
+from core.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     """
@@ -28,7 +32,7 @@ class AppSettings(Settings):
     A classe base Settings ja fornece campos comuns:
     
     Aplicacao:
-    - app_name, app_version, environment, debug, secret_key
+    - app_name, app_version, environment, debug, secret_key, auto_create_tables
     
     Banco de dados:
     - database_url, database_echo, database_pool_size,
@@ -42,7 +46,7 @@ class AppSettings(Settings):
     
     Auth:
     - auth_secret_key, auth_algorithm, auth_access_token_expire_minutes,
-      auth_refresh_token_expire_days, auth_password_hasher
+      auth_refresh_token_expire_days, auth_password_hasher, user_model
     
     DateTime:
     - timezone, use_tz, datetime_format, date_format, time_format
@@ -52,31 +56,56 @@ class AppSettings(Settings):
     
     Logging:
     - log_level, log_format, log_json
+    
+    Kafka/Messaging:
+    - kafka_enabled, kafka_backend, kafka_bootstrap_servers, etc.
+    
+    Tasks:
+    - task_enabled, task_default_queue, task_worker_concurrency, etc.
     """
     
+    # =========================================================================
+    # Sobrescrever configuracoes do framework
+    # =========================================================================
+    
+    app_name: str = "Minha Aplicacao"
+    app_version: str = "1.0.0"
+    
+    # =========================================================================
+    # Auth (obrigatorio se usar autenticacao)
+    # =========================================================================
+    
+    user_model: str = "app.models.User"  # Path do modelo User
+    
+    # =========================================================================
     # Campos customizados da sua aplicacao
-    # Tipo define validacao automatica
-    stripe_api_key: str = ""           # String vazia como padrao
+    # =========================================================================
+    
+    stripe_api_key: str = PydanticField(
+        default="",
+        description="Chave da API Stripe"
+    )
     stripe_webhook_secret: str = ""
     sendgrid_api_key: str = ""
     aws_access_key: str = ""
     aws_secret_key: str = ""
     aws_bucket_name: str = "my-bucket"
-    max_upload_size_mb: int = 10       # Inteiro com padrao
-    
-    # Campos de infraestrutura
-    redis_url: str = "redis://localhost:6379/0"
-    kafka_bootstrap_servers: str = "localhost:9092"
+    max_upload_size_mb: int = 10
 
-# Instancia singleton - importe esta variavel em outros modulos
-# A instancia e criada uma vez e reutilizada
-settings = AppSettings()
+# =========================================================================
+# Registrar settings globalmente (OBRIGATORIO)
+# =========================================================================
+
+# Esta linha registra as configuracoes no framework
+settings = configure(settings_class=AppSettings)
 ```
 
-**Comportamento de carregamento**: Ao instanciar `AppSettings()`, o Pydantic automaticamente:
-1. Le o arquivo `.env` da raiz do projeto
-2. Le variaveis de ambiente do sistema
-3. Valida tipos e aplica valores padrao
+**Comportamento de carregamento**: 
+
+1. Framework importa `src.settings` no bootstrap
+2. Pydantic le `.env` e `.env.{ENVIRONMENT}` **uma vez**
+3. `configure()` registra o singleton globalmente
+4. `get_settings()` retorna esta instancia em qualquer lugar do codigo
 
 ## Criar .env
 
@@ -128,12 +157,16 @@ KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 
 ```python
 # Em qualquer arquivo do projeto
-from src.api.config import settings
+from core.config import get_settings
+
+# Obtem singleton registrado em src/settings.py
+settings = get_settings()
 
 # Acesso direto aos valores
 print(settings.app_name)
 print(settings.database_url)
 print(settings.stripe_api_key)
+print(settings.user_model)
 
 # Propriedades auxiliares disponiveis
 if settings.is_development:
@@ -223,42 +256,54 @@ class AppSettings(Settings):
 
 ## Multiplos Ambientes
 
-Para ambientes diferentes (dev, staging, prod), use arquivos .env separados.
+O framework carrega automaticamente arquivos `.env` baseado na variavel `ENVIRONMENT`:
 
 ```
-/.env                  # Desenvolvimento (local) - padrao
-/.env.staging          # Staging
-/.env.production       # Producao
+/.env                  # Base (sempre carregado)
+/.env.development      # Sobrescreve em development
+/.env.staging          # Sobrescreve em staging
+/.env.production       # Sobrescreve em production
+/.env.testing          # Sobrescreve em testing
 ```
 
-Configure qual arquivo carregar baseado em variavel de ambiente:
+**Precedencia (maior para menor):**
+1. Variaveis de ambiente do OS
+2. `.env.{ENVIRONMENT}`
+3. `.env`
+4. Defaults da classe Settings
+
+**Nao e necessario configurar** qual arquivo carregar - o framework faz isso automaticamente.
 
 ```python
-# config.py
-import os
-from pydantic_settings import SettingsConfigDict
-
-# ENVIRONMENT deve ser definida no sistema, nao no .env
-# Ex: export ENVIRONMENT=production
-env_file = f".env.{os.getenv('ENVIRONMENT', 'development')}"
+# src/settings.py - sem configuracao adicional necessaria
+from core.config import Settings, configure
 
 class AppSettings(Settings):
-    model_config = SettingsConfigDict(
-        env_file=env_file,
-        env_file_encoding="utf-8",
-    )
+    user_model: str = "app.models.User"
+
+settings = configure(settings_class=AppSettings)
 ```
 
-**Em Docker/Kubernetes**: Defina `ENVIRONMENT` como variavel de ambiente do container, nao no .env.
+**Em Docker/Kubernetes**: Defina `ENVIRONMENT` como variavel de ambiente do container:
+
+```yaml
+# deployment.yaml
+env:
+  - name: ENVIRONMENT
+    value: "production"
+```
 
 ## Precedencia de Valores
 
 Ordem de precedencia (maior para menor):
-1. Variaveis de ambiente do sistema
-2. Arquivo .env
-3. Valores padrao na classe
+1. Variaveis de ambiente do sistema (OS env vars)
+2. Arquivo `.env.{ENVIRONMENT}` (ex: `.env.production`)
+3. Arquivo `.env` (base)
+4. Valores padrao na classe Settings
 
-Isso permite sobrescrever valores do .env em runtime sem modificar arquivos.
+**Importante:** A leitura ocorre **uma vez** no bootstrap via Pydantic. Nao ha leitura de .env em runtime.
+
+Isso permite sobrescrever valores do .env via OS env vars sem modificar arquivos.
 
 ## Enterprise Features (v0.4.0+)
 
@@ -420,19 +465,33 @@ KAFKA_SASL_USERNAME=api-key
 KAFKA_SASL_PASSWORD=api-secret
 ```
 
-### Configuração via código (ANTES de iniciar a app)
+### Configuração via src/settings.py
 
 ```python
-from core import configure
+# src/settings.py
+from core.config import Settings, configure
 
-# Configura TUDO em um lugar só
-configure(
-    kafka_enabled=True,
-    kafka_backend="confluent",
-    kafka_bootstrap_servers="kafka:9092",
-    kafka_fire_and_forget=True,
-    database_url="postgresql+asyncpg://localhost/myapp",
-)
+class AppSettings(Settings):
+    # Configure tudo aqui
+    kafka_enabled: bool = True
+    kafka_backend: str = "confluent"
+    kafka_bootstrap_servers: str = "kafka:9092"
+    kafka_fire_and_forget: bool = True
+    database_url: str = "postgresql+asyncpg://localhost/myapp"
+    user_model: str = "app.models.User"
+
+settings = configure(settings_class=AppSettings)
+```
+
+**Ou via .env** (recomendado):
+
+```env
+# .env
+KAFKA_ENABLED=true
+KAFKA_BACKEND=confluent
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+KAFKA_FIRE_AND_FORGET=true
+DATABASE_URL=postgresql+asyncpg://localhost/myapp
 ```
 
 ### Tabela de Configurações Kafka

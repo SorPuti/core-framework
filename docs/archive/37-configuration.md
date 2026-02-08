@@ -2,11 +2,21 @@
 
 ## Overview
 
-The Core Framework uses a **single source of truth** for all configuration: `core.config.Settings`.
+The Core Framework uses a **single source of truth** for all configuration: `src/settings.py`.
 
-All settings — application, database, auth, messaging, tasks, CLI — live in one centralized class. There are no separate config files per module.
+All settings — application, database, auth, messaging, tasks, CLI — are defined in one centralized file. There are no separate config files, no auto-discovery, no fallbacks.
 
-## Configuration Precedence
+## Architecture
+
+### Single Source of Truth
+
+```
+{project_root}/src/settings.py  ← ÚNICA fonte de configuração
+```
+
+This file is loaded **once** during bootstrap. All runtime configuration flows from here.
+
+### Configuration Precedence
 
 From highest to lowest priority:
 
@@ -15,16 +25,21 @@ From highest to lowest priority:
 3. **`.env`** — base configuration
 4. **`Settings` class defaults** — built-in framework defaults
 
+**Important:** `.env` files are read **once** during bootstrap via Pydantic Settings, not in runtime.
+
 ## Quick Start
 
-### 1. Create a settings file
+### 1. Create src/settings.py
 
 ```python
-# myapp/settings.py
-from core.config import Settings, PydanticField
+# src/settings.py (REQUIRED)
+from core.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     """All your app configuration in ONE place."""
+    
+    # Auth configuration (required if using auth)
+    user_model: str = "app.models.User"
     
     # Custom fields
     stripe_api_key: str = PydanticField(default="", description="Stripe API key")
@@ -33,7 +48,8 @@ class AppSettings(Settings):
     # Override framework defaults
     # (or set via .env — env vars always win)
 
-settings = AppSettings()
+# Register settings globally (REQUIRED)
+settings = configure(settings_class=AppSettings)
 ```
 
 ### 2. Create `.env` files
@@ -64,14 +80,12 @@ RELOAD=false
 ### 3. Use in your app
 
 ```python
-# myapp/app.py
+# app/main.py
 from core.app import CoreApp
-from myapp.settings import settings
+from core.config import get_settings
 
-app = CoreApp(
-    title="My API",
-    settings=settings,
-)
+# Settings are loaded automatically from src.settings
+app = CoreApp(title="My API")
 ```
 
 ### 4. Access settings anywhere
@@ -79,9 +93,10 @@ app = CoreApp(
 ```python
 from core.config import get_settings
 
-settings = get_settings()
+settings = get_settings()  # Returns singleton from src/settings.py
 print(settings.database_url)
 print(settings.kafka_backend)
+print(settings.user_model)
 ```
 
 ## Environment-Specific Files
@@ -188,56 +203,79 @@ The `ENVIRONMENT` variable is read from the OS environment first, defaulting to 
 |---------|---------|-------------|
 | `HEALTH_CHECK_ENABLED` | `true` | Enable /healthz and /readyz |
 
-## Programmatic Configuration
+## Bootstrap Process
 
-For cases where `.env` files are not enough:
+The framework loads settings in this order:
+
+1. Reads `ENVIRONMENT` from OS env vars (default: `"development"`)
+2. Determines which `.env` files to load (`.env` + `.env.{ENVIRONMENT}`)
+3. Imports `src.settings` module
+4. `src/settings.py` calls `configure(settings_class=AppSettings)`
+5. Pydantic reads `.env` files **once** and creates Settings instance
+6. Settings singleton is registered globally
+
+**Fail-fast behavior:**
+- Missing `src/settings.py` → **RuntimeError** with clear instructions
+- Invalid `user_model` path → **ImportError** with exact module/class issue
+- Missing required fields → **ValidationError** from Pydantic
+
+## Configuration Overrides
+
+If you need programmatic overrides (rare), use the `configure()` overrides parameter:
 
 ```python
-from core.config import configure, Settings
+# src/settings.py
+from core.config import Settings, configure
 
-# Option 1: Override values
-configure(
-    kafka_backend="confluent",
-    database_url="postgresql+asyncpg://localhost/myapp",
+class AppSettings(Settings):
+    user_model: str = "app.models.User"
+
+# Override specific values (rarely needed)
+settings = configure(
+    settings_class=AppSettings,
+    kafka_backend="confluent",  # Override just this field
 )
-
-# Option 2: Custom settings class
-class MySettings(Settings):
-    stripe_api_key: str = ""
-
-configure(settings_class=MySettings)
-
-# Option 3: Both
-configure(settings_class=MySettings, kafka_backend="confluent")
 ```
 
-**Important:** Call `configure()` BEFORE creating `CoreApp` or importing components that use `get_settings()`.
-
-## Post-Load Hooks
-
-Register callbacks executed after Settings is loaded:
-
-```python
-from core.config import on_settings_loaded
-
-@on_settings_loaded
-def setup_logging(settings):
-    import logging
-    logging.basicConfig(level=settings.log_level)
-
-@on_settings_loaded
-def validate_config(settings):
-    if settings.kafka_enabled and not settings.kafka_bootstrap_servers:
-        raise ValueError("KAFKA_BOOTSTRAP_SERVERS required when KAFKA_ENABLED=true")
-```
+**Warning:** Overrides should be avoided. Use `.env` files or OS env vars instead.
 
 ## CLI Integration
 
-The CLI reads configuration from the same Settings. No more separate `core.toml` configuration needed (though it's still supported as a fallback).
+The CLI reads configuration from `src/settings.py` automatically.
 
 ```bash
-# These are all equivalent:
-DATABASE_URL=... core migrate
-# or set in .env
+# Set via .env or OS env vars
+DATABASE_URL=postgresql://... core migrate
+
+# Or just use .env file
 core migrate
 ```
+
+## Authentication Configuration
+
+The `user_model` field in settings is used to configure auth:
+
+```python
+# src/settings.py
+class AppSettings(Settings):
+    user_model: str = "app.models.User"  # Path to your User model
+    
+settings = configure(settings_class=AppSettings)
+```
+
+The framework calls `configure_auth(user_model=User)` automatically during bootstrap based on this setting.
+
+**No fallbacks:** There are no TOML files, no environment variable alternatives. Define `user_model` in `src/settings.py` or don't use auth.
+
+## Removed Features
+
+The following features were removed in this refactoring for simplicity:
+
+- ❌ `on_settings_loaded()` callbacks
+- ❌ `core.toml` / `pyproject.toml` fallback configuration
+- ❌ `USER_MODEL` environment variable auto-detection
+- ❌ Auto-discovery of settings modules
+- ❌ Entry points for settings
+- ❌ Multiple bootstrap paths
+
+**One way to do it:** `src/settings.py` with `configure()`. That's it.

@@ -1,0 +1,24 @@
+"""
+Event views. Docs: docs/04-viewsets.md
+"""
+from core import ModelViewSet, action
+from core.permissions import AllowAny
+from fastapi import Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .models import Event
+from .producers import publish_user_created
+
+
+class EventViewSet(ModelViewSet):
+    """Event log endpoints."""
+    
+    model = Event
+    permission_classes = [AllowAny]
+    tags = ["Events"]
+    
+    @action(methods=["POST"], detail=False)
+    async def publish_test(self, request: Request, db: AsyncSession, **kwargs):
+        """Publish a test event to Kafka."""
+        await publish_user_created(user_id=1, email="test@example.com")
+        return {"message": "Event published to Kafka"}

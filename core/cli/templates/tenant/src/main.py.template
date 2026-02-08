@@ -1,0 +1,18 @@
+"""
+App entry point - Multi-tenant.
+Docs: docs/32-tenancy.md
+"""
+from core import CoreApp, AutoRouter
+from src.apps.tenants.routes import router as tenants_router
+from src.apps.items.routes import router as items_router
+
+# API router
+api = AutoRouter(prefix="/api/v1")
+api.include_router(tenants_router)
+api.include_router(items_router)
+
+# App instance with tenant middleware
+app = CoreApp(
+    routers=[api],
+    middleware=["tenant"],  # Extracts tenant_id from header
+)

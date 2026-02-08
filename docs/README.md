@@ -1,114 +1,149 @@
-# Core Framework Documentation
+# Core Framework
 
-## Tutorials (Progressivo)
+Django-style framework for FastAPI. Models, ViewSets, Auth, Admin — batteries included.
 
-| Guide | Descricao |
-|-------|-----------|
-| [01 Quickstart](01-quickstart.md) | Primeira API em 5 minutos |
-| [02 ViewSets](02-viewsets.md) | CRUD, actions, hooks |
-| [03 Authentication](03-authentication.md) | JWT, tokens, login |
-| [04 Messaging](04-messaging.md) | Producers, consumers, @event |
-| [05 Multi-Service](05-multi-service.md) | Duas APIs com messaging |
-| [06 Tasks](06-tasks.md) | Background jobs, scheduling |
-| [07 Deployment](07-deployment.md) | Docker, Kubernetes, PM2 |
-| [08 Complete Example](08-complete-example.md) | E-commerce completo |
-
-## Reference (Detalhado)
-
-| Guide | Descricao |
-|-------|-----------|
-| [09 Settings](09-settings.md) | Configuracao, .env, campos customizados |
-| [10 Migrations](10-migrations.md) | Criar, aplicar, SQL customizado |
-| [11 Permissions](11-permissions.md) | Permissoes built-in e customizadas |
-| [12 Auth Backends](12-auth-backends.md) | Backends customizados, OAuth |
-| [13 Validators](13-validators.md) | Validacao de campos e unicidade |
-| [14 QuerySets](14-querysets.md) | Queries fluentes, lookups, agregacoes, Manager + QuerySet completo |
-| [15 Routing](15-routing.md) | AutoRouter, rotas manuais |
-| [16 Serializers](16-serializers.md) | Input/Output schemas, migracao de BaseModel, OpenAPI/Postman |
-| [17 DateTime](17-datetime.md) | Timezones, formatacao |
-| [18 Dependencies](18-dependencies.md) | Dependency injection, get_db, get_current_user |
-| [19 Views](19-views.md) | APIView, ViewSet, ModelViewSet, ReadOnlyModelViewSet |
-
-## Enterprise Features (v0.4.0+)
-
-| Guide | Descricao |
-|-------|-----------|
-| [20 Advanced Fields](20-fields.md) | UUID7 time-sortable, JSON, campos otimizados |
-| [21 Multi-Tenancy](21-tenancy.md) | Isolamento por workspace/organization |
-| [22 Read/Write Replicas](22-replicas.md) | Separacao de leitura e escrita |
-| [23 Soft Delete](23-soft-delete.md) | Exclusao logica com restauracao |
-| [24 Relations](24-relations.md) | Helpers para relacionamentos SQLAlchemy |
-| [25 Exceptions](25-exceptions.md) | Sistema centralizado de exceções |
-| [26 Choices](26-choices.md) | TextChoices e IntegerChoices (Django-style) |
-
-## Messaging (v0.11.0+)
-
-| Guide | Descricao |
-|-------|-----------|
-| [27 Workers](27-workers.md) | Sistema de workers estilo Celery |
-| [28 Avro](28-avro.md) | Auto-geração de schemas Avro |
-| [29 Topics](29-topics.md) | Definição de tópicos como classes |
-
-## v0.12.2 - Correções e Middleware
-
-| Guide | Descricao |
-|-------|-----------|
-| [30 Changelog 0.12.2](30-changelog-0.12.2.md) | Bugs corrigidos e novas features |
-| [31 Middleware](31-middleware.md) | Sistema Django-style de middlewares |
-| [32 Migration Guide](32-migration-guide-0.12.2.md) | Como migrar de v0.12.1 |
-
-## Troubleshooting
-
-| Guide | Descricao |
-|-------|-----------|
-| [99 FAQ & Troubleshooting](99-faq-troubleshooting.md) | Erros comuns e soluções |
-
-## API Reference
-
-| Document | Descricao |
-|----------|-----------|
-| [GUIDE.md](GUIDE.md) | Referencia completa da API |
-
-## Quick Start
+## Install
 
 ```bash
-# Instalar CLI (global)
 pipx install core-framework
-# ou: pip install core-framework --user
-
-# Criar projeto
-core init my-api
-cd my-api
-
-# Configurar banco
-core makemigrations --name initial
-core migrate
-
-# Rodar
+core init my-api && cd my-api
 core run
-
-# Deploy
-core docker generate
-docker compose up -d
+# → http://localhost:8000/docs
 ```
 
-## Estrutura de Projeto
+## Documentation
+
+### Getting Started
+
+| Doc | Description |
+|-----|-------------|
+| [Quickstart](01-quickstart.md) | First API in 5 minutes |
+| [Settings](02-settings.md) | Configuration system |
+| [Models](03-models.md) | Database models |
+| [ViewSets](04-viewsets.md) | CRUD endpoints |
+
+### Authentication
+
+| Doc | Description |
+|-----|-------------|
+| [Auth](05-auth.md) | JWT authentication |
+| [Auth Backends](06-auth-backends.md) | Custom auth backends |
+| [CLI](07-cli.md) | Command reference |
+
+### Data Layer
+
+| Doc | Description |
+|-----|-------------|
+| [Permissions](09-permissions.md) | Access control |
+| [Fields](10-fields.md) | All field types |
+| [Relations](11-relations.md) | Relationships |
+| [QuerySets](12-querysets.md) | Django-style queries |
+| [Serializers](13-serializers.md) | Input/Output schemas |
+| [Validators](14-validators.md) | Data validation |
+
+### Infrastructure
+
+| Doc | Description |
+|-----|-------------|
+| [Middleware](20-middleware.md) | Request/response hooks |
+| [Database Replicas](21-replicas.md) | Read/write split |
+| [Soft Delete](22-soft-delete.md) | Logical deletion |
+| [Routing](23-routing.md) | URL routing |
+| [Dependencies](24-dependencies.md) | Dependency injection |
+
+### Advanced
+
+| Doc | Description |
+|-----|-------------|
+| [Messaging](30-messaging.md) | Kafka/Redis integration |
+| [Workers](31-workers.md) | Background workers |
+| [Tenancy](32-tenancy.md) | Multi-tenant |
+| [Choices](33-choices.md) | TextChoices/IntegerChoices |
+| [Exceptions](34-exceptions.md) | Error handling |
+| [DateTime](35-datetime.md) | Timezone handling |
+| [Security](36-security.md) | Security best practices |
+
+### Reference
+
+| Doc | Description |
+|-----|-------------|
+| [Admin](40-admin.md) | Admin panel |
+| [Migrations](41-migrations.md) | Database migrations |
+
+## Project Structure
 
 ```
-/my-project
-  /.env                    # Variaveis de ambiente
-  /migrations              # Migracoes do banco
-  /src
-    /api
-      config.py            # Settings customizados
-    /apps
-      /users
-        models.py          # Modelos SQLAlchemy
-        schemas.py         # Input/Output schemas
-        views.py           # ViewSets
-        routes.py          # Rotas
-        permissions.py     # Permissoes customizadas
-        validators.py      # Validadores customizados
-        backends.py        # Auth backends customizados
-    main.py                # Entry point
+my-api/
+├── src/
+│   ├── settings.py      # All config here
+│   ├── main.py          # App entry point
+│   └── apps/
+│       ├── models.py    # Model imports (barrel)
+│       └── items/
+│           ├── models.py
+│           ├── views.py
+│           └── routes.py
+├── migrations/
+├── .env
+└── pyproject.toml
 ```
+
+## Minimal Example
+
+```python
+# src/settings.py
+from core.config import Settings, configure
+
+class AppSettings(Settings):
+    app_name: str = "My API"
+
+settings = configure(settings_class=AppSettings)
+```
+
+```python
+# src/apps/items/models.py
+from core import Model, Field
+from sqlalchemy.orm import Mapped
+
+class Item(Model):
+    __tablename__ = "items"
+    id: Mapped[int] = Field.pk()
+    name: Mapped[str] = Field.string(max_length=200)
+```
+
+```python
+# src/apps/items/views.py
+from core import ModelViewSet
+from .models import Item
+
+class ItemViewSet(ModelViewSet):
+    model = Item
+```
+
+```python
+# src/main.py
+from core import CoreApp, AutoRouter
+from src.apps.items.routes import router as items_router
+
+api = AutoRouter(prefix="/api/v1")
+api.include_router(items_router)
+
+app = CoreApp(routers=[api])
+```
+
+## Quick Commands
+
+```bash
+core init my-api          # Create project
+core init my-api --minimal # Minimal project
+core makemigrations       # Generate migrations
+core migrate              # Apply migrations
+core run                  # Start server
+core createsuperuser      # Create admin user
+```
+
+## Links
+
+- [GitHub](https://github.com/your-org/core-framework)
+- [PyPI](https://pypi.org/project/core-framework/)
+- [Changelog](CHANGELOG.md)

@@ -15,7 +15,7 @@
 {% endblock %}
 
 {% block page_actions %}
-{% if 'add' in admin.permissions and 'add' not in admin.exclude_actions %}
+{% if user_perms.add and 'add' not in admin.exclude_actions %}
 <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/new/"
    class="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-primary-600/20">
     <svg class="w-4 h-4 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -126,7 +126,7 @@
     <div x-show="selectedIds.length > 0" x-cloak x-transition
          class="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-xl p-3 mb-4 flex items-center">
         <span class="text-sm text-primary-800 dark:text-primary-200 font-medium" x-text="selectedIds.length + ' selected'"></span>
-        {% if 'delete' in admin.permissions and 'delete' not in admin.exclude_actions %}
+        {% if user_perms.delete and 'delete' not in admin.exclude_actions %}
         <button @click="bulkDelete()" 
                 class="ml-4 inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-800 font-medium transition-colors">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -236,7 +236,7 @@
                         <span>Get started by creating your first {{ admin.display_name | lower }}.</span>
                     </template>
                 </p>
-                {% if 'add' in admin.permissions and 'add' not in admin.exclude_actions %}
+                {% if user_perms.add and 'add' not in admin.exclude_actions %}
                 <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/new/"
                    class="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-all shadow-sm">
                     <svg class="w-4 h-4 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>

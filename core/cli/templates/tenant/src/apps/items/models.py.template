@@ -1,0 +1,29 @@
+"""
+Item model with tenant isolation.
+Docs: docs/32-tenancy.md
+"""
+from core import Model, Field
+from core.tenancy import TenantMixin
+from core.datetime import DateTime
+from sqlalchemy.orm import Mapped
+import uuid
+
+
+class Item(TenantMixin, Model):
+    """
+    Item with automatic tenant isolation.
+    
+    TenantMixin adds:
+        - tenant_id: Foreign key to tenant
+        - Automatic filtering by current tenant
+        - for_tenant() queryset method
+    """
+    
+    __tablename__ = "items"
+    
+    id: Mapped[int] = Field.pk()
+    tenant_id: Mapped[uuid.UUID] = Field.uuid(index=True)  # From TenantMixin
+    name: Mapped[str] = Field.string(max_length=200)
+    description: Mapped[str | None] = Field.text(nullable=True)
+    price: Mapped[float] = Field.float(default=0.0)
+    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)

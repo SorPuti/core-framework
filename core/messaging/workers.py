@@ -514,11 +514,11 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     except Exception as e:
         logger.warning("Could not initialize database for heartbeats: %s", e)
     
-    async def _ensure_models_loaded() -> None:
+    async     def _ensure_models_loaded() -> None:
         """
-        Lazy load de modelos via registry apenas quando necessário.
+        Lazy load de modelos quando necessário.
         
-        Carrega modelos apenas se database estiver disponível e for necessário.
+        Carrega modelos apenas se database estiver disponível.
         """
         nonlocal _registry
         
@@ -526,13 +526,16 @@ async def _run_worker_config(config: WorkerConfig) -> None:
             return
         
         if _registry is None:
-            from core.registry import ModelRegistry
-            _registry = ModelRegistry.get_instance()
+            from importlib import import_module
             
-            # Carrega modelos apenas se necessário para heartbeats
-            # Registry usa cache, então não há overhead se já foram carregados
-            models_module = getattr(_settings, "models_module", None)
-            _registry.discover_models(models_module=models_module)
+            models_module = getattr(_settings, "models_module", "app.models")
+            
+            try:
+                import_module(models_module)
+                _registry = True  # Marca como carregado
+            except ModuleNotFoundError:
+                logger.warning("Models module '%s' not found", models_module)
+                _registry = False
     
     # ── Heartbeat state (in-memory counters, zero I/O overhead) ──
     worker_id = str(uuid.uuid4())

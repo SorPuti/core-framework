@@ -1,0 +1,23 @@
+"""
+App settings - Multi-tenant architecture.
+Docs: docs/32-tenancy.md
+"""
+from core.config import Settings, configure
+
+
+class AppSettings(Settings):
+    """Configuration for multi-tenant application."""
+    
+    # Application
+    app_name: str = "{{project_name}}"
+    app_version: str = "0.1.0"
+    
+    # Database
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost/{{project_name}}"
+    
+    # Tenant settings
+    tenant_header: str = "X-Tenant-ID"  # Header to extract tenant from
+    tenant_id_type: str = "uuid"  # uuid, int, or str
+
+
+settings = configure(settings_class=AppSettings)

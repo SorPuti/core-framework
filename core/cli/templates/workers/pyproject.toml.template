@@ -1,0 +1,20 @@
+[project]
+name = "{{project_name}}"
+version = "0.1.0"
+description = "API with background task processing"
+requires-python = ">={{python_version}}"
+dependencies = [
+    "core-framework",
+    "redis",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

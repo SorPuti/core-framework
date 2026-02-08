@@ -1,0 +1,11 @@
+"""
+App settings. Docs: docs/02-settings.md
+"""
+from core.config import Settings, configure
+
+class AppSettings(Settings):
+    """All configuration in one place."""
+    app_name: str = "{{project_name}}"
+    app_version: str = "0.1.0"
+
+settings = configure(settings_class=AppSettings)

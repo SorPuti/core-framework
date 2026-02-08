@@ -1,230 +1,160 @@
 # Quickstart
 
-Este guia cobre a criacao de uma API funcional do zero. O objetivo e demonstrar o fluxo minimo necessario para ter endpoints CRUD operacionais.
+Create a working API in 5 minutes.
 
-## Instalacao
+## Requirements
 
-O framework esta disponivel no PyPI. Escolha entre instalacao global (CLI disponivel em qualquer diretorio) ou local (por projeto).
+- Python 3.12+
+- PostgreSQL (or SQLite for dev)
 
-### Global (recomendado para CLI)
+## Install
 
 ```bash
-# pipx instala em ambiente isolado, evitando conflitos
+# Global install (recommended)
 pipx install core-framework
 
-# Alternativa: pip global (Debian/Ubuntu)
-pip install core-framework --break-system-packages
-
-# Alternativa: pip no diretorio do usuario
-pip install core-framework --user
-```
-
-Apos instalacao global, o comando `core` fica disponivel em qualquer diretorio:
-
-```bash
-core --help
-core startproject meu_projeto
-```
-
-### Local (por projeto)
-
-```bash
-# Criar virtualenv
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-
-# Instalar
+# Or per-project
 pip install core-framework
-
-# Com extras opcionais
-pip install "core-framework[postgres]"      # PostgreSQL
-pip install "core-framework[enterprise]"    # Todas as features
 ```
 
-**Requisito**: Python 3.12 ou superior. O framework utiliza features de tipagem modernas que nao existem em versoes anteriores.
-
-## Criacao do Projeto
+## Create Project
 
 ```bash
-# --python especifica a versao do interpretador para o virtualenv
-# O comando cria estrutura de diretorios, .env, pyproject.toml e dependencias
-core init my-api --python 3.13
+core init my-api
 cd my-api
 ```
 
-O comando `core init` gera:
-- Estrutura de pastas padrao (`src/apps/`, `src/api/`)
-- Arquivo `.env` com configuracoes de desenvolvimento
-- `pyproject.toml` configurado com dependencias do framework
-- Virtualenv ativado automaticamente
+This creates:
 
-## Primeiro Model
+```
+my-api/
+├── src/
+│   ├── settings.py      # Configuration
+│   ├── main.py          # Entry point
+│   └── apps/
+│       ├── models.py    # Model imports
+│       └── users/       # Example app
+├── migrations/
+├── .env
+└── pyproject.toml
+```
 
-Models herdam de `core.Model`, que e um wrapper sobre SQLAlchemy ORM com funcionalidades adicionais como QuerySet e metodos de conveniencia.
+## Configure
+
+Edit `src/settings.py`:
+
+```python
+from core.config import Settings, configure
+
+class AppSettings(Settings):
+    app_name: str = "My API"
+    user_model: str = "src.apps.users.models.User"  # Required for auth
+
+settings = configure(settings_class=AppSettings)
+```
+
+Edit `.env`:
+
+```env
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost/mydb
+SECRET_KEY=change-me-in-production
+DEBUG=true
+```
+
+## Create Model
 
 ```python
 # src/apps/posts/models.py
-from core import Model
-from sqlalchemy.orm import Mapped, mapped_column
+from core import Model, Field
+from sqlalchemy.orm import Mapped
 
 class Post(Model):
-    # __tablename__ e obrigatorio - define o nome da tabela no banco
     __tablename__ = "posts"
     
-    # Mapped[tipo] define o tipo Python e SQLAlchemy infere o tipo SQL
-    # primary_key=True gera autoincrement por padrao em PostgreSQL/SQLite
-    id: Mapped[int] = mapped_column(primary_key=True)
-    
-    # index=True cria indice B-tree - use para campos frequentemente filtrados
-    title: Mapped[str] = mapped_column(index=True)
-    
-    # Campos sem mapped_column() usam configuracao padrao do tipo
-    content: Mapped[str]
-    
-    # default= define valor padrao no Python, nao no banco
-    # Para default no banco, use server_default=
-    published: Mapped[bool] = mapped_column(default=False)
+    id: Mapped[int] = Field.pk()
+    title: Mapped[str] = Field.string(max_length=200, index=True)
+    content: Mapped[str] = Field.text()
+    published: Mapped[bool] = Field.boolean(default=False)
 ```
 
-**Importante**: O tipo `Mapped[str]` gera `VARCHAR(255)` por padrao. Para textos longos, use `mapped_column(Text)`.
+Import in barrel file:
 
-## Primeiro ViewSet
+```python
+# src/apps/models.py
+from src.apps.posts.models import Post  # noqa
+```
 
-ViewSet encapsula toda logica CRUD em uma classe. O framework gera automaticamente os endpoints baseado nos atributos definidos.
+## Create ViewSet
 
 ```python
 # src/apps/posts/views.py
-from core import ModelViewSet, action
-from core.permissions import AllowAny, IsAuthenticated
+from core import ModelViewSet
+from core.permissions import AllowAny
 from .models import Post
-from .schemas import PostInput, PostOutput
 
 class PostViewSet(ModelViewSet):
-    # model: obrigatorio - define qual tabela o ViewSet manipula
     model = Post
-    
-    # input_schema: valida dados de entrada (POST, PUT, PATCH)
-    input_schema = PostInput
-    
-    # output_schema: formata dados de saida (GET, respostas)
-    output_schema = PostOutput
-    
-    # tags: agrupa endpoints na documentacao OpenAPI
-    tags = ["Posts"]
-    
-    # permission_classes: permissao padrao para todas as acoes
-    # AllowAny permite acesso sem autenticacao
-    permission_classes = [AllowAny]
-    
-    # permission_classes_by_action: override por acao especifica
-    # Acoes disponiveis: list, create, retrieve, update, partial_update, destroy
-    permission_classes_by_action = {
-        "create": [IsAuthenticated],      # POST /posts/
-        "update": [IsAuthenticated],      # PUT /posts/{id}
-        "destroy": [IsAuthenticated],     # DELETE /posts/{id}
-    }
+    permission_classes = [AllowAny]  # Public access
 ```
 
-**Comportamento**: Se uma acao nao estiver em `permission_classes_by_action`, usa `permission_classes`. Se `permission_classes` nao estiver definido, o padrao e `IsAuthenticated`.
-
-## Schemas
-
-Schemas sao classes Pydantic que definem a estrutura de dados. O framework usa schemas separados para entrada e saida, permitindo controle granular sobre quais campos sao aceitos e retornados.
-
-```python
-# src/apps/posts/schemas.py
-from core import InputSchema, OutputSchema
-
-class PostInput(InputSchema):
-    # Campos obrigatorios - requisicao falha se ausentes
-    title: str
-    content: str
-    
-    # Campo opcional com valor padrao
-    published: bool = False
-
-class PostOutput(OutputSchema):
-    # Todos os campos que serao retornados na resposta
-    # Campos do model nao listados aqui NAO aparecem na resposta
-    id: int
-    title: str
-    content: str
-    published: bool
-```
-
-**Trade-off**: `InputSchema` e `OutputSchema` herdam de `pydantic.BaseModel` com configuracoes especificas. Usar `BaseModel` diretamente funciona, mas perde integracao automatica com o ViewSet.
-
-## Rotas
-
-O `AutoRouter` gera rotas automaticamente a partir do ViewSet registrado.
+## Create Routes
 
 ```python
 # src/apps/posts/routes.py
 from core import AutoRouter
 from .views import PostViewSet
 
-# prefix: prefixo de URL para todos os endpoints deste router
-# tags: tags OpenAPI (pode ser sobrescrito pelo ViewSet)
 router = AutoRouter(prefix="/posts", tags=["Posts"])
-
-# register("", ViewSet) - string vazia significa que usa apenas o prefix
-# register("/sub", ViewSet) geraria /posts/sub/
 router.register("", PostViewSet)
 ```
 
-## Registro no Main
-
-Routers precisam ser incluidos no router principal para serem reconhecidos pela aplicacao.
+## Register Routes
 
 ```python
 # src/main.py
-from core import AutoRouter
+from core import CoreApp, AutoRouter
+from core.config import get_settings
 from src.apps.posts.routes import router as posts_router
 
-# Router principal com prefixo da API
-# Todos os sub-routers herdam este prefixo
-api_router = AutoRouter(prefix="/api/v1")
+settings = get_settings()
 
-# include_router adiciona todas as rotas do posts_router
-# Resultado: /api/v1/posts/...
-api_router.include_router(posts_router)
+api = AutoRouter(prefix="/api/v1")
+api.include_router(posts_router)
+
+app = CoreApp(routers=[api])
 ```
 
-**Nota**: O arquivo `main.py` gerado pelo `core init` ja contem a estrutura basica. Adicione apenas o `include_router`.
-
-## Execucao
+## Run
 
 ```bash
-# Gera arquivo de migracao baseado nas diferencas entre models e banco
-# --name e obrigatorio e deve ser descritivo
+# Create migration
 core makemigrations --name add_posts
 
-# Aplica migracoes pendentes ao banco de dados
-# Em desenvolvimento, usa SQLite por padrao (.env DATABASE_URL)
+# Apply migration
 core migrate
 
-# Inicia servidor de desenvolvimento com hot-reload
-# Padrao: http://localhost:8000
+# Start server
 core run
 ```
 
-**Producao**: `core run` usa Uvicorn com reload habilitado. Para producao, use `core run --no-reload --workers 4` ou configure via Docker.
+## Test
 
-## Endpoints Gerados
+Open http://localhost:8000/docs
 
-O `ModelViewSet` gera automaticamente os seguintes endpoints:
+Generated endpoints:
 
-| Metodo | Path | Acao | Descricao |
-|--------|------|------|-----------|
-| GET | /api/v1/posts/ | list | Lista paginada de posts |
-| POST | /api/v1/posts/ | create | Cria novo post |
-| GET | /api/v1/posts/{id} | retrieve | Retorna post especifico |
-| PUT | /api/v1/posts/{id} | update | Atualiza todos os campos |
-| PATCH | /api/v1/posts/{id} | partial_update | Atualiza campos parciais |
-| DELETE | /api/v1/posts/{id} | destroy | Remove post |
+| Method | Path | Action |
+|--------|------|--------|
+| GET | /api/v1/posts/ | List |
+| POST | /api/v1/posts/ | Create |
+| GET | /api/v1/posts/{id} | Get one |
+| PUT | /api/v1/posts/{id} | Update |
+| PATCH | /api/v1/posts/{id} | Partial update |
+| DELETE | /api/v1/posts/{id} | Delete |
 
-**Documentacao**: Acesse `/docs` para Swagger UI ou `/redoc` para ReDoc. Ambos sao gerados automaticamente.
+## Next
 
----
-
-Proximo: [ViewSets](02-viewsets.md) - Customizacao de CRUD, actions personalizadas e hooks de ciclo de vida.
+- [Settings](02-settings.md) — Configuration options
+- [Models](03-models.md) — Field types, relationships
+- [ViewSets](04-viewsets.md) — Custom actions, hooks
+- [Auth](05-auth.md) — JWT authentication

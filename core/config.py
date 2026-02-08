@@ -1,54 +1,22 @@
 """
-Configurações centralizadas do framework.
+Settings system. Docs: https://github.com/your-org/core-framework/docs/02-settings.md
 
-UNICO local de configuração para toda a aplicação:
-- Database, Auth, API, CORS
-- Kafka (aiokafka ou confluent)
-- Tasks, Workers
-- Middleware, Logging
-- CLI, Migrations, Discovery
+Single source of truth: src/settings.py
 
-Uso:
-    # settings.py do projeto
-    from core import Settings
+Usage:
+    from core.config import Settings, configure
     
     class AppSettings(Settings):
-        # Suas configurações customizadas
-        stripe_api_key: str = ""
-        sendgrid_api_key: str = ""
+        user_model: str = "app.models.User"
     
-    settings = AppSettings()
-
-Configuração via .env:
-    DATABASE_URL=postgresql+asyncpg://localhost/myapp
-    KAFKA_BACKEND=confluent
-    KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-
-Ou via código (antes de iniciar a app):
-    from core import configure
-    
-    configure(
-        kafka_backend="confluent",
-        database_url="postgresql+asyncpg://localhost/myapp",
-    )
-
-Resolução de .env simplificada (12-Factor App):
-    Precedência (maior para menor):
-    1. Variáveis de ambiente do OS (sempre prevalecem)
-    2. .env.local (gitignored, apenas em development)
-    3. .env (base, único arquivo recomendado)
-    4. Defaults da classe Settings
-    
-    Para diferentes ambientes: use ENVIRONMENT env var + variáveis de ambiente do OS.
+    settings = configure(settings_class=AppSettings)
 """
 
 import logging
 import os
 import secrets
-import threading
 import warnings
 from importlib import import_module
-from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Any, Literal, Self
 
@@ -59,37 +27,32 @@ logger = logging.getLogger("core.config")
 
 
 # =========================================================================
-# ENV FILE RESOLUTION
+# ENV FILE RESOLUTION (carregado apenas no bootstrap)
 # =========================================================================
 
-def _resolve_env_files() -> tuple[str, ...]:
+def _resolve_env_files_at_bootstrap() -> tuple[str, ...]:
     """
-    Resolve .env files de forma simplificada (12-Factor App style).
+    Resolve .env files baseado em ENVIRONMENT.
     
-    Precedência (maior para menor):
-    1. Variáveis de ambiente do OS (sempre lidas)
-    2. .env.local (gitignored, para overrides locais - apenas em development)
-    3. .env (base, único arquivo recomendado)
-    4. Defaults da classe Settings
+    Chamado APENAS no bootstrap (uma vez).
+    Não deve ser chamado em runtime.
     
-    NOTA: Para simplificar, removemos suporte a .env.{environment}.
-    Use ENVIRONMENT env var + um único .env, ou .env.local para overrides locais.
-    
-    Returns:
-        Tupla de paths de .env files para carregar
+    Precedência:
+    1. OS env vars
+    2. .env.{ENVIRONMENT}
+    3. .env
+    4. Settings defaults
     """
+    env = os.environ.get("ENVIRONMENT", "development")
     files: list[str] = []
     
-    # Base .env (carregado primeiro, menor precedência)
     if Path(".env").is_file():
         files.append(".env")
     
-    # .env.local (gitignored, apenas em development, maior precedência)
-    env = os.environ.get("ENVIRONMENT", "development")
-    if env == "development" and Path(".env.local").is_file():
-        files.append(".env.local")
+    env_file = f".env.{env}"
+    if Path(env_file).is_file():
+        files.append(env_file)
     
-    # Se nenhum arquivo existe, tenta .env mesmo assim (pydantic ignora se não existir)
     return tuple(files) if files else (".env",)
 
 
@@ -115,13 +78,12 @@ class Settings(BaseSettings):
     Variáveis de ambiente carregadas automaticamente:
         DATABASE_URL, KAFKA_BACKEND, SECRET_KEY, etc.
     
-    Configuração simplificada (12-Factor App):
-        .env                  # Base (único arquivo recomendado)
-        .env.local            # Overrides locais (gitignored, apenas em development)
-        
-    NOTA: Para diferentes ambientes, use ENVIRONMENT env var + variáveis de ambiente
-    do sistema operacional (recomendado para produção) ou um único .env com valores
-    apropriados para cada ambiente.
+    Ambientes suportados (.env por ambiente):
+        .env                  # Base (sempre carregado)
+        .env.development      # Sobrescreve em development
+        .env.production       # Sobrescreve em production
+        .env.staging          # Sobrescreve em staging
+        .env.testing          # Sobrescreve em testing
     """
     
     model_config = SettingsConfigDict(
@@ -274,13 +236,15 @@ class Settings(BaseSettings):
     # Authentication
     # =========================================================================
     
+    # --- Chaves e Tokens ---
+    
     auth_secret_key: str | None = PydanticField(
         default=None,
         description="Chave secreta para tokens (usa secret_key se None)",
     )
     auth_algorithm: str = PydanticField(
         default="HS256",
-        description="Algoritmo JWT",
+        description="Algoritmo JWT (HS256, HS384, HS512, RS256, etc.)",
     )
     auth_access_token_expire_minutes: int = PydanticField(
         default=30,
@@ -290,16 +254,86 @@ class Settings(BaseSettings):
         default=7,
         description="Tempo de expiração do refresh token em dias",
     )
-    auth_password_hasher: str = PydanticField(
-        default="pbkdf2_sha256",
-        description="Algoritmo de hash de senha (pbkdf2_sha256, argon2, bcrypt, scrypt)",
-    )
+    
+    # --- User Model ---
+    
     user_model: str | None = PydanticField(
         default=None,
         description=(
             "Path do modelo User (ex: 'src.apps.users.models.User'). "
-            "Também via USER_MODEL env, core.toml [core] user_model, ou configure_auth."
+            "Obrigatório para autenticação funcionar."
         ),
+    )
+    auth_username_field: str = PydanticField(
+        default="email",
+        description="Campo usado como username para login (email, username, cpf, etc.)",
+    )
+    
+    # --- Backends ---
+    
+    auth_backends: list[str] = PydanticField(
+        default=["model"],
+        description=(
+            "Lista de backends de autenticação a tentar (em ordem). "
+            "Opções: model, oauth, ldap, token, api_key"
+        ),
+    )
+    auth_backend: str = PydanticField(
+        default="model",
+        description="Backend de autenticação padrão (model, oauth, ldap)",
+    )
+    auth_token_backend: str = PydanticField(
+        default="jwt",
+        description="Backend de tokens (jwt, opaque, redis)",
+    )
+    auth_permission_backend: str = PydanticField(
+        default="default",
+        description="Backend de permissões (default, rbac, abac)",
+    )
+    
+    # --- Password Hashing ---
+    
+    auth_password_hasher: str = PydanticField(
+        default="pbkdf2_sha256",
+        description="Algoritmo de hash de senha (pbkdf2_sha256, argon2, bcrypt, scrypt)",
+    )
+    auth_password_min_length: int = PydanticField(
+        default=8,
+        description="Comprimento mínimo da senha",
+    )
+    auth_password_require_uppercase: bool = PydanticField(
+        default=False,
+        description="Exigir pelo menos uma letra maiúscula na senha",
+    )
+    auth_password_require_lowercase: bool = PydanticField(
+        default=False,
+        description="Exigir pelo menos uma letra minúscula na senha",
+    )
+    auth_password_require_digit: bool = PydanticField(
+        default=False,
+        description="Exigir pelo menos um dígito na senha",
+    )
+    auth_password_require_special: bool = PydanticField(
+        default=False,
+        description="Exigir pelo menos um caractere especial na senha",
+    )
+    
+    # --- HTTP Headers ---
+    
+    auth_header: str = PydanticField(
+        default="Authorization",
+        description="Nome do header HTTP para autenticação",
+    )
+    auth_scheme: str = PydanticField(
+        default="Bearer",
+        description="Scheme de autenticação (Bearer, Basic, Token)",
+    )
+    
+    # --- Middleware ---
+    
+    auth_warn_missing_middleware: bool = PydanticField(
+        default=True,
+        description="Emitir warning se AuthenticationMiddleware não estiver configurado",
     )
 
     # =========================================================================
@@ -868,177 +902,283 @@ class Settings(BaseSettings):
 # GLOBAL SETTINGS SINGLETON
 # =========================================================================
 
-# Instância global única
+# Instância global única (configurada via configure() ou bootstrap)
 _settings: Settings | None = None
 _settings_class: type[Settings] = Settings
 
-# Flag para evitar múltiplos bootstraps
-_settings_loaded: bool = False
-
-# Lock para thread safety durante carregamento
-_settings_loading_lock: threading.Lock = threading.Lock()
-
-# Callbacks pós-carregamento
-_on_settings_loaded: list[Any] = []
-
 
 def bootstrap_project_settings() -> None:
-    """Bootstrap project settings module using explicit resolution rules."""
+    """
+    Bootstrap settings importando src.settings.
+    
+    Ordem de resolução (fail-fast):
+    1. APP_SETTINGS_MODULE env var (se definido)
+    2. src.settings (convenção padrão)
+    3. Erro explícito se nenhum encontrado
+    
+    Não há fallbacks implícitos ou auto-discovery.
+    """
     if is_configured():
         return
 
+    # 1. Variável de ambiente explícita
     module_name = os.getenv("APP_SETTINGS_MODULE")
-
     if module_name:
-        _import_settings_module(module_name)
-        return
-
-    if _import_entrypoint_settings():
-        return
-
-    _import_legacy_src_settings()
-
-
-def _import_settings_module(module_name: str) -> None:
-    try:
-        import_module(module_name)
-    except ModuleNotFoundError as exc:
-        logger.error(
-            "Failed to import settings module '%s' from APP_SETTINGS_MODULE.",
-            module_name,
-            exc_info=exc,
-        )
-
-
-def _import_legacy_src_settings() -> bool:
-    """
-    Try conventional settings modules in order.
-    Projects typically use src.settings; core-framework example uses example.settings.
-    """
-    for module_name in ("src.settings", "example.settings"):
         try:
             import_module(module_name)
-            return True
-        except ModuleNotFoundError:
-            continue
-    logger.debug(
-        "No conventional settings module found (tried src.settings, example.settings). "
-        "Default core Settings will be used."
-    )
-    return False
+            return
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                f"APP_SETTINGS_MODULE='{module_name}' not found. "
+                f"Verify the module path is correct."
+            ) from exc
 
-def _import_entrypoint_settings() -> bool:
+    # 2. Convenção padrão: src.settings
     try:
-        eps = entry_points(group="core_framework.settings")
-    except Exception:
-        return False
+        import_module("src.settings")
+        return
+    except ModuleNotFoundError:
+        pass
 
-    for ep in eps:
-        try:
-            ep.load()
-            return True
-        except Exception as exc:
-            logger.error(
-                "Failed to load settings from entrypoint '%s'.",
-                ep.name,
-                exc_info=exc,
-            )
+    # 3. Fail-fast: não há fonte de configuração
+    raise RuntimeError(
+        "No settings module found. Create 'src/settings.py' with your configuration.\n"
+        "Example:\n"
+        "  from core.config import Settings, configure\n"
+        "  class AppSettings(Settings):\n"
+        "      user_model: str = 'app.models.User'\n"
+        "  settings = configure(settings_class=AppSettings)"
+    )
 
-    return False
-
-def _auto_configure_auth_from_user_model() -> None:
+def _configure_auth_from_settings() -> None:
     """
-    Auto-register user_model via configure_auth if not yet configured.
-    Reads from: AuthConfig (already set), Settings.user_model, USER_MODEL env, TOML.
+    Configura auth baseado em settings.user_model.
+    
+    Chamado APENAS no bootstrap, após carregar settings.
+    Fail-fast: erro explícito se user_model estiver mal configurado.
     """
     from core.auth.base import get_auth_config, configure_auth
 
+    # Já configurado (configure_auth chamado explicitamente)
     if get_auth_config().user_model is not None:
         return
 
-    user_model_path: str | None = None
-
-    # 1. Settings (AppSettings.user_model or env USER_MODEL)
-    try:
-        s = get_settings()
-        if hasattr(s, "user_model") and s.user_model:
-            user_model_path = s.user_model if isinstance(s.user_model, str) else None
-    except Exception:
-        pass
-
-    # 2. Env USER_MODEL
-    if not user_model_path:
-        user_model_path = os.environ.get("USER_MODEL")
-
-    # 3. TOML (core.toml [core] user_model or pyproject.toml [tool.core] user_model)
-    if not user_model_path:
-        try:
-            import tomllib
-            for candidate in [Path("core.toml"), Path("pyproject.toml")]:
-                if candidate.exists():
-                    with open(candidate, "rb") as f:
-                        data = tomllib.load(f)
-                    cfg = data.get("core", {}) or data.get("tool", {}).get("core", {}) or {}
-                    if cfg.get("user_model"):
-                        user_model_path = str(cfg["user_model"])
-                        break
-        except Exception:
-            pass
-
-    if not user_model_path:
+    # Obtém settings (já deve estar carregado)
+    s = get_settings()
+    if not hasattr(s, "user_model") or not s.user_model:
+        # Sem user_model configurado - OK se não usar auth
         return
+
+    user_model_path = s.user_model
+    if not isinstance(user_model_path, str):
+        raise TypeError(
+            f"settings.user_model must be str, got {type(user_model_path).__name__}. "
+            f"Example: user_model = 'app.models.User'"
+        )
 
     try:
         module_path, class_name = user_model_path.rsplit(".", 1)
         module = import_module(module_path)
         User = getattr(module, class_name)
         configure_auth(user_model=User)
-        logger.debug("Auto-configured user_model from %s", user_model_path)
-    except Exception as exc:
-        logger.warning(
-            "Could not auto-configure user_model from %s: %s",
-            user_model_path,
-            exc,
-        )
+        logger.debug("Configured auth from settings.user_model: %s", user_model_path)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid user_model format: '{user_model_path}'. "
+            f"Expected 'module.path.ClassName', got invalid format."
+        ) from exc
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise ImportError(
+            f"Cannot import user_model '{user_model_path}': module not found. "
+            f"Verify the module path is correct."
+        ) from exc
+    except AttributeError as exc:
+        raise AttributeError(
+            f"Cannot find class '{class_name}' in module '{module_path}'. "
+            f"Verify the class name is correct."
+        ) from exc
 
 
 def get_settings() -> Settings:
     """
-    Return the global Settings singleton after bootstrapping project settings.
+    Retorna a instância global de Settings.
     
-    Thread-safe singleton com lock para evitar múltiplos bootstraps.
-    Usa double-checked locking pattern para performance.
+    Função pura: apenas retorna o singleton já configurado.
+    Não executa side-effects, não faz auto-configuração.
+    
+    Se settings ainda não foi carregado, executa bootstrap uma vez.
+    Após o bootstrap inicial, apenas retorna o valor cacheado.
+    
+    Returns:
+        Settings instance (singleton)
+    
+    Raises:
+        RuntimeError: Se bootstrap falhar (src.settings não encontrado)
     """
-    global _settings, _settings_loaded
+    global _settings
 
-    # Fast path: settings já carregado
     if _settings is not None:
         return _settings
 
-    # Adquire lock apenas se necessário
-    with _settings_loading_lock:
-        # Double-check após adquirir lock
-        if _settings is not None:
-            return _settings
+    # Bootstrap uma única vez
+    bootstrap_project_settings()
 
-        # Bootstrap apenas uma vez
-        if not _settings_loaded:
-            bootstrap_project_settings()
-            _settings_loaded = True
+    # Após bootstrap, settings deve estar configurado
+    # (src.settings chama configure() internamente)
+    if _settings is None:
+        # Fallback: cria Settings padrão se nenhum foi configurado
+        env_files = _resolve_env_files_at_bootstrap()
+        _settings = _settings_class(_env_file=env_files)
+        logger.warning(
+            "Settings not explicitly configured. Using default Settings. "
+            "Configure explicitly in src/settings.py via configure()."
+        )
 
-        # Settings mod may have called configure() during bootstrap; don't overwrite
-        if _settings is None:
-            env_files = _resolve_env_files()
-            _settings = _settings_class(_env_file=env_files)
-
-        # Executa callbacks apenas uma vez
-        for callback in _on_settings_loaded:
-            callback(_settings)
-
-        # Auto-register user_model from Settings/env/TOML if configure_auth wasn't called
-        _auto_configure_auth_from_user_model()
+    # NOTA: Auth NÃO é configurado aqui automaticamente.
+    # O lifecycle correto é:
+    # 1. get_settings() → carrega configurações
+    # 2. App/CLI importa models
+    # 3. configure_auth() é chamado explicitamente (em src/main.py ou CoreApp)
+    #
+    # Isso garante que User model está disponível antes de configure_auth().
 
     return _settings
+
+
+# =========================================================================
+# Auto-configuration helpers (plug-and-play)
+# =========================================================================
+
+_datetime_configured = False
+_auth_configured = False
+
+
+def _auto_configure_datetime(settings: Settings) -> None:
+    """
+    Auto-configura o sistema de DateTime a partir das Settings.
+    
+    Chamado automaticamente por configure().
+    """
+    global _datetime_configured
+    
+    if _datetime_configured:
+        return
+    
+    try:
+        from core.datetime import configure_datetime
+        
+        configure_datetime(
+            default_timezone=settings.timezone,
+            use_aware_datetimes=settings.use_tz,
+            datetime_format=settings.datetime_format,
+            date_format=settings.date_format,
+            time_format=settings.time_format,
+        )
+        _datetime_configured = True
+        logger.debug("DateTime auto-configured from Settings")
+    except Exception as e:
+        logger.warning("Failed to auto-configure DateTime: %s", e)
+
+
+def auto_configure_auth(settings: Settings | None = None) -> bool:
+    """
+    Auto-configura o sistema de Auth a partir das Settings.
+    
+    Pode ser chamado explicitamente ou é chamado automaticamente pelo CoreApp.
+    
+    Args:
+        settings: Settings instance (usa get_settings() se None)
+    
+    Returns:
+        True se configurado com sucesso, False se já configurado ou falhou
+    
+    Nota:
+        Esta função é idempotente - pode ser chamada múltiplas vezes sem efeito.
+        A configuração só ocorre se user_model estiver definido nas Settings.
+    """
+    global _auth_configured
+    
+    if _auth_configured:
+        return False
+    
+    if settings is None:
+        settings = get_settings()
+    
+    # Verifica se user_model está configurado
+    if not settings.user_model:
+        logger.debug("Auth not auto-configured: user_model not set in Settings")
+        return False
+    
+    try:
+        from core.auth import configure_auth as _configure_auth
+        
+        # Resolve user_model string para classe
+        user_class = _resolve_user_model(settings.user_model)
+        if user_class is None:
+            logger.warning(
+                "Auth not auto-configured: could not resolve user_model '%s'",
+                settings.user_model
+            )
+            return False
+        
+        # Configura auth com todos os valores das Settings
+        _configure_auth(
+            # Chaves e Tokens
+            secret_key=settings.auth_secret_key or settings.secret_key,
+            jwt_algorithm=settings.auth_algorithm,
+            access_token_expire_minutes=settings.auth_access_token_expire_minutes,
+            refresh_token_expire_days=settings.auth_refresh_token_expire_days,
+            # User Model
+            user_model=user_class,
+            username_field=settings.auth_username_field,
+            # Backends
+            auth_backends=settings.auth_backends,
+            auth_backend=settings.auth_backend,
+            token_backend=settings.auth_token_backend,
+            permission_backend=settings.auth_permission_backend,
+            # Password
+            password_hasher=settings.auth_password_hasher,
+            password_min_length=settings.auth_password_min_length,
+            password_require_uppercase=settings.auth_password_require_uppercase,
+            password_require_lowercase=settings.auth_password_require_lowercase,
+            password_require_digit=settings.auth_password_require_digit,
+            password_require_special=settings.auth_password_require_special,
+            # HTTP Headers
+            auth_header=settings.auth_header,
+            auth_scheme=settings.auth_scheme,
+            # Middleware
+            warn_missing_middleware=settings.auth_warn_missing_middleware,
+        )
+        _auth_configured = True
+        logger.debug("Auth auto-configured from Settings (user_model=%s)", settings.user_model)
+        return True
+    except Exception as e:
+        logger.warning("Failed to auto-configure Auth: %s", e)
+        return False
+
+
+def _resolve_user_model(user_model_path: str) -> type | None:
+    """
+    Resolve user_model string para classe.
+    
+    Args:
+        user_model_path: Path como "src.apps.users.models.User"
+    
+    Returns:
+        Classe do User ou None se não encontrada
+    """
+    try:
+        module_path, class_name = user_model_path.rsplit(".", 1)
+        module = import_module(module_path)
+        return getattr(module, class_name, None)
+    except (ValueError, ImportError, AttributeError) as e:
+        logger.debug("Could not resolve user_model '%s': %s", user_model_path, e)
+        return None
+
+
+def is_auth_configured() -> bool:
+    """Verifica se o sistema de auth foi configurado."""
+    return _auth_configured
 
 
 def configure(
@@ -1046,86 +1186,72 @@ def configure(
     **overrides: Any,
 ) -> Settings:
     """
-    Configura o framework ANTES de iniciar a aplicação.
+    Configura o framework registrando a instância global de Settings.
     
-    IMPORTANTE: Chamar ANTES de criar a app ou importar componentes.
+    Chamado por src/settings.py para registrar AppSettings.
     
     Args:
-        settings_class: Classe customizada de Settings (opcional)
-        **overrides: Valores para sobrescrever
+        settings_class: Classe de Settings customizada
+        **overrides: Valores para sobrescrever (raramente usado)
     
     Returns:
-        Settings configurado
+        Settings instance (registrado globalmente)
     
     Raises:
-        ValueError: Se override key não existir na classe Settings
+        RuntimeError: Se configure() for chamado múltiplas vezes
     
     Exemplo:
-        from core import configure, Settings
+        # src/settings.py
+        from core.config import Settings, configure
         
-        # Opção 1: Apenas sobrescrever valores
-        configure(
-            kafka_backend="confluent",
-            kafka_bootstrap_servers="kafka:9092",
-            database_url="postgresql+asyncpg://localhost/myapp",
-        )
+        class AppSettings(Settings):
+            user_model: str = "app.models.User"
         
-        # Opção 2: Usar classe customizada
-        class MySettings(Settings):
-            stripe_api_key: str = ""
-        
-        configure(settings_class=MySettings)
-        
-        # Opção 3: Ambos
-        configure(
-            settings_class=MySettings,
-            kafka_backend="confluent",
-        )
+        settings = configure(settings_class=AppSettings)
     """
     global _settings, _settings_class
+    
+    if _settings is not None:
+        raise RuntimeError(
+            "configure() called multiple times. "
+            "Settings can only be configured once during bootstrap."
+        )
     
     if settings_class is not None:
         _settings_class = settings_class
     
-    # Valida que todas as override keys existem na classe Settings
+    # Valida overrides
     if overrides:
         known_fields = set(_settings_class.model_fields.keys())
         unknown = set(overrides.keys()) - known_fields
         if unknown:
-            logger.warning(
-                "Unknown settings keys passed to configure(): %s. "
-                "Available keys: check Settings class fields.",
-                ", ".join(sorted(unknown)),
+            raise ValueError(
+                f"Unknown settings keys: {', '.join(sorted(unknown))}. "
+                f"Check Settings class for available fields."
             )
     
-    # Resolve env files e cria instância
-    env_files = _resolve_env_files()
+    # Cria instância (lê .env uma vez aqui via Pydantic)
+    env_files = _resolve_env_files_at_bootstrap()
     
     if overrides:
         _settings = _settings_class(_env_file=env_files, **overrides)
     else:
         _settings = _settings_class(_env_file=env_files)
     
-    # Executa callbacks pós-carregamento
-    for callback in _on_settings_loaded:
-        callback(_settings)
+    logger.debug("Settings configured: %s", _settings_class.__name__)
+    
+    # =========================================================================
+    # Auto-configure subsystems from Settings (plug-and-play)
+    # =========================================================================
+    
+    # 1. DateTime configuration
+    _auto_configure_datetime(_settings)
+    
+    # 2. Auth configuration (deferred until user_model is available)
+    # Auth is configured lazily when first accessed or when CoreApp starts
+    # This allows user_model to be imported after configure() is called
     
     return _settings
-
-
-def on_settings_loaded(callback: Any) -> Any:
-    """
-    Registra callback executado após Settings ser carregado.
-    
-    O callback recebe a instância de Settings como argumento.
-    
-    Exemplo:
-        @on_settings_loaded
-        def setup_logging(settings):
-            logging.basicConfig(level=settings.log_level)
-    """
-    _on_settings_loaded.append(callback)
-    return callback
 
 
 def is_configured() -> bool:
@@ -1135,24 +1261,20 @@ def is_configured() -> bool:
 
 def reset_settings() -> None:
     """
-    Reseta configurações. Útil para testes.
+    Reseta configurações para testes.
     
-    AVISO: Apenas para uso em testes. Em produção, este método
-    emite um warning e não executa.
+    AVISO: Apenas para testes. Não usar em production.
     """
-    global _settings, _settings_class, _settings_loaded
+    global _settings, _settings_class
     
     if _settings is not None and _settings.environment == "production":
-        logger.warning(
-            "reset_settings() called in production environment — ignored. "
-            "This function is intended for testing only."
+        raise RuntimeError(
+            "reset_settings() cannot be called in production. "
+            "This function is for testing only."
         )
-        return
     
-    with _settings_loading_lock:
-        _settings = None
-        _settings_class = Settings
-        _settings_loaded = False
+    _settings = None
+    _settings_class = Settings
 
 
 # =========================================================================

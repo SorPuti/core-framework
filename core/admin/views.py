@@ -516,8 +516,11 @@ def create_api_views(site: Any) -> APIRouter:
                 if obj is None:
                     raise HTTPException(404, f"{admin_instance.display_name} with {pk_field}={pk} not found")
                 
+                # Load M2M data safely to avoid lazy load issues
+                m2m_data = await _load_m2m_data(db, obj, model)
+                
                 display_fields = admin_instance.get_display_fields()
-                data = serialize_instance(obj, display_fields, admin_instance)
+                data = serialize_instance(obj, display_fields, admin_instance, m2m_data)
                 
                 return {
                     "item": data,
@@ -566,17 +569,24 @@ def create_api_views(site: Any) -> APIRouter:
         # Validar campos obrigatórios e cast de tipos
         try:
             required_fields = []
+            fk_fields = []  # Campos FK obrigatórios
             columns_map = {col.name: col for col in model.__table__.columns}
             
             for col in model.__table__.columns:
-                if (
+                is_required = (
                     not col.nullable
                     and not col.primary_key
                     and col.default is None
                     and col.server_default is None
-                    and col.name in editable
-                ):
+                )
+                
+                if is_required and col.name in editable:
                     required_fields.append(col.name)
+                
+                # FK obrigatória: sempre valida mesmo se não está em editable
+                # Isso evita IntegrityError no banco
+                if is_required and col.foreign_keys:
+                    fk_fields.append(col.name)
             
             # Virtual password: required on create if model has set_password()
             if admin_instance.password_field:
@@ -587,7 +597,22 @@ def create_api_views(site: Any) -> APIRouter:
                     if not pw_val or pw_val in ("", "••••••••"):
                         required_fields.append("password")
             
+            # Valida campos obrigatórios normais
             missing = [f for f in required_fields if f not in safe_data or safe_data[f] in (None, "")]
+            
+            # Valida FKs obrigatórias (mensagem específica)
+            missing_fks = [f for f in fk_fields if f not in safe_data or safe_data[f] in (None, "")]
+            
+            if missing_fks:
+                # Mensagem amigável para FKs
+                fk_names = [f.replace("_id", "").replace("_", " ").title() for f in missing_fks]
+                raise HTTPException(400, detail={
+                    "error": "validation_error",
+                    "missing_fields": missing_fks,
+                    "message": f"Selecione: {', '.join(fk_names)}",
+                    "hint": "Campos de relacionamento são obrigatórios.",
+                })
+            
             if missing:
                 raise HTTPException(400, detail={
                     "error": "validation_error",
@@ -657,7 +682,7 @@ def create_api_views(site: Any) -> APIRouter:
                 display_fields = admin_instance.get_display_fields()
                 
                 return {
-                    "item": serialize_instance(obj, display_fields, admin_instance),
+                    "item": serialize_instance(obj, display_fields, admin_instance, m2m_data),
                     "message": f"{admin_instance.display_name} created successfully",
                     "pk": str(pk),
                 }
@@ -691,7 +716,7 @@ def create_api_views(site: Any) -> APIRouter:
         editable = set(admin_instance.get_editable_fields())
         safe_data = {k: v for k, v in body.items() if k in editable}
         
-        # Cast tipos e remove campos vazios opcionais
+        # Cast tipos e valida FKs obrigatórias
         try:
             columns_map = {col.name: col for col in model.__table__.columns}
             required_fields = [
@@ -700,7 +725,22 @@ def create_api_views(site: Any) -> APIRouter:
                 and col.default is None and col.server_default is None
                 and col.name in editable
             ]
+            
+            # Valida FKs obrigatórias não podem ser null
+            for col in model.__table__.columns:
+                if col.foreign_keys and not col.nullable:
+                    val = safe_data.get(col.name)
+                    if col.name in safe_data and val in (None, ""):
+                        fk_name = col.name.replace("_id", "").replace("_", " ").title()
+                        raise HTTPException(400, detail={
+                            "error": "validation_error",
+                            "missing_fields": [col.name],
+                            "message": f"{fk_name} é obrigatório e não pode ser removido.",
+                        })
+            
             safe_data = _cast_and_clean_data(safe_data, columns_map, required_fields)
+        except HTTPException:
+            raise
         except Exception:
             pass
         
@@ -776,7 +816,7 @@ def create_api_views(site: Any) -> APIRouter:
                 
                 display_fields = admin_instance.get_display_fields()
                 return {
-                    "item": serialize_instance(obj, display_fields, admin_instance),
+                    "item": serialize_instance(obj, display_fields, admin_instance, m2m_data),
                     "message": f"{admin_instance.display_name} updated successfully",
                     "changes": changes,
                 }
@@ -1061,10 +1101,17 @@ async def _apply_m2m_data(
     """
     Apply M2M relationship data to an object (Issue #21).
     
-    For each M2M field, resolves the target model and replaces
-    the current relationship with the provided IDs.
+    For each M2M field, manipulates the association table directly
+    to avoid greenlet/async issues with lazy-loaded collections.
+    
+    This approach:
+    1. Deletes existing associations from the secondary table
+    2. Inserts new associations
+    
+    This is safer than manipulating the ORM collection directly,
+    which can trigger lazy loads in async context.
     """
-    from sqlalchemy import inspect as sa_inspect, select
+    from sqlalchemy import inspect as sa_inspect, select, delete, insert
     from sqlalchemy.orm import RelationshipProperty
     
     try:
@@ -1072,28 +1119,48 @@ async def _apply_m2m_data(
     except Exception:
         return
     
+    # Get the primary key value of the object
+    obj_pk_col = list(model.__table__.primary_key.columns)[0]
+    obj_pk_value = getattr(obj, obj_pk_col.name)
+    
     for field_name, ids in m2m_data.items():
         rel = mapper.relationships.get(field_name)
-        if not rel or not isinstance(rel, RelationshipProperty) or rel.secondary is None:
+        if rel is None or not isinstance(rel, RelationshipProperty) or rel.secondary is None:
             continue
         
+        secondary_table = rel.secondary
         target_cls = rel.mapper.class_
+        target_pk_col = list(target_cls.__table__.primary_key.columns)[0]
+        
+        # Find the columns in the secondary table
+        # One references our model, one references the target
+        local_fk_col = None
+        remote_fk_col = None
+        
+        for col in secondary_table.columns:
+            for fk in col.foreign_keys:
+                if fk.column.table.name == model.__tablename__:
+                    local_fk_col = col
+                elif fk.column.table.name == target_cls.__tablename__:
+                    remote_fk_col = col
+        
+        if local_fk_col is None or remote_fk_col is None:
+            logger.warning(f"Could not identify FK columns in M2M table for {field_name}")
+            continue
+        
+        # Step 1: Delete all existing associations for this object
+        del_stmt = delete(secondary_table).where(local_fk_col == obj_pk_value)
+        await db.execute(del_stmt)
         
         if not ids:
-            # Clear the relationship
-            current = getattr(obj, field_name, [])
-            if hasattr(current, 'clear'):
-                current.clear()
+            # No new associations to add
             continue
         
-        # Fetch target objects by ID
-        pk_col = list(target_cls.__table__.primary_key.columns)[0]
-        
-        # Cast IDs to the right type
+        # Step 2: Cast IDs to the right type
         typed_ids = []
         for id_val in ids:
             try:
-                col_type = str(pk_col.type).upper()
+                col_type = str(target_pk_col.type).upper()
                 if "INT" in col_type:
                     typed_ids.append(int(id_val))
                 else:
@@ -1101,16 +1168,92 @@ async def _apply_m2m_data(
             except (ValueError, TypeError):
                 typed_ids.append(id_val)
         
-        stmt = select(target_cls).where(pk_col.in_(typed_ids))
-        result = await db.execute(stmt)
-        target_objects = list(result.scalars().all())
+        # Step 3: Verify target IDs exist (optional but safer)
+        verify_stmt = select(target_pk_col).where(target_pk_col.in_(typed_ids))
+        result = await db.execute(verify_stmt)
+        valid_ids = [row[0] for row in result.fetchall()]
         
-        # Replace the relationship
-        current = getattr(obj, field_name, [])
-        if hasattr(current, 'clear'):
-            current.clear()
-        for target_obj in target_objects:
-            current.append(target_obj)
+        if not valid_ids:
+            continue
+        
+        # Step 4: Insert new associations
+        for target_id in valid_ids:
+            ins_stmt = insert(secondary_table).values({
+                local_fk_col.name: obj_pk_value,
+                remote_fk_col.name: target_id,
+            })
+            try:
+                await db.execute(ins_stmt)
+            except Exception as e:
+                # Ignore duplicate key errors (shouldn't happen after delete, but be safe)
+                if "duplicate" not in str(e).lower():
+                    logger.warning(f"Error inserting M2M association: {e}")
+        
+        # Step 5: Expire the relationship attribute so it reloads on next access
+        try:
+            db.expire(obj, [field_name])
+        except Exception:
+            pass
+
+
+async def _load_m2m_data(
+    db: Any,
+    obj: Any,
+    model: type,
+) -> dict[str, list]:
+    """
+    Load M2M relationship data for an object safely (Issue #21).
+    
+    Queries the association table directly to avoid lazy loading issues
+    in async context. Returns a dict mapping field names to lists of IDs.
+    """
+    from sqlalchemy import inspect as sa_inspect, select
+    from sqlalchemy.orm import RelationshipProperty
+    
+    result: dict[str, list] = {}
+    
+    try:
+        mapper = sa_inspect(model)
+    except Exception:
+        return result
+    
+    # Get the primary key value of the object
+    obj_pk_col = list(model.__table__.primary_key.columns)[0]
+    obj_pk_value = getattr(obj, obj_pk_col.name)
+    
+    for rel_name, rel in mapper.relationships.items():
+        if not isinstance(rel, RelationshipProperty) or rel.secondary is None:
+            continue
+        
+        secondary_table = rel.secondary
+        target_cls = rel.mapper.class_
+        target_pk_col = list(target_cls.__table__.primary_key.columns)[0]
+        
+        # Find the columns in the secondary table
+        local_fk_col = None
+        remote_fk_col = None
+        
+        for col in secondary_table.columns:
+            for fk in col.foreign_keys:
+                if fk.column.table.name == model.__tablename__:
+                    local_fk_col = col
+                elif fk.column.table.name == target_cls.__tablename__:
+                    remote_fk_col = col
+        
+        if local_fk_col is None or remote_fk_col is None:
+            continue
+        
+        # Query the association table for this object's M2M IDs
+        stmt = select(remote_fk_col).where(local_fk_col == obj_pk_value)
+        try:
+            res = await db.execute(stmt)
+            ids = [row[0] for row in res.fetchall()]
+            result[rel_name] = ids
+        except Exception as e:
+            logger.warning(f"Error loading M2M data for {rel_name}: {e}")
+            result[rel_name] = []
+    
+    return result
 
 
 def _process_smart_fields(

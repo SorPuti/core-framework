@@ -1,0 +1,12 @@
+"""
+App entry point. Docs: docs/01-quickstart.md
+"""
+from core import CoreApp, AutoRouter
+from src.apps.items.routes import router as items_router
+
+# API router
+api = AutoRouter(prefix="/api/v1")
+api.include_router(items_router)
+
+# App instance
+app = CoreApp(routers=[api])

@@ -1,0 +1,58 @@
+"""
+Task views. Docs: docs/04-viewsets.md
+"""
+from core import ModelViewSet, action
+from core.permissions import AllowAny
+from fastapi import Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .models import Task, TaskStatus
+from .workers import send_email_task, process_data_task
+
+
+class TaskViewSet(ModelViewSet):
+    """Task management endpoints."""
+    
+    model = Task
+    permission_classes = [AllowAny]
+    tags = ["Tasks"]
+    
+    @action(methods=["POST"], detail=False)
+    async def enqueue_email(self, request: Request, db: AsyncSession, **kwargs):
+        """Enqueue an email task."""
+        data = await request.json()
+        
+        # Create task record
+        task = Task(
+            name="send_email",
+            payload=data,
+            status=TaskStatus.PENDING,
+        )
+        db.add(task)
+        await db.commit()
+        
+        # Dispatch to worker
+        await send_email_task.delay(
+            to=data.get("to"),
+            subject=data.get("subject"),
+            body=data.get("body"),
+        )
+        
+        return {"task_id": task.id, "status": "queued"}
+    
+    @action(methods=["POST"], detail=False)
+    async def enqueue_process(self, request: Request, db: AsyncSession, **kwargs):
+        """Enqueue a data processing task."""
+        data = await request.json()
+        
+        task = Task(
+            name="process_data",
+            payload=data,
+            status=TaskStatus.PENDING,
+        )
+        db.add(task)
+        await db.commit()
+        
+        await process_data_task.delay(data_id=data.get("data_id"))
+        
+        return {"task_id": task.id, "status": "queued"}

@@ -1,17 +1,14 @@
 """
-Sistema de Models inspirado no Django, mas com Pydantic + SQLAlchemy 2.0.
+Model system. Docs: https://github.com/your-org/core-framework/docs/03-models.md
 
-Características:
-- Sintaxe declarativa e limpa
-- Campos tipados
-- Hooks (before_save, after_save, before_delete, after_delete)
-- Query API fluente via Manager
-- Async por padrão
-- Zero magia obscura
-
-Features Avançadas (opcionais):
-- SoftDeleteMixin: Soft delete com deleted_at
-- SoftDeleteManager: Manager que filtra deletados automaticamente
+Usage:
+    from core import Model, Field
+    from sqlalchemy.orm import Mapped
+    
+    class Item(Model):
+        __tablename__ = "items"
+        id: Mapped[int] = Field.pk()
+        name: Mapped[str] = Field.string(200)
 """
 
 from __future__ import annotations
@@ -525,7 +522,6 @@ class Model(Base, metaclass=ModelMeta):
     """
     
     __abstract__ = True
-    __table_args__ = {"extend_existing": True}
 
     # Manager será adicionado pela metaclass
     objects: ClassVar[Manager[Self]]

@@ -781,1403 +781,241 @@ def install_uv() -> bool:
         return False
 
 
-def cmd_init(args: argparse.Namespace) -> int:
-    """Inicializa um novo projeto com uv."""
+def show_template_menu() -> str | None:
+    """Show interactive menu to select a template."""
+    from core.cli.templates import list_available_templates, get_template_metadata
+    
+    # Try interactive menu first
+    try:
+        from core.cli.interactive import InteractiveMenu, is_interactive
+        
+        if is_interactive():
+            templates = list_available_templates()
+            template_items = []
+            for name in templates:
+                meta = get_template_metadata(name)
+                template_items.append({
+                    "value": name,
+                    "name": meta["name"],
+                    "description": meta["description"],
+                    "features": meta.get("features", []),
+                    "recommended_for": meta.get("recommended_for", ""),
+                })
+            
+            menu = InteractiveMenu(
+                title="📦 Select Template",
+                items=template_items,
+                show_details=True,
+            )
+            
+            result = menu.run()
+            return result["value"] if result else None
+    except Exception:
+        pass  # Fallback to simple menu
+    
+    # Fallback: simple numbered menu
+    templates = list_available_templates()
+    
+    print(bold("\n📦 Available Templates:\n"))
+    print("-" * 60)
+    
+    for i, name in enumerate(templates, 1):
+        meta = get_template_metadata(name)
+        print(f"\n  {bold(f'[{i}]')} {bold(meta['name'])}")
+        print(f"      {meta['description']}")
+        print(f"      {info('Features:')}")
+        for feature in meta.get('features', [])[:4]:
+            print(f"        • {feature}")
+        if meta.get('recommended_for'):
+            print(f"      {warning('Best for:')} {meta['recommended_for']}")
+    
+    print("\n" + "-" * 60)
+    print(f"  {bold('[0]')} Cancel")
+    print()
+    
+    try:
+        choice = input(info("Select template [1]: ")).strip()
+        if not choice:
+            choice = "1"
+        
+        if choice == "0":
+            return None
+        
+        idx = int(choice) - 1
+        if 0 <= idx < len(templates):
+            return templates[idx]
+        else:
+            print(error("Invalid choice."))
+            return None
+    except (ValueError, KeyboardInterrupt, EOFError):
+        print()
+        return None
+
+
+def show_python_menu() -> str | None:
+    """Show interactive menu to select Python version."""
+    try:
+        from core.cli.interactive import InteractiveInput, get_installed_python_versions, get_available_python_versions, is_interactive
+        
+        if not is_interactive():
+            return None
+        
+        installed = get_installed_python_versions()
+        
+        if installed:
+            version_input = InteractiveInput(
+                prompt="🐍 Select Python Version",
+                suggestions=installed[:6],
+                default=installed[0] if installed else "3.12",
+            )
+            return version_input.run()
+        else:
+            # Show available versions to install
+            available = get_available_python_versions()
+            if available:
+                version_input = InteractiveInput(
+                    prompt="🐍 Select Python Version (will be installed)",
+                    suggestions=available[:6],
+                    default="3.12",
+                )
+                return version_input.run()
+    except Exception:
+        pass
+    
+    return None
+
+
+def ensure_python_version(python_version: str) -> bool:
+    """Ensure the requested Python version is available via uv."""
     import subprocess
     
-    project_name = args.name or "myproject"
-    python_version = args.python or "3.12"
-    skip_venv = args.no_venv
+    print(info(f"\nChecking Python {python_version}..."))
     
-    print(bold(f"\n🚀 Core Framework - Project Initialization\n"))
-    print(info(f"Creating project: {project_name}"))
-    
-    # Verifica/instala uv
-    if not skip_venv:
-        if not check_uv_installed():
-            print(warning("uv not found."))
-            if not install_uv():
-                print(warning("Continuing without uv..."))
-                skip_venv = True
-    
-    # Cria estrutura de diretórios
-    # Nova estrutura escalável:
-    # project/
-    # ├── src/
-    # │   ├── apps/           # Apps modulares
-    # │   │   └── users/      # App de exemplo
-    # │   ├── core/           # Configurações centrais
-    # │   └── main.py         # Entry point
-    # ├── migrations/
-    # ├── tests/
-    # └── settings.py         # Configurações do projeto
-    
-    print(info("\nCreating project structure..."))
-    dirs = [
-        project_name,
-        f"{project_name}/src",
-        f"{project_name}/src/apps",
-        f"{project_name}/src/apps/users",
-        f"{project_name}/src/apps/users/tests",
-        f"{project_name}/src/api",
-        f"{project_name}/migrations",
-        f"{project_name}/tests",
-    ]
-    
-    for d in dirs:
-        Path(d).mkdir(parents=True, exist_ok=True)
-        print(f"  📁 {d}/")
-    
-    # Cria arquivos
-    print(info("\nCreating files..."))
-    files = {
-        # Source package
-        f"{project_name}/src/__init__.py": '"""Source package."""\n',
-        
-        # Apps package
-        f"{project_name}/src/apps/__init__.py": '"""Apps package - módulos da aplicação."""\n',
-        
-        # Users app
-        f"{project_name}/src/apps/users/__init__.py": '''"""
-Users App.
-
-Authentication and user management module using Core Framework's
-built-in AbstractUser, permissions, and JWT authentication.
-
-ViewSets:
-    - UserViewSet: User CRUD operations
-    - AuthViewSet: Authentication (login, register, refresh, me)
-"""
-
-from src.apps.users.routes import users_router, auth_router
-
-__all__ = ["users_router", "auth_router"]
-''',
-        f"{project_name}/src/apps/users/models.py": '''"""
-User model extending AbstractUser.
-
-This module defines the custom User model with additional fields
-while inheriting all authentication features from AbstractUser.
-
-Inherited fields from AbstractUser:
-    - id: Primary key
-    - email: Unique email (used for login)
-    - password_hash: Hashed password
-    - is_active: Whether user can login
-    - is_staff: Whether user can access admin
-    - is_superuser: Whether user has all permissions
-    - date_joined: Account creation timestamp
-    - last_login: Last login timestamp
-
-Inherited from PermissionsMixin:
-    - groups: Many-to-many relationship with Group
-    - user_permissions: Direct permissions
-
-Available methods:
-    - set_password(raw_password): Hash and set password
-    - check_password(raw_password): Verify password
-    - has_perm(permission): Check single permission
-    - has_perms(permissions): Check multiple permissions
-    - authenticate(email, password, db): Class method to authenticate
-    - create_user(email, password, db): Class method to create user
-    - create_superuser(email, password, db): Class method to create admin
-"""
-
-from sqlalchemy.orm import Mapped
-
-from core import Field
-from core.auth import AbstractUser, PermissionsMixin
-
-
-class User(AbstractUser, PermissionsMixin):
-    """
-    Custom User model with additional profile fields.
-    
-    Extends AbstractUser for authentication and PermissionsMixin
-    for groups and permissions support.
-    
-    Example usage:
-        # Create user
-        user = await User.create_user("user@example.com", "password123", db)
-        
-        # Create superuser
-        admin = await User.create_superuser("admin@example.com", "password123", db)
-        
-        # Authenticate
-        user = await User.authenticate("user@example.com", "password123", db)
-        
-        # Check permissions
-        if user.has_perm("posts.delete"):
-            ...
-        
-        # Add to group
-        await user.add_to_group("editors", db)
-    """
-    
-    __tablename__ = "users"
-    
-    # Additional profile fields
-    first_name: Mapped[str | None] = Field.string(max_length=100, nullable=True)
-    last_name: Mapped[str | None] = Field.string(max_length=100, nullable=True)
-    phone: Mapped[str | None] = Field.string(max_length=20, nullable=True)
-    avatar_url: Mapped[str | None] = Field.string(max_length=500, nullable=True)
-    
-    @property
-    def full_name(self) -> str:
-        """Return user's full name or email if not set."""
-        parts = [self.first_name, self.last_name]
-        return " ".join(p for p in parts if p) or self.email
-    
-    @property
-    def short_name(self) -> str:
-        """Return first name or email username."""
-        return self.first_name or self.email.split("@")[0]
-''',
-        f"{project_name}/src/apps/users/schemas.py": '''"""
-User schemas for request/response validation.
-
-Defines Pydantic schemas for:
-    - User registration (UserRegisterInput)
-    - User login (LoginInput)
-    - User profile output (UserOutput)
-    - Token response (TokenResponse)
-"""
-
-from pydantic import EmailStr, field_validator
-
-from core import InputSchema, OutputSchema
-from core.datetime import DateTime
-
-
-class UserRegisterInput(InputSchema):
-    """
-    Schema for user registration.
-    
-    Validates:
-        - Email format
-        - Password strength (min 8 chars, uppercase, lowercase, digit)
-    """
-    
-    email: EmailStr
-    password: str
-    first_name: str | None = None
-    last_name: str | None = None
-    
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        """Validate password strength."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
-
-
-class LoginInput(InputSchema):
-    """Schema for user login."""
-    
-    email: EmailStr
-    password: str
-
-
-class UserOutput(OutputSchema):
-    """
-    Schema for user response.
-    
-    Excludes sensitive data like password_hash.
-    """
-    
-    id: int
-    email: str
-    first_name: str | None
-    last_name: str | None
-    phone: str | None
-    avatar_url: str | None
-    is_active: bool
-    is_staff: bool
-    date_joined: DateTime
-    last_login: DateTime | None
-
-
-class TokenResponse(OutputSchema):
-    """
-    Schema for authentication token response.
-    
-    Contains JWT access and refresh tokens.
-    """
-    
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int
-
-
-class RefreshTokenInput(InputSchema):
-    """Schema for refreshing access token."""
-    
-    refresh_token: str
-
-
-class UserUpdateInput(InputSchema):
-    """
-    Schema for updating user profile.
-    
-    All fields are optional for partial updates.
-    """
-    
-    first_name: str | None = None
-    last_name: str | None = None
-    phone: str | None = None
-    avatar_url: str | None = None
-
-
-class ChangePasswordInput(InputSchema):
-    """
-    Schema for changing password.
-    
-    Requires current password for security.
-    """
-    
-    current_password: str
-    new_password: str
-    
-    @field_validator("new_password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        """Validate password strength."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
-''',
-        f"{project_name}/src/apps/users/views.py": '''"""
-User views using DRF-style ViewSets.
-
-All endpoints are defined using ViewSets and @action decorators.
-No direct FastAPI decorators needed - pure DRF pattern.
-
-ViewSets:
-    - UserViewSet: User CRUD operations
-    - AuthViewSet: Authentication (login, register, refresh, me)
-"""
-
-from fastapi import HTTPException, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from core import ModelViewSet, action
-from core.permissions import AllowAny, IsAuthenticated
-from core.auth import (
-    create_access_token,
-    create_refresh_token,
-    verify_token,
-)
-
-from src.apps.users.models import User
-from src.apps.users.schemas import (
-    UserRegisterInput,
-    UserUpdateInput,
-    UserOutput,
-    LoginInput,
-    TokenResponse,
-    RefreshTokenInput,
-    ChangePasswordInput,
-)
-from src.api.config import settings
-
-
-class UserViewSet(ModelViewSet):
-    """
-    ViewSet for user management (CRUD).
-    
-    Endpoints (auto-generated):
-        GET    /users/              - List all users
-        POST   /users/              - Create user (admin)
-        GET    /users/{id}/         - Get user details
-        PUT    /users/{id}/         - Update user
-        PATCH  /users/{id}/         - Partial update
-        DELETE /users/{id}/         - Delete user
-    
-    Custom actions:
-        POST   /users/{id}/activate/    - Activate user
-        POST   /users/{id}/deactivate/  - Deactivate user
-    """
-    
-    model = User
-    input_schema = UserRegisterInput
-    output_schema = UserOutput
-    tags = ["Users"]
-    
-    # Permissions per action
-    permission_classes = [IsAuthenticated]
-    permission_classes_by_action = {
-        "list": [IsAuthenticated],
-        "retrieve": [IsAuthenticated],
-        "create": [IsAuthenticated],  # Admin only in production
-        "update": [IsAuthenticated],
-        "partial_update": [IsAuthenticated],
-        "destroy": [IsAuthenticated],
-    }
-    
-    # Unique field validation
-    unique_fields = ["email"]
-    
-    async def perform_create_validation(self, data: dict, db: AsyncSession) -> dict:
-        """Hash password before creating user."""
-        if "password" in data:
-            password = data.pop("password")
-            data["password_hash"] = User.make_password(password)
-        return data
-    
-    @action(methods=["POST"], detail=True, permission_classes=[IsAuthenticated])
-    async def activate(self, request: Request, db: AsyncSession, **kwargs):
-        """Activate a user account."""
-        user = await self.get_object(db, **kwargs)
-        user.is_active = True
-        await user.save(db)
-        return {"message": f"User {user.email} activated", "is_active": True}
-    
-    @action(methods=["POST"], detail=True, permission_classes=[IsAuthenticated])
-    async def deactivate(self, request: Request, db: AsyncSession, **kwargs):
-        """Deactivate a user account."""
-        user = await self.get_object(db, **kwargs)
-        user.is_active = False
-        await user.save(db)
-        return {"message": f"User {user.email} deactivated", "is_active": False}
-
-
-class AuthViewSet(ModelViewSet):
-    """
-    ViewSet for authentication operations.
-    
-    All authentication endpoints in one ViewSet using @action.
-    No FastAPI decorators needed - pure DRF pattern.
-    
-    Endpoints:
-        POST /auth/register/  - Register new user
-        POST /auth/login/     - Login and get tokens
-        POST /auth/refresh/   - Refresh access token
-        GET  /auth/me/        - Get current user profile
-        POST /auth/password/  - Change password
-    """
-    
-    model = User
-    input_schema = UserRegisterInput
-    output_schema = UserOutput
-    tags = ["Authentication"]
-    
-    # Default: no permissions (public endpoints)
-    permission_classes = [AllowAny]
-    
-    # Disable default CRUD actions (we only use custom actions)
-    async def list(self, *args, **kwargs):
-        raise HTTPException(status_code=404, detail="Not found")
-    
-    async def retrieve(self, *args, **kwargs):
-        raise HTTPException(status_code=404, detail="Not found")
-    
-    async def create(self, *args, **kwargs):
-        raise HTTPException(status_code=404, detail="Not found")
-    
-    async def update(self, *args, **kwargs):
-        raise HTTPException(status_code=404, detail="Not found")
-    
-    async def destroy(self, *args, **kwargs):
-        raise HTTPException(status_code=404, detail="Not found")
-    
-    @action(methods=["POST"], detail=False, permission_classes=[AllowAny])
-    async def register(self, request: Request, db: AsyncSession, **kwargs):
-        """
-        Register a new user account.
-        
-        Request body:
-            - email: User email (unique)
-            - password: Strong password (min 8 chars, upper, lower, digit)
-            - first_name: Optional first name
-            - last_name: Optional last name
-        
-        Returns:
-            Created user data (without password)
-        """
-        # Parse request body
-        body = await request.json()
-        data = UserRegisterInput.model_validate(body)
-        
-        # Check if email exists
-        existing = await User.get_by_email(str(data.email), db)
-        if existing:
-            raise HTTPException(status_code=400, detail="Email already registered")
-        
-        # Create user
-        user = await User.create_user(
-            email=str(data.email),
-            password=data.password,
-            db=db,
-            first_name=data.first_name,
-            last_name=data.last_name,
+    try:
+        # Try to find the Python version
+        result = subprocess.run(
+            ["uv", "python", "find", python_version],
+            capture_output=True,
+            text=True,
         )
         
-        return UserOutput.model_validate(user).model_dump()
-    
-    @action(methods=["POST"], detail=False, permission_classes=[AllowAny])
-    async def login(self, request: Request, db: AsyncSession, **kwargs):
-        """
-        Authenticate and get access tokens.
+        if result.returncode == 0:
+            print(success(f"  ✓ Python {python_version} found"))
+            return True
         
-        Request body:
-            - email: User email
-            - password: User password
+        # Not found, try to install
+        print(info(f"  Installing Python {python_version}..."))
+        result = subprocess.run(
+            ["uv", "python", "install", python_version],
+            capture_output=True,
+            text=True,
+        )
         
-        Returns:
-            - access_token: JWT access token
-            - refresh_token: JWT refresh token
-            - token_type: "bearer"
-            - expires_in: Token expiration in seconds
-        """
-        body = await request.json()
-        data = LoginInput.model_validate(body)
-        
-        # Authenticate
-        user = await User.authenticate(str(data.email), data.password, db)
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid email or password")
-        
-        # Generate tokens using new API
-        access_token = create_access_token(user_id=user.id, extra_claims={"email": user.email})
-        refresh_token = create_refresh_token(user_id=user.id)
-        
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_in=settings.auth_access_token_expire_minutes * 60,
-        ).model_dump()
-    
-    @action(methods=["POST"], detail=False, permission_classes=[AllowAny])
-    async def refresh(self, request: Request, db: AsyncSession, **kwargs):
-        """
-        Refresh access token using refresh token.
-        
-        Request body:
-            - refresh_token: Valid refresh token
-        
-        Returns:
-            New access and refresh tokens
-        """
-        body = await request.json()
-        data = RefreshTokenInput.model_validate(body)
-        
-        # Verify refresh token
-        payload = verify_token(data.refresh_token, token_type="refresh")
-        if not payload:
-            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
-        
-        # Generate new tokens using new API
-        access_token = create_access_token(user_id=payload["sub"])
-        refresh_token = create_refresh_token(user_id=payload["sub"])
-        
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_in=settings.auth_access_token_expire_minutes * 60,
-        ).model_dump()
-    
-    @action(methods=["GET"], detail=False, permission_classes=[IsAuthenticated])
-    async def me(self, request: Request, db: AsyncSession, **kwargs):
-        """
-        Get current authenticated user profile.
-        
-        Requires: Authorization header with Bearer token
-        
-        Returns:
-            Current user data
-        """
-        # User is available via request.user (Starlette pattern) or request.state.user (legacy)
-        # permission_classes=[IsAuthenticated] ensures user is authenticated
-        from core.auth.helpers import get_request_user
-        user = get_request_user(request)
-        
-        if user is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        
-        return UserOutput.model_validate(user).model_dump()
-    
-    @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
-    async def password(self, request: Request, db: AsyncSession, **kwargs):
-        """
-        Change current user password.
-        
-        Requires: Authorization header with Bearer token
-        
-        Request body:
-            - current_password: Current password
-            - new_password: New strong password
-        
-        Returns:
-            Success message
-        """
-        body = await request.json()
-        data = ChangePasswordInput.model_validate(body)
-        
-        # User is available via request.user (Starlette pattern) or request.state.user (legacy)
-        # permission_classes=[IsAuthenticated] ensures user is authenticated
-        from core.auth.helpers import get_request_user
-        user = get_request_user(request)
-        
-        if user is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        
-        # Verify current password
-        if not user.check_password(data.current_password):
-            raise HTTPException(status_code=400, detail="Current password is incorrect")
-        
-        # Update password
-        user.set_password(data.new_password)
-        await user.save(db)
-        
-        return {"message": "Password changed successfully"}
-''',
-        f"{project_name}/src/apps/users/services.py": '''"""
-User business logic services.
-
-Separates complex business logic from views for better
-testability and reusability.
-"""
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from src.apps.users.models import User
+        if result.returncode == 0:
+            print(success(f"  ✓ Python {python_version} installed"))
+            return True
+        else:
+            print(warning(f"  Could not install Python {python_version}"))
+            print(info(f"  {result.stderr.strip()}"))
+            return False
+            
+    except FileNotFoundError:
+        print(warning("  uv not found, skipping Python check"))
+        return False
+    except Exception as e:
+        print(warning(f"  Error: {e}"))
+        return False
 
 
-class UserService:
+def cmd_init_from_templates(project_name: str, python_version: str, skip_venv: bool, template_name: str | None = None) -> int:
     """
-    Service class for user-related business logic.
+    Create a new project using external templates.
     
-    Example usage:
-        service = UserService(db)
-        active_users = await service.get_active_users()
-        admins = await service.get_staff_users()
+    Templates are stored in core/cli/templates/ and can be customized.
     """
+    import subprocess
+    from core.cli.templates import load_all_templates, get_template_dirs, get_template_metadata
     
-    def __init__(self, db: "AsyncSession"):
-        self.db = db
+    print(bold("\n🚀 Core Framework - New Project\n"))
     
-    async def get_active_users(self) -> list["User"]:
-        """Get all active users."""
-        from src.apps.users.models import User
-        return await User.objects.using(self.db).filter(is_active=True).all()
+    # Interactive template selection if not specified
+    if template_name is None:
+        template_name = show_template_menu()
+        if template_name is None:
+            print(info("Cancelled."))
+            return 0
     
-    async def get_staff_users(self) -> list["User"]:
-        """Get all staff users."""
-        from src.apps.users.models import User
-        return await User.objects.using(self.db).filter(is_staff=True).all()
+    meta = get_template_metadata(template_name)
     
-    async def get_superusers(self) -> list["User"]:
-        """Get all superusers."""
-        from src.apps.users.models import User
-        return await User.objects.using(self.db).filter(is_superuser=True).all()
+    print(info(f"Project: {project_name}"))
+    print(info(f"Template: {meta['name']}"))
+    print(info(f"Python: {python_version}"))
     
-    async def deactivate_user(self, user_id: int) -> "User | None":
-        """Deactivate a user account."""
-        from src.apps.users.models import User
-        user = await User.objects.using(self.db).get_or_none(id=user_id)
-        if user:
-            user.is_active = False
-            await user.save(self.db)
-        return user
-    
-    async def activate_user(self, user_id: int) -> "User | None":
-        """Activate a user account."""
-        from src.apps.users.models import User
-        user = await User.objects.using(self.db).get_or_none(id=user_id)
-        if user:
-            user.is_active = True
-            await user.save(self.db)
-        return user
-''',
-        f"{project_name}/src/apps/users/routes.py": '''"""
-User routes configuration.
-
-All routes are defined using ViewSets - no FastAPI decorators needed.
-This is the DRF-style pattern for clean, maintainable code.
-
-Routes (auto-generated from ViewSets):
-    Users (CRUD):
-        GET    /users/              - List all users
-        POST   /users/              - Create user
-        GET    /users/{id}/         - Get user by ID
-        PUT    /users/{id}/         - Update user
-        PATCH  /users/{id}/         - Partial update
-        DELETE /users/{id}/         - Delete user
-        POST   /users/{id}/activate/    - Activate user
-        POST   /users/{id}/deactivate/  - Deactivate user
-    
-    Authentication:
-        POST   /auth/register/  - Register new user
-        POST   /auth/login/     - Login and get tokens
-        POST   /auth/refresh/   - Refresh access token
-        GET    /auth/me/        - Get current user
-        POST   /auth/password/  - Change password
-"""
-
-from core import AutoRouter
-from src.apps.users.views import UserViewSet, AuthViewSet
-
-
-# User management routes (CRUD + custom actions)
-users_router = AutoRouter(prefix="/users", tags=["Users"])
-users_router.register("", UserViewSet, basename="user")
-
-# Authentication routes (all via @action)
-auth_router = AutoRouter(prefix="/auth", tags=["Authentication"])
-auth_router.register("", AuthViewSet, basename="auth")
-''',
-        f"{project_name}/src/apps/users/tests/__init__.py": '"""Tests for users app."""\n',
-        f"{project_name}/src/apps/users/tests/test_users.py": '''"""
-User app tests.
-
-Tests for user registration, authentication, and profile management.
-"""
-
-import pytest
-from httpx import AsyncClient
-
-
-@pytest.mark.asyncio
-async def test_list_users(client: AsyncClient):
-    """Test listing users endpoint."""
-    response = await client.get("/api/v1/users/")
-    assert response.status_code in [200, 401]  # 401 if auth required
-
-
-@pytest.mark.asyncio
-async def test_register_user(client: AsyncClient):
-    """Test user registration."""
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "newuser@example.com",
-            "password": "SecurePass123",
-            "first_name": "Test",
-            "last_name": "User",
-        },
-    )
-    assert response.status_code == 201
-    data = response.json()
-    assert data["email"] == "newuser@example.com"
-    assert "password" not in data
-    assert "password_hash" not in data
-
-
-@pytest.mark.asyncio
-async def test_register_weak_password(client: AsyncClient):
-    """Test registration with weak password fails."""
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "weak@example.com",
-            "password": "weak",
-        },
-    )
-    assert response.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_login(client: AsyncClient):
-    """Test user login."""
-    # First register
-    await client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "login@example.com",
-            "password": "SecurePass123",
-        },
-    )
-    
-    # Then login
-    response = await client.post(
-        "/api/v1/auth/login",
-        json={
-            "email": "login@example.com",
-            "password": "SecurePass123",
-        },
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-    assert data["token_type"] == "bearer"
-
-
-@pytest.mark.asyncio
-async def test_login_invalid_credentials(client: AsyncClient):
-    """Test login with invalid credentials fails."""
-    response = await client.post(
-        "/api/v1/auth/login",
-        json={
-            "email": "nonexistent@example.com",
-            "password": "WrongPass123",
-        },
-    )
-    assert response.status_code == 401
-''',
+    # Ensure uv is installed
+    if not skip_venv:
+        if not check_uv_installed():
+            print(warning("\nuv not found. Installing..."))
+            if not install_uv():
+                print(error("Failed to install uv."))
+                print(info("Install manually: curl -LsSf https://astral.sh/uv/install.sh | sh"))
+                skip_venv = True
         
-        # API config package
-        f"{project_name}/src/api/__init__.py": '''"""
-API configuration package.
-
-Configuracoes centrais da aplicacao.
-"""
-
-from src.api.config import settings
-
-__all__ = ["settings"]
-''',
-        f"{project_name}/src/api/config.py": '''"""
-Configuracoes da aplicacao.
-
-Todas as configuracoes sao carregadas de variaveis de ambiente
-ou do arquivo .env.
-
-Variaveis de ambiente sao mapeadas automaticamente:
-    SECRET_KEY -> settings.secret_key
-    DATABASE_URL -> settings.database_url
-    DEBUG -> settings.debug
-"""
-
-from typing import Literal
-from pydantic import Field as PydanticField
-from core import Settings
-
-
-class AppSettings(Settings):
-    """
-    Configuracoes da aplicacao.
+        # Ensure Python version is available
+        if not skip_venv:
+            if not ensure_python_version(python_version):
+                print(warning(f"Python {python_version} not available."))
+                try:
+                    alt = input(info(f"Continue with system Python? [Y/n]: ")).strip().lower()
+                    if alt == 'n':
+                        return 1
+                except (KeyboardInterrupt, EOFError):
+                    print()
+                    return 1
     
-    Todas as configuracoes abaixo podem ser sobrescritas via variaveis
-    de ambiente ou arquivo .env.
-    
-    Para adicionar configuracoes customizadas, basta definir novos campos:
-    
-        stripe_api_key: str = ""
-        sendgrid_api_key: str = ""
-        
-    E definir no .env:
-    
-        STRIPE_API_KEY=sk_test_xxx
-        SENDGRID_API_KEY=SG.xxx
-    """
-    
-    # =========================================================================
-    # APPLICATION
-    # =========================================================================
-    
-    app_name: str = PydanticField(
-        default="My App",
-        description="Nome da aplicacao (exibido na documentacao)",
-    )
-    app_version: str = PydanticField(
-        default="0.1.0",
-        description="Versao da aplicacao",
-    )
-    environment: Literal["development", "staging", "production", "testing"] = PydanticField(
-        default="development",
-        description="Ambiente de execucao (development, staging, production, testing)",
-    )
-    debug: bool = PydanticField(
-        default=False,
-        description="Modo debug - NUNCA use True em producao",
-    )
-    secret_key: str = PydanticField(
-        default="change-me-in-production",
-        description="Chave secreta para criptografia e tokens JWT",
-    )
-    
-    # =========================================================================
-    # DATABASE
-    # =========================================================================
-    
-    database_url: str = PydanticField(
-        default="sqlite+aiosqlite:///./app.db",
-        description="URL de conexao do banco (async). Exemplos: "
-                    "sqlite+aiosqlite:///./app.db, "
-                    "postgresql+asyncpg://user:pass@localhost/db, "
-                    "mysql+aiomysql://user:pass@localhost/db",
-    )
-    database_echo: bool = PydanticField(
-        default=False,
-        description="Habilita logging de SQL (util para debug)",
-    )
-    database_pool_size: int = PydanticField(
-        default=5,
-        description="Tamanho do pool de conexoes",
-    )
-    database_max_overflow: int = PydanticField(
-        default=10,
-        description="Conexoes extras alem do pool",
-    )
-    database_pool_timeout: int = PydanticField(
-        default=30,
-        description="Timeout em segundos para obter conexao do pool",
-    )
-    database_pool_recycle: int = PydanticField(
-        default=3600,
-        description="Tempo em segundos para reciclar conexoes",
-    )
-    
-    # =========================================================================
-    # API
-    # =========================================================================
-    
-    api_prefix: str = PydanticField(
-        default="/api/v1",
-        description="Prefixo das rotas da API",
-    )
-    docs_url: str | None = PydanticField(
-        default="/docs",
-        description="URL da documentacao Swagger (None para desabilitar)",
-    )
-    redoc_url: str | None = PydanticField(
-        default="/redoc",
-        description="URL da documentacao ReDoc (None para desabilitar)",
-    )
-    openapi_url: str | None = PydanticField(
-        default="/openapi.json",
-        description="URL do schema OpenAPI (None para desabilitar)",
-    )
-    
-    # =========================================================================
-    # CORS
-    # =========================================================================
-    
-    cors_origins: list[str] = PydanticField(
-        default=["*"],
-        description="Origens permitidas para CORS. Use ['*'] para permitir todas",
-    )
-    cors_allow_credentials: bool = PydanticField(
-        default=True,
-        description="Permitir credenciais (cookies, auth headers) em CORS",
-    )
-    cors_allow_methods: list[str] = PydanticField(
-        default=["*"],
-        description="Metodos HTTP permitidos em CORS",
-    )
-    cors_allow_headers: list[str] = PydanticField(
-        default=["*"],
-        description="Headers permitidos em CORS",
-    )
-    
-    # =========================================================================
-    # AUTHENTICATION
-    # =========================================================================
-    
-    auth_secret_key: str | None = PydanticField(
-        default=None,
-        description="Chave secreta para tokens (usa secret_key se None)",
-    )
-    auth_algorithm: str = PydanticField(
-        default="HS256",
-        description="Algoritmo JWT (HS256, HS384, HS512, RS256, etc.)",
-    )
-    auth_access_token_expire_minutes: int = PydanticField(
-        default=30,
-        description="Tempo de expiracao do access token em minutos",
-    )
-    auth_refresh_token_expire_days: int = PydanticField(
-        default=7,
-        description="Tempo de expiracao do refresh token em dias",
-    )
-    auth_password_hasher: str = PydanticField(
-        default="pbkdf2_sha256",
-        description="Algoritmo de hash de senha: pbkdf2_sha256, argon2, bcrypt, scrypt",
-    )
-    
-    # =========================================================================
-    # DATETIME / TIMEZONE
-    # =========================================================================
-    
-    timezone: str = PydanticField(
-        default="UTC",
-        description="Timezone padrao da aplicacao (sempre use UTC)",
-    )
-    use_tz: bool = PydanticField(
-        default=True,
-        description="Usar datetimes aware (com timezone). Recomendado: True",
-    )
-    datetime_format: str = PydanticField(
-        default="%Y-%m-%dT%H:%M:%S%z",
-        description="Formato padrao de datetime (ISO 8601)",
-    )
-    date_format: str = PydanticField(
-        default="%Y-%m-%d",
-        description="Formato padrao de data",
-    )
-    time_format: str = PydanticField(
-        default="%H:%M:%S",
-        description="Formato padrao de hora",
-    )
-    
-    # =========================================================================
-    # SERVER
-    # =========================================================================
-    
-    host: str = PydanticField(
-        default="0.0.0.0",
-        description="Host do servidor",
-    )
-    port: int = PydanticField(
-        default=8000,
-        description="Porta do servidor",
-    )
-    workers: int = PydanticField(
-        default=1,
-        description="Numero de workers (use 1 em desenvolvimento)",
-    )
-    reload: bool = PydanticField(
-        default=True,
-        description="Auto-reload em desenvolvimento",
-    )
-    
-    # =========================================================================
-    # PERFORMANCE
-    # =========================================================================
-    
-    request_timeout: int = PydanticField(
-        default=30,
-        description="Timeout de requisicoes em segundos",
-    )
-    max_request_size: int = PydanticField(
-        default=10 * 1024 * 1024,  # 10MB
-        description="Tamanho maximo de requisicao em bytes",
-    )
-    
-    # =========================================================================
-    # LOGGING
-    # =========================================================================
-    
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = PydanticField(
-        default="INFO",
-        description="Nivel de log",
-    )
-    log_format: str = PydanticField(
-        default="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        description="Formato de log",
-    )
-    log_json: bool = PydanticField(
-        default=False,
-        description="Usar formato JSON para logs (recomendado em producao)",
-    )
-    
-    # =========================================================================
-    # CUSTOM SETTINGS
-    # Adicione suas configuracoes customizadas abaixo
-    # =========================================================================
-    
-    # stripe_api_key: str = ""
-    # sendgrid_api_key: str = ""
-    # redis_url: str = "redis://localhost:6379"
-    # aws_access_key_id: str = ""
-    # aws_secret_access_key: str = ""
-    # aws_s3_bucket: str = ""
-
-
-# Instancia global de configuracoes
-settings = AppSettings()
-''',
-        
-        # Main entry point
-        f"{project_name}/src/main.py": '''"""
-Main Application Entry Point.
-
-Pure DRF-style application - no direct FastAPI decorators needed.
-All routes are defined via ViewSets and AutoRouter.
-
-Features:
-    - JWT Authentication (login, register, token refresh)
-    - User management with AbstractUser
-    - Automatic API documentation at /docs
-    - CORS configuration
-    - DateTime configured for UTC
-
-Routes:
-    /api/v1/users/     - User CRUD (UserViewSet)
-    /api/v1/auth/      - Authentication (AuthViewSet)
-"""
-
-from core import CoreApp, AutoRouter, APIView
-from core.datetime import configure_datetime
-from core.auth import configure_auth
-from core.permissions import AllowAny
-
-from src.api.config import settings
-from src.apps.users.routes import users_router, auth_router
-from src.apps.users.models import User
-
-
-# Configure DateTime to use UTC globally
-configure_datetime(
-    default_timezone=settings.timezone,
-    use_aware_datetimes=settings.use_tz,
-)
-
-# Configure authentication system
-configure_auth(
-    secret_key=settings.secret_key,
-    access_token_expire_minutes=settings.auth_access_token_expire_minutes,
-    refresh_token_expire_days=settings.auth_refresh_token_expire_days,
-    password_hasher=settings.auth_password_hasher,
-    user_model=User,
-)
-
-
-# Health check view using APIView (DRF-style)
-class HealthView(APIView):
-    """Health check endpoint for monitoring."""
-    
-    permission_classes = [AllowAny]
-    tags = ["Health"]
-    
-    async def get(self, request, **kwargs):
-        """
-        Health check endpoint.
-        
-        Use for load balancer health checks and monitoring.
-        """
-        return {
-            "status": "healthy",
-            "version": settings.app_version,
-            "environment": settings.environment,
-        }
-
-
-class RootView(APIView):
-    """Root endpoint with API information."""
-    
-    permission_classes = [AllowAny]
-    tags = ["Root"]
-    
-    async def get(self, request, **kwargs):
-        """
-        Root endpoint.
-        
-        Returns API information and documentation links.
-        """
-        return {
-            "message": f"Welcome to {settings.app_name}",
-            "version": settings.app_version,
-            "environment": settings.environment,
-            "docs": settings.docs_url,
-            "redoc": settings.redoc_url,
-        }
-
-
-# Main API router
-api_router = AutoRouter(prefix=settings.api_prefix)
-
-# Include app routers (ViewSets)
-api_router.include_router(users_router)  # /api/v1/users/
-api_router.include_router(auth_router)   # /api/v1/auth/
-
-# Root router for health and info
-root_router = AutoRouter(prefix="", tags=["System"])
-
-# Create application
-app = CoreApp(
-    title=settings.app_name,
-    description="API built with Core Framework - Django-inspired, FastAPI-powered. "
-                "All endpoints use DRF-style ViewSets for clean, maintainable code.",
-    version=settings.app_version,
-    debug=settings.debug,
-    routers=[api_router, root_router],
-)
-
-# Register root views (DRF-style)
-app.add_api_route("/", RootView.as_route("/")[1], methods=["GET"], tags=["System"])
-app.add_api_route("/health", HealthView.as_route("/health")[1], methods=["GET"], tags=["System"])
-''',
-        
-        # Root files
-        f"{project_name}/migrations/__init__.py": '"""Migrations package."""\n',
-        f"{project_name}/tests/__init__.py": '"""Tests package."""\n',
-        f"{project_name}/tests/conftest.py": '''"""
-Configuração de testes.
-"""
-
-import pytest
-import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-
-from src.main import app
-
-
-@pytest_asyncio.fixture
-async def client():
-    """Cliente HTTP para testes."""
-    async with AsyncClient(
-        transport=ASGITransport(app=app.app),
-        base_url="http://test",
-    ) as client:
-        yield client
-''',
-        f"{project_name}/.env": f'''# Environment variables
-# Copie para .env.local para desenvolvimento
-
-# Application
-APP_NAME="{project_name}"
-APP_VERSION="0.1.0"
-ENVIRONMENT="development"
-DEBUG=true
-SECRET_KEY="change-me-in-production-{project_name}"
-
-# Database
-DATABASE_URL="sqlite+aiosqlite:///./app.db"
-
-# Timezone
-TIMEZONE="UTC"
-USE_TZ=true
-''',
-        f"{project_name}/.env.example": '''# Environment variables example
-# Copy to .env and fill in the values
-
-# Application
-APP_NAME="My App"
-APP_VERSION="0.1.0"
-ENVIRONMENT="development"  # development, staging, production
-DEBUG=false
-SECRET_KEY="your-secret-key-here"
-
-# Database
-DATABASE_URL="sqlite+aiosqlite:///./app.db"
-# DATABASE_URL="postgresql+asyncpg://user:pass@localhost/dbname"
-
-# Timezone
-TIMEZONE="UTC"
-USE_TZ=true
-
-# Auth (optional)
-# AUTH_ACCESS_TOKEN_EXPIRE_MINUTES=30
-# AUTH_REFRESH_TOKEN_EXPIRE_DAYS=7
-''',
-        f"{project_name}/core.toml": '''# Core Framework Configuration
-
-[core]
-database_url = "sqlite+aiosqlite:///./app.db"
-migrations_dir = "./migrations"
-app_label = "main"
-models_module = "src.apps.users.models"
-app_module = "src.main"
-host = "0.0.0.0"
-port = 8000
-''',
-        f"{project_name}/pyproject.toml": f'''[project]
-name = "{project_name}"
-version = "0.1.0"
-description = "Project created with Core Framework"
-requires-python = ">={python_version}"
-dependencies = [
-    "core-framework @ git+https://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@github.com/SorPuti/core-framework.git",
-    "python-dotenv>=1.0.0",
-    "asyncpg>=0.29.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.4.0",
-    "pytest-asyncio>=0.23.0",
-    "httpx>=0.26.0",
-    "ruff>=0.1.0",
-]
-
-[tool.core]
-database_url = "sqlite+aiosqlite:///./app.db"
-migrations_dir = "./migrations"
-app_label = "main"
-models_module = "src.apps.users.models"
-app_module = "src.main"
-
-[tool.ruff]
-target-version = "py312"
-line-length = 100
-select = ["E", "W", "F", "I", "B", "C4", "UP"]
-ignore = ["E501", "B008"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests", "src"]
-''',
-        f"{project_name}/.python-version": f"{python_version}\n",
-        f"{project_name}/.gitignore": '''# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-dist/
-*.egg-info/
-.eggs/
-
-# Virtual environments
-.venv/
-venv/
-ENV/
-
-# uv
-uv.lock
-
-# Database
-*.db
-*.sqlite
-
-# IDE
-.idea/
-.vscode/
-*.swp
-
-# Environment
-.env
-.env.local
-
-# Logs
-*.log
-''',
-        f"{project_name}/README.md": f'''# {project_name}
-
-Projeto criado com [Core Framework](https://github.com/SorPuti/core-framework).
-
-## Setup
-
-```bash
-# Ativar ambiente virtual
-source .venv/bin/activate
-
-# Configurar variáveis de ambiente
-cp .env.example .env
-# Edite .env com suas configurações
-
-# Criar migrações
-core makemigrations --name initial
-
-# Aplicar migrações
-core migrate
-
-# Executar servidor
-core run
-```
-
-## Estrutura
-
-```
-{project_name}/
-├── src/
-│   ├── apps/              # Apps modulares
-│   │   └── users/         # App de usuários (exemplo)
-│   │       ├── models.py
-│   │       ├── schemas.py
-│   │       ├── views.py
-│   │       ├── services.py
-│   │       ├── routes.py
-│   │       └── tests/
-│   ├── api/               # Configuracoes centrais
-│   │   └── config.py      # Settings da aplicacao
-│   └── main.py            # Entry point
-├── migrations/            # Arquivos de migração
-├── tests/                 # Testes globais
-├── .env                   # Variáveis de ambiente
-├── core.toml              # Config do Core Framework
-└── pyproject.toml         # Config do projeto
-```
-
-## Criando novos apps
-
-```bash
-# Cria um novo app modular
-core createapp products
-
-# Estrutura criada:
-# src/apps/products/
-# ├── models.py
-# ├── schemas.py
-# ├── views.py
-# ├── services.py
-# ├── routes.py
-# └── tests/
-```
-
-Depois, registre o router no `src/main.py`:
-
-```python
-from src.apps.products import router as products_router
-
-api_router.include_router(products_router)
-```
-
-## Comandos úteis
-
-```bash
-core run              # Servidor de desenvolvimento
-core makemigrations   # Gerar migrações
-core migrate          # Aplicar migrações
-core shell            # Shell interativo
-core routes           # Listar rotas
-core createapp <name> # Criar novo app
-core check            # Verificar migrações
-```
-
-## Configuração
-
-Todas as configurações são carregadas de variáveis de ambiente.
-Edite `.env` ou defina variáveis no sistema:
-
-```bash
-# Aplicação
-APP_NAME="{project_name}"
-DEBUG=true
-SECRET_KEY="sua-chave-secreta"
-
-# Banco de dados
-DATABASE_URL="sqlite+aiosqlite:///./app.db"
-
-# Timezone (sempre UTC por padrão)
-TIMEZONE="UTC"
-```
-
-Adicione configuracoes customizadas em `src/api/config.py`.
-''',
+    # Template context
+    context = {
+        "project_name": project_name,
+        "python_version": python_version,
     }
     
-    for filepath, content in files.items():
-        Path(filepath).write_text(content)
-        print(f"  📄 {filepath}")
+    # Create directory structure
+    print(info("\nCreating project structure..."))
+    Path(project_name).mkdir(parents=True, exist_ok=True)
+    print(f"  📁 {project_name}/")
     
-    # Configura ambiente virtual com uv
+    for dir_path in get_template_dirs(template_name):
+        full_path = Path(project_name) / dir_path
+        full_path.mkdir(parents=True, exist_ok=True)
+        print(f"  📁 {project_name}/{dir_path}/")
+    
+    # Create migrations dir
+    (Path(project_name) / "migrations").mkdir(parents=True, exist_ok=True)
+    print(f"  📁 {project_name}/migrations/")
+    
+    # Load and write template files
+    print(info("\nCreating files..."))
+    files = load_all_templates(template_name, context)
+    
+    for file_path, content in files.items():
+        full_path = Path(project_name) / file_path
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(content)
+        print(f"  📄 {project_name}/{file_path}")
+    
+    # Setup virtual environment
     if not skip_venv:
-        print(info("\nSetting up virtual environment with uv..."))
-        
+        print(info("\nSetting up virtual environment..."))
         project_path = Path(project_name).absolute()
         
         try:
-            # Inicializa projeto uv
             subprocess.run(
                 ["uv", "venv", "--python", python_version],
                 cwd=project_path,
                 check=True,
                 capture_output=True,
             )
-            print(success("  ✓ Virtual environment created (.venv)"))
+            print(success("  ✓ Virtual environment created"))
             
-            # Instala dependências
-            print(info("  Installing dependencies..."))
             subprocess.run(
                 ["uv", "sync"],
                 cwd=project_path,
@@ -2188,50 +1026,139 @@ Adicione configuracoes customizadas em `src/api/config.py`.
             
         except subprocess.CalledProcessError as e:
             print(warning(f"  Warning: {e}"))
-            print(info("  You can manually run: cd {project_name} && uv sync"))
-        except FileNotFoundError:
-            print(warning("  uv not found in PATH after installation"))
-            print(info("  Please restart your terminal and run: cd {project_name} && uv sync"))
+            print(info(f"  Run manually: cd {project_name} && uv sync"))
     
-    # Mensagem final
+    # Final message
     print()
-    print(success("=" * 50))
-    print(success(f"✓ Project '{project_name}' created successfully!"))
-    print(success("=" * 50))
+    print(success("=" * 60))
+    print(success(f"✓ Project '{project_name}' created!"))
+    print(success("=" * 60))
     print()
     
-    # Instruções
+    # Template-specific instructions
     print(bold("Next steps:\n"))
-    print(f"  {info('1.')} cd {project_name}")
+    
+    # Check if docker-compose exists
+    has_docker = (Path(project_name) / "docker-compose.yml").exists()
+    
+    step = 1
+    print(f"  {step}. cd {project_name}")
+    step += 1
+    
+    if has_docker:
+        print(f"  {step}. docker-compose up -d  # Start services")
+        step += 1
     
     if not skip_venv:
-        print(f"  {info('2.')} source .venv/bin/activate")
-        print(f"  {info('3.')} core makemigrations --name initial")
-        print(f"  {info('4.')} core migrate")
-        print(f"  {info('5.')} core run")
+        print(f"  {step}. source .venv/bin/activate")
+        step += 1
     else:
-        print(f"  {info('2.')} uv sync  # ou pip install -e .")
-        print(f"  {info('3.')} source .venv/bin/activate")
-        print(f"  {info('4.')} core makemigrations --name initial")
-        print(f"  {info('5.')} core migrate")
-        print(f"  {info('6.')} core run")
+        print(f"  {step}. uv sync && source .venv/bin/activate")
+        step += 1
+    
+    print(f"  {step}. core makemigrations --name initial")
+    step += 1
+    print(f"  {step}. core migrate")
+    step += 1
+    print(f"  {step}. core run")
     
     print()
-    print(f"  Then open: {bold('http://localhost:8000/docs')}")
+    print(f"  Open: {bold('http://localhost:8000/docs')}")
     print()
     
-    # Gera script de ativação
-    activate_script = f"{project_name}/activate.sh"
-    Path(activate_script).write_text(f'''#!/bin/bash
-# Ativa o ambiente virtual do projeto {project_name}
-cd "$(dirname "$0")"
-source .venv/bin/activate
-echo "✓ Virtual environment activated for {project_name}"
-echo "  Run 'core run' to start the server"
-''')
-    os.chmod(activate_script, 0o755)
+    # Show features
+    print(info(f"Template: {meta['name']}"))
+    for feature in meta.get('features', []):
+        print(f"  • {feature}")
+    print()
+    
+    print(info(f"Customize: core/cli/templates/{template_name}/"))
+    print()
     
     return 0
+
+
+def cmd_templates(args: argparse.Namespace) -> int:
+    """List available project templates."""
+    from core.cli.templates import get_all_templates_metadata
+    
+    print(bold("\n📦 Available Project Templates\n"))
+    print("-" * 65)
+    
+    for name, meta in get_all_templates_metadata().items():
+        print(f"\n  {bold(name)}")
+        print(f"  {meta['description']}")
+        print(f"  {info('Features:')}")
+        for feature in meta.get('features', []):
+            print(f"    • {feature}")
+        if meta.get('recommended_for'):
+            print(f"  {warning('Best for:')} {meta['recommended_for']}")
+    
+    print("\n" + "-" * 65)
+    print(f"\n{info('Usage:')}")
+    print(f"  core init myproject --template <name>")
+    print(f"  core init myproject  # Interactive menu")
+    print()
+    
+    return 0
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """
+    Inicializa um novo projeto usando templates externos.
+    
+    Templates estão em: core/cli/templates/
+    - minimal: CRUD simples com SQLite
+    - default: Auth + Users + PostgreSQL
+    - kafka: Event-driven com Kafka + Redis
+    - tenant: Multi-tenant com isolamento de dados
+    - workers: Background tasks com Redis
+    
+    Para customizar, edite os arquivos .template no diretório de templates.
+    """
+    skip_venv = args.no_venv
+    
+    # Check if running with explicit arguments
+    has_explicit_template = getattr(args, "minimal", False) or getattr(args, "template", None)
+    has_explicit_name = args.name is not None
+    has_explicit_python = args.python is not None
+    
+    # If no explicit arguments, try full interactive wizard
+    if not has_explicit_template and not has_explicit_name and not has_explicit_python:
+        try:
+            from core.cli.interactive import interactive_project_setup, is_interactive
+            
+            if is_interactive():
+                result = interactive_project_setup()
+                if result is None:
+                    return 0
+                
+                return cmd_init_from_templates(
+                    result["project_name"],
+                    result["python_version"],
+                    skip_venv,
+                    result["template"],
+                )
+        except Exception as e:
+            # Debug: print exception in verbose mode
+            import os
+            if os.environ.get("DEBUG"):
+                print(f"Interactive mode failed: {e}")
+            pass  # Fallback to simple mode
+    
+    # Simple mode with arguments
+    project_name = args.name or "myproject"
+    python_version = args.python or "3.12"
+    
+    # Determine template from flags
+    template_name = None
+    if getattr(args, "minimal", False):
+        template_name = "minimal"
+    elif getattr(args, "template", None):
+        template_name = args.template
+    # If no template specified, show interactive menu
+    
+    return cmd_init_from_templates(project_name, python_version, skip_venv, template_name)
 
 
 def cmd_makemigrations(args: argparse.Namespace) -> int:
@@ -4154,18 +3081,34 @@ For more information, visit: https://github.com/SorPuti/core-framework
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # init (also aliased as startproject)
-    init_parser = subparsers.add_parser("init", help="Initialize a new project with uv")
-    init_parser.add_argument("name", nargs="?", help="Project name (default: myproject)")
-    init_parser.add_argument("--python", "-p", default="3.12", help="Python version (default: 3.12)")
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Initialize a new project (interactive wizard)",
+        description="Create a new project. Without arguments, opens interactive wizard with keyboard navigation."
+    )
+    init_parser.add_argument("name", nargs="?", help="Project name (omit for interactive wizard)")
+    init_parser.add_argument("--python", "-p", help="Python version (default: select from installed)")
     init_parser.add_argument("--no-venv", action="store_true", help="Skip virtual environment setup")
+    init_parser.add_argument("--template", "-t", help="Template: minimal, default, kafka, tenant, workers")
+    init_parser.add_argument("--minimal", action="store_true", help="Shortcut for --template minimal")
     init_parser.set_defaults(func=cmd_init)
     
     # startproject (alias for init - Django-style command)
-    startproject_parser = subparsers.add_parser("startproject", help="Create a new project (alias for init)")
-    startproject_parser.add_argument("name", nargs="?", help="Project name (default: myproject)")
-    startproject_parser.add_argument("--python", "-p", default="3.12", help="Python version (default: 3.12)")
+    startproject_parser = subparsers.add_parser(
+        "startproject",
+        help="Create a new project (alias for init)",
+        description="Create a new project. Without arguments, opens interactive wizard with keyboard navigation."
+    )
+    startproject_parser.add_argument("name", nargs="?", help="Project name (omit for interactive wizard)")
+    startproject_parser.add_argument("--python", "-p", help="Python version (default: select from installed)")
     startproject_parser.add_argument("--no-venv", action="store_true", help="Skip virtual environment setup")
+    startproject_parser.add_argument("--template", "-t", help="Template: minimal, default, kafka, tenant, workers")
+    startproject_parser.add_argument("--minimal", action="store_true", help="Shortcut for --template minimal")
     startproject_parser.set_defaults(func=cmd_init)
+    
+    # templates (list available templates)
+    templates_parser = subparsers.add_parser("templates", help="List available project templates")
+    templates_parser.set_defaults(func=cmd_templates)
     
     # makemigrations
     make_parser = subparsers.add_parser("makemigrations", help="Generate migration files")

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="{{ 'dark' if theme == 'dark' else '' }}">
+<html lang="en" x-data="themeManager()" x-init="init()" :class="{ 'dark': isDark }">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -113,7 +113,8 @@
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
     
-    <!-- Alpine.js -->
+    <!-- Alpine.js + Collapse Plugin -->
+    <script src="https://unpkg.com/@alpinejs/collapse@3.14.3/dist/cdn.min.js" defer></script>
     <script src="https://unpkg.com/alpinejs@3.14.3/dist/cdn.min.js" defer></script>
     
     <!-- Lucide Icons -->
@@ -126,7 +127,7 @@
     <!-- Toast Notification System -->
     <div id="toast-container" 
          x-data="toastManager()" 
-         class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+         class="fixed bottom-4 right-4 z-50 flex flex-col-reverse gap-2 pointer-events-none"
          style="min-width: 320px; max-width: 420px;"
          @toast.window="add($event.detail)">
         <template x-for="toast in toasts" :key="toast.id">
@@ -406,6 +407,20 @@
                 
                 <div class="flex items-center gap-2">
                     {% block page_actions %}{% endblock %}
+                    
+                    <!-- Theme Toggle -->
+                    <button @click="toggleTheme()" 
+                            class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'">
+                        <!-- Sun icon (shown in dark mode) -->
+                        <svg x-show="isDark" x-cloak class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                        </svg>
+                        <!-- Moon icon (shown in light mode) -->
+                        <svg x-show="!isDark" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                    </button>
                 </div>
             </header>
             
@@ -430,6 +445,96 @@
     </div>
     
     <script>
+        // Theme manager - persists user preference with multiple fallbacks
+        function themeManager() {
+            return {
+                isDark: false,
+                
+                // Cookie helpers
+                getCookie(name) {
+                    const value = `; ${document.cookie}`;
+                    const parts = value.split(`; ${name}=`);
+                    if (parts.length === 2) return parts.pop().split(';').shift();
+                    return null;
+                },
+                
+                setCookie(name, value, days = 365) {
+                    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+                    document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
+                },
+                
+                // Storage helpers with fallback
+                getThemePreference() {
+                    // Try localStorage first
+                    try {
+                        const local = localStorage.getItem('admin_theme');
+                        if (local) return local;
+                    } catch (e) {
+                        // localStorage might be blocked (privacy mode, etc.)
+                    }
+                    // Fallback to cookie
+                    return this.getCookie('admin_theme');
+                },
+                
+                setThemePreference(theme) {
+                    // Save to both localStorage and cookie for redundancy
+                    try {
+                        localStorage.setItem('admin_theme', theme);
+                    } catch (e) {
+                        // localStorage might be blocked
+                    }
+                    // Always set cookie as fallback
+                    this.setCookie('admin_theme', theme);
+                },
+                
+                init() {
+                    // Priority: 1. Server preference (from user profile), 2. localStorage/cookie, 3. System preference
+                    const serverTheme = '{{ user_theme|default("") }}';
+                    const savedTheme = this.getThemePreference();
+                    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    
+                    if (serverTheme) {
+                        this.isDark = serverTheme === 'dark';
+                    } else if (savedTheme) {
+                        this.isDark = savedTheme === 'dark';
+                    } else {
+                        this.isDark = systemDark;
+                    }
+                    
+                    // Listen for system theme changes (only if no explicit preference)
+                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                        if (!this.getThemePreference() && !'{{ user_theme|default("") }}') {
+                            this.isDark = e.matches;
+                        }
+                    });
+                },
+                
+                toggleTheme() {
+                    this.isDark = !this.isDark;
+                    const theme = this.isDark ? 'dark' : 'light';
+                    
+                    // Save to localStorage + cookie immediately
+                    this.setThemePreference(theme);
+                    
+                    // Sync to server (fire and forget)
+                    this.syncToServer(theme);
+                },
+                
+                async syncToServer(theme) {
+                    try {
+                        await fetch('{{ admin_prefix }}/api/preferences/theme', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ theme })
+                        });
+                    } catch (e) {
+                        // Silently fail - localStorage/cookie is the fallback
+                        console.debug('Theme sync failed:', e);
+                    }
+                }
+            };
+        }
+        
         // Toast notification manager
         function toastManager() {
             return {
