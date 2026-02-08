@@ -20,6 +20,7 @@ class User(AbstractUser, PermissionsMixin, Model):
     """
     
     __tablename__ = "users"
+     __abstract__ = False  # Ensure this model is not abstract
     
     # Profile fields
     first_name: Mapped[str | None] = Field.string(max_length=100, nullable=True)
