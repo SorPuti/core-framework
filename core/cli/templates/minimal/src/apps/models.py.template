@@ -3,3 +3,4 @@ Model imports. All models must be imported here for migrations.
 Docs: docs/03-models.md
 """
 from src.apps.items.models import Item  # noqa
+from src.apps.users.models import User  # noqa

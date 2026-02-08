@@ -2659,7 +2659,24 @@ def cmd_createsuperuser(args: argparse.Namespace) -> int:
             from core.auth.models import get_user_model
             User = get_user_model()
         except Exception as exc:
-            print(error(f"Could not resolve User model: {exc}"))
+            print()
+            print(error("No User model configured."))
+            print()
+            print(info("To use authentication, create a User model:"))
+            print()
+            print("  # src/apps/users/models.py")
+            print("  from core import Model, Field")
+            print("  from core.auth import AbstractUser")
+            print()
+            print("  class User(AbstractUser, Model):")
+            print("      __tablename__ = 'users'")
+            print()
+            print(info("Then configure in src/settings.py:"))
+            print("  user_model: str = 'src.apps.users.models.User'")
+            print()
+            print(info("Or use the 'default' template which includes auth:"))
+            print(f"  {bold('core init myproject --template default')}")
+            print()
             return 1
 
     username_field = getattr(User, "USERNAME_FIELD", "email")
