@@ -321,6 +321,106 @@ class UserInactive(AuthError):
 
 
 # =============================================================================
+# User ID Coercion
+# =============================================================================
+
+def coerce_user_id(user_model: type, user_id: str | int | Any) -> Any:
+    """
+    Converte user_id para o tipo correto baseado no modelo User.
+    
+    Suporta: Integer, BigInteger, UUID, String, Text.
+    
+    Esta função é usada internamente pelo framework para garantir
+    compatibilidade quando o user_id é armazenado como VARCHAR
+    (ex: AdminSession.user_id) mas o User.id pode ser de qualquer tipo.
+    
+    Args:
+        user_model: Classe do modelo User
+        user_id: ID do usuário (geralmente string do banco)
+        
+    Returns:
+        user_id convertido para o tipo correto, ou None se inválido
+        
+    Example:
+        from core.auth.base import coerce_user_id
+        
+        # User com UUID
+        user_id = coerce_user_id(User, "550e8400-e29b-41d4-a716-446655440000")
+        # Retorna: UUID('550e8400-e29b-41d4-a716-446655440000')
+        
+        # User com Integer
+        user_id = coerce_user_id(User, "123")
+        # Retorna: 123
+    """
+    from uuid import UUID as UUIDType
+    import sqlalchemy as sa
+    
+    # Se já é None, retorna None
+    if user_id is None:
+        return None
+    
+    try:
+        # Obtém o tipo da coluna 'id' do modelo User
+        id_column = getattr(user_model, "id", None)
+        if id_column is None:
+            # Sem coluna id, tenta int primeiro
+            try:
+                return int(user_id)
+            except (ValueError, TypeError):
+                return user_id
+        
+        # Obtém o tipo SQLAlchemy da coluna
+        col_type = None
+        if hasattr(id_column, "property") and hasattr(id_column.property, "columns"):
+            col = id_column.property.columns[0]
+            col_type = col.type
+        elif hasattr(id_column, "type"):
+            col_type = id_column.type
+        
+        if col_type is None:
+            # Fallback: tenta int, senão retorna original
+            try:
+                return int(user_id)
+            except (ValueError, TypeError):
+                return user_id
+        
+        # Converte baseado no tipo da coluna
+        type_name = type(col_type).__name__.upper()
+        
+        # UUID
+        if "UUID" in type_name or isinstance(col_type, sa.Uuid):
+            if isinstance(user_id, UUIDType):
+                return user_id
+            try:
+                return UUIDType(str(user_id))
+            except (ValueError, TypeError):
+                return None
+        
+        # Integer / BigInteger
+        if "INT" in type_name or isinstance(col_type, (sa.Integer, sa.BigInteger)):
+            if isinstance(user_id, int):
+                return user_id
+            try:
+                return int(user_id)
+            except (ValueError, TypeError):
+                return None
+        
+        # String / Text / VARCHAR
+        if any(t in type_name for t in ("STRING", "VARCHAR", "TEXT", "CHAR")):
+            return str(user_id)
+        
+        # Fallback: retorna como está
+        return user_id
+        
+    except Exception:
+        # Em caso de erro, tenta int primeiro, senão string
+        try:
+            return int(user_id)
+        except (ValueError, TypeError):
+            return user_id
+
+
+# =============================================================================
 # Registry Global
 # =============================================================================
 
@@ -576,7 +676,11 @@ def configure_auth(config: AuthConfig | None = None, **kwargs) -> AuthConfig:
         from core.models import get_session
         session = await get_session()
         try:
-            return await config.user_model.objects.using(session).filter(id=int(user_id)).first()
+            # Converte user_id para o tipo correto (int, UUID, etc.)
+            converted_id = coerce_user_id(config.user_model, user_id)
+            if converted_id is None:
+                return None
+            return await config.user_model.objects.using(session).filter(id=converted_id).first()
         finally:
             await session.close()
     

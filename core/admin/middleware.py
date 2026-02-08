@@ -91,11 +91,11 @@ class AdminSessionMiddleware(BaseHTTPMiddleware):
             except RuntimeError:
                 return None
             
-            # user_id é VARCHAR — converte para int se necessário
+            # Converte user_id (VARCHAR) para o tipo correto do User.id
+            from core.auth.base import coerce_user_id
             user_id: Any = session.user_id
-            try:
-                user_id = int(user_id)
-            except (ValueError, TypeError):
-                pass
+            user_id = coerce_user_id(User, user_id)
+            if user_id is None:
+                return None
             
             return await User.objects.using(db).filter(id=user_id).first()

@@ -50,6 +50,8 @@ from core.auth.base import (
     validate_auth_configuration,
     check_middleware_configured,
     get_auth_setup_checklist,
+    # User ID utilities
+    coerce_user_id,
 )
 
 # Default implementations
