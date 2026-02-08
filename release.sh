@@ -11,7 +11,21 @@ git add .
 if ! git diff --staged --quiet 2>/dev/null; then
     echo " Committing and pushing changes..."
     git commit -m "chore: updates before release"
-    git push origin main
+    # ── 2. Commit e push do bump ──
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+    echo "Current branch: $CURRENT_BRANCH"
+    read -p "Confirm push to branch '$CURRENT_BRANCH'? (y/N): " CONFIRM
+
+    if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+      echo "Push aborted."
+      exit 1
+    fi
+
+    git add pyproject.toml core/__init__.py
+    git commit -m "chore: bump version to $NEW_VERSION"
+    git push origin "$CURRENT_BRANCH"
+
     echo " Done."
 else
     echo " No pending changes to commit."
@@ -49,7 +63,19 @@ twine upload dist/*
 echo " Uploaded: https://pypi.org/project/core-framework/$NEW_VERSION/"
 
 # ── 6. Commit e push do bump ──
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+echo "Current branch: $CURRENT_BRANCH"
+read -p "Confirm push to branch '$CURRENT_BRANCH'? (y/N): " CONFIRM
+
+if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+  echo "Push aborted."
+  exit 1
+fi
+
 git add pyproject.toml core/__init__.py
-git commit -m "Bump version $NEW_VERSION"
-git push origin main
-echo " Done. Version $NEW_VERSION released."
+git commit -m "chore: bump version to $NEW_VERSION"
+git push origin "$CURRENT_BRANCH"
+
+echo "Done. Version $NEW_VERSION pushed to $CURRENT_BRANCH."
