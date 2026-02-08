@@ -200,5 +200,5 @@ configure_auth(
 
 ## Next
 
-- [Permissions](07-permissions.md) — Access control
+- [Permissions](08-permissions.md) — Access control
 - [Auth](05-auth.md) — Basic authentication

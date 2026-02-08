@@ -29,12 +29,12 @@ core run
 | [Auth](05-auth.md) | JWT authentication |
 | [Auth Backends](06-auth-backends.md) | Custom auth backends |
 | [CLI](07-cli.md) | Command reference |
+| [Permissions](08-permissions.md) | Access control |
 
 ### Data Layer
 
 | Doc | Description |
 |-----|-------------|
-| [Permissions](09-permissions.md) | Access control |
 | [Fields](10-fields.md) | All field types |
 | [Relations](11-relations.md) | Relationships |
 | [QuerySets](12-querysets.md) | Django-style queries |

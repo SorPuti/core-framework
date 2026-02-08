@@ -208,5 +208,5 @@ class CustomAuthViewSet(AuthViewSet):
 
 ## Next
 
-- [Admin](06-admin.md) — Admin panel
-- [Permissions](11-permissions.md) — Custom permissions
+- [Admin](40-admin.md) — Admin panel
+- [Permissions](08-permissions.md) — Access control

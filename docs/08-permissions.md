@@ -242,5 +242,5 @@ class PostViewSet(ModelViewSet):
 
 ## Next
 
-- [Auth](05-auth.md) — Authentication
+- [Fields](10-fields.md) — Field types
 - [ViewSets](04-viewsets.md) — CRUD endpoints

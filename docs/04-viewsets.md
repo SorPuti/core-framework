@@ -205,4 +205,4 @@ app = CoreApp(routers=[api])
 ## Next
 
 - [Auth](05-auth.md) — Authentication
-- [Permissions](11-permissions.md) — Custom permissions
+- [Permissions](08-permissions.md) — Access control
