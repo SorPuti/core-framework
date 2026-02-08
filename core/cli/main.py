@@ -298,9 +298,24 @@ def load_config() -> dict[str, Any]:
     
     # Retrocompatibilidade: merge TOML como fallback para campos
     # não configurados via env vars (Settings prevalece)
+    # TOML sobrescreve valores default conhecidos
     _toml_fallback = _load_toml_config()
+    
+    # Valores default que devem ser sobrescritos pelo TOML
+    _default_values = {
+        "models_module": "app.models",
+        "app_module": "app.main:app",
+        "workers_module": None,
+        "tasks_module": None,
+    }
+    
     for key, value in _toml_fallback.items():
-        if key not in config or config[key] is None:
+        if key not in config:
+            config[key] = value
+        elif config[key] is None:
+            config[key] = value
+        elif key in _default_values and config[key] == _default_values[key]:
+            # TOML sobrescreve valor default
             config[key] = value
     
     return config
