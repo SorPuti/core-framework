@@ -2,7 +2,7 @@
 
 All notable changes to Core Framework.
 
-## [0.14.0] - Latest
+## [0..17.6] - Latest
 
 ### Added
 - Admin panel with Django-style ModelAdmin
@@ -12,6 +12,8 @@ All notable changes to Core Framework.
 ### Changed
 - Improved M2M field handling in admin
 - Better permission-based UI visibility
+
+```...Jumping versions```
 
 ## [0.13.0]
 
