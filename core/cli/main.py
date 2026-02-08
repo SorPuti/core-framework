@@ -442,6 +442,24 @@ def _get_core_internal_models() -> list[str]:
     ]
 
 
+def _is_concrete_model(cls: type) -> bool:
+    """
+    Verifica se uma classe é um model concreto (não abstrato).
+    
+    Em SQLAlchemy, __abstract__ é herdado. Uma classe é concreta se:
+    1. __abstract__ NÃO está definido diretamente na classe, OU
+    2. __abstract__ está definido como False diretamente na classe
+    
+    Isso permite que User(AbstractUser, Model) seja concreto mesmo que
+    AbstractUser e Model tenham __abstract__ = True.
+    """
+    # Verifica se __abstract__ está definido DIRETAMENTE na classe (não herdado)
+    if "__abstract__" in cls.__dict__:
+        return cls.__dict__["__abstract__"] is False
+    # Se não está definido diretamente, é concreto (herda mas não declara)
+    return True
+
+
 def _import_core_module(module_path: str):
     """
     Importa um módulo interno do core-framework com fallback robusto.
@@ -584,7 +602,8 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
                 isinstance(obj, type)
                 and issubclass(obj, Model)
                 and obj is not Model
-                and hasattr(obj, "__table__")
+                and hasattr(obj, "__tablename__")
+                and _is_concrete_model(obj)
             ):
                 if obj not in models:
                     models.append(obj)
@@ -606,7 +625,8 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
                     isinstance(obj, type)
                     and issubclass(obj, Model)
                     and obj is not Model
-                    and hasattr(obj, "__table__")
+                    and hasattr(obj, "__tablename__")
+                    and _is_concrete_model(obj)
                 ):
                     # Avoid duplicates (same model imported in multiple places)
                     if obj not in models:
@@ -3067,8 +3087,9 @@ def cmd_collectpermissions(args: argparse.Namespace) -> int:
 
     permissions_to_create: list[tuple[str, str]] = []  # (codename, name)
 
-    # Skip abstract models and models without __table__
-    concrete_models = [m for m in models if hasattr(m, "__table__") and not getattr(m, "__abstract__", False)]
+    # Skip abstract models and models without __tablename__
+    # Nota: _is_concrete_model já foi aplicado em discover_models, mas verificamos novamente por segurança
+    concrete_models = [m for m in models if hasattr(m, "__tablename__") and _is_concrete_model(m)]
 
     print(info(f"Found {len(concrete_models)} model(s) from {len(set(resolve_app_label(m) for m in concrete_models))} app(s)"))
     print()
