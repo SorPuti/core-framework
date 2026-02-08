@@ -2602,31 +2602,34 @@ def cmd_createsuperuser(args: argparse.Namespace) -> int:
 
     # ── Check if migrations have been applied ──────────────────────────
     async def check_tables_exist():
-        from core.models import init_database
         from sqlalchemy import text
+        from sqlalchemy.ext.asyncio import create_async_engine
         
-        engine = await init_database(config["database_url"])
+        db_url = config["database_url"]
+        engine = create_async_engine(db_url)
         
-        async with engine.connect() as conn:
-            # Check for users table (or equivalent)
-            db_url = config["database_url"]
-            if "sqlite" in db_url:
-                result = await conn.execute(
-                    text("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-                )
-            elif "postgresql" in db_url:
-                result = await conn.execute(
-                    text("SELECT tablename FROM pg_tables WHERE tablename='users'")
-                )
-            elif "mysql" in db_url:
-                result = await conn.execute(
-                    text("SHOW TABLES LIKE 'users'")
-                )
-            else:
-                # Assume table exists for unknown dialects
-                return True
-            
-            return result.fetchone() is not None
+        try:
+            async with engine.connect() as conn:
+                # Check for users table (or equivalent)
+                if "sqlite" in db_url:
+                    result = await conn.execute(
+                        text("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+                    )
+                elif "postgresql" in db_url:
+                    result = await conn.execute(
+                        text("SELECT tablename FROM pg_tables WHERE tablename='users'")
+                    )
+                elif "mysql" in db_url:
+                    result = await conn.execute(
+                        text("SHOW TABLES LIKE 'users'")
+                    )
+                else:
+                    # Assume table exists for unknown dialects
+                    return True
+                
+                return result.fetchone() is not None
+        finally:
+            await engine.dispose()
     
     if not asyncio.run(check_tables_exist()):
         print()
