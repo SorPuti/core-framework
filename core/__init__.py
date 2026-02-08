@@ -1,21 +1,23 @@
 """
-Core Framework - Django-inspired, FastAPI-powered.
+Core Framework - Django-style framework for FastAPI.
 
-A minimalist high-performance framework that combines:
-- Django's productivity
-- FastAPI's performance
-- Full developer control
+Docs: https://github.com/your-org/core-framework/docs/
 
-Principles:
-- Zero unnecessary abstractions
-- Async by default
-- Strong typing (mypy friendly)
-- Performance first
-
-Enterprise Features (v0.3.0+):
-- Messaging: Kafka, Redis Streams, RabbitMQ
-- Background Tasks: @task, @periodic_task
-- Deployment: Docker, PM2, Kubernetes generators
+Quick start:
+    from core import CoreApp, Model, ModelViewSet, AutoRouter
+    
+    class Item(Model):
+        __tablename__ = "items"
+        id: Mapped[int] = Field.pk()
+        name: Mapped[str] = Field.string(200)
+    
+    class ItemViewSet(ModelViewSet):
+        model = Item
+    
+    router = AutoRouter(prefix="/items")
+    router.register("", ItemViewSet)
+    
+    app = CoreApp(routers=[router])
 """
 
 from core.models import Model, Field, SoftDeleteMixin, SoftDeleteManager, TenantSoftDeleteManager
@@ -49,7 +51,15 @@ from core.views import (
 from core.routing import Router, AutoRouter
 from core.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
 from core.dependencies import Depends, get_db, get_current_user, set_session_factory
-from core.config import Settings, get_settings, configure, is_configured, reset_settings, on_settings_loaded
+from core.config import (
+    Settings, 
+    get_settings, 
+    configure, 
+    is_configured, 
+    reset_settings,
+    auto_configure_auth,
+    is_auth_configured,
+)
 from core.app import CoreApp
 
 # Validation
@@ -353,7 +363,8 @@ __all__ = [
     "configure",
     "is_configured",
     "reset_settings",
-    "on_settings_loaded",
+    "auto_configure_auth",
+    "is_auth_configured",
     # App
     "CoreApp",
     # Middleware

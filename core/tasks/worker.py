@@ -301,9 +301,9 @@ class TaskWorker:
     
     # ─── Ops: Task Persistence ────────────────────────────────────
     
-    async def _ensure_models_loaded(self) -> None:
+    async     def _ensure_models_loaded(self) -> None:
         """
-        Lazy load de modelos via registry apenas quando necessário.
+        Lazy load de modelos quando necessário.
         
         Carrega modelos apenas se persistência estiver habilitada.
         """
@@ -311,13 +311,16 @@ class TaskWorker:
             return
         
         if self._registry is None:
-            from core.registry import ModelRegistry
-            self._registry = ModelRegistry.get_instance()
+            from importlib import import_module
             
-            # Carrega modelos apenas se necessário para persistência
-            # Registry usa cache, então não há overhead se já foram carregados
-            models_module = getattr(self._settings, "models_module", None)
-            self._registry.discover_models(models_module=models_module)
+            models_module = getattr(self._settings, "models_module", "app.models")
+            
+            try:
+                import_module(models_module)
+                self._registry = True  # Marca como carregado
+            except ModuleNotFoundError:
+                logger.warning("Models module '%s' not found", models_module)
+                self._registry = False
     
     async def _persist_task_start(self, task_msg: TaskMessage) -> None:
         """Persist task execution start to the database."""

@@ -497,6 +497,100 @@ class ModelAdmin:
                     source_file=source,
                     available_fields=columns,
                 )
+        
+        # Valida fieldsets — detecta uso de nome de relacionamento ao invés de FK
+        if self.fieldsets:
+            # Coleta nomes de relacionamentos do model
+            relationship_names = set()
+            m2m_field_names = set()
+            if self.model:
+                try:
+                    from sqlalchemy import inspect as sa_inspect
+                    mapper = sa_inspect(self.model)
+                    for rel in mapper.relationships:
+                        relationship_names.add(rel.key)
+                        # M2M tem secondary table
+                        if rel.secondary is not None:
+                            m2m_field_names.add(rel.key)
+                except Exception:
+                    pass
+            
+            for section_name, section_dict in self.fieldsets:
+                for field_name in section_dict.get("fields", []):
+                    if field_name not in columns and not hasattr(self, field_name):
+                        # M2M fields são válidos (Issue #21)
+                        if field_name in m2m_field_names:
+                            continue
+                        
+                        # Verifica se é um nome de relacionamento (FK)
+                        if field_name in relationship_names:
+                            # Sugere o campo FK correto
+                            fk_suggestion = f"{field_name}_id"
+                            hint = ""
+                            if fk_suggestion in columns:
+                                hint = f" Did you mean '{fk_suggestion}'?"
+                            raise AdminRegistrationError(
+                                f"{admin_class}.fieldsets section '{section_name}' references "
+                                f"relationship '{field_name}' instead of the FK column.{hint}",
+                                model_name=model_name,
+                                admin_class=admin_class,
+                                source_file=source,
+                                available_fields=columns,
+                            )
+                        else:
+                            raise AdminRegistrationError(
+                                f"{admin_class}.fieldsets section '{section_name}' references "
+                                f"'{field_name}' which does not exist on model {model_name}.",
+                                model_name=model_name,
+                                admin_class=admin_class,
+                                source_file=source,
+                                available_fields=columns,
+                            )
+        
+        # Valida fields (quando não usa fieldsets)
+        if self.fields and not self.fieldsets:
+            # Coleta nomes de relacionamentos do model
+            relationship_names = set()
+            m2m_field_names = set()
+            if self.model:
+                try:
+                    from sqlalchemy import inspect as sa_inspect
+                    mapper = sa_inspect(self.model)
+                    for rel in mapper.relationships:
+                        relationship_names.add(rel.key)
+                        if rel.secondary is not None:
+                            m2m_field_names.add(rel.key)
+                except Exception:
+                    pass
+            
+            for field_name in self.fields:
+                if field_name not in columns and not hasattr(self, field_name):
+                    # M2M fields são válidos
+                    if field_name in m2m_field_names:
+                        continue
+                    
+                    if field_name in relationship_names:
+                        fk_suggestion = f"{field_name}_id"
+                        hint = ""
+                        if fk_suggestion in columns:
+                            hint = f" Did you mean '{fk_suggestion}'?"
+                        raise AdminRegistrationError(
+                            f"{admin_class}.fields references relationship '{field_name}' "
+                            f"instead of the FK column.{hint}",
+                            model_name=model_name,
+                            admin_class=admin_class,
+                            source_file=source,
+                            available_fields=columns,
+                        )
+                    else:
+                        raise AdminRegistrationError(
+                            f"{admin_class}.fields references '{field_name}' "
+                            f"which does not exist on model {model_name}.",
+                            model_name=model_name,
+                            admin_class=admin_class,
+                            source_file=source,
+                            available_fields=columns,
+                        )
     
     # -- Hooks (override nos subclasses) --
     

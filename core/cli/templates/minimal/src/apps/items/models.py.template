@@ -1,0 +1,17 @@
+"""
+Item model. Docs: docs/03-models.md
+"""
+from core import Model, Field
+from core.datetime import DateTime
+from sqlalchemy.orm import Mapped
+
+class Item(Model):
+    """Simple item model for CRUD example."""
+    __tablename__ = "items"
+    
+    id: Mapped[int] = Field.pk()
+    name: Mapped[str] = Field.string(max_length=200, index=True)
+    description: Mapped[str | None] = Field.text(nullable=True)
+    price: Mapped[float] = Field.float(default=0.0)
+    active: Mapped[bool] = Field.boolean(default=True)
+    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)

@@ -291,6 +291,9 @@ def get_group_permissions_table() -> Table:
     return _association_tables[key]
 
 
+_group_permissions_table = get_group_permissions_table()
+
+
 # =============================================================================
 # Permission Model
 # =============================================================================
@@ -576,6 +579,9 @@ class AbstractUser(Model):
     # Timestamps
     date_joined: Mapped[DateTime] = Field.datetime(auto_now_add=True)
     last_login: Mapped[DateTime | None] = Field.datetime(nullable=True)
+    
+    # Admin preferences
+    admin_theme: Mapped[str | None] = Field.string(max_length=10, nullable=True, default=None)
     
     # Configuração
     USERNAME_FIELD: ClassVar[str] = "email"

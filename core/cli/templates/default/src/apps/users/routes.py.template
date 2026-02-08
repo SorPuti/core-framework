@@ -1,0 +1,14 @@
+"""
+User routes. Docs: docs/23-routing.md
+"""
+from core import AutoRouter
+from core.auth import AuthViewSet
+from .views import UserViewSet
+
+# User CRUD
+users_router = AutoRouter(prefix="/users", tags=["Users"])
+users_router.register("", UserViewSet)
+
+# Auth endpoints (login, register, me, refresh)
+auth_router = AutoRouter(prefix="/auth", tags=["Auth"])
+auth_router.register("", AuthViewSet)

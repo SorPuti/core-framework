@@ -48,9 +48,63 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         ops_router = create_ops_api(site)
         router.include_router(ops_router)
         
-        # Initialize log buffer
         from core.admin.log_handler import setup_log_buffer
         setup_log_buffer()
+    
+    # 1.5. User Preferences API (rotas literais: /api/preferences/*)
+    prefs_router = APIRouter(prefix="/api/preferences", tags=["admin-preferences"])
+    
+    @prefs_router.post("/theme")
+    async def set_theme_preference(request: Request) -> dict:
+        """Salva a preferência de tema do usuário."""
+        user = _get_admin_user(request)
+        if not user:
+            return {"status": "error", "message": "Not authenticated"}
+        
+        try:
+            body = await request.json()
+            theme = body.get("theme", "light")
+            
+            # Validate theme value
+            if theme not in ("light", "dark"):
+                return {"status": "error", "message": "Invalid theme value"}
+            
+            if hasattr(user, "admin_theme"):
+                from core.models import get_session
+                from sqlalchemy import select
+                
+                # Get user model class
+                user_model = type(user)
+                user_id = user.id
+                
+                db = await get_session()
+                async with db:
+                    # Re-fetch user in this session to avoid detached instance error
+                    stmt = select(user_model).where(user_model.id == user_id)
+                    result = await db.execute(stmt)
+                    db_user = result.scalar_one_or_none()
+                    
+                    if db_user:
+                        db_user.admin_theme = theme
+                        await db.commit()
+                        return {"status": "ok", "theme": theme, "saved": True}
+            
+            return {"status": "ok", "theme": theme, "saved": False}
+        except Exception as e:
+            logger.exception("Error saving theme preference")
+            return {"status": "error", "message": str(e)}
+    
+    @prefs_router.get("/theme")
+    async def get_theme_preference(request: Request) -> dict:
+        """Obtém a preferência de tema do usuário."""
+        user = _get_admin_user(request)
+        if not user:
+            return {"theme": None}
+        
+        theme = getattr(user, "admin_theme", None)
+        return {"theme": theme}
+    
+    router.include_router(prefs_router)
     
     # 2. API views genéricas (rotas com path params: /api/{app_label}/{model_name})
     from core.admin.views import create_api_views
@@ -72,6 +126,13 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         # Resolve current page for active sidebar indicator
         current_path = str(request.url.path).rstrip("/")
         
+        user = _get_admin_user(request)
+        user_is_superuser = user and getattr(user, "is_superuser", False)
+        show_ops = ops_enabled and user_is_superuser
+        
+        # User theme preference (from user profile or None)
+        user_theme = getattr(user, "admin_theme", None) if user else None
+        
         return {
             "request": request,
             "site_title": getattr(settings, "admin_site_title", "Admin"),
@@ -82,11 +143,12 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             "errors": site.errors,
             "debug": debug,
             "theme": getattr(settings, "admin_theme", "default"),
+            "user_theme": user_theme,  # User's personal preference
             "primary_color": getattr(settings, "admin_primary_color", "#3B82F6"),
             "logo_url": getattr(settings, "admin_logo_url", None),
             "core_version": core_version,
             "current_path": current_path,
-            "ops_enabled": ops_enabled,
+            "ops_enabled": show_ops,
             **extra,
         }
     
@@ -178,6 +240,8 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
                 
                 response = RedirectResponse(f"{prefix}/", status_code=303)
                 
+                # Cookie Secure: detecta automaticamente pelo scheme
+                # Em HTTP (dev local), Secure=False é obrigatório
                 cookie_secure = getattr(settings, "admin_cookie_secure", None)
                 if cookie_secure is None:
                     cookie_secure = request.url.scheme == "https"
@@ -187,8 +251,9 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
                     value=session_key,
                     httponly=True,
                     samesite="lax",
-                    max_age=86400,  # 24 hours
+                    max_age=86400,
                     secure=cookie_secure,
+                    path="/",
                 )
                 return response
                 
@@ -221,58 +286,85 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
     # =========================================================================
     
     if ops_enabled:
+        def _require_superuser(request: Request) -> Any:
+            """
+            Verifica se o usuário é superuser para acessar Operations Center.
+            
+            Operations Center contém funcionalidades de infraestrutura que podem
+            comprometer o servidor. Apenas superusers (criados via CLI) devem ter
+            acesso, nunca administradores comuns.
+            """
+            user = _get_admin_user(request)
+            if not user:
+                return None
+            if not getattr(user, "is_superuser", False):
+                return False  # Acesso negado (403)
+            return user  # OK
+        
         @router.get("/ops/", response_class=HTMLResponse)
         async def ops_dashboard(request: Request) -> Response:
-            """Operations Center dashboard."""
-            user = _get_admin_user(request)
-            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            """Operations Center dashboard — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
                 return RedirectResponse(f"{prefix}/login", status_code=302)
-            ctx = _base_context(request, user=user)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
             return _templates.TemplateResponse("admin/ops/dashboard.html", ctx)
         
         @router.get("/ops/infrastructure/", response_class=HTMLResponse)
         async def ops_infrastructure(request: Request) -> Response:
-            """Infrastructure panel."""
-            user = _get_admin_user(request)
-            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            """Infrastructure panel — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
                 return RedirectResponse(f"{prefix}/login", status_code=302)
-            ctx = _base_context(request, user=user)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
             return _templates.TemplateResponse("admin/ops/infrastructure.html", ctx)
         
         @router.get("/ops/tasks/", response_class=HTMLResponse)
         async def ops_tasks(request: Request) -> Response:
-            """Task Manager."""
-            user = _get_admin_user(request)
-            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            """Task Manager — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
                 return RedirectResponse(f"{prefix}/login", status_code=302)
-            ctx = _base_context(request, user=user)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
             return _templates.TemplateResponse("admin/ops/tasks.html", ctx)
         
         @router.get("/ops/workers/", response_class=HTMLResponse)
         async def ops_workers(request: Request) -> Response:
-            """Worker Manager."""
-            user = _get_admin_user(request)
-            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            """Worker Manager — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
                 return RedirectResponse(f"{prefix}/login", status_code=302)
-            ctx = _base_context(request, user=user)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
             return _templates.TemplateResponse("admin/ops/workers.html", ctx)
         
         @router.get("/ops/logs/", response_class=HTMLResponse)
         async def ops_logs(request: Request) -> Response:
-            """Log Viewer with streaming."""
-            user = _get_admin_user(request)
-            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            """Log Viewer with streaming — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
                 return RedirectResponse(f"{prefix}/login", status_code=302)
-            ctx = _base_context(request, user=user)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
             return _templates.TemplateResponse("admin/ops/logs.html", ctx)
         
         @router.get("/ops/periodic/", response_class=HTMLResponse)
         async def ops_periodic(request: Request) -> Response:
-            """Periodic Tasks."""
-            user = _get_admin_user(request)
-            if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            """Periodic Tasks — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
                 return RedirectResponse(f"{prefix}/login", status_code=302)
-            ctx = _base_context(request, user=user)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
             return _templates.TemplateResponse("admin/ops/periodic.html", ctx)
     
     # =========================================================================
@@ -298,6 +390,10 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         
         # Verificar erros do model
         model_errors = site.errors.get_errors_for_model(model.__name__)
+        
+        # Obter permissões do usuário para este model
+        from core.admin.permissions import get_user_model_permissions
+        user_perms = await get_user_model_permissions(user, app_label, model_name)
         
         # Resolve tipo de cada filtro para gerar opcoes corretas no template
         filter_types = {}
@@ -326,6 +422,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             model_errors=model_errors,
             filter_types=filter_types,
             filter_types_json=_json.dumps(filter_types),
+            user_perms=user_perms,
         )
         return _templates.TemplateResponse("admin/list.html", ctx)
     
@@ -347,6 +444,10 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         
         model, admin_instance = result
         
+        # Obter permissões do usuário para este model
+        from core.admin.permissions import get_user_model_permissions
+        user_perms = await get_user_model_permissions(user, app_label, model_name)
+        
         import json as _json
         fields_json = _json.dumps(admin_instance.get_column_info())
         editable_fields_json = _json.dumps(admin_instance.get_editable_fields())
@@ -361,6 +462,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             is_new=(pk == "new"),
             fields_json=fields_json,
             editable_fields_json=editable_fields_json,
+            user_perms=user_perms,
         )
         return _templates.TemplateResponse("admin/detail.html", ctx)
     

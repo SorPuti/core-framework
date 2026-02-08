@@ -1,0 +1,21 @@
+"""
+Event model - Store events in PostgreSQL.
+Docs: docs/03-models.md
+"""
+from core import Model, Field
+from core.datetime import DateTime
+from sqlalchemy.orm import Mapped
+
+
+class Event(Model):
+    """Event log for tracking published/consumed events."""
+    
+    __tablename__ = "events"
+    
+    id: Mapped[int] = Field.pk()
+    topic: Mapped[str] = Field.string(max_length=100, index=True)
+    key: Mapped[str | None] = Field.string(max_length=255, nullable=True)
+    payload: Mapped[dict] = Field.json_field(default={})
+    status: Mapped[str] = Field.string(max_length=20, default="pending")  # pending, sent, failed
+    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+    processed_at: Mapped[DateTime | None] = Field.datetime(nullable=True)

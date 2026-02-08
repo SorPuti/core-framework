@@ -178,19 +178,53 @@ def _is_sensitive_field(name: str) -> bool:
     return any(lower.endswith(s) for s in _SENSITIVE_SUFFIXES)
 
 
-def serialize_instance(obj: Any, schema_fields: list[str], admin: Any = None) -> dict[str, Any]:
+def serialize_instance(
+    obj: Any,
+    schema_fields: list[str],
+    admin: Any = None,
+    m2m_data: dict[str, list] | None = None,
+) -> dict[str, Any]:
     """
     Serializa uma instância de model para dict.
     
     Suporta campos computados (métodos no ModelAdmin).
     Campos sensíveis (password, tokens, hashes) são mascarados.
+    
+    Args:
+        obj: Instância do model
+        schema_fields: Lista de campos para serializar
+        admin: Instância do ModelAdmin (opcional)
+        m2m_data: Dados M2M já conhecidos para evitar lazy load (opcional)
     """
+    from sqlalchemy import inspect as sa_inspect
+    from sqlalchemy.orm import RelationshipProperty
+    
     data: dict[str, Any] = {}
+    m2m_data = m2m_data or {}
+    
+    # Detecta campos M2M do model para evitar lazy load
+    m2m_fields: set[str] = set()
+    try:
+        mapper = sa_inspect(type(obj))
+        for rel_name, rel in mapper.relationships.items():
+            if isinstance(rel, RelationshipProperty) and rel.secondary is not None:
+                m2m_fields.add(rel_name)
+    except Exception:
+        pass
     
     for field_name in schema_fields:
         # Campos sensíveis — nunca expor valor real
         if _is_sensitive_field(field_name):
             data[field_name] = "••••••••"
+            continue
+        
+        # Campos M2M — usa dados fornecidos ou lista vazia (evita lazy load)
+        if field_name in m2m_fields:
+            if field_name in m2m_data:
+                data[field_name] = m2m_data[field_name]
+            else:
+                # Não tenta acessar o atributo para evitar lazy load
+                data[field_name] = []
             continue
         
         # Tenta campo do model primeiro

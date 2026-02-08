@@ -1,0 +1,19 @@
+[project]
+name = "{{project_name}}"
+version = "0.1.0"
+description = "Multi-tenant API with PostgreSQL"
+requires-python = ">={{python_version}}"
+dependencies = [
+    "core-framework",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

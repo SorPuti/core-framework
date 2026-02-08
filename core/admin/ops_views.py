@@ -7,6 +7,10 @@ Provides JSON endpoints for:
 - Worker management (list, detail, heartbeats)
 - Log streaming (SSE) and recent logs
 - Resource inventory
+
+SECURITY: All endpoints require SUPERUSER access.
+Operations Center contains infrastructure controls that could compromise
+the server. Only superusers (created via CLI) should have access.
 """
 
 from __future__ import annotations
@@ -28,6 +32,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger("core.admin.ops")
 
 
+async def check_superuser_access(request: Request) -> Any:
+    """
+    Dependency that requires SUPERUSER access for Operations Center.
+    
+    Operations Center contains infrastructure controls that could compromise
+    the server. Only superusers (created via CLI) should have access,
+    never regular staff/admin users.
+    """
+    # First check basic admin access
+    user = await check_admin_access(request)
+    
+    # Then verify superuser status
+    if not getattr(user, "is_superuser", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Operations Center requires superuser access. Contact your system administrator.",
+        )
+    
+    return user
+
+
 def create_ops_api(site: "AdminSite") -> APIRouter:
     """Create the Operations Center API router."""
     router = APIRouter(prefix="/api/ops", tags=["admin-ops"])
@@ -39,7 +64,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     @router.get("/infrastructure")
     async def infrastructure_view(
         request: Request,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Full infrastructure report."""
         from core.admin.infrastructure import InfraDetector
@@ -48,7 +73,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     @router.get("/infrastructure/health")
     async def infrastructure_health(
         request: Request,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Service health check only (faster)."""
         from core.admin.infrastructure import InfraDetector
@@ -67,7 +92,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         status: str = Query("", description="Filter by status"),
         task_name: str = Query("", description="Filter by task name"),
         queue: str = Query("", description="Filter by queue"),
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """List task executions with filters."""
         try:
@@ -105,7 +130,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     @router.get("/tasks/stats")
     async def tasks_stats(
         request: Request,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Task execution statistics."""
         try:
@@ -144,7 +169,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     @router.get("/tasks/registered")
     async def tasks_registered(
         request: Request,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """List all registered tasks (from registry)."""
         from core.tasks.registry import list_tasks
@@ -154,7 +179,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     async def task_detail(
         request: Request,
         task_id: str,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Get task execution detail."""
         try:
@@ -178,7 +203,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     async def task_retry(
         request: Request,
         task_id: str,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Retry a failed task."""
         try:
@@ -227,7 +252,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     async def task_cancel(
         request: Request,
         task_id: str,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Cancel a pending/retry task."""
         try:
@@ -259,7 +284,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     async def tasks_purge(
         request: Request,
         days: int = Query(30, ge=1),
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Purge old task executions."""
         try:
@@ -287,7 +312,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     @router.get("/periodic")
     async def periodic_list(
         request: Request,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """List periodic tasks (from registry + persisted state)."""
         from core.tasks.registry import get_periodic_tasks
@@ -311,7 +336,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     async def periodic_toggle(
         request: Request,
         task_name: str,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Enable/disable a periodic task."""
         from core.tasks.registry import get_periodic_tasks
@@ -328,7 +353,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     async def periodic_run_now(
         request: Request,
         task_name: str,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Manually trigger a periodic task."""
         from core.tasks.registry import get_periodic_tasks, get_task_producer
@@ -360,7 +385,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     @router.get("/workers")
     async def workers_list(
         request: Request,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """List active workers."""
         try:
@@ -395,7 +420,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     @router.get("/workers/registered")
     async def workers_registered(
         request: Request,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """List all registered message workers (from registry)."""
         def _safe_topic(val: Any) -> str | None:
@@ -431,7 +456,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     async def worker_delete(
         request: Request,
         worker_id: str,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """
         Delete an OFFLINE worker record (Issue #19).
@@ -469,7 +494,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     async def worker_detail(
         request: Request,
         worker_id: str,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Get worker detail."""
         try:
@@ -500,7 +525,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         level: str = Query(""),
         logger_name: str = Query("", alias="logger"),
         search: str = Query(""),
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Get recent log entries."""
         from core.admin.log_handler import get_log_buffer
@@ -525,7 +550,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         level: str = Query("INFO"),
         logger_name: str = Query("", alias="logger"),
         search: str = Query(""),
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ):
         """SSE endpoint for real-time log streaming."""
         from core.admin.log_handler import get_log_buffer
@@ -583,7 +608,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     @router.get("/inventory")
     async def resource_inventory(
         request: Request,
-        user: Any = Depends(check_admin_access),
+        user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Unified resource inventory."""
         from core.admin.resource_inventory import ResourceInventory

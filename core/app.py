@@ -1,28 +1,11 @@
 """
-Bootstrap do Framework - Aplicação principal.
+CoreApp - Application wrapper. Docs: https://github.com/your-org/core-framework/docs/01-quickstart.md
 
-Boot Sequence (ordem garantida):
-1. Settings loaded (frozen, validado)
-2. Logging configured
-3. Database engine initialized
-4. Models metadata ready (tables registered)
-5. Auth configured (se middleware "auth" habilitado)
-6. Middleware applied
-7. Routes registered
-8. Health checks registered (se habilitado)
-9. Startup callbacks executed
-
-Características:
-- Configuração centralizada via Settings
-- Lifecycle management (startup/shutdown)
-- Middleware integrado (Django-style)
-- CORS configurável
-- Documentação automática
-- Health checks built-in (/healthz, /readyz)
-- Auto-configuração de features enterprise:
-  - Multi-tenancy
-  - Read/Write replicas
-  - Soft delete
+Usage:
+    from core import CoreApp, AutoRouter
+    
+    api = AutoRouter(prefix="/api/v1")
+    app = CoreApp(routers=[api])
 """
 
 from __future__ import annotations
@@ -198,6 +181,7 @@ class CoreApp:
         Executa tarefas de startup na ordem garantida.
         
         Boot sequence:
+        0. Auto-configure auth (if user_model is set in Settings)
         1. Schema validation (fail-fast)
         1.5. Load models via registry (lazy, apenas se necessário)
         2. Database initialization
@@ -213,26 +197,32 @@ class CoreApp:
             self.settings.debug,
         )
         
+        # ── Step 0: Auto-configure auth from Settings (plug-and-play) ──
+        # This allows user_model to be configured in Settings without
+        # needing to call configure_auth() manually in main.py
+        from core.config import auto_configure_auth, is_auth_configured
+        
+        if not is_auth_configured() and getattr(self.settings, "user_model", None):
+            if auto_configure_auth(self.settings):
+                app_logger.debug("Auth auto-configured from Settings")
+        
         # ── Step 1: Schema/Model validation (before DB for fail-fast) ──
         if getattr(self.settings, "strict_validation", self.settings.debug):
             await self._validate_schemas()
         
-        # ── Step 1.5: Load models via registry (lazy, apenas se necessário) ──
+        # ── Step 1.5: Load models (apenas se necessário) ──
         # Carrega modelos apenas se necessário para table creation ou permissions
         if self._auto_create_tables or getattr(self.settings, "auto_collect_permissions", False):
-            from core.registry import ModelRegistry
+            from importlib import import_module
             
-            registry = ModelRegistry.get_instance()
             models_module = self.settings.models_module
             
-            # Descobre modelos usando registry (cache evita re-imports)
-            models = registry.discover_models(models_module=models_module)
-            
-            if models:
-                app_logger.debug(
-                    "Loaded %d model(s) via registry for startup",
-                    len(models),
-                )
+            # Importa módulo de modelos explicitamente
+            try:
+                import_module(models_module)
+                app_logger.debug("Loaded models from %s", models_module)
+            except ModuleNotFoundError:
+                app_logger.warning("Models module '%s' not found", models_module)
         
         # ── Step 2: Database initialization ──
         if self.settings.has_read_replica:

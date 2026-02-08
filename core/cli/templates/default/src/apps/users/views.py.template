@@ -1,0 +1,25 @@
+"""
+User views. Docs: docs/04-viewsets.md
+"""
+from core import ModelViewSet
+from core.permissions import IsAuthenticated
+from .models import User
+
+
+class UserViewSet(ModelViewSet):
+    """
+    User CRUD endpoints.
+    
+    Auto-generated:
+        GET    /users/         - List users
+        POST   /users/         - Create user
+        GET    /users/{id}     - Get user
+        PUT    /users/{id}     - Update user
+        PATCH  /users/{id}     - Partial update
+        DELETE /users/{id}     - Delete user
+    """
+    
+    model = User
+    permission_classes = [IsAuthenticated]
+    unique_fields = ["email"]
+    tags = ["Users"]

@@ -1,0 +1,5 @@
+"""
+Model imports - Barrel file for migrations.
+"""
+from src.apps.tenants.models import Tenant  # noqa
+from src.apps.items.models import Item  # noqa

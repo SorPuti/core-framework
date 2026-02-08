@@ -478,45 +478,128 @@
                                             >
                                         </template>
                                         
-                                        <!-- M2M Multi-Select (Issue #21, #24) — dropdown abre só ao clicar -->
+                                        <!-- M2M Multi-Select (Issue #21, #24) — Enhanced UX with chips + grouped options -->
                                         <template x-if="field.widget === 'm2m_select'">
-                                            <div x-data="m2mField(field)" x-init="loadOptions()" class="relative"
-                                                 @click.outside="isOpen = false">
-                                                <!-- Trigger: mostra "N selected" e abre dropdown ao clicar -->
-                                                <button type="button"
-                                                        @click="isOpen = !isOpen"
-                                                        class="w-full flex items-center justify-between px-3.5 py-2.5 text-left text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-gray-300 dark:hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
-                                                    <span x-text="selectedCount === 0 ? 'Select...' : selectedCount + ' selected'"></span>
-                                                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" :class="{ 'rotate-180': isOpen }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-                                                </button>
-                                                <!-- Dropdown (visível só quando isOpen) -->
-                                                <div x-show="isOpen" x-cloak x-transition
-                                                     class="absolute z-50 mt-1 w-full min-w-[200px] border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 shadow-lg overflow-hidden">
-                                                    <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-600">
-                                                        <input type="text" x-model="search" placeholder="Search..."
-                                                               @click.stop
-                                                               class="w-full text-sm bg-transparent border-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400">
-                                                    </div>
-                                                    <div class="max-h-48 overflow-y-auto p-2 space-y-0.5">
-                                                        <template x-for="opt in filteredOptions" :key="opt.id">
-                                                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600/50 cursor-pointer text-sm">
-                                                                <input type="checkbox"
-                                                                       :value="opt.id"
-                                                                       :checked="isSelected(opt.id)"
-                                                                       @change="toggleOption(opt.id)"
+                                            <div x-data="m2mField(field)" x-init="loadOptions()" class="space-y-2">
+                                                <!-- Selected Items (Chips) -->
+                                                <div x-show="selectedItems.length > 0" class="flex flex-wrap gap-1.5 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-600">
+                                                    <template x-for="item in selectedItems" :key="item.id">
+                                                        <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg">
+                                                            <span x-text="item.shortLabel || item.label" class="max-w-[150px] truncate"></span>
+                                                            <button type="button" @click="toggleOption(item.id)" class="hover:text-primary-900 dark:hover:text-primary-100 transition-colors">
+                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                            </button>
+                                                        </span>
+                                                    </template>
+                                                    <button type="button" x-show="selectedItems.length > 3" @click="clearAll()" class="text-[10px] text-gray-400 hover:text-red-500 transition-colors ml-auto self-center">
+                                                        Clear all
+                                                    </button>
+                                                </div>
+                                                
+                                                <!-- Dropdown Trigger -->
+                                                <div class="relative" @click.outside="isOpen = false">
+                                                    <button type="button"
+                                                            @click="isOpen = !isOpen"
+                                                            class="w-full flex items-center justify-between px-3.5 py-2.5 text-left text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-gray-300 dark:hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
+                                                        <span x-text="selectedCount === 0 ? 'Select...' : selectedCount + ' selected'"></span>
+                                                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform" :class="{ 'rotate-180': isOpen }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                                    </button>
+                                                    
+                                                    <!-- Dropdown Panel -->
+                                                    <div x-show="isOpen" x-cloak x-transition
+                                                         class="absolute z-50 mt-1 w-full min-w-[280px] border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 shadow-lg overflow-hidden">
+                                                        <!-- Search -->
+                                                        <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-600">
+                                                            <div class="flex items-center gap-2">
+                                                                <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                                                <input type="text" x-model="search" placeholder="Search options..."
                                                                        @click.stop
-                                                                       class="rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0">
-                                                                <span class="text-gray-900 dark:text-gray-100 truncate" x-text="opt.label"></span>
-                                                                <template x-if="opt.description">
-                                                                    <span class="text-[10px] text-gray-400 truncate ml-auto" x-text="opt.description"></span>
-                                                                </template>
-                                                            </label>
-                                                        </template>
-                                                        <div x-show="loading" class="text-center py-3 text-gray-400 text-xs">Loading...</div>
-                                                        <div x-show="!loading && filteredOptions.length === 0" class="text-center py-3 text-gray-400 text-xs">No options found</div>
-                                                    </div>
-                                                    <div class="px-3 py-1.5 border-t border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
-                                                        <span class="text-[10px] text-gray-400" x-text="selectedCount + ' selected'"></span>
+                                                                       class="w-full text-sm bg-transparent border-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400">
+                                                                <button x-show="search" type="button" @click="search = ''" class="text-gray-400 hover:text-gray-600">
+                                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <!-- Quick Actions -->
+                                                        <div x-show="!search && options.length > 5" class="px-3 py-1.5 border-b border-gray-100 dark:border-gray-600 flex items-center gap-2 text-[10px]">
+                                                            <button type="button" @click="expandAll()" class="text-gray-400 hover:text-primary-500 transition-colors">Expand all</button>
+                                                            <span class="text-gray-300">|</span>
+                                                            <button type="button" @click="collapseAll()" class="text-gray-400 hover:text-primary-500 transition-colors">Collapse all</button>
+                                                            <span class="text-gray-300">|</span>
+                                                            <button type="button" @click="selectAllVisible()" class="text-gray-400 hover:text-primary-500 transition-colors">Select all</button>
+                                                        </div>
+                                                        
+                                                        <!-- Grouped Options -->
+                                                        <div class="max-h-64 overflow-y-auto">
+                                                            <!-- When searching: flat list -->
+                                                            <template x-if="search">
+                                                                <div class="p-2 space-y-0.5">
+                                                                    <template x-for="opt in filteredOptions" :key="opt.id">
+                                                                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600/50 cursor-pointer text-sm">
+                                                                            <input type="checkbox"
+                                                                                   :value="opt.id"
+                                                                                   :checked="isSelected(opt.id)"
+                                                                                   @change="toggleOption(opt.id)"
+                                                                                   @click.stop
+                                                                                   class="rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0">
+                                                                            <span class="text-gray-900 dark:text-gray-100 truncate" x-text="opt.label"></span>
+                                                                            <template x-if="opt.description">
+                                                                                <span class="text-[10px] text-gray-400 truncate ml-auto" x-text="opt.description"></span>
+                                                                            </template>
+                                                                        </label>
+                                                                    </template>
+                                                                    <div x-show="filteredOptions.length === 0" class="text-center py-3 text-gray-400 text-xs">No matches found</div>
+                                                                </div>
+                                                            </template>
+                                                            
+                                                            <!-- When not searching: grouped view -->
+                                                            <template x-if="!search">
+                                                                <div class="p-2 space-y-1">
+                                                                    <template x-for="(group, groupName) in groupedOptions" :key="groupName">
+                                                                        <div class="rounded-lg overflow-hidden">
+                                                                            <!-- Group Header -->
+                                                                            <button type="button" 
+                                                                                    @click="toggleGroup(groupName)"
+                                                                                    class="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
+                                                                                <svg class="w-3.5 h-3.5 transition-transform" :class="{ 'rotate-90': expandedGroups[groupName] }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                                                                                <span class="uppercase tracking-wide" x-text="groupName"></span>
+                                                                                <span class="ml-auto text-[10px] font-normal">
+                                                                                    <span x-text="getGroupSelectedCount(groupName)" class="text-primary-500"></span>/<span x-text="group.length"></span>
+                                                                                </span>
+                                                                            </button>
+                                                                            
+                                                                            <!-- Group Items -->
+                                                                            <div x-show="expandedGroups[groupName]" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="ml-4 space-y-0.5 mt-0.5">
+                                                                                <template x-for="opt in group" :key="opt.id">
+                                                                                    <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600/50 cursor-pointer text-sm">
+                                                                                        <input type="checkbox"
+                                                                                               :value="opt.id"
+                                                                                               :checked="isSelected(opt.id)"
+                                                                                               @change="toggleOption(opt.id)"
+                                                                                               @click.stop
+                                                                                               class="rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0">
+                                                                                        <span class="text-gray-900 dark:text-gray-100 truncate" x-text="opt.shortLabel || opt.label"></span>
+                                                                                        <template x-if="opt.description">
+                                                                                            <span class="text-[10px] text-gray-400 truncate ml-auto max-w-[120px]" x-text="opt.description"></span>
+                                                                                        </template>
+                                                                                    </label>
+                                                                                </template>
+                                                                            </div>
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+                                                            
+                                                            <div x-show="loading" class="text-center py-4 text-gray-400 text-xs">Loading options...</div>
+                                                            <div x-show="!loading && options.length === 0" class="text-center py-4 text-gray-400 text-xs">No options available</div>
+                                                        </div>
+                                                        
+                                                        <!-- Footer -->
+                                                        <div class="px-3 py-1.5 border-t border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between">
+                                                            <span class="text-[10px] text-gray-400" x-text="selectedCount + ' of ' + options.length + ' selected'"></span>
+                                                            <button type="button" @click="isOpen = false" class="text-[10px] text-primary-500 hover:text-primary-600 font-medium">Done</button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -560,7 +643,7 @@
                             <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Actions</h3>
                         </div>
                         <div class="p-5 space-y-3">
-                            {% if (is_new and 'add' in admin.permissions) or (not is_new and 'change' in admin.permissions) %}
+                            {% if (is_new and user_perms.add) or (not is_new and user_perms.change) %}
                             <button type="submit" :disabled="saving"
                                     class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-primary-600/20 disabled:opacity-60 disabled:cursor-not-allowed">
                                 <template x-if="!saving">
@@ -583,7 +666,7 @@
                                 Cancel
                             </a>
                             
-                            {% if not is_new and 'delete' in admin.permissions and 'delete' not in admin.exclude_actions %}
+                            {% if not is_new and user_perms.delete and 'delete' not in admin.exclude_actions %}
                             <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
                                 <button type="button" @click="deleteItem()"
                                         class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors">
@@ -1149,6 +1232,7 @@ function m2mField(field) {
         options: [],
         loading: false,
         isOpen: false,
+        expandedGroups: {},
         
         get selectedIds() {
             try {
@@ -1163,6 +1247,10 @@ function m2mField(field) {
             return [];
         },
         
+        get selectedItems() {
+            return this.options.filter(o => this.isSelected(o.id));
+        },
+        
         get filteredOptions() {
             if (!this.search) return this.options;
             const q = this.search.toLowerCase();
@@ -1172,13 +1260,102 @@ function m2mField(field) {
             );
         },
         
+        get groupedOptions() {
+            const groups = {};
+            for (const opt of this.options) {
+                // Detect group from label pattern: "prefix.action" or "prefix_action"
+                let groupName = 'other';
+                const label = opt.label || '';
+                
+                // Try dot notation first (e.g., "admin.view_user")
+                if (label.includes('.')) {
+                    groupName = label.split('.')[0];
+                    opt.shortLabel = label.split('.').slice(1).join('.');
+                }
+                // Try underscore pattern (e.g., "view_user")
+                else if (label.includes('_')) {
+                    const parts = label.split('_');
+                    // Common action prefixes
+                    const actions = ['view', 'add', 'change', 'delete', 'create', 'edit', 'remove', 'manage'];
+                    if (actions.includes(parts[0])) {
+                        groupName = parts.slice(1).join('_');
+                        opt.shortLabel = parts[0];
+                    } else {
+                        groupName = parts[0];
+                        opt.shortLabel = parts.slice(1).join('_');
+                    }
+                }
+                
+                if (!groups[groupName]) groups[groupName] = [];
+                groups[groupName].push(opt);
+            }
+            
+            // Sort groups alphabetically
+            const sorted = {};
+            Object.keys(groups).sort().forEach(k => sorted[k] = groups[k]);
+            return sorted;
+        },
+        
         get selectedCount() {
             return this.selectedIds.length;
         },
         
         isSelected(id) {
-            // Compare with loose equality to handle int/string mismatch
             return this.selectedIds.some(v => String(v) === String(id));
+        },
+        
+        getGroupSelectedCount(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            return group.filter(o => this.isSelected(o.id)).length;
+        },
+        
+        toggleGroup(groupName) {
+            this.expandedGroups[groupName] = !this.expandedGroups[groupName];
+        },
+        
+        expandAll() {
+            for (const groupName of Object.keys(this.groupedOptions)) {
+                this.expandedGroups[groupName] = true;
+            }
+        },
+        
+        collapseAll() {
+            for (const groupName of Object.keys(this.groupedOptions)) {
+                this.expandedGroups[groupName] = false;
+            }
+        },
+        
+        selectAllVisible() {
+            const toSelect = this.search ? this.filteredOptions : this.options;
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        let current = Array.isArray(data.formData[field.name]) ? [...data.formData[field.name]] : [];
+                        for (const opt of toSelect) {
+                            if (!current.some(v => String(v) === String(opt.id))) {
+                                current.push(opt.id);
+                            }
+                        }
+                        data.formData[field.name] = current;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        clearAll() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        data.formData[field.name] = [];
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
         },
         
         toggleOption(id) {
@@ -1210,6 +1387,14 @@ function m2mField(field) {
                 if (resp.ok) {
                     const data = await resp.json();
                     this.options = data.items || [];
+                    // Auto-expand first group if few groups
+                    const groups = Object.keys(this.groupedOptions);
+                    if (groups.length <= 3) {
+                        groups.forEach(g => this.expandedGroups[g] = true);
+                    } else if (groups.length > 0) {
+                        // Expand first group only
+                        this.expandedGroups[groups[0]] = true;
+                    }
                 }
             } catch(e) {
                 console.error('M2M options load error:', e);

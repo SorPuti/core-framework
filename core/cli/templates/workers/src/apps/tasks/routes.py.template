@@ -1,0 +1,8 @@
+"""
+Task routes. Docs: docs/23-routing.md
+"""
+from core import AutoRouter
+from .views import TaskViewSet
+
+router = AutoRouter(prefix="/tasks", tags=["Tasks"])
+router.register("", TaskViewSet)

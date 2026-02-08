@@ -150,3 +150,25 @@ async def check_model_permission(
                     return True
     
     return False
+
+
+async def get_user_model_permissions(
+    user: Any,
+    app_label: str,
+    model_name: str,
+) -> dict[str, bool]:
+    """
+    Retorna dict com todas as permissões do usuário para um model.
+    
+    Usado para renderizar UI do admin (esconder/mostrar botões).
+    
+    Returns:
+        {"view": True, "add": False, "change": True, "delete": False}
+    """
+    actions = ("view", "add", "change", "delete")
+    result = {}
+    
+    for action in actions:
+        result[action] = await check_model_permission(user, app_label, model_name, action)
+    
+    return result

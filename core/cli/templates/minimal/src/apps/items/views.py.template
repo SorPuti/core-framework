@@ -1,0 +1,12 @@
+"""
+Item ViewSet. Docs: docs/04-viewsets.md
+"""
+from core import ModelViewSet
+from core.permissions import AllowAny
+from .models import Item
+
+class ItemViewSet(ModelViewSet):
+    """CRUD endpoints for Item model."""
+    model = Item
+    permission_classes = [AllowAny]  # Public access (change for production)
+    tags = ["Items"]

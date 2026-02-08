@@ -185,77 +185,44 @@ class AssociationTable:
 
 def _resolve_target(target: str) -> str:
     """
-    Resolve ambiguous model names to full module path (Issue #25).
+    Resolve target de relacionamento.
     
-    When target is "User" (no dots), there may be multiple User classes
-    in the registry (core.auth, project). Use configure_auth's user_model
-    to disambiguate.
+    Targets com "." são considerados fully-qualified e usados diretamente.
+    Target "User" sem "." tenta resolver via get_user_model().
     
-    Usa cache do ModelRegistry para evitar resoluções duplicadas.
+    Fail-fast: se "User" não puder ser resolvido, erro explícito.
+    
+    Args:
+        target: Nome do modelo (ex: "User" ou "app.models.Post")
+    
+    Returns:
+        Target fully-qualified
     
     Raises:
-        ValueError: Se não conseguir resolver ambiguidade com mensagem clara de correção.
+        ValueError: Se target ambíguo não puder ser resolvido
     """
-    # Paths completos não precisam de resolução
+    # Paths completos são usados diretamente
     if "." in target:
-        return target  # Already fully qualified
-    
-    # Obtém registry para cache
-    try:
-        from core.registry import ModelRegistry
-        registry = ModelRegistry.get_instance()
-        
-        # Verifica cache primeiro
-        cached = registry.get_cached_relationship(target)
-        if cached is not None:
-            logger.debug("Using cached resolution for '%s' -> '%s'", target, cached)
-            return cached
-    except Exception:
-        # Se registry não disponível, continua sem cache
-        pass
-    
-    # Resolve normalmente
-    resolved = _resolve_target_impl(target)
-    
-    # Cache resultado se registry disponível
-    try:
-        from core.registry import ModelRegistry
-        registry = ModelRegistry.get_instance()
-        registry.cache_relationship(target, resolved)
-    except Exception:
-        pass
-    
-    return resolved
-
-
-def _resolve_target_impl(target: str) -> str:
-    """
-    Implementação interna de resolução de target.
-    
-    Separada de _resolve_target() para permitir cache sem recursão.
-    """
-    if target != "User":
         return target
     
-    # Tenta resolver "User" via configure_auth
-    try:
-        from core.auth.models import get_user_model
-        User = get_user_model()
-        resolved = f"{User.__module__}.{User.__name__}"
-        logger.debug("Resolved 'User' to '%s'", resolved)
-        return resolved
-    except Exception as e:
-        # Mensagem de erro clara com sugestão de correção
-        logger.warning(
-            "Could not auto-resolve 'User' model. "
-            "Use fully-qualified path, e.g. 'src.apps.users.models.User' "
-            "or configure via configure_auth(user_model=User). "
-            "Error: %s",
-            e,
-        )
-        # Retorna o target original para não quebrar código existente
-        # mas emite warning para o desenvolvedor corrigir
-        return target
+    # Caso especial: "User" → resolve via get_user_model()
+    if target == "User":
+        try:
+            from core.auth.models import get_user_model
+            User = get_user_model()
+            resolved = f"{User.__module__}.{User.__name__}"
+            logger.debug("Resolved 'User' -> '%s'", resolved)
+            return resolved
+        except Exception as e:
+            raise ValueError(
+                f"Cannot resolve ambiguous target 'User'. "
+                f"Use fully-qualified path (e.g., 'app.models.User') "
+                f"or configure auth via settings.user_model. Error: {e}"
+            ) from e
+    
+    # Outros targets sem "." são usados diretamente
+    # (SQLAlchemy resolverá em runtime)
+    return target
 
 
 class Rel:

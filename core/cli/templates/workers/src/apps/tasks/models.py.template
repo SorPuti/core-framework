@@ -1,0 +1,34 @@
+"""
+Task model - Track background jobs.
+Docs: docs/31-workers.md
+"""
+from core import Model, Field
+from core.datetime import DateTime
+from core.choices import TextChoices
+from sqlalchemy.orm import Mapped
+
+
+class TaskStatus(TextChoices):
+    """Task status choices."""
+    PENDING = "pending", "Pending"
+    RUNNING = "running", "Running"
+    COMPLETED = "completed", "Completed"
+    FAILED = "failed", "Failed"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class Task(Model):
+    """Background task tracking."""
+    
+    __tablename__ = "tasks"
+    
+    id: Mapped[int] = Field.pk()
+    name: Mapped[str] = Field.string(max_length=200, index=True)
+    status: Mapped[str] = Field.choice(TaskStatus, default=TaskStatus.PENDING)
+    payload: Mapped[dict] = Field.json_field(default={})
+    result: Mapped[dict | None] = Field.json_field(nullable=True)
+    error: Mapped[str | None] = Field.text(nullable=True)
+    retries: Mapped[int] = Field.integer(default=0)
+    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+    started_at: Mapped[DateTime | None] = Field.datetime(nullable=True)
+    completed_at: Mapped[DateTime | None] = Field.datetime(nullable=True)

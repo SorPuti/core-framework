@@ -1,0 +1,26 @@
+"""
+App settings - Kafka + PostgreSQL + Redis.
+Docs: docs/02-settings.md
+"""
+from core.config import Settings, configure
+
+
+class AppSettings(Settings):
+    """Configuration for event-driven architecture."""
+    
+    # Application
+    app_name: str = "{{project_name}}"
+    app_version: str = "0.1.0"
+    
+    # PostgreSQL (required)
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost/{{project_name}}"
+    
+    # Kafka
+    kafka_bootstrap_servers: str = "localhost:9092"
+    kafka_consumer_group: str = "{{project_name}}-group"
+    
+    # Redis (for caching/sessions)
+    redis_url: str = "redis://localhost:6379/0"
+
+
+settings = configure(settings_class=AppSettings)

@@ -1,14 +1,12 @@
 """
-Sistema de Views inspirado no DRF.
+ViewSet system. Docs: https://github.com/your-org/core-framework/docs/04-viewsets.md
 
-Características:
-- APIView para views baseadas em classe
-- ViewSet para CRUD completo
-- ModelViewSet para operações automáticas
-- Integração nativa com FastAPI
-- Permissões por view/action
-- Serialização automática
-- Validação de unicidade automática
+Usage:
+    from core import ModelViewSet
+    from .models import Item
+    
+    class ItemViewSet(ModelViewSet):
+        model = Item
 """
 
 from __future__ import annotations

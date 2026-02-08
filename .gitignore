@@ -5,6 +5,7 @@ __pycache__/
 
 core.toml
 .core_models_cache.json
+test_project/
 
 # C extensions
 *.so

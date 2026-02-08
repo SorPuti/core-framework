@@ -1,0 +1,27 @@
+"""
+App settings - Background workers.
+Docs: docs/31-workers.md
+"""
+from core.config import Settings, configure
+
+
+class AppSettings(Settings):
+    """Configuration for background task processing."""
+    
+    # Application
+    app_name: str = "{{project_name}}"
+    app_version: str = "0.1.0"
+    
+    # Database
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost/{{project_name}}"
+    
+    # Redis (for task queue)
+    redis_url: str = "redis://localhost:6379/0"
+    
+    # Worker settings
+    worker_concurrency: int = 4
+    task_retry_max: int = 3
+    task_retry_delay: int = 60  # seconds
+
+
+settings = configure(settings_class=AppSettings)
