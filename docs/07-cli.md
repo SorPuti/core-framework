@@ -156,5 +156,5 @@ Most commands support:
 
 ## Next
 
-- [Migrations](08-migrations.md) — Migration details
-- [Testing](13-testing.md) — Test utilities
+- [Migrations](41-migrations.md) — Migration details
+- [Permissions](08-permissions.md) — Access control

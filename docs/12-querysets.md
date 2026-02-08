@@ -2,6 +2,65 @@
 
 Django-style query API.
 
+## Query Chain
+
+```mermaid
+flowchart LR
+    subgraph "Chainable (returns QuerySet)"
+        F[filter]
+        E[exclude]
+        O[order_by]
+        L[limit]
+        OF[offset]
+        SR[select_related]
+    end
+    
+    subgraph "Terminal (executes query)"
+        ALL[all → List]
+        GET[get → Object]
+        FIRST[first → Object?]
+        COUNT[count → int]
+        EXISTS[exists → bool]
+    end
+    
+    F --> E --> O --> L --> ALL
+    F --> GET
+    F --> COUNT
+    
+    style ALL fill:#c8e6c9
+    style GET fill:#c8e6c9
+    style COUNT fill:#c8e6c9
+```
+
+## Lookup Expressions
+
+```mermaid
+flowchart TB
+    subgraph "Comparison"
+        EQ["field=value (exact)"]
+        GT["field__gt (>)"]
+        GTE["field__gte (>=)"]
+        LT["field__lt (<)"]
+        LTE["field__lte (<=)"]
+    end
+    
+    subgraph "String"
+        CONT["field__contains"]
+        ICONT["field__icontains"]
+        START["field__startswith"]
+        END["field__endswith"]
+    end
+    
+    subgraph "Null/In"
+        NULL["field__isnull"]
+        IN["field__in"]
+    end
+    
+    style EQ fill:#e3f2fd
+    style CONT fill:#fff3e0
+    style NULL fill:#e8f5e9
+```
+
 ## Basic Usage
 
 ```python

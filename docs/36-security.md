@@ -2,6 +2,69 @@
 
 Security best practices and configuration.
 
+## Security Layers
+
+```mermaid
+flowchart TB
+    subgraph "Request"
+        REQ[HTTP Request]
+    end
+    
+    subgraph "Security Stack"
+        CORS[CORS Check]
+        HEADERS[Security Headers]
+        AUTH[Authentication]
+        PERM[Permissions]
+        VALID[Input Validation]
+    end
+    
+    subgraph "Protection"
+        XSS[XSS Prevention]
+        SQLI[SQL Injection Prevention]
+        CSRF[CSRF Protection]
+    end
+    
+    REQ --> CORS --> HEADERS --> AUTH --> PERM --> VALID
+    VALID --> XSS
+    VALID --> SQLI
+    VALID --> CSRF
+    
+    style CORS fill:#ffcdd2
+    style AUTH fill:#fff3e0
+    style PERM fill:#e3f2fd
+    style VALID fill:#c8e6c9
+```
+
+## Security Checklist
+
+```mermaid
+flowchart LR
+    subgraph "Must Have"
+        A[✓ HTTPS]
+        B[✓ JWT Auth]
+        C[✓ Input Validation]
+        D[✓ SQL Parameterization]
+    end
+    
+    subgraph "Recommended"
+        E[✓ Security Headers]
+        F[✓ Rate Limiting]
+        G[✓ CORS Config]
+        H[✓ HSTS]
+    end
+    
+    subgraph "Advanced"
+        I[✓ CSP]
+        J[✓ Audit Logs]
+        K[✓ IP Allowlist]
+    end
+    
+    style A fill:#c8e6c9
+    style B fill:#c8e6c9
+    style C fill:#c8e6c9
+    style D fill:#c8e6c9
+```
+
 ## Security Headers
 
 Enable via middleware:

@@ -164,4 +164,4 @@ src/apps/
 ## Next
 
 - [CLI](07-cli.md) — Command reference
-- [Permissions](11-permissions.md) — Access control
+- [Permissions](08-permissions.md) — Access control

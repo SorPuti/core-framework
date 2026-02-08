@@ -2,6 +2,33 @@
 
 Create a working API in 5 minutes.
 
+## Architecture Overview
+
+```mermaid
+flowchart TB
+    subgraph Client
+        REQ[HTTP Request]
+    end
+    
+    subgraph "Core Framework"
+        MW[Middleware Stack]
+        RT[AutoRouter]
+        VS[ViewSet]
+        MD[Model]
+        DB[(Database)]
+    end
+    
+    REQ --> MW
+    MW --> RT
+    RT --> VS
+    VS --> MD
+    MD --> DB
+    
+    style MW fill:#e1f5fe
+    style VS fill:#fff3e0
+    style MD fill:#e8f5e9
+```
+
 ## Requirements
 
 - Python 3.12+

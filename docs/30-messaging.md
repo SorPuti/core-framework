@@ -2,6 +2,55 @@
 
 Kafka and Redis integration for event-driven architecture.
 
+## Event Flow
+
+```mermaid
+flowchart LR
+    subgraph "Service A"
+        API[API Handler]
+        PROD[Producer]
+    end
+    
+    subgraph "Message Broker"
+        KAFKA[Kafka Topic]
+    end
+    
+    subgraph "Service B"
+        CONS[Consumer]
+        WORKER[Worker]
+    end
+    
+    API --> |event| PROD
+    PROD --> |publish| KAFKA
+    KAFKA --> |subscribe| CONS
+    CONS --> WORKER
+    
+    style KAFKA fill:#fff3e0
+```
+
+## Producer/Consumer Pattern
+
+```mermaid
+sequenceDiagram
+    participant A as API
+    participant P as Producer
+    participant K as Kafka
+    participant C as Consumer
+    participant W as Worker
+    
+    A->>P: publish("user.created", data)
+    P->>K: Send message
+    K-->>P: ACK
+    P-->>A: Success
+    
+    Note over K,C: Async processing
+    
+    K->>C: Poll messages
+    C->>W: Process message
+    W-->>C: Result
+    C->>K: Commit offset
+```
+
 ## Configuration
 
 ### Kafka

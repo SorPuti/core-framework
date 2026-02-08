@@ -2,6 +2,30 @@
 
 All configuration in one file: `src/settings.py`.
 
+## Configuration Flow
+
+```mermaid
+flowchart LR
+    subgraph Priority["Priority (high → low)"]
+        ENV[OS Environment]
+        ENVF[".env.{ENV}"]
+        ENVB[".env"]
+        DEF[Class Defaults]
+    end
+    
+    ENV --> |overrides| ENVF
+    ENVF --> |overrides| ENVB
+    ENVB --> |overrides| DEF
+    
+    DEF --> CFG[Final Config]
+    ENVB --> CFG
+    ENVF --> CFG
+    ENV --> CFG
+    
+    style ENV fill:#ffcdd2
+    style CFG fill:#c8e6c9
+```
+
 ## Basic Setup
 
 ```python

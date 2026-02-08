@@ -148,10 +148,10 @@ posts = await Post.objects.order_by("-created_at").all()
 posts = await Post.objects.limit(10).all()
 ```
 
-See [QuerySets](10-querysets.md) for full reference.
+See [QuerySets](12-querysets.md) for full reference.
 
 ## Next
 
 - [ViewSets](04-viewsets.md) — CRUD endpoints
-- [Migrations](08-migrations.md) — Schema changes
-- [QuerySets](10-querysets.md) — Advanced queries
+- [Migrations](41-migrations.md) — Schema changes
+- [QuerySets](12-querysets.md) — Advanced queries

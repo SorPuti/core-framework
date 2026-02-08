@@ -2,6 +2,52 @@
 
 Read/write split for database scaling.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph App["Application"]
+        VS[ViewSet]
+    end
+    
+    subgraph "Database Layer"
+        VS --> |SELECT| READ[(Replica<br/>Read-only)]
+        VS --> |INSERT/UPDATE/DELETE| WRITE[(Primary<br/>Read-Write)]
+        WRITE --> |Replication| READ
+    end
+    
+    style READ fill:#e3f2fd
+    style WRITE fill:#fff3e0
+```
+
+## When to Use
+
+```mermaid
+flowchart TB
+    subgraph "Use Replica (db.read)"
+        R1[List queries]
+        R2[Search/Filter]
+        R3[Reports]
+        R4[Analytics]
+    end
+    
+    subgraph "Use Primary (db.write)"
+        W1[Create records]
+        W2[Update records]
+        W3[Delete records]
+        W4[Transactions]
+    end
+    
+    style R1 fill:#e3f2fd
+    style R2 fill:#e3f2fd
+    style R3 fill:#e3f2fd
+    style R4 fill:#e3f2fd
+    style W1 fill:#fff3e0
+    style W2 fill:#fff3e0
+    style W3 fill:#fff3e0
+    style W4 fill:#fff3e0
+```
+
 ## Configuration
 
 ```python

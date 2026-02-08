@@ -2,6 +2,57 @@
 
 Request/response processing hooks.
 
+## Middleware Stack
+
+```mermaid
+flowchart TB
+    subgraph "Request Flow"
+        REQ[Request] --> M1
+        
+        subgraph Stack["Middleware Stack (order matters)"]
+            M1[1. TimingMiddleware<br/>order=10]
+            M2[2. RequestIDMiddleware<br/>order=5]
+            M3[3. AuthMiddleware<br/>order=100]
+            M4[4. LoggingMiddleware<br/>order=20]
+        end
+        
+        M1 --> M2 --> M3 --> M4
+        M4 --> VIEW[View Handler]
+        VIEW --> M4R[4. after_response]
+        M4R --> M3R[3. after_response]
+        M3R --> M2R[2. after_response]
+        M2R --> M1R[1. after_response]
+        M1R --> RESP[Response]
+    end
+    
+    style M1 fill:#e3f2fd
+    style M2 fill:#e3f2fd
+    style M3 fill:#fff3e0
+    style M4 fill:#e3f2fd
+    style VIEW fill:#c8e6c9
+```
+
+## Middleware Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant R as Request
+    participant M as Middleware
+    participant V as View
+    
+    R->>M: before_request()
+    alt Short-circuit
+        M-->>R: Return Response (e.g., 429)
+    else Continue
+        M->>V: Process request
+        V-->>M: Response
+        M->>M: after_response()
+        M-->>R: Final Response
+    end
+    
+    Note over M: on_error() called<br/>if exception occurs
+```
+
 ## Configuration
 
 **Important:** Register middleware via settings, not directly on FastAPI.
