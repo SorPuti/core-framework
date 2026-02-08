@@ -1,0 +1,19 @@
+# Core Framework Configuration
+# Docs: docs/02-settings.md
+#
+# Note: .env and src/settings.py are the primary configuration sources.
+# This file provides fallback values for CLI commands.
+
+[core]
+# Database (PostgreSQL required for Kafka template)
+database_url = "postgresql+asyncpg://postgres:postgres@localhost/{{project_name}}"
+
+# Migrations
+migrations_dir = "migrations"
+app_label = "app"
+
+# Models discovery (optional - auto-discovered by default)
+# models_module = "src.apps.events.models"
+
+# Application
+app_module = "src.main:app"

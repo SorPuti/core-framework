@@ -273,6 +273,11 @@ def load_config() -> dict[str, Any]:
     
     Retorna dict para compatibilidade com código existente do CLI.
     """
+    # Adiciona diretório atual ao path para permitir import de src.settings
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    
     from core.config import get_settings
     
     settings = get_settings()
@@ -1162,9 +1167,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_makemigrations(args: argparse.Namespace) -> int:
-    """Gera arquivos de migração usando registry centralizado."""
-    from core.registry import ModelRegistry
-    
+    """Gera arquivos de migração detectando models automaticamente."""
     config = load_config()
     
     print(info("Detecting model changes..."))
@@ -1172,16 +1175,15 @@ def cmd_makemigrations(args: argparse.Namespace) -> int:
     # Adiciona diretório atual ao path
     sys.path.insert(0, os.getcwd())
     
-    # Usa registry centralizado para descobrir modelos
-    registry = ModelRegistry.get_instance()
+    # Descobre modelos usando função local (sem ModelRegistry)
     models_module = config.get("models_module")
     rescan = getattr(args, "rescan", False)
     
-    # Descobre modelos via registry (cache evita re-imports)
+    # Descobre modelos via discover_models local
     if not models_module or models_module == "app.models":
-        models = registry.discover_models(models_module=None, force_rescan=rescan)
+        models = discover_models(models_module=None, rescan=rescan)
     else:
-        models = registry.discover_models(models_module=models_module, force_rescan=rescan)
+        models = discover_models(models_module=models_module, rescan=rescan)
     
     if not models and not args.empty:
         print(warning("No models found."))
