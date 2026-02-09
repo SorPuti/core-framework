@@ -1086,6 +1086,16 @@ def auto_configure_auth(settings: Settings | None = None) -> bool:
     
     Pode ser chamado explicitamente ou é chamado automaticamente pelo CoreApp.
     
+    IMPORTANTE: Esta função importa models_module ANTES de resolver user_model
+    para garantir que todos os models relacionados estejam registrados no
+    SQLAlchemy registry. Isso resolve problemas de dependência circular como:
+    
+        User → WorkspaceUser → User
+    
+    Quando User define relationship("workspaces.WorkspaceUser"), o SQLAlchemy
+    precisa que WorkspaceUser já esteja registrado. Importando models_module
+    primeiro, garantimos que todos os models estejam disponíveis.
+    
     Args:
         settings: Settings instance (usa get_settings() se None)
     
@@ -1111,6 +1121,21 @@ def auto_configure_auth(settings: Settings | None = None) -> bool:
     
     try:
         from core.auth import configure_auth as _configure_auth
+        
+        # ══════════════════════════════════════════════════════════════════════
+        # IMPORTANTE: Importar models_module ANTES de resolver user_model
+        # ══════════════════════════════════════════════════════════════════════
+        # Isso garante que todos os models estejam registrados no SQLAlchemy
+        # registry antes de resolver relacionamentos. Sem isso, relacionamentos
+        # como User.workspace_users → "workspaces.WorkspaceUser" falhariam
+        # porque WorkspaceUser ainda não existe no registry.
+        #
+        # Fluxo CORRETO:
+        #   1. Importar models_module (registra TODOS os models)
+        #   2. Resolver user_model (agora WorkspaceUser já existe)
+        #   3. Configurar auth
+        # ══════════════════════════════════════════════════════════════════════
+        _preload_models_module(settings)
         
         # Resolve user_model string para classe
         user_class = _resolve_user_model(settings.user_model)
@@ -1155,6 +1180,52 @@ def auto_configure_auth(settings: Settings | None = None) -> bool:
     except Exception as e:
         logger.warning("Failed to auto-configure Auth: %s", e)
         return False
+
+
+def _preload_models_module(settings: Settings) -> None:
+    """
+    Pré-carrega o módulo de models para registrar todos os models no SQLAlchemy.
+    
+    Esta função é chamada ANTES de resolver user_model para garantir que todos
+    os models relacionados (como WorkspaceUser, Workspace, etc.) já estejam
+    registrados no SQLAlchemy registry quando o User for importado.
+    
+    Isso resolve o problema clássico de dependência circular:
+    
+        User → relationship("workspaces.WorkspaceUser") → WorkspaceUser não existe!
+    
+    Com o pré-carregamento:
+    
+        1. Importa models_module (registra WorkspaceUser, Workspace, etc.)
+        2. Importa User (agora WorkspaceUser já existe no registry)
+        3. SQLAlchemy resolve os relacionamentos corretamente
+    
+    Args:
+        settings: Settings instance com models_module configurado
+    
+    Note:
+        - Silenciosamente ignora erros (não bloqueia o startup)
+        - Suporta models_module como string ou lista de strings
+        - Compatível com a convenção Django de barrel files
+    """
+    models_module = getattr(settings, "models_module", None)
+    if not models_module:
+        return
+    
+    # Suporta string única ou lista de módulos
+    modules = [models_module] if isinstance(models_module, str) else list(models_module)
+    
+    for module_path in modules:
+        try:
+            import_module(module_path)
+            logger.debug("Pre-loaded models module: %s", module_path)
+        except ImportError as e:
+            # Não é erro crítico - o módulo pode não existir ainda
+            # ou pode ser um path inválido. O startup continua.
+            logger.debug(
+                "Could not pre-load models module '%s': %s (continuing anyway)",
+                module_path, e
+            )
 
 
 def _resolve_user_model(user_model_path: str) -> type | None:

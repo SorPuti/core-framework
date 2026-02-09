@@ -103,9 +103,9 @@ class PostViewSet(ModelViewSet):
 ### Basic Permission
 
 ```python
-from core.permissions import BasePermission
+from core.permissions import Permission
 
-class IsOwner(BasePermission):
+class IsOwner(Permission):
     """Only allow owners to access."""
     
     async def has_permission(self, request, view) -> bool:
@@ -146,9 +146,9 @@ class PostViewSet(ModelViewSet):
 ## Group-Based Permissions
 
 ```python
-from core.permissions import BasePermission
+from core.permissions import Permission
 
-class InGroup(BasePermission):
+class InGroup(Permission):
     def __init__(self, *groups):
         self.groups = groups
     
@@ -175,7 +175,7 @@ permission_classes = [IsAuthenticated, IsOwner]
 For OR logic, create a custom permission:
 
 ```python
-class IsOwnerOrAdmin(BasePermission):
+class IsOwnerOrAdmin(Permission):
     async def has_object_permission(self, request, view, obj) -> bool:
         if request.user.is_staff:
             return True
@@ -185,7 +185,7 @@ class IsOwnerOrAdmin(BasePermission):
 ## Model-Level Permissions
 
 ```python
-class HasModelPermission(BasePermission):
+class HasModelPermission(Permission):
     def __init__(self, permission: str):
         self.permission = permission
     
@@ -211,7 +211,7 @@ class PostViewSet(ModelViewSet):
 2. `has_object_permission()` — Called for detail views (retrieve, update, destroy)
 
 ```python
-class IsOwner(BasePermission):
+class IsOwner(Permission):
     async def has_permission(self, request, view) -> bool:
         # Called first, for all actions
         return request.user is not None
@@ -260,7 +260,7 @@ class PostViewSet(ModelViewSet):
 ### Owner Only
 
 ```python
-class IsOwner(BasePermission):
+class IsOwner(Permission):
     async def has_object_permission(self, request, view, obj) -> bool:
         return obj.user_id == request.user.id
 
@@ -272,7 +272,7 @@ class ProfileViewSet(ModelViewSet):
 ### Admin or Owner
 
 ```python
-class IsAdminOrOwner(BasePermission):
+class IsAdminOrOwner(Permission):
     async def has_object_permission(self, request, view, obj) -> bool:
         if request.user.is_staff:
             return True

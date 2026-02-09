@@ -185,27 +185,71 @@ class AssociationTable:
 
 def _resolve_target(target: str) -> str:
     """
-    Resolve target de relacionamento.
+    Resolve target de relacionamento com suporte a lazy loading.
     
-    Targets com "." são considerados fully-qualified e usados diretamente.
-    Target "User" sem "." tenta resolver via get_user_model().
+    Estratégia de resolução (ordem de prioridade):
     
-    Fail-fast: se "User" não puder ser resolvido, erro explícito.
+    1. **Fully-qualified paths** (contém "."): Usados diretamente pelo SQLAlchemy
+       para lazy resolution em runtime. Ex: "src.apps.workspaces.models.Workspace"
+       
+    2. **Sintaxe app.Model** (formato "app.ModelName"): Resolve automaticamente
+       para o path completo usando convenção de projeto.
+       Ex: "workspaces.Workspace" → "src.apps.workspaces.models.Workspace"
+       
+    3. **"User" especial**: Resolve via get_user_model() para o User configurado.
+    
+    4. **Nomes simples**: Passados diretamente para SQLAlchemy resolver no mesmo
+       registry/módulo. Funciona apenas se o model estiver no mesmo arquivo ou
+       já registrado.
     
     Args:
-        target: Nome do modelo (ex: "User" ou "app.models.Post")
+        target: Nome do modelo. Formatos suportados:
+            - "src.apps.posts.models.Post" (fully-qualified)
+            - "posts.Post" (app.Model syntax - RECOMENDADO)
+            - "User" (resolve via auth config)
+            - "Post" (nome simples - mesmo módulo)
     
     Returns:
-        Target fully-qualified
+        Target string para SQLAlchemy (fully-qualified quando possível)
     
     Raises:
-        ValueError: Se target ambíguo não puder ser resolvido
+        ValueError: Se target "User" não puder ser resolvido
+    
+    Examples:
+        >>> _resolve_target("src.apps.posts.models.Post")
+        "src.apps.posts.models.Post"
+        
+        >>> _resolve_target("posts.Post")  # app.Model syntax
+        "src.apps.posts.models.Post"
+        
+        >>> _resolve_target("User")  # resolve via get_user_model()
+        "src.apps.users.models.User"
+        
+        >>> _resolve_target("Comment")  # nome simples
+        "Comment"
     """
-    # Paths completos são usados diretamente
-    if "." in target:
+    # 1. Fully-qualified paths (múltiplos ".") → usar diretamente
+    # Ex: "src.apps.workspaces.models.Workspace"
+    if target.count(".") > 1:
+        logger.debug("Using fully-qualified target: %s", target)
         return target
     
-    # Caso especial: "User" → resolve via get_user_model()
+    # 2. Sintaxe app.Model (exatamente um ".") → expandir para path completo
+    # Ex: "workspaces.Workspace" → "src.apps.workspaces.models.Workspace"
+    if "." in target:
+        app_name, model_name = target.split(".", 1)
+        
+        # Tenta resolver usando convenção de projeto
+        resolved = _resolve_app_model(app_name, model_name)
+        if resolved:
+            logger.debug("Resolved '%s' -> '%s' (app.Model syntax)", target, resolved)
+            return resolved
+        
+        # Se não conseguiu resolver, usa como está (pode ser um path parcial válido)
+        logger.debug("Could not expand '%s', using as-is", target)
+        return target
+    
+    # 3. Caso especial: "User" → resolve via get_user_model()
     if target == "User":
         try:
             from core.auth.models import get_user_model
@@ -220,9 +264,58 @@ def _resolve_target(target: str) -> str:
                 f"or configure auth via settings.user_model. Error: {e}"
             ) from e
     
-    # Outros targets sem "." são usados diretamente
-    # (SQLAlchemy resolverá em runtime)
+    # 4. Nomes simples → SQLAlchemy resolve em runtime no mesmo registry
+    # Ex: "Comment" quando definido no mesmo arquivo
+    logger.debug("Using simple target '%s' (SQLAlchemy will resolve in registry)", target)
     return target
+
+
+def _resolve_app_model(app_name: str, model_name: str) -> str | None:
+    """
+    Resolve sintaxe app.Model para path fully-qualified.
+    
+    Tenta múltiplas convenções de projeto:
+    1. src.apps.{app}.models.{Model}  (convenção padrão)
+    2. src.{app}.models.{Model}       (alternativa)
+    3. apps.{app}.models.{Model}      (sem src)
+    4. {app}.models.{Model}           (direto)
+    
+    Args:
+        app_name: Nome da app (ex: "workspaces", "users")
+        model_name: Nome do model (ex: "Workspace", "User")
+    
+    Returns:
+        Path fully-qualified ou None se não encontrado
+    """
+    import sys
+    
+    # Convenções de path a tentar (ordem de prioridade)
+    conventions = [
+        f"src.apps.{app_name}.models.{model_name}",
+        f"src.{app_name}.models.{model_name}",
+        f"apps.{app_name}.models.{model_name}",
+        f"{app_name}.models.{model_name}",
+    ]
+    
+    # Primeiro, verifica se algum módulo já está carregado
+    for path in conventions:
+        module_path = path.rsplit(".", 1)[0]
+        if module_path in sys.modules:
+            module = sys.modules[module_path]
+            if hasattr(module, model_name):
+                logger.debug("Found '%s' in loaded module '%s'", model_name, module_path)
+                return path
+    
+    # Se nenhum módulo está carregado, retorna a primeira convenção
+    # O SQLAlchemy fará lazy loading quando precisar
+    # Usamos a convenção mais comum: src.apps.{app}.models
+    default_path = conventions[0]
+    logger.debug(
+        "Module not loaded yet, using default convention: %s "
+        "(SQLAlchemy will lazy-load)",
+        default_path
+    )
+    return default_path
 
 
 class Rel:
