@@ -6,17 +6,28 @@ Testa:
 - Sintaxe app.Model para lazy loading
 - Resolução de "User" via get_user_model()
 - Relacionamentos complexos User <-> Other Models
+- Cache de importação de models
 """
 
 import pytest
 import sys
 from unittest.mock import patch, MagicMock
 
-from core.relations import _resolve_target, _resolve_app_model, Rel
+from core.relations import (
+    _resolve_target,
+    _ensure_model_loaded,
+    _get_model_path,
+    clear_model_cache,
+    Rel,
+)
 
 
 class TestResolveTarget:
     """Testes para _resolve_target()."""
+    
+    def setup_method(self):
+        """Limpa cache antes de cada teste."""
+        clear_model_cache()
     
     def test_fully_qualified_path_multiple_dots(self):
         """Paths com múltiplos pontos são usados diretamente."""
@@ -28,16 +39,22 @@ class TestResolveTarget:
         result = _resolve_target("myapp.models.users.User")
         assert result == "myapp.models.users.User"
     
-    def test_app_model_syntax_expands_to_full_path(self):
-        """Sintaxe app.Model expande para path completo."""
-        result = _resolve_target("workspaces.Workspace")
-        # Deve expandir para convenção padrão
-        assert result == "src.apps.workspaces.models.Workspace"
+    def test_app_model_syntax_returns_simple_name_when_loaded(self):
+        """Sintaxe app.Model retorna nome simples quando model está carregado."""
+        # Simula módulo carregado com o model
+        mock_module = MagicMock()
+        mock_module.Workspace = MagicMock()
+        
+        with patch.dict(sys.modules, {"src.apps.workspaces.models": mock_module}):
+            result = _resolve_target("workspaces.Workspace")
+            # Deve retornar nome simples (model está no registry)
+            assert result == "Workspace"
     
-    def test_app_model_syntax_users(self):
-        """Sintaxe app.Model funciona para users."""
-        result = _resolve_target("users.Profile")
-        assert result == "src.apps.users.models.Profile"
+    def test_app_model_syntax_returns_simple_name_as_fallback(self):
+        """Sintaxe app.Model retorna nome simples como fallback."""
+        # Quando o módulo não existe, retorna nome simples
+        result = _resolve_target("nonexistent.SomeModel")
+        assert result == "SomeModel"
     
     def test_simple_name_passed_through(self):
         """Nomes simples são passados para SQLAlchemy resolver."""
@@ -49,93 +66,185 @@ class TestResolveTarget:
         result = _resolve_target("Post")
         assert result == "Post"
     
-    def test_user_special_case_without_auth_raises(self):
-        """'User' sem auth configurado levanta ValueError."""
-        with patch("core.relations.get_user_model") as mock:
+    def test_user_special_case_without_auth_returns_simple_name(self):
+        """'User' sem auth configurado retorna nome simples."""
+        with patch("core.auth.models.get_user_model") as mock:
             mock.side_effect = RuntimeError("No user_model configured")
             
-            with pytest.raises(ValueError) as exc_info:
-                _resolve_target("User")
-            
-            assert "Cannot resolve ambiguous target 'User'" in str(exc_info.value)
+            # Agora retorna "User" em vez de levantar exceção
+            result = _resolve_target("User")
+            assert result == "User"
     
-    def test_user_special_case_with_auth_resolves(self):
-        """'User' com auth configurado resolve para path completo."""
+    def test_user_special_case_with_auth_returns_simple_name(self):
+        """'User' com auth configurado retorna nome simples."""
         mock_user = MagicMock()
         mock_user.__module__ = "src.apps.users.models"
         mock_user.__name__ = "User"
         
-        with patch("core.relations.get_user_model", return_value=mock_user):
+        with patch("core.auth.models.get_user_model", return_value=mock_user):
             result = _resolve_target("User")
-            assert result == "src.apps.users.models.User"
+            # Retorna nome simples (model já está no registry)
+            assert result == "User"
 
 
-class TestResolveAppModel:
-    """Testes para _resolve_app_model()."""
+class TestEnsureModelLoaded:
+    """Testes para _ensure_model_loaded()."""
     
-    def test_returns_default_convention(self):
-        """Retorna convenção padrão src.apps.{app}.models.{Model}."""
-        result = _resolve_app_model("posts", "Post")
-        assert result == "src.apps.posts.models.Post"
+    def setup_method(self):
+        """Limpa cache antes de cada teste."""
+        clear_model_cache()
     
-    def test_uses_loaded_module_if_available(self):
-        """Usa módulo já carregado se disponível."""
-        # Simula módulo carregado
+    def test_returns_true_when_module_already_loaded(self):
+        """Retorna True quando módulo já está carregado."""
         mock_module = MagicMock()
         mock_module.Workspace = MagicMock()
         
         with patch.dict(sys.modules, {"src.apps.workspaces.models": mock_module}):
-            result = _resolve_app_model("workspaces", "Workspace")
-            assert result == "src.apps.workspaces.models.Workspace"
+            result = _ensure_model_loaded("workspaces", "Workspace")
+            assert result is True
     
-    def test_different_app_names(self):
-        """Funciona com diferentes nomes de app."""
-        assert _resolve_app_model("users", "Profile") == "src.apps.users.models.Profile"
-        assert _resolve_app_model("orders", "Order") == "src.apps.orders.models.Order"
-        assert _resolve_app_model("products", "Product") == "src.apps.products.models.Product"
+    def test_returns_false_when_model_not_found(self):
+        """Retorna False quando model não é encontrado."""
+        result = _ensure_model_loaded("nonexistent", "SomeModel")
+        assert result is False
+    
+    def test_tries_import_when_not_loaded(self):
+        """Tenta importar módulo quando não está carregado."""
+        with patch("importlib.import_module") as mock_import:
+            mock_module = MagicMock()
+            mock_module.TestModel = MagicMock()
+            mock_import.return_value = mock_module
+            
+            result = _ensure_model_loaded("testapp", "TestModel")
+            assert result is True
+            # Verifica que tentou importar
+            assert mock_import.called
+    
+    def test_caches_results(self):
+        """Usa cache para evitar importações repetidas."""
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module")
+            
+            # Primeira chamada
+            _ensure_model_loaded("cached", "Model")
+            # Segunda chamada
+            _ensure_model_loaded("cached", "Model")
+            
+            # import_module deve ser chamado apenas nas convenções da primeira vez
+            # (4 convenções tentadas)
+            first_call_count = mock_import.call_count
+            
+            # Terceira chamada - deve usar cache
+            _ensure_model_loaded("cached", "Model")
+            
+            # Não deve ter chamadas adicionais
+            assert mock_import.call_count == first_call_count
+
+
+class TestGetModelPath:
+    """Testes para _get_model_path()."""
+    
+    def test_returns_path_when_module_loaded(self):
+        """Retorna path quando módulo está carregado."""
+        mock_module = MagicMock()
+        mock_module.Post = MagicMock()
+        
+        with patch.dict(sys.modules, {"src.apps.posts.models": mock_module}):
+            result = _get_model_path("posts", "Post")
+            assert result == "src.apps.posts.models.Post"
+    
+    def test_returns_none_when_not_found(self):
+        """Retorna None quando model não é encontrado."""
+        result = _get_model_path("nonexistent", "Model")
+        assert result is None
+    
+    def test_tries_multiple_conventions(self):
+        """Tenta múltiplas convenções de path."""
+        mock_module = MagicMock()
+        mock_module.CustomModel = MagicMock()
+        
+        # Simula módulo em convenção alternativa
+        with patch.dict(sys.modules, {"apps.custom.models": mock_module}):
+            result = _get_model_path("custom", "CustomModel")
+            assert result == "apps.custom.models.CustomModel"
+
+
+class TestClearModelCache:
+    """Testes para clear_model_cache()."""
+    
+    def test_clears_cache(self):
+        """Limpa o cache de importação."""
+        # Popula o cache
+        _ensure_model_loaded("test", "Model")
+        
+        # Limpa
+        clear_model_cache()
+        
+        # Verifica que cache foi limpo (nova chamada tentará importar novamente)
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module")
+            _ensure_model_loaded("test", "Model")
+            assert mock_import.called
 
 
 class TestRelMethods:
     """Testes para métodos da classe Rel."""
     
+    def setup_method(self):
+        """Limpa cache antes de cada teste."""
+        clear_model_cache()
+    
     def test_many_to_one_with_app_model_syntax(self):
         """many_to_one aceita sintaxe app.Model."""
-        with patch("core.relations.relationship") as mock_rel:
-            mock_rel.return_value = MagicMock()
-            
-            Rel.many_to_one("workspaces.Workspace", back_populates="users")
-            
-            # Verifica que foi chamado com path expandido
-            mock_rel.assert_called_once()
-            args, kwargs = mock_rel.call_args
-            assert args[0] == "src.apps.workspaces.models.Workspace"
-            assert kwargs["back_populates"] == "users"
+        # Simula módulo carregado
+        mock_module = MagicMock()
+        mock_module.Workspace = MagicMock()
+        
+        with patch.dict(sys.modules, {"src.apps.workspaces.models": mock_module}):
+            with patch("core.relations.relationship") as mock_rel:
+                mock_rel.return_value = MagicMock()
+                
+                Rel.many_to_one("workspaces.Workspace", back_populates="users")
+                
+                # Verifica que foi chamado com nome simples
+                mock_rel.assert_called_once()
+                args, kwargs = mock_rel.call_args
+                assert args[0] == "Workspace"
+                assert kwargs["back_populates"] == "users"
     
     def test_one_to_many_with_app_model_syntax(self):
         """one_to_many aceita sintaxe app.Model."""
-        with patch("core.relations.relationship") as mock_rel:
-            mock_rel.return_value = MagicMock()
-            
-            Rel.one_to_many("posts.Post", back_populates="author")
-            
-            mock_rel.assert_called_once()
-            args, kwargs = mock_rel.call_args
-            assert args[0] == "src.apps.posts.models.Post"
+        mock_module = MagicMock()
+        mock_module.Post = MagicMock()
+        
+        with patch.dict(sys.modules, {"src.apps.posts.models": mock_module}):
+            with patch("core.relations.relationship") as mock_rel:
+                mock_rel.return_value = MagicMock()
+                
+                Rel.one_to_many("posts.Post", back_populates="author")
+                
+                mock_rel.assert_called_once()
+                args, kwargs = mock_rel.call_args
+                assert args[0] == "Post"
     
     def test_many_to_many_with_app_model_syntax(self):
         """many_to_many aceita sintaxe app.Model."""
-        with patch("core.relations.relationship") as mock_rel:
-            mock_rel.return_value = MagicMock()
-            
-            Rel.many_to_many(
-                "tags.Tag",
-                secondary="post_tags",
-                back_populates="posts"
-            )
-            
-            mock_rel.assert_called_once()
-            args, kwargs = mock_rel.call_args
-            assert args[0] == "src.apps.tags.models.Tag"
+        mock_module = MagicMock()
+        mock_module.Tag = MagicMock()
+        
+        with patch.dict(sys.modules, {"src.apps.tags.models": mock_module}):
+            with patch("core.relations.relationship") as mock_rel:
+                mock_rel.return_value = MagicMock()
+                
+                Rel.many_to_many(
+                    "tags.Tag",
+                    secondary="post_tags",
+                    back_populates="posts"
+                )
+                
+                mock_rel.assert_called_once()
+                args, kwargs = mock_rel.call_args
+                assert args[0] == "Tag"
     
     def test_fully_qualified_path_not_modified(self):
         """Paths fully-qualified não são modificados."""
@@ -162,6 +271,10 @@ class TestCircularDependencyResolution:
     o SQLAlchemy resolve as strings em runtime, não em tempo de definição.
     """
     
+    def setup_method(self):
+        """Limpa cache antes de cada teste."""
+        clear_model_cache()
+    
     def test_lazy_loading_syntax_documentation(self):
         """
         Documenta o uso correto para resolver dependências circulares.
@@ -184,14 +297,31 @@ class TestCircularDependencyResolution:
                 back_populates="user",
             )
         """
-        # Este teste serve como documentação
-        # A sintaxe app.Model resolve para path completo
-        assert _resolve_target("workspaces.WorkspaceUser") == \
-            "src.apps.workspaces.models.WorkspaceUser"
+        # Simula módulo carregado
+        mock_module = MagicMock()
+        mock_module.WorkspaceUser = MagicMock()
+        
+        with patch.dict(sys.modules, {"src.apps.workspaces.models": mock_module}):
+            # A sintaxe app.Model resolve para nome simples quando carregado
+            assert _resolve_target("workspaces.WorkspaceUser") == "WorkspaceUser"
         
         # Paths completos são usados diretamente
         assert _resolve_target("src.apps.workspaces.models.WorkspaceUser") == \
             "src.apps.workspaces.models.WorkspaceUser"
+    
+    def test_app_model_imports_module_automatically(self):
+        """Sintaxe app.Model importa módulo automaticamente se necessário."""
+        with patch("importlib.import_module") as mock_import:
+            mock_module = MagicMock()
+            mock_module.WorkspaceUser = MagicMock()
+            mock_import.return_value = mock_module
+            
+            result = _resolve_target("workspaces.WorkspaceUser")
+            
+            # Deve ter tentado importar
+            assert mock_import.called
+            # Deve retornar nome simples
+            assert result == "WorkspaceUser"
 
 
 class TestPreloadModelsModule:

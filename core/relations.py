@@ -189,12 +189,12 @@ def _resolve_target(target: str) -> str:
     
     Estratégia de resolução (ordem de prioridade):
     
-    1. **Fully-qualified paths** (contém "."): Usados diretamente pelo SQLAlchemy
+    1. **Fully-qualified paths** (3+ pontos): Usados diretamente pelo SQLAlchemy
        para lazy resolution em runtime. Ex: "src.apps.workspaces.models.Workspace"
        
-    2. **Sintaxe app.Model** (formato "app.ModelName"): Resolve automaticamente
-       para o path completo usando convenção de projeto.
-       Ex: "workspaces.Workspace" → "src.apps.workspaces.models.Workspace"
+    2. **Sintaxe app.Model** (exatamente 1 ponto): Resolve para nome simples
+       após garantir que o model está registrado no SQLAlchemy registry.
+       Ex: "workspaces.Workspace" → "Workspace" (após importar o módulo)
        
     3. **"User" especial**: Resolve via get_user_model() para o User configurado.
     
@@ -210,7 +210,7 @@ def _resolve_target(target: str) -> str:
             - "Post" (nome simples - mesmo módulo)
     
     Returns:
-        Target string para SQLAlchemy (fully-qualified quando possível)
+        Target string para SQLAlchemy (nome simples quando possível)
     
     Raises:
         ValueError: Se target "User" não puder ser resolvido
@@ -220,10 +220,10 @@ def _resolve_target(target: str) -> str:
         "src.apps.posts.models.Post"
         
         >>> _resolve_target("posts.Post")  # app.Model syntax
-        "src.apps.posts.models.Post"
+        "Post"  # Retorna nome simples após garantir que está no registry
         
         >>> _resolve_target("User")  # resolve via get_user_model()
-        "src.apps.users.models.User"
+        "User"  # Nome simples após garantir que está no registry
         
         >>> _resolve_target("Comment")  # nome simples
         "Comment"
@@ -234,35 +234,38 @@ def _resolve_target(target: str) -> str:
         logger.debug("Using fully-qualified target: %s", target)
         return target
     
-    # 2. Sintaxe app.Model (exatamente um ".") → expandir para path completo
-    # Ex: "workspaces.Workspace" → "src.apps.workspaces.models.Workspace"
+    # 2. Sintaxe app.Model (exatamente um ".") → importar e retornar nome simples
+    # Ex: "workspaces.Workspace" → "Workspace"
     if "." in target:
         app_name, model_name = target.split(".", 1)
         
-        # Tenta resolver usando convenção de projeto
-        resolved = _resolve_app_model(app_name, model_name)
+        # Tenta importar o model e retorna nome simples
+        if _ensure_model_loaded(app_name, model_name):
+            logger.debug("Resolved '%s' -> '%s' (model loaded into registry)", target, model_name)
+            return model_name
+        
+        # Se não conseguiu carregar, tenta retornar path fully-qualified como fallback
+        resolved = _get_model_path(app_name, model_name)
         if resolved:
-            logger.debug("Resolved '%s' -> '%s' (app.Model syntax)", target, resolved)
+            logger.debug("Resolved '%s' -> '%s' (fallback to full path)", target, resolved)
             return resolved
         
-        # Se não conseguiu resolver, usa como está (pode ser um path parcial válido)
-        logger.debug("Could not expand '%s', using as-is", target)
-        return target
+        # Último recurso: retorna nome simples e espera que esteja no registry
+        logger.debug("Could not load '%s', using simple name '%s' (hope it's in registry)", target, model_name)
+        return model_name
     
     # 3. Caso especial: "User" → resolve via get_user_model()
     if target == "User":
         try:
             from core.auth.models import get_user_model
             User = get_user_model()
-            resolved = f"{User.__module__}.{User.__name__}"
-            logger.debug("Resolved 'User' -> '%s'", resolved)
-            return resolved
+            # Retorna nome simples - o model já está no registry
+            logger.debug("Resolved 'User' -> '%s' (from auth config)", User.__name__)
+            return User.__name__
         except Exception as e:
-            raise ValueError(
-                f"Cannot resolve ambiguous target 'User'. "
-                f"Use fully-qualified path (e.g., 'app.models.User') "
-                f"or configure auth via settings.user_model. Error: {e}"
-            ) from e
+            # Se não conseguiu resolver, retorna "User" e espera que esteja no registry
+            logger.debug("Could not resolve 'User' via auth config: %s. Using simple name.", e)
+            return "User"
     
     # 4. Nomes simples → SQLAlchemy resolve em runtime no mesmo registry
     # Ex: "Comment" quando definido no mesmo arquivo
@@ -270,15 +273,75 @@ def _resolve_target(target: str) -> str:
     return target
 
 
-def _resolve_app_model(app_name: str, model_name: str) -> str | None:
+# Cache de módulos já tentados (evita importações repetidas)
+_model_import_cache: dict[str, bool] = {}
+
+
+def _ensure_model_loaded(app_name: str, model_name: str) -> bool:
     """
-    Resolve sintaxe app.Model para path fully-qualified.
+    Garante que um model está carregado no SQLAlchemy registry.
     
-    Tenta múltiplas convenções de projeto:
-    1. src.apps.{app}.models.{Model}  (convenção padrão)
-    2. src.{app}.models.{Model}       (alternativa)
-    3. apps.{app}.models.{Model}      (sem src)
-    4. {app}.models.{Model}           (direto)
+    Tenta importar o módulo do model se ainda não estiver carregado.
+    Usa cache para evitar tentativas repetidas de importação.
+    
+    Args:
+        app_name: Nome da app (ex: "workspaces", "users")
+        model_name: Nome do model (ex: "Workspace", "User")
+    
+    Returns:
+        True se o model foi encontrado/carregado, False caso contrário
+    """
+    import sys
+    from importlib import import_module
+    
+    cache_key = f"{app_name}.{model_name}"
+    
+    # Verifica cache primeiro
+    if cache_key in _model_import_cache:
+        return _model_import_cache[cache_key]
+    
+    # Convenções de módulo a tentar (ordem de prioridade)
+    module_conventions = [
+        f"src.apps.{app_name}.models",
+        f"src.{app_name}.models",
+        f"apps.{app_name}.models",
+        f"{app_name}.models",
+    ]
+    
+    # Primeiro, verifica se algum módulo já está carregado
+    for module_path in module_conventions:
+        if module_path in sys.modules:
+            module = sys.modules[module_path]
+            if hasattr(module, model_name):
+                logger.debug("Found '%s' in already-loaded module '%s'", model_name, module_path)
+                _model_import_cache[cache_key] = True
+                return True
+    
+    # Tenta importar cada convenção
+    for module_path in module_conventions:
+        try:
+            module = import_module(module_path)
+            if hasattr(module, model_name):
+                logger.debug("Loaded '%s' from module '%s'", model_name, module_path)
+                _model_import_cache[cache_key] = True
+                return True
+        except ImportError:
+            continue
+        except Exception as e:
+            logger.debug("Error importing '%s': %s", module_path, e)
+            continue
+    
+    # Não encontrou em nenhuma convenção
+    logger.debug("Could not find model '%s' in app '%s'", model_name, app_name)
+    _model_import_cache[cache_key] = False
+    return False
+
+
+def _get_model_path(app_name: str, model_name: str) -> str | None:
+    """
+    Retorna o path fully-qualified de um model se encontrado.
+    
+    Verifica módulos já carregados para encontrar o path correto.
     
     Args:
         app_name: Nome da app (ex: "workspaces", "users")
@@ -289,33 +352,32 @@ def _resolve_app_model(app_name: str, model_name: str) -> str | None:
     """
     import sys
     
-    # Convenções de path a tentar (ordem de prioridade)
+    # Convenções de path a tentar
     conventions = [
-        f"src.apps.{app_name}.models.{model_name}",
-        f"src.{app_name}.models.{model_name}",
-        f"apps.{app_name}.models.{model_name}",
-        f"{app_name}.models.{model_name}",
+        f"src.apps.{app_name}.models",
+        f"src.{app_name}.models",
+        f"apps.{app_name}.models",
+        f"{app_name}.models",
     ]
     
-    # Primeiro, verifica se algum módulo já está carregado
-    for path in conventions:
-        module_path = path.rsplit(".", 1)[0]
+    for module_path in conventions:
         if module_path in sys.modules:
             module = sys.modules[module_path]
             if hasattr(module, model_name):
-                logger.debug("Found '%s' in loaded module '%s'", model_name, module_path)
-                return path
+                return f"{module_path}.{model_name}"
     
-    # Se nenhum módulo está carregado, retorna a primeira convenção
-    # O SQLAlchemy fará lazy loading quando precisar
-    # Usamos a convenção mais comum: src.apps.{app}.models
-    default_path = conventions[0]
-    logger.debug(
-        "Module not loaded yet, using default convention: %s "
-        "(SQLAlchemy will lazy-load)",
-        default_path
-    )
-    return default_path
+    return None
+
+
+def clear_model_cache() -> None:
+    """
+    Limpa o cache de importação de models.
+    
+    Útil para testes ou quando models são recarregados dinamicamente.
+    """
+    global _model_import_cache
+    _model_import_cache.clear()
+    logger.debug("Model import cache cleared")
 
 
 class Rel:
@@ -767,4 +829,5 @@ class Rel:
 __all__ = [
     "Rel",
     "AssociationTable",
+    "clear_model_cache",
 ]
