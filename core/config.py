@@ -18,7 +18,7 @@ import secrets
 import warnings
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Literal, Self, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar, cast, overload
 
 from pydantic import Field as PydanticField, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +27,20 @@ logger = logging.getLogger("core.config")
 
 # TypeVar para get_settings() genérico - permite autocomplete de subclasses
 _SettingsT = TypeVar("_SettingsT", bound="Settings")
+
+# =========================================================================
+# TYPE_CHECKING: Import da classe de Settings do usuário para autocomplete
+# =========================================================================
+# Este bloco só é executado por type checkers (PyCharm, mypy, pyright).
+#
+# Quando o usuário tem src/settings.py com AppSettings, o PyCharm resolve
+# o import e oferece autocomplete dos campos customizados automaticamente.
+#
+# Se src.settings não existir, o type checker mostra warning mas não quebra.
+# O fallback _UserSettings = Settings é definido após a classe Settings.
+# =========================================================================
+if TYPE_CHECKING:
+    from src.settings import AppSettings as _UserSettings  # noqa: F401
 
 
 # =========================================================================
@@ -934,6 +948,11 @@ class Settings(BaseSettings):
 _settings: Settings | None = None
 _settings_class: type[Settings] = Settings
 
+# Runtime fallback para _UserSettings (usado apenas se TYPE_CHECKING é False)
+# Em runtime, _UserSettings é Settings. Para type checkers, é AppSettings.
+if not TYPE_CHECKING:
+    _UserSettings = Settings
+
 
 def bootstrap_project_settings() -> None:
     """
@@ -1028,24 +1047,27 @@ def _configure_auth_from_settings() -> None:
 
 
 @overload
-def get_settings() -> Settings: ...
+def get_settings() -> _UserSettings: ...  # type: ignore[name-defined]
 
 @overload
 def get_settings(settings_type: type[_SettingsT]) -> _SettingsT: ...
 
-def get_settings(settings_type: type[_SettingsT] | None = None) -> Settings | _SettingsT:
+def get_settings(settings_type: type[_SettingsT] | None = None) -> _UserSettings | _SettingsT:  # type: ignore[name-defined]
     """
     Retorna a instância global de Settings.
     
     Se settings ainda não foi carregado, executa bootstrap uma vez.
     Após o bootstrap inicial, apenas retorna o valor cacheado.
     
+    O tipo de retorno é automaticamente inferido como AppSettings (de src.settings)
+    quando disponível, permitindo autocomplete no PyCharm sem passar tipo explícito.
+    
     Args:
         settings_type: Classe de Settings para cast de tipo (opcional).
                        Usado apenas para inferência estática, não afeta runtime.
     
     Returns:
-        Settings instance (singleton), tipado como a classe passada se fornecida.
+        Settings instance (singleton), tipado como AppSettings se src.settings existir.
     
     Raises:
         RuntimeError: Se bootstrap falhar (src.settings não encontrado)
