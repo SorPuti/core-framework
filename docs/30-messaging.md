@@ -1,8 +1,8 @@
 # Messaging
 
-Kafka and Redis integration for event-driven architecture.
+Sistema de mensageria Kafka com configuração plug-and-play. Defina `kafka_enabled=True` no Settings e tudo é configurado automaticamente.
 
-## Event Flow
+## Arquitetura
 
 ```mermaid
 flowchart LR
@@ -28,86 +28,88 @@ flowchart LR
     style KAFKA fill:#fff3e0
 ```
 
-## Producer/Consumer Pattern
-
-```mermaid
-sequenceDiagram
-    participant A as API
-    participant P as Producer
-    participant K as Kafka
-    participant C as Consumer
-    participant W as Worker
-    
-    A->>P: publish("user.created", data)
-    P->>K: Send message
-    K-->>P: ACK
-    P-->>A: Success
-    
-    Note over K,C: Async processing
-    
-    K->>C: Poll messages
-    C->>W: Process message
-    W-->>C: Result
-    C->>K: Commit offset
-```
-
-## Configuration
-
-### Kafka
+## Configuração Plug-and-Play
 
 ```python
 # src/settings.py
 class AppSettings(Settings):
+    # Habilita Kafka - auto-configura tudo
     kafka_enabled: bool = True
-    kafka_backend: str = "aiokafka"  # or "confluent"
-    kafka_bootstrap_servers: str = "localhost:9092"
+    kafka_bootstrap_servers: str = "kafka:9092"
+    
+    # Opcional: Schema Registry para Avro
+    kafka_schema_registry_url: str = "http://schema-registry:8081"
+    avro_default_namespace: str = "com.mycompany.events"
 ```
 
-Multiple servers:
+**Zero configuração explícita**: Você NÃO precisa chamar `configure_kafka()`. Basta definir `kafka_enabled=True`.
 
-```bash
-KAFKA_BOOTSTRAP_SERVERS=kafka1:9092,kafka2:9092,kafka3:9092
+```python
+# Verificar se Kafka foi configurado
+from core.config import is_kafka_configured
+
+if is_kafka_configured():
+    print("Kafka pronto!")
 ```
 
-### Redis
+### Múltiplos Brokers (Cluster)
+
+Use vírgula para separar múltiplos servidores Kafka:
 
 ```python
 class AppSettings(Settings):
-    redis_url: str = "redis://localhost:6379/0"
+    kafka_enabled: bool = True
+    # Cluster com 3 brokers
+    kafka_bootstrap_servers: str = "kafka1:9092,kafka2:9092,kafka3:9092"
+    
+    # Schema Registry cluster
+    kafka_schema_registry_url: str = "http://sr1:8081,http://sr2:8081"
 ```
 
-## Kafka Backends
+```bash
+# .env
+KAFKA_BOOTSTRAP_SERVERS=kafka1:9092,kafka2:9092,kafka3:9092
+KAFKA_SCHEMA_REGISTRY_URL=http://sr1:8081,http://sr2:8081
+```
 
-| Backend | Package | Use Case |
-|---------|---------|----------|
-| `"aiokafka"` | `aiokafka` | Default, pure async |
-| `"confluent"` | `confluent-kafka` | High performance |
+## Backends
+
+| Backend | Package | Uso |
+|---------|---------|-----|
+| `"aiokafka"` | `aiokafka` | Default, async puro |
+| `"confluent"` | `confluent-kafka` | Alta performance |
 
 ```bash
 # aiokafka (default)
 pip install aiokafka
 
-# confluent (high performance)
+# confluent (alta performance)
 pip install confluent-kafka
+```
+
+```python
+class AppSettings(Settings):
+    kafka_enabled: bool = True
+    kafka_backend: str = "confluent"  # ou "aiokafka"
 ```
 
 ## Producer
 
-### Basic Usage
+### Uso Básico
 
 ```python
 from core.messaging import get_producer
 
 producer = get_producer("kafka")
 
-# Send message
+# Enviar mensagem
 await producer.send(
     topic="events",
     message={"user_id": 1, "action": "login"},
     key="user-1"
 )
 
-# Fire and forget
+# Fire and forget (mais rápido, menos confiável)
 await producer.send_fire_and_forget(
     topic="logs",
     message={"level": "info", "msg": "User logged in"}
@@ -132,7 +134,7 @@ from core.messaging import producer
 async def publish_user_event(user_id: int, action: str):
     return {"user_id": user_id, "action": action}
 
-# Usage
+# Uso
 await publish_user_event(1, "login")
 ```
 
@@ -153,7 +155,7 @@ async def handle_user_event(message: dict):
     print(f"User {user_id} performed {action}")
 ```
 
-### Run Consumer
+### Executar Consumer
 
 ```bash
 core kafka consume user-events --group my-service
@@ -161,7 +163,7 @@ core kafka consume user-events --group my-service
 
 ## Topics
 
-### Define Topics
+### Definir Topics
 
 ```python
 from core.messaging import Topic, EventTopic, CommandTopic, StateTopic
@@ -177,16 +179,16 @@ class UserEvents(EventTopic):
     schema = UserEventSchema
     partitions = 3
     replication_factor = 1
-    retention_ms = 604800000  # 7 days
+    retention_ms = 604800000  # 7 dias
 ```
 
-### Topic Types
+### Tipos de Topic
 
-| Type | `cleanup_policy` | Use Case |
-|------|------------------|----------|
-| `EventTopic` | `"delete"` | Events, logs |
-| `CommandTopic` | `"delete"` | Commands, tasks |
-| `StateTopic` | `"compact"` | State, snapshots |
+| Tipo | `cleanup_policy` | Uso |
+|------|------------------|-----|
+| `EventTopic` | `"delete"` | Eventos, logs |
+| `CommandTopic` | `"delete"` | Comandos, tasks |
+| `StateTopic` | `"compact"` | Estado, snapshots |
 
 ## Workers
 
@@ -208,7 +210,7 @@ async def process_task(message: dict) -> dict:
     return {"status": "completed", "result": result}
 ```
 
-### Class-Based Worker
+### Worker Baseado em Classe
 
 ```python
 from core.messaging import Worker
@@ -234,11 +236,11 @@ class TaskWorker(Worker):
         logger.info(f"Completed: {result}")
 ```
 
-### Run Worker
+### Executar Worker
 
 ```bash
 core kafka worker TaskWorker
-core kafka worker --all  # Run all workers
+core kafka worker --all  # Todos os workers
 ```
 
 ## Retry Policy
@@ -247,35 +249,65 @@ core kafka worker --all  # Run all workers
 @worker(
     topic="tasks",
     max_retries=5,
-    retry_backoff="exponential",  # or "linear", "fixed"
+    retry_backoff="exponential",  # ou "linear", "fixed"
     dlq_topic="tasks-dlq",  # Dead letter queue
 )
 async def process_task(message: dict):
     ...
 ```
 
-Backoff calculation:
-- `"fixed"`: Always `initial_delay`
+Cálculo de backoff:
+- `"fixed"`: Sempre `initial_delay`
 - `"linear"`: `initial_delay * attempt`
 - `"exponential"`: `initial_delay * (2 ** attempt)`
 
 ## Avro Serialization
 
-### Define Schema
+### Namespace Configurável
+
+O namespace Avro é lido automaticamente do Settings:
+
+```python
+class AppSettings(Settings):
+    kafka_enabled: bool = True
+    avro_default_namespace: str = "com.mycompany.events"
+```
+
+### Definir Schema
 
 ```python
 from core.messaging import AvroModel
 
 class UserEvent(AvroModel):
+    # Namespace herdado de avro_default_namespace
+    # ou defina explicitamente:
+    __avro_namespace__ = "com.mycompany.users"
+    
     user_id: int
     action: str
     timestamp: str
 
-# Get Avro schema
+# Obter schema Avro
 schema = UserEvent.__avro_schema__()
 ```
 
-### Send with Avro
+### Decorator para Schema
+
+```python
+from core.messaging import avro_schema
+
+@avro_schema  # Usa avro_default_namespace do Settings
+class OrderEvent(AvroModel):
+    order_id: int
+    status: str
+
+@avro_schema(namespace="com.mycompany.orders")  # Namespace explícito
+class OrderCreated(AvroModel):
+    order_id: int
+    customer_id: int
+```
+
+### Enviar com Avro
 
 ```python
 from core.messaging.confluent import ConfluentProducer
@@ -294,6 +326,7 @@ await producer.send_avro(
 
 ```python
 class AppSettings(Settings):
+    kafka_enabled: bool = True
     kafka_schema_registry_url: str = "http://localhost:8081"
 ```
 
@@ -306,7 +339,7 @@ from core.messaging.redis import RedisProducer
 
 producer = RedisProducer()
 await producer.send(
-    topic="events",  # Stream name
+    topic="events",  # Nome do stream
     message={"user_id": 1, "action": "login"}
 )
 ```
@@ -326,61 +359,134 @@ async for message in consumer:
     await consumer.ack(message)
 ```
 
-## Kafka Configuration
+## Referência de Settings
 
-Full settings:
+### Conexão
 
-```python
-class AppSettings(Settings):
-    # Connection
-    kafka_bootstrap_servers: str = "localhost:9092"
-    kafka_client_id: str = "core-framework"
-    
-    # Security
-    kafka_security_protocol: str = "PLAINTEXT"  # SSL, SASL_PLAINTEXT, SASL_SSL
-    kafka_sasl_mechanism: str | None = None
-    kafka_sasl_username: str | None = None
-    kafka_sasl_password: str | None = None
-    kafka_ssl_cafile: str | None = None
-    kafka_ssl_certfile: str | None = None
-    kafka_ssl_keyfile: str | None = None
-    
-    # Producer
-    kafka_compression_type: str = "none"  # gzip, snappy, lz4, zstd
-    kafka_linger_ms: int = 0
-    kafka_max_batch_size: int = 16384
-    kafka_request_timeout_ms: int = 30000
-    kafka_retry_backoff_ms: int = 100
-    
-    # Consumer
-    kafka_auto_offset_reset: str = "earliest"  # latest, none
-    kafka_enable_auto_commit: bool = True
-    kafka_auto_commit_interval_ms: int = 5000
-    kafka_max_poll_records: int = 500
-    kafka_session_timeout_ms: int = 10000
-    kafka_heartbeat_interval_ms: int = 3000
-```
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `kafka_enabled` | `bool` | `False` | **Habilita Kafka** |
+| `kafka_backend` | `Literal` | `"aiokafka"` | Backend: aiokafka ou confluent |
+| `kafka_bootstrap_servers` | `str` | `"localhost:9092"` | Servidores Kafka |
+| `kafka_client_id` | `str` | `"core-framework"` | Client ID |
+| `kafka_fire_and_forget` | `bool` | `False` | Não aguardar ACK |
+
+### Segurança
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `kafka_security_protocol` | `Literal` | `"PLAINTEXT"` | PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL |
+| `kafka_sasl_mechanism` | `str \| None` | `None` | PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 |
+| `kafka_sasl_username` | `str \| None` | `None` | Usuário SASL |
+| `kafka_sasl_password` | `str \| None` | `None` | Senha SASL |
+| `kafka_ssl_cafile` | `str \| None` | `None` | Certificado CA |
+| `kafka_ssl_certfile` | `str \| None` | `None` | Certificado cliente |
+| `kafka_ssl_keyfile` | `str \| None` | `None` | Chave privada |
+
+### Producer
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `kafka_compression_type` | `Literal` | `"none"` | none, gzip, snappy, lz4, zstd |
+| `kafka_linger_ms` | `int` | `0` | Tempo para acumular batch (ms) |
+| `kafka_max_batch_size` | `int` | `16384` | Tamanho máximo do batch (bytes) |
+| `kafka_request_timeout_ms` | `int` | `30000` | Timeout de requisição (ms) |
+| `kafka_retry_backoff_ms` | `int` | `100` | Backoff entre retries (ms) |
+
+### Consumer
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `kafka_auto_offset_reset` | `Literal` | `"earliest"` | earliest, latest, none |
+| `kafka_enable_auto_commit` | `bool` | `True` | Auto-commit de offsets |
+| `kafka_auto_commit_interval_ms` | `int` | `5000` | Intervalo de auto-commit (ms) |
+| `kafka_max_poll_records` | `int` | `500` | Máximo de registros por poll |
+| `kafka_session_timeout_ms` | `int` | `10000` | Timeout de sessão (ms) |
+| `kafka_heartbeat_interval_ms` | `int` | `3000` | Intervalo de heartbeat (ms) |
+
+### Avro / Schema Registry
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `kafka_schema_registry_url` | `str \| None` | `None` | URL do Schema Registry |
+| `avro_default_namespace` | `str` | `"com.core.events"` | Namespace padrão Avro |
+
+### Messaging Geral
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `messaging_default_topic` | `str` | `"events"` | Tópico padrão |
+| `messaging_event_source` | `str` | `""` | Identificador de origem |
+| `messaging_dead_letter_topic` | `str` | `"dead-letter"` | Tópico para falhas |
 
 ## CLI Commands
 
 ```bash
-# List topics
+# Listar topics
 core kafka topics
 
-# Create topic
+# Criar topic
 core kafka create-topic user-events --partitions 3
 
-# Consume messages
+# Consumir mensagens
 core kafka consume user-events --group my-service
 
-# Run worker
+# Executar worker
 core kafka worker MyWorker
 
-# Run all workers
+# Executar todos os workers
 core kafka worker --all
 ```
 
-## Next
+## Exemplo Completo
 
-- [Workers](31-workers.md) — Background tasks
-- [Settings](02-settings.md) — Configuration
+```python
+# src/settings.py
+class AppSettings(Settings):
+    # Kafka auto-configurado
+    kafka_enabled: bool = True
+    kafka_backend: str = "confluent"
+    kafka_bootstrap_servers: str = "kafka:9092"
+    kafka_schema_registry_url: str = "http://schema-registry:8081"
+    avro_default_namespace: str = "com.mycompany.events"
+    
+    # Segurança
+    kafka_security_protocol: str = "SASL_SSL"
+    kafka_sasl_mechanism: str = "SCRAM-SHA-256"
+    kafka_sasl_username: str = "my-user"
+    kafka_sasl_password: str = "my-password"
+    
+    # Performance
+    kafka_compression_type: str = "lz4"
+    kafka_linger_ms: int = 5
+    kafka_max_batch_size: int = 32768
+
+# src/events.py
+from core.messaging import AvroModel, avro_schema
+
+@avro_schema
+class UserCreated(AvroModel):
+    user_id: int
+    email: str
+    created_at: str
+
+# src/handlers.py
+from core.messaging import producer, consumer
+
+@producer(topic="user-events")
+async def publish_user_created(user_id: int, email: str):
+    return UserCreated(
+        user_id=user_id,
+        email=email,
+        created_at=datetime.utcnow().isoformat()
+    ).model_dump()
+
+@consumer(topic="user-events", group_id="notification-service")
+async def send_welcome_email(message: dict):
+    await send_email(message["email"], "Welcome!")
+```
+
+## Próximos Passos
+
+- [Workers](31-workers.md) — Tasks em background
+- [Settings](02-settings.md) — Todas as configurações

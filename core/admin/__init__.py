@@ -9,16 +9,21 @@ Uso:
     from core.admin import admin, ModelAdmin
     
     @admin.register(User)
-    class UserAdmin(ModelAdmin):
+    class UserAdmin(ModelAdmin[User]):  # Tipagem genérica para autocomplete
         list_display = ("id", "email", "is_active")
         search_fields = ("email",)
         ordering = ("-created_at",)
 
 API pública:
     - admin: Proxy para AdminSite.default_site (registrar models)
-    - ModelAdmin: Classe base para configuração de models
+    - ModelAdmin: Classe base para configuração de models (genérica)
     - InlineModelAdmin: Configuração inline de models relacionados (Fase 2)
     - AdminSite: Registry central (uso avançado — múltiplos sites)
+    
+Tipos para autocomplete:
+    - WidgetConfig: TypedDict para configuração de widgets
+    - FieldsetConfig: Tipo para fieldsets
+    - IconType: Literal com ícones Lucide disponíveis
 """
 
 from core.admin.site import AdminSite
@@ -29,6 +34,16 @@ from core.admin.exceptions import (
     AdminRuntimeError,
 )
 from core.admin.middleware import AdminSessionMiddleware
+from core.admin.types import (
+    WidgetConfig,
+    FieldsetConfig,
+    FieldsetOptions,
+    IconType,
+    PermissionType,
+    WidgetType,
+    ColumnInfo,
+    ModelT,
+)
 
 # ── Models internos do Admin — importados no module-level para garantir ──
 # que são registrados no Base.metadata e visíveis ao sistema de migrações.
@@ -68,18 +83,30 @@ def action(description: str = ""):
 
 
 __all__ = [
+    # Core classes
     "AdminSite",
     "ModelAdmin",
     "InlineModelAdmin",
+    # Exceptions
     "AdminConfigurationError",
     "AdminRegistrationError",
     "AdminRuntimeError",
+    # Singleton e helpers
     "default_site",
     "admin",
     "register",
     "unregister",
     "action",
     "AdminSessionMiddleware",
+    # Type hints para autocomplete
+    "WidgetConfig",
+    "FieldsetConfig",
+    "FieldsetOptions",
+    "IconType",
+    "PermissionType",
+    "WidgetType",
+    "ColumnInfo",
+    "ModelT",
     # Models internos
     "AuditLog",
     "AdminSession",

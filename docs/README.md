@@ -1,8 +1,8 @@
 # Core Framework
 
-Django-style framework for FastAPI. Models, ViewSets, Auth, Admin — batteries included.
+Framework estilo Django para FastAPI. Models, ViewSets, Auth, Admin — baterias incluídas.
 
-## Architecture
+## Arquitetura
 
 ```mermaid
 flowchart TB
@@ -59,7 +59,28 @@ flowchart TB
     style AUTH fill:#fff3e0
 ```
 
-## Install
+## Filosofia Plug-and-Play
+
+Configure no Settings, tudo é auto-configurado:
+
+```python
+class AppSettings(Settings):
+    # Auth - auto-configurado
+    user_model: str = "src.apps.users.models.User"
+    
+    # Kafka - auto-configurado
+    kafka_enabled: bool = True
+    
+    # Tasks - auto-configurado
+    task_enabled: bool = True
+    
+    # Multi-tenancy - auto-configurado
+    tenancy_enabled: bool = True
+```
+
+**Zero chamadas explícitas**: Você NÃO precisa chamar `configure_auth()`, `configure_kafka()`, etc.
+
+## Instalação
 
 ```bash
 pipx install core-framework
@@ -68,74 +89,74 @@ core run
 # → http://localhost:8000/docs
 ```
 
-## Documentation
+## Documentação
 
-### Getting Started
+### Começando
 
-| Doc | Description |
-|-----|-------------|
-| [Quickstart](01-quickstart.md) | First API in 5 minutes |
-| [Settings](02-settings.md) | Configuration system |
-| [Models](03-models.md) | Database models |
-| [ViewSets](04-viewsets.md) | CRUD endpoints |
+| Doc | Descrição |
+|-----|-----------|
+| [Quickstart](01-quickstart.md) | Primeira API em 5 minutos |
+| [Settings](02-settings.md) | Sistema de configuração plug-and-play |
+| [Models](03-models.md) | Modelos de banco de dados |
+| [ViewSets](04-viewsets.md) | Endpoints CRUD |
 
-### Authentication
+### Autenticação
 
-| Doc | Description |
-|-----|-------------|
-| [Auth](05-auth.md) | JWT authentication |
-| [Auth Backends](06-auth-backends.md) | Custom auth backends |
-| [CLI](07-cli.md) | Command reference |
-| [Permissions](08-permissions.md) | Access control |
+| Doc | Descrição |
+|-----|-----------|
+| [Auth](05-auth.md) | Autenticação JWT |
+| [Auth Backends](06-auth-backends.md) | Backends customizados |
+| [CLI](07-cli.md) | Referência de comandos |
+| [Permissions](08-permissions.md) | Controle de acesso |
 
-### Data Layer
+### Camada de Dados
 
-| Doc | Description |
-|-----|-------------|
-| [Fields](10-fields.md) | All field types |
-| [Relations](11-relations.md) | Relationships |
-| [QuerySets](12-querysets.md) | Django-style queries |
-| [Serializers](13-serializers.md) | Input/Output schemas |
-| [Validators](14-validators.md) | Data validation |
+| Doc | Descrição |
+|-----|-----------|
+| [Fields](10-fields.md) | Todos os tipos de campos |
+| [Relations](11-relations.md) | Relacionamentos |
+| [QuerySets](12-querysets.md) | Queries estilo Django |
+| [Serializers](13-serializers.md) | Schemas de Input/Output |
+| [Validators](14-validators.md) | Validação de dados |
 
-### Infrastructure
+### Infraestrutura
 
-| Doc | Description |
-|-----|-------------|
-| [Middleware](20-middleware.md) | Request/response hooks |
-| [Database Replicas](21-replicas.md) | Read/write split |
-| [Soft Delete](22-soft-delete.md) | Logical deletion |
-| [Routing](23-routing.md) | URL routing |
-| [Dependencies](24-dependencies.md) | Dependency injection |
+| Doc | Descrição |
+|-----|-----------|
+| [Middleware](20-middleware.md) | Hooks de request/response |
+| [Database Replicas](21-replicas.md) | Separação read/write |
+| [Soft Delete](22-soft-delete.md) | Deleção lógica |
+| [Routing](23-routing.md) | Roteamento de URLs |
+| [Dependencies](24-dependencies.md) | Injeção de dependências |
 
-### Advanced
+### Avançado
 
-| Doc | Description |
-|-----|-------------|
-| [Messaging](30-messaging.md) | Kafka/Redis integration |
-| [Workers](31-workers.md) | Background workers |
+| Doc | Descrição |
+|-----|-----------|
+| [Messaging](30-messaging.md) | Integração Kafka/Redis |
+| [Workers](31-workers.md) | Workers em background |
 | [Tenancy](32-tenancy.md) | Multi-tenant |
 | [Choices](33-choices.md) | TextChoices/IntegerChoices |
-| [Exceptions](34-exceptions.md) | Error handling |
-| [DateTime](35-datetime.md) | Timezone handling |
-| [Security](36-security.md) | Security best practices |
+| [Exceptions](34-exceptions.md) | Tratamento de erros |
+| [DateTime](35-datetime.md) | Tratamento de timezone |
+| [Security](36-security.md) | Boas práticas de segurança |
 
-### Reference
+### Referência
 
-| Doc | Description |
-|-----|-------------|
-| [Admin](40-admin.md) | Admin panel |
-| [Migrations](41-migrations.md) | Database migrations |
+| Doc | Descrição |
+|-----|-----------|
+| [Admin](40-admin.md) | Painel administrativo |
+| [Migrations](41-migrations.md) | Migrations de banco |
 
-## Project Structure
+## Estrutura do Projeto
 
 ```
 my-api/
 ├── src/
-│   ├── settings.py      # All config here
-│   ├── main.py          # App entry point
+│   ├── settings.py      # Toda configuração aqui
+│   ├── main.py          # Entry point da app
 │   └── apps/
-│       ├── models.py    # Model imports (barrel)
+│       ├── models.py    # Imports de models (barrel)
 │       └── items/
 │           ├── models.py
 │           ├── views.py
@@ -145,14 +166,14 @@ my-api/
 └── pyproject.toml
 ```
 
-## Minimal Example
+## Exemplo Mínimo
 
 ```python
 # src/settings.py
 from core.config import Settings, configure
 
 class AppSettings(Settings):
-    app_name: str = "My API"
+    app_name: str = "Minha API"
 
 settings = configure(settings_class=AppSettings)
 ```
@@ -188,15 +209,81 @@ api.include_router(items_router)
 app = CoreApp(routers=[api])
 ```
 
-## Quick Commands
+## Exemplo Completo com Auto-Configuração
+
+```python
+# src/settings.py
+from core.config import Settings, PydanticField, configure
+
+class AppSettings(Settings):
+    # ══════════════════════════════════════════════════════════════════
+    # Aplicação
+    # ══════════════════════════════════════════════════════════════════
+    app_name: str = "Minha API"
+    app_version: str = "1.0.0"
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Auth (auto-configurado quando user_model definido)
+    # ══════════════════════════════════════════════════════════════════
+    user_model: str = "src.apps.users.models.User"
+    models_module: str = "src.apps"
+    auth_password_hasher: str = "argon2"
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Kafka (auto-configurado quando kafka_enabled=True)
+    # ══════════════════════════════════════════════════════════════════
+    kafka_enabled: bool = True
+    kafka_bootstrap_servers: str = "kafka:9092"
+    avro_default_namespace: str = "com.mycompany.events"
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Tasks (auto-configurado quando task_enabled=True)
+    # ══════════════════════════════════════════════════════════════════
+    task_enabled: bool = True
+    task_worker_concurrency: int = 8
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Multi-tenancy
+    # ══════════════════════════════════════════════════════════════════
+    tenancy_enabled: bool = True
+    tenancy_field: str = "workspace_id"
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Middleware
+    # ══════════════════════════════════════════════════════════════════
+    middleware: list[str] = [
+        "timing",
+        "request_id",
+        "tenant",
+        "auth",
+        "logging",
+    ]
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Admin
+    # ══════════════════════════════════════════════════════════════════
+    admin_site_title: str = "Minha Empresa"
+    admin_primary_color: str = "#10B981"
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Campos customizados
+    # ══════════════════════════════════════════════════════════════════
+    stripe_api_key: str = PydanticField(default="", description="Stripe API Key")
+
+# Configura TUDO automaticamente
+settings = configure(settings_class=AppSettings)
+```
+
+## Comandos Rápidos
 
 ```bash
-core init my-api          # Create project
-core init my-api --minimal # Minimal project
-core makemigrations       # Generate migrations
-core migrate              # Apply migrations
-core run                  # Start server
-core createsuperuser      # Create admin user
+core init my-api          # Criar projeto
+core init my-api --minimal # Projeto mínimo
+core makemigrations       # Gerar migrations
+core migrate              # Aplicar migrations
+core run                  # Iniciar servidor
+core createsuperuser      # Criar usuário admin
+core kafka worker --all   # Executar workers
 ```
 
 ## Links

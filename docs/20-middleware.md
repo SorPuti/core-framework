@@ -1,15 +1,15 @@
 # Middleware
 
-Request/response processing hooks.
+Hooks de processamento request/response com configuração via Settings.
 
-## Middleware Stack
+## Stack de Middleware
 
 ```mermaid
 flowchart TB
-    subgraph "Request Flow"
+    subgraph "Fluxo de Request"
         REQ[Request] --> M1
         
-        subgraph Stack["Middleware Stack (order matters)"]
+        subgraph Stack["Middleware Stack (ordem importa)"]
             M1[1. TimingMiddleware<br/>order=10]
             M2[2. RequestIDMiddleware<br/>order=5]
             M3[3. AuthMiddleware<br/>order=100]
@@ -32,7 +32,7 @@ flowchart TB
     style VIEW fill:#c8e6c9
 ```
 
-## Middleware Lifecycle
+## Ciclo de Vida do Middleware
 
 ```mermaid
 sequenceDiagram
@@ -42,20 +42,20 @@ sequenceDiagram
     
     R->>M: before_request()
     alt Short-circuit
-        M-->>R: Return Response (e.g., 429)
-    else Continue
-        M->>V: Process request
+        M-->>R: Return Response (ex: 429)
+    else Continua
+        M->>V: Processa request
         V-->>M: Response
         M->>M: after_response()
-        M-->>R: Final Response
+        M-->>R: Response Final
     end
     
-    Note over M: on_error() called<br/>if exception occurs
+    Note over M: on_error() chamado<br/>se exceção ocorrer
 ```
 
-## Configuration
+## Configuração via Settings
 
-**Important:** Register middleware via settings, not directly on FastAPI.
+**Importante:** Registre middleware via settings, não diretamente no FastAPI.
 
 ```python
 # src/settings.py
@@ -68,42 +68,49 @@ class AppSettings(Settings):
     ]
 ```
 
-Or via CoreApp:
+Ou via CoreApp:
 
 ```python
 app = CoreApp(
     middleware=[
         "timing",
         "auth",
-        ("logging", {"log_body": True}),  # With kwargs
+        ("logging", {"log_body": True}),  # Com kwargs
     ]
 )
 ```
 
-## Built-in Middleware
+## Middlewares Built-in
 
-| Shortcut | Class | Description |
-|----------|-------|-------------|
-| `"timing"` | `TimingMiddleware` | Adds `X-Response-Time` header |
-| `"request_id"` | `RequestIDMiddleware` | Adds unique request ID |
-| `"logging"` | `LoggingMiddleware` | Logs requests/responses |
-| `"auth"` | `AuthenticationMiddleware` | JWT authentication |
-| `"optional_auth"` | `OptionalAuthenticationMiddleware` | Optional JWT auth |
-| `"tenant"` | `TenantMiddleware` | Multi-tenant context |
-| `"security_headers"` | `SecurityHeadersMiddleware` | Security headers |
-| `"maintenance"` | `MaintenanceModeMiddleware` | Maintenance mode |
-| `"cors"` | `CORSMiddleware` | CORS handling |
-| `"gzip"` | `GZipMiddleware` | Response compression |
+| Shortcut | Classe | Descrição |
+|----------|--------|-----------|
+| `"timing"` | `TimingMiddleware` | Adiciona header `X-Response-Time` |
+| `"request_id"` | `RequestIDMiddleware` | Adiciona ID único de request |
+| `"logging"` | `LoggingMiddleware` | Log de requests/responses |
+| `"auth"` | `AuthenticationMiddleware` | Autenticação JWT (obrigatória) |
+| `"optional_auth"` | `OptionalAuthenticationMiddleware` | Auth JWT opcional |
+| `"tenant"` | `TenantMiddleware` | Contexto multi-tenant |
+| `"security_headers"` | `SecurityHeadersMiddleware` | Headers de segurança |
+| `"maintenance"` | `MaintenanceModeMiddleware` | Modo manutenção |
+| `"cors"` | `CORSMiddleware` | Tratamento CORS |
+| `"gzip"` | `GZipMiddleware` | Compressão de response |
 
-## Execution Order
+## Diferença entre `auth` e `optional_auth`
 
-Middleware executes in list order:
+| Middleware | Comportamento |
+|------------|---------------|
+| `auth` | Requer autenticação, retorna 401 se não autenticado |
+| `optional_auth` | Carrega usuário se token presente, permite anônimo |
+
+## Ordem de Execução
+
+Middleware executa na ordem da lista:
 
 ```
 Request:
-  timing.before_request()      # First (outermost)
+  timing.before_request()      # Primeiro (mais externo)
     → auth.before_request()
-      → logging.before_request()  # Last (innermost)
+      → logging.before_request()  # Último (mais interno)
         → [VIEW]
       ← logging.after_response()
     ← auth.after_response()
@@ -111,9 +118,9 @@ Request:
 Response
 ```
 
-## Custom Middleware
+## Middleware Customizado
 
-### ASGIMiddleware (Recommended)
+### ASGIMiddleware (Recomendado)
 
 ```python
 # src/middleware.py
@@ -124,11 +131,11 @@ from starlette.types import Scope
 
 class RateLimitMiddleware(ASGIMiddleware):
     name = "RateLimitMiddleware"
-    order = 5  # Lower = executes first
+    order = 5  # Menor = executa primeiro
     
-    # Optional: path filtering
+    # Opcional: filtro de paths
     exclude_paths = ["/health", "/docs"]
-    include_paths = []  # Empty = all paths
+    include_paths = []  # Vazio = todos os paths
     
     def __init__(self, app, requests_per_minute: int = 60):
         super().__init__(app)
@@ -137,7 +144,7 @@ class RateLimitMiddleware(ASGIMiddleware):
     async def before_request(
         self, scope: Scope, request: Request
     ) -> Response | None:
-        """Called before request. Return Response to short-circuit."""
+        """Chamado antes do request. Retorne Response para short-circuit."""
         client_ip = request.client.host
         
         if await self.is_rate_limited(client_ip):
@@ -147,7 +154,7 @@ class RateLimitMiddleware(ASGIMiddleware):
                 media_type="application/json"
             )
         
-        # Continue to next middleware
+        # Continua para próximo middleware
         return None
     
     async def after_response(
@@ -157,17 +164,17 @@ class RateLimitMiddleware(ASGIMiddleware):
         status_code: int,
         response_headers: list[tuple[bytes, bytes]],
     ) -> None:
-        """Called after response. Can modify headers in-place."""
+        """Chamado após response. Pode modificar headers in-place."""
         response_headers.append((b"x-rate-limit", b"60"))
     
     async def on_error(
         self, scope: Scope, request: Request, exc: Exception
     ) -> Response | None:
-        """Called on exception. Return Response or None to re-raise."""
+        """Chamado em exceção. Retorne Response ou None para re-raise."""
         return None
 ```
 
-### Register Custom Middleware
+### Registrar Middleware Customizado
 
 ```python
 # src/settings.py
@@ -179,7 +186,7 @@ class AppSettings(Settings):
     ]
 ```
 
-Or programmatically:
+Ou programaticamente:
 
 ```python
 from core.middleware import register_middleware
@@ -190,13 +197,13 @@ register_middleware(
 )
 ```
 
-## Middleware Options
+## Opções dos Middlewares
 
 ### TimingMiddleware
 
 ```python
 middleware = [
-    "timing",  # Adds X-Response-Time header
+    "timing",  # Adiciona header X-Response-Time
 ]
 ```
 
@@ -242,7 +249,7 @@ middleware = [
 middleware = [
     ("maintenance", {
         "maintenance_enabled": False,
-        "message": "System under maintenance",
+        "message": "Sistema em manutenção",
         "allowed_ips": ["127.0.0.1"],
         "allowed_paths": ["/health"],
     }),
@@ -251,22 +258,22 @@ middleware = [
 
 ## Request State
 
-Access data set by middleware:
+Acesse dados definidos pelo middleware:
 
 ```python
-# In view
+# Na view
 async def my_view(request: Request):
     request_id = request.state.request_id
     user = request.state.user
     tenant_id = request.state.tenant_id
 ```
 
-## Exception Handling
+## Tratamento de Exceções
 
 ```python
 class ErrorHandlerMiddleware(ASGIMiddleware):
     name = "ErrorHandlerMiddleware"
-    order = 1  # Run first
+    order = 1  # Executa primeiro
     
     async def on_error(
         self, scope: Scope, request: Request, exc: Exception
@@ -276,11 +283,11 @@ class ErrorHandlerMiddleware(ASGIMiddleware):
                 {"detail": str(exc)},
                 status_code=400
             )
-        # Re-raise other exceptions
+        # Re-raise outras exceções
         return None
 ```
 
-## Middleware Registry
+## Registry de Middleware
 
 ```python
 from core.middleware import (
@@ -291,19 +298,19 @@ from core.middleware import (
     configure_middleware,
 )
 
-# Register
+# Registrar
 register_middleware("myapp.middleware.Custom")
 
-# Unregister
+# Desregistrar
 unregister_middleware("myapp.middleware.Custom")
 
-# Get all
+# Obter todos
 middlewares = get_registered_middlewares()
 
-# Clear all
+# Limpar todos
 clear_middleware_registry()
 
-# Configure entire list
+# Configurar lista inteira
 configure_middleware([
     "timing",
     "auth",
@@ -311,19 +318,19 @@ configure_middleware([
 ], clear_existing=True)
 ```
 
-## Order Attribute
+## Atributo Order
 
-Control execution order via `order` attribute:
+Controle a ordem de execução via atributo `order`:
 
 ```python
 class EarlyMiddleware(ASGIMiddleware):
-    order = 1  # Runs first
+    order = 1  # Executa primeiro
 
 class LateMiddleware(ASGIMiddleware):
-    order = 100  # Runs later
+    order = 100  # Executa depois
 ```
 
-Default orders:
+Ordens padrão:
 - `MaintenanceModeMiddleware`: 1
 - `RequestIDMiddleware`: 5
 - `TimingMiddleware`: 10
@@ -331,7 +338,23 @@ Default orders:
 - `LoggingMiddleware`: 20
 - Default: 100
 
-## Next
+## Exemplo Completo
 
-- [Security](36-security.md) — Security best practices
-- [Auth](05-auth.md) — Authentication
+```python
+# src/settings.py
+class AppSettings(Settings):
+    middleware: list[str] = [
+        "timing",           # Mede tempo de resposta
+        "request_id",       # Adiciona ID único
+        "security_headers", # Headers de segurança
+        "auth",             # Autenticação JWT
+        "logging",          # Log de requests
+        ("src.middleware.RateLimitMiddleware", {"requests_per_minute": 100}),
+    ]
+```
+
+## Próximos Passos
+
+- [Security](36-security.md) — Boas práticas de segurança
+- [Auth](05-auth.md) — Autenticação
+- [Settings](02-settings.md) — Todas as configurações

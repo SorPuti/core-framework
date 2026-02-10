@@ -1,8 +1,8 @@
 # Authentication
 
-JWT-based authentication with login, register, and token refresh.
+Sistema de autenticação JWT com configuração plug-and-play. Defina `user_model` no Settings e tudo é configurado automaticamente.
 
-## Auth Flow
+## Fluxo de Auth
 
 ```mermaid
 sequenceDiagram
@@ -29,50 +29,105 @@ sequenceDiagram
     A-->>C: {new_access_token}
 ```
 
-## Token Lifecycle
+## Ciclo de Vida dos Tokens
 
 ```mermaid
 flowchart LR
     subgraph Tokens
         AT[Access Token<br/>30 min TTL]
-        RT[Refresh Token<br/>7 days TTL]
+        RT[Refresh Token<br/>7 dias TTL]
     end
     
     LOGIN[Login] --> AT
     LOGIN --> RT
     
-    AT --> |expired| REFRESH[Refresh]
+    AT --> |expirado| REFRESH[Refresh]
     RT --> REFRESH
-    REFRESH --> AT2[New Access Token]
+    REFRESH --> AT2[Novo Access Token]
     
-    RT --> |expired| LOGIN2[Re-login]
+    RT --> |expirado| LOGIN2[Re-login]
     
     style AT fill:#fff3e0
     style RT fill:#e3f2fd
 ```
 
-## Setup
-
-### 1. Configure Settings
+## Configuração Plug-and-Play
 
 ```python
 # src/settings.py
 from core.config import Settings, configure
 
 class AppSettings(Settings):
-    # Required
+    # ══════════════════════════════════════════════════════════════════
+    # Auth - auto-configurado quando user_model está definido
+    # ══════════════════════════════════════════════════════════════════
     user_model: str = "src.apps.users.models.User"
+    models_module: str = "src.apps"  # Para carregar relacionamentos
     
-    # Optional (defaults shown)
-    auth_secret_key: str = ""  # Falls back to secret_key
-    auth_algorithm: str = "HS256"
+    # Tokens (opcional)
     auth_access_token_expire_minutes: int = 30
     auth_refresh_token_expire_days: int = 7
+    
+    # Password (opcional)
+    auth_password_hasher: str = "argon2"
+    auth_password_min_length: int = 10
+    auth_password_require_uppercase: bool = True
+    auth_password_require_digit: bool = True
 
 settings = configure(settings_class=AppSettings)
 ```
 
-### 2. Create User Model
+**Zero configuração explícita**: Você NÃO precisa chamar `configure_auth()`. Basta definir `user_model`.
+
+## Settings de Auth
+
+### Tokens e Chaves
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `auth_secret_key` | `str \| None` | `None` | Chave para tokens. Usa `secret_key` se None |
+| `auth_algorithm` | `str` | `"HS256"` | Algoritmo JWT: HS256, HS384, HS512, RS256 |
+| `auth_access_token_expire_minutes` | `int` | `30` | TTL do access token (minutos) |
+| `auth_refresh_token_expire_days` | `int` | `7` | TTL do refresh token (dias) |
+
+### User Model
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `user_model` | `str \| None` | `None` | Path do modelo User. **Obrigatório para auth** |
+| `auth_username_field` | `str` | `"email"` | Campo usado como username: email, username, cpf |
+
+### Backends
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `auth_backends` | `list[str]` | `["model"]` | Backends a tentar: model, oauth, ldap, token, api_key |
+| `auth_backend` | `str` | `"model"` | Backend padrão |
+| `auth_token_backend` | `str` | `"jwt"` | Backend de tokens: jwt, opaque, redis |
+| `auth_permission_backend` | `str` | `"default"` | Backend de permissões: default, rbac, abac |
+
+### Password
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `auth_password_hasher` | `str` | `"pbkdf2_sha256"` | Hasher: pbkdf2_sha256, argon2, bcrypt, scrypt |
+| `auth_password_min_length` | `int` | `8` | Comprimento mínimo |
+| `auth_password_require_uppercase` | `bool` | `False` | Exigir maiúscula |
+| `auth_password_require_lowercase` | `bool` | `False` | Exigir minúscula |
+| `auth_password_require_digit` | `bool` | `False` | Exigir dígito |
+| `auth_password_require_special` | `bool` | `False` | Exigir caractere especial |
+
+### HTTP
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `auth_header` | `str` | `"Authorization"` | Header HTTP para auth |
+| `auth_scheme` | `str` | `"Bearer"` | Scheme: Bearer, Basic, Token |
+| `auth_warn_missing_middleware` | `bool` | `True` | Warning se middleware não configurado |
+
+## Setup
+
+### 1. Criar User Model
 
 ```python
 # src/apps/users/models.py
@@ -83,25 +138,25 @@ from sqlalchemy.orm import Mapped
 class User(AbstractUser, PermissionsMixin):
     __tablename__ = "users"
     
-    # AbstractUser provides:
+    # AbstractUser fornece:
     # - id, email, password (hashed), is_active, is_staff, is_superuser
     
-    # PermissionsMixin provides:
-    # - groups, user_permissions (M2M relationships)
+    # PermissionsMixin fornece:
+    # - groups, user_permissions (relacionamentos M2M)
     
-    # Add custom fields
+    # Campos customizados
     first_name: Mapped[str | None] = Field.string(max_length=100, nullable=True)
     last_name: Mapped[str | None] = Field.string(max_length=100, nullable=True)
 ```
 
-### 3. Add Auth Routes
+### 2. Adicionar Rotas de Auth
 
 ```python
 # src/apps/users/views.py
 from core.auth import AuthViewSet
 
 class AuthViewSet(AuthViewSet):
-    pass  # Uses defaults
+    pass  # Usa defaults
 ```
 
 ```python
@@ -123,19 +178,19 @@ api.include_router(auth_router)
 
 app = CoreApp(
     routers=[api],
-    middleware=["auth"],  # Enable auth middleware
+    middleware=["auth"],  # Habilita middleware de auth
 )
 ```
 
 ## Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | /auth/login | Login, get tokens |
-| POST | /auth/register | Create account |
-| POST | /auth/refresh | Refresh access token |
-| GET | /auth/me | Get current user |
-| POST | /auth/logout | Invalidate tokens |
+| Método | Path | Descrição |
+|--------|------|-----------|
+| POST | /auth/login | Login, obter tokens |
+| POST | /auth/register | Criar conta |
+| POST | /auth/refresh | Renovar access token |
+| GET | /auth/me | Obter usuário atual |
+| POST | /auth/logout | Invalidar tokens |
 
 ### Login
 
@@ -145,7 +200,7 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   -d '{"email": "user@example.com", "password": "secret123"}'
 ```
 
-Response:
+Resposta:
 
 ```json
 {
@@ -167,14 +222,14 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
   -d '{"email": "new@example.com", "password": "secret123"}'
 ```
 
-### Authenticated Request
+### Request Autenticado
 
 ```bash
 curl http://localhost:8000/api/v1/posts/ \
   -H "Authorization: Bearer eyJ..."
 ```
 
-## Protect Endpoints
+## Proteger Endpoints
 
 ```python
 from core import ModelViewSet
@@ -182,15 +237,15 @@ from core.permissions import IsAuthenticated, AllowAny
 
 class PostViewSet(ModelViewSet):
     model = Post
-    permission_classes = [IsAuthenticated]  # Require auth
+    permission_classes = [IsAuthenticated]  # Requer auth
     
     permission_classes_by_action = {
-        "list": [AllowAny],  # Public list
-        "retrieve": [AllowAny],  # Public detail
+        "list": [AllowAny],     # Lista pública
+        "retrieve": [AllowAny], # Detalhe público
     }
 ```
 
-## Access Current User
+## Acessar Usuário Atual
 
 ```python
 from core import ModelViewSet
@@ -203,7 +258,7 @@ class PostViewSet(ModelViewSet):
         await instance.save()
 ```
 
-Or in any route:
+Ou em qualquer rota:
 
 ```python
 from fastapi import Depends
@@ -214,27 +269,45 @@ async def me(user = Depends(get_current_user)):
     return {"id": user.id, "email": user.email}
 ```
 
-## Create Superuser
+## Criar Superusuário
 
 ```bash
 core createsuperuser
-# Enter email and password
+# Digite email e senha
 ```
 
 ## Password Hashers
 
-Default: PBKDF2-SHA256
-
-Available:
+| Hasher | Descrição |
+|--------|-----------|
+| `pbkdf2_sha256` | Default, seguro, compatível |
+| `argon2` | Mais seguro, requer `argon2-cffi` |
+| `bcrypt` | Popular, requer `bcrypt` |
+| `scrypt` | Resistente a hardware |
 
 ```python
 class AppSettings(Settings):
-    auth_password_hasher: str = "pbkdf2_sha256"  # Default
-    # auth_password_hasher: str = "argon2"
-    # auth_password_hasher: str = "bcrypt"
+    auth_password_hasher: str = "argon2"
 ```
 
-## Custom Auth ViewSet
+```bash
+# Instalar dependência
+pip install argon2-cffi  # para argon2
+pip install bcrypt       # para bcrypt
+```
+
+## Validação de Senha
+
+```python
+class AppSettings(Settings):
+    auth_password_min_length: int = 12
+    auth_password_require_uppercase: bool = True
+    auth_password_require_lowercase: bool = True
+    auth_password_require_digit: bool = True
+    auth_password_require_special: bool = True
+```
+
+## AuthViewSet Customizado
 
 ```python
 from core.auth import AuthViewSet
@@ -248,14 +321,41 @@ class CustomAuthViewSet(AuthViewSet):
         data = await request.json()
         
         if not user.check_password(data["old_password"]):
-            raise HTTPException(400, "Wrong password")
+            raise HTTPException(400, "Senha incorreta")
         
         user.set_password(data["new_password"])
         await user.save()
         return {"status": "ok"}
+    
+    @action(detail=False, methods=["POST"])
+    async def forgot_password(self, request) -> dict:
+        data = await request.json()
+        # Implementar lógica de reset
+        return {"status": "email enviado"}
 ```
 
-## Next
+## Middleware
 
-- [Admin](40-admin.md) — Admin panel
-- [Permissions](08-permissions.md) — Access control
+### Shortcuts
+
+```python
+class AppSettings(Settings):
+    middleware: list[str] = [
+        "auth",           # AuthenticationMiddleware (requer auth)
+        "optional_auth",  # OptionalAuthenticationMiddleware (auth opcional)
+    ]
+```
+
+### Diferença
+
+| Middleware | Comportamento |
+|------------|---------------|
+| `auth` | Requer autenticação, retorna 401 se não autenticado |
+| `optional_auth` | Carrega usuário se token presente, permite anônimo |
+
+## Próximos Passos
+
+- [Auth Backends](06-auth-backends.md) — Backends de autenticação
+- [Permissions](08-permissions.md) — Controle de acesso
+- [Admin](40-admin.md) — Painel administrativo
+- [Settings](02-settings.md) — Todas as configurações

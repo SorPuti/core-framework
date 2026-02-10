@@ -1,8 +1,8 @@
 # Workers
 
-Background task processing.
+Sistema de processamento de tasks em background com configuração plug-and-play.
 
-## Worker Flow
+## Fluxo do Worker
 
 ```mermaid
 flowchart LR
@@ -34,21 +34,21 @@ flowchart LR
     style COMMIT fill:#c8e6c9
 ```
 
-## Retry Strategy
+## Estratégia de Retry
 
 ```mermaid
 flowchart TB
-    subgraph "Retry with Backoff"
-        E1[Error 1] --> |wait 1s| R1[Retry 1]
-        R1 --> |error| E2[Error 2]
+    subgraph "Retry com Backoff"
+        E1[Erro 1] --> |wait 1s| R1[Retry 1]
+        R1 --> |erro| E2[Erro 2]
         E2 --> |wait 2s| R2[Retry 2]
-        R2 --> |error| E3[Error 3]
+        R2 --> |erro| E3[Erro 3]
         E3 --> |wait 4s| R3[Retry 3]
-        R3 --> |error| DLQ[Dead Letter Queue]
+        R3 --> |erro| DLQ[Dead Letter Queue]
         
-        R1 --> |success| OK1[✓]
-        R2 --> |success| OK2[✓]
-        R3 --> |success| OK3[✓]
+        R1 --> |sucesso| OK1[✓]
+        R2 --> |sucesso| OK2[✓]
+        R3 --> |sucesso| OK3[✓]
     end
     
     style DLQ fill:#ffcdd2
@@ -57,16 +57,42 @@ flowchart TB
     style OK3 fill:#c8e6c9
 ```
 
-## Setup
+## Configuração Plug-and-Play
 
 ```python
 # src/settings.py
 class AppSettings(Settings):
+    # Tasks - auto-configurado quando task_enabled=True
+    task_enabled: bool = True
+    task_default_queue: str = "default"
+    task_default_retry: int = 3
+    task_default_retry_delay: int = 60
+    task_retry_backoff: bool = True
+    task_default_timeout: int = 300
+    task_worker_concurrency: int = 4
+    task_result_backend: str = "redis"  # none, redis, database
+    
+    # Kafka (necessário para workers)
     kafka_enabled: bool = True
     kafka_bootstrap_servers: str = "localhost:9092"
 ```
 
-## Decorator Worker
+**Zero configuração explícita**: Você NÃO precisa chamar `configure_tasks()`. Basta definir `task_enabled=True`.
+
+## Settings de Tasks
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `task_enabled` | `bool` | `False` | **Habilita Tasks** |
+| `task_default_queue` | `str` | `"default"` | Fila padrão |
+| `task_default_retry` | `int` | `3` | Número de retries |
+| `task_default_retry_delay` | `int` | `60` | Delay entre retries (segundos) |
+| `task_retry_backoff` | `bool` | `True` | Usar backoff exponencial |
+| `task_default_timeout` | `int` | `300` | Timeout de task (segundos) |
+| `task_worker_concurrency` | `int` | `4` | Tarefas concorrentes por worker |
+| `task_result_backend` | `Literal` | `"none"` | Backend: none, redis, database |
+
+## Worker com Decorator
 
 ```python
 from core.messaging import worker
@@ -76,12 +102,12 @@ from core.messaging import worker
     group_id="task-processor",
 )
 async def process_task(message: dict) -> dict:
-    """Process a single task."""
+    """Processa uma única task."""
     result = await do_work(message["data"])
     return {"status": "completed", "result": result}
 ```
 
-## Class-Based Worker
+## Worker Baseado em Classe
 
 ```python
 from core.messaging import Worker
@@ -93,7 +119,7 @@ class EmailWorker(Worker):
     max_retries = 3
     
     async def process(self, message: dict) -> dict:
-        """Process single message."""
+        """Processa uma mensagem."""
         await send_email(
             to=message["to"],
             subject=message["subject"],
@@ -102,38 +128,38 @@ class EmailWorker(Worker):
         return {"sent": True}
     
     async def on_error(self, message: dict, error: Exception):
-        """Called on processing error."""
-        logger.error(f"Failed to send email: {error}")
+        """Chamado em erro de processamento."""
+        logger.error(f"Falha ao enviar email: {error}")
     
     async def on_success(self, message: dict, result):
-        """Called on success."""
-        logger.info(f"Email sent: {result}")
+        """Chamado em sucesso."""
+        logger.info(f"Email enviado: {result}")
 ```
 
-## Worker Options
+## Opções do Worker
 
 ```python
 class MyWorker(Worker):
     input_topic = "tasks"
-    output_topic = "results"      # Optional: publish results
+    output_topic = "results"      # Opcional: publica resultados
     group_id = "my-worker"
     
-    # Concurrency
-    concurrency = 4               # Parallel processing
+    # Concorrência
+    concurrency = 4               # Processamento paralelo
     
     # Retry
     max_retries = 3
     retry_backoff = "exponential"  # "linear", "fixed"
     
     # Batching
-    batch_size = 10               # Process N messages at once
-    batch_timeout = 5.0           # Max wait for batch (seconds)
+    batch_size = 10               # Processa N mensagens de uma vez
+    batch_timeout = 5.0           # Tempo máximo para batch (segundos)
     
     # Dead Letter Queue
-    dlq_topic = "tasks-dlq"       # Failed messages go here
+    dlq_topic = "tasks-dlq"       # Mensagens com falha vão aqui
 ```
 
-## Batch Processing
+## Processamento em Batch
 
 ```python
 class BatchWorker(Worker):
@@ -142,7 +168,7 @@ class BatchWorker(Worker):
     batch_timeout = 10.0
     
     async def process_batch(self, messages: list[dict]) -> list:
-        """Process multiple messages at once."""
+        """Processa múltiplas mensagens de uma vez."""
         results = []
         for msg in messages:
             result = await process_single(msg)
@@ -150,10 +176,10 @@ class BatchWorker(Worker):
         return results
 ```
 
-## Retry Policy
+## Política de Retry
 
 ```python
-from core.messaging import worker, RetryPolicy
+from core.messaging import worker
 
 @worker(
     topic="tasks",
@@ -162,15 +188,15 @@ from core.messaging import worker, RetryPolicy
     dlq_topic="tasks-dlq",
 )
 async def process_task(message: dict):
-    # If this fails, it will retry with exponential backoff
-    # After max_retries, message goes to dlq_topic
+    # Se falhar, vai fazer retry com backoff exponencial
+    # Após max_retries, mensagem vai para dlq_topic
     ...
 ```
 
-Backoff calculation:
-- `"fixed"`: Always `initial_delay` seconds
-- `"linear"`: `initial_delay * attempt` seconds
-- `"exponential"`: `initial_delay * (2 ** attempt)` seconds
+Cálculo de backoff:
+- `"fixed"`: Sempre `initial_delay` segundos
+- `"linear"`: `initial_delay * attempt` segundos
+- `"exponential"`: `initial_delay * (2 ** attempt)` segundos
 
 ## Output Topic
 
@@ -181,38 +207,38 @@ Backoff calculation:
     group_id="order-processor",
 )
 async def process_order(message: dict) -> dict:
-    # Return value is published to output_topic
+    # Valor de retorno é publicado no output_topic
     return {"order_id": message["id"], "status": "processed"}
 ```
 
-## Run Workers
+## Executar Workers
 
-### Single Worker
+### Worker Único
 
 ```bash
 core kafka worker EmailWorker
 ```
 
-### All Workers
+### Todos os Workers
 
 ```bash
 core kafka worker --all
 ```
 
-### With Options
+### Com Opções
 
 ```bash
 core kafka worker EmailWorker --concurrency 8
 ```
 
-## Publish Tasks
+## Publicar Tasks
 
 ```python
 from core.messaging import get_producer
 
 producer = get_producer("kafka")
 
-# Publish task
+# Publicar task
 await producer.send(
     topic="tasks",
     message={"type": "process", "data": {...}},
@@ -220,7 +246,7 @@ await producer.send(
 )
 ```
 
-## Worker Registry
+## Registry de Workers
 
 ```python
 from core.messaging import (
@@ -231,18 +257,18 @@ from core.messaging import (
     run_all_workers,
 )
 
-# Get worker config
+# Obter config do worker
 config = get_worker("EmailWorker")
 
-# List all workers
+# Listar todos os workers
 names = list_workers()
 
-# Run programmatically
+# Executar programaticamente
 await run_worker(EmailWorker)
 await run_all_workers()
 ```
 
-## Error Handling
+## Tratamento de Erros
 
 ```python
 class MyWorker(Worker):
@@ -253,29 +279,29 @@ class MyWorker(Worker):
         try:
             return await do_work(message)
         except TemporaryError:
-            # Re-raise to trigger retry
+            # Re-raise para disparar retry
             raise
         except PermanentError as e:
-            # Log and don't retry
-            logger.error(f"Permanent error: {e}")
+            # Log e não faz retry
+            logger.error(f"Erro permanente: {e}")
             return {"error": str(e)}
     
     async def on_error(self, message: dict, error: Exception):
-        # Called after all retries exhausted
-        # Message will be sent to dlq_topic
+        # Chamado após todos os retries esgotados
+        # Mensagem será enviada para dlq_topic
         await notify_admin(error)
 ```
 
 ## Graceful Shutdown
 
-Workers handle SIGTERM/SIGINT:
+Workers tratam SIGTERM/SIGINT:
 
-1. Stop accepting new messages
-2. Finish processing current batch
-3. Commit offsets
-4. Exit cleanly
+1. Para de aceitar novas mensagens
+2. Finaliza processamento do batch atual
+3. Commit dos offsets
+4. Sai limpo
 
-## Monitoring
+## Monitoramento
 
 ```python
 class MyWorker(Worker):
@@ -286,7 +312,20 @@ class MyWorker(Worker):
         metrics.increment("worker.error")
 ```
 
-## Complete Example
+## Operations Center
+
+O admin panel inclui monitoramento de workers:
+
+```python
+class AppSettings(Settings):
+    ops_enabled: bool = True
+    ops_task_persist: bool = True
+    ops_task_retention_days: int = 30
+    ops_worker_heartbeat_interval: int = 30
+    ops_worker_offline_ttl: int = 24
+```
+
+## Exemplo Completo
 
 ```python
 # src/workers/email.py
@@ -314,18 +353,18 @@ class EmailWorker(Worker):
         return {"sent": True, "to": message["to"]}
     
     async def on_error(self, message: dict, error: Exception):
-        logger.error(f"Email failed: {message['to']} - {error}")
+        logger.error(f"Email falhou: {message['to']} - {error}")
     
     async def on_success(self, message: dict, result):
-        logger.info(f"Email sent: {result['to']}")
+        logger.info(f"Email enviado: {result['to']}")
 ```
 
 ```bash
-# Run worker
+# Executar worker
 core kafka worker EmailWorker
 ```
 
-## Next
+## Próximos Passos
 
-- [Messaging](30-messaging.md) — Kafka/Redis integration
-- [Settings](02-settings.md) — Configuration
+- [Messaging](30-messaging.md) — Integração Kafka/Redis
+- [Settings](02-settings.md) — Todas as configurações

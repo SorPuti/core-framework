@@ -1,10 +1,10 @@
 # Soft Delete
 
-Logical deletion instead of permanent removal.
+Deleção lógica ao invés de remoção permanente, com configuração via Settings.
 
 ## Setup
 
-Add `SoftDeleteMixin` to your model:
+Adicione `SoftDeleteMixin` ao seu model:
 
 ```python
 from core import Model, Field
@@ -19,28 +19,54 @@ class Item(Model, SoftDeleteMixin):
     name: Mapped[str] = Field.string(max_length=200)
 ```
 
-This adds:
-- `deleted_at: Mapped[DateTime | None]` field
-- `is_deleted` and `is_active` properties
-- `soft_delete()`, `restore()`, `hard_delete()` methods
+Isso adiciona:
+- Campo `deleted_at: Mapped[DateTime | None]`
+- Propriedades `is_deleted` e `is_active`
+- Métodos `soft_delete()`, `restore()`, `hard_delete()`
 
-## Basic Usage
+## Configuração via Settings
+
+```python
+# src/settings.py
+class AppSettings(Settings):
+    soft_delete_field: str = "deleted_at"      # Nome do campo
+    soft_delete_cascade: bool = False          # Cascade para relações
+    soft_delete_auto_filter: bool = True       # Auto-filtrar em queries
+```
+
+Ou via ambiente:
+
+```bash
+SOFT_DELETE_FIELD=deleted_at
+SOFT_DELETE_CASCADE=false
+SOFT_DELETE_AUTO_FILTER=true
+```
+
+## Settings de Soft Delete
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `soft_delete_field` | `str` | `"deleted_at"` | Nome do campo de soft delete |
+| `soft_delete_cascade` | `bool` | `False` | Soft delete em cascata para relacionamentos |
+| `soft_delete_auto_filter` | `bool` | `True` | Filtrar deletados automaticamente em queries |
+
+## Uso Básico
 
 ### Soft Delete
 
 ```python
-# Soft delete (sets deleted_at)
+# Soft delete (define deleted_at)
 await item.soft_delete(db)
 
-# Check status
+# Verificar status
 item.is_deleted  # True
 item.is_active   # False
 ```
 
-### Restore
+### Restaurar
 
 ```python
-# Restore (sets deleted_at = None)
+# Restaurar (define deleted_at = None)
 await item.restore(db)
 
 item.is_deleted  # False
@@ -50,43 +76,43 @@ item.is_active   # True
 ### Hard Delete
 
 ```python
-# Permanent deletion
+# Deleção permanente
 await item.hard_delete(db)
 ```
 
-## Querying
+## Queries
 
-### Default Behavior
+### Comportamento Padrão
 
-Soft-deleted records are **excluded by default**:
+Registros soft-deleted são **excluídos por padrão**:
 
 ```python
-# Only active records
+# Apenas registros ativos
 items = await Item.objects.using(db).all()
 ```
 
-### Include Deleted
+### Incluir Deletados
 
 ```python
-# All records (active + deleted)
+# Todos os registros (ativos + deletados)
 items = await Item.objects.using(db).with_deleted().all()
 ```
 
-### Only Deleted
+### Apenas Deletados
 
 ```python
-# Only soft-deleted records
+# Apenas registros soft-deleted
 items = await Item.objects.using(db).only_deleted().all()
 ```
 
-### Explicit Active
+### Ativos Explícito
 
 ```python
-# Same as default, but explicit
+# Mesmo que padrão, mas explícito
 items = await Item.objects.using(db).active().all()
 ```
 
-## Bulk Operations
+## Operações em Bulk
 
 ### Bulk Soft Delete
 
@@ -105,25 +131,7 @@ count = await Item.objects.using(db).restore_by(
 )
 ```
 
-## Configuration
-
-```python
-# src/settings.py
-class AppSettings(Settings):
-    soft_delete_field: str = "deleted_at"  # Field name
-    soft_delete_cascade: bool = False      # Cascade to relations
-    soft_delete_auto_filter: bool = True   # Auto-filter in queries
-```
-
-Or via environment:
-
-```bash
-SOFT_DELETE_FIELD=deleted_at
-SOFT_DELETE_CASCADE=false
-SOFT_DELETE_AUTO_FILTER=true
-```
-
-## Custom Field Name
+## Nome de Campo Customizado
 
 ```python
 class Item(Model, SoftDeleteMixin):
@@ -131,9 +139,9 @@ class Item(Model, SoftDeleteMixin):
     objects = SoftDeleteManager["Item"](deleted_field="removed_at")
 ```
 
-## With Multi-Tenancy
+## Com Multi-Tenancy
 
-Use `TenantSoftDeleteManager` for both:
+Use `TenantSoftDeleteManager` para ambos:
 
 ```python
 from core.models import TenantSoftDeleteManager
@@ -144,26 +152,26 @@ class Item(Model, SoftDeleteMixin, TenantMixin):
 ```
 
 ```python
-# Filter by tenant + exclude deleted
+# Filtra por tenant + exclui deletados
 items = await Item.objects.using(db).for_tenant(tenant_id).all()
 
-# Filter by tenant + include deleted
+# Filtra por tenant + inclui deletados
 items = await Item.objects.using(db).for_tenant(tenant_id).with_deleted().all()
 ```
 
-## ViewSet Integration
+## Integração com ViewSet
 
-Soft delete works automatically in ViewSets:
+Soft delete funciona automaticamente em ViewSets:
 
 ```python
 class ItemViewSet(ModelViewSet):
-    model = Item  # Uses Item.objects (SoftDeleteManager)
+    model = Item  # Usa Item.objects (SoftDeleteManager)
     
-    # DELETE endpoint calls soft_delete by default
-    # if model has SoftDeleteMixin
+    # Endpoint DELETE chama soft_delete por padrão
+    # se model tem SoftDeleteMixin
 ```
 
-Override for hard delete:
+Sobrescrever para hard delete:
 
 ```python
 class ItemViewSet(ModelViewSet):
@@ -173,7 +181,7 @@ class ItemViewSet(ModelViewSet):
         await instance.hard_delete(db)
 ```
 
-## Filter Deleted in ViewSet
+## Filtrar Deletados no ViewSet
 
 ```python
 class ItemViewSet(ModelViewSet):
@@ -182,58 +190,59 @@ class ItemViewSet(ModelViewSet):
     async def get_queryset(self, db):
         qs = Item.objects.using(db)
         
-        # Include deleted for admins
+        # Incluir deletados para admins
         if self.request.user.is_admin:
             return qs.with_deleted()
         
-        return qs  # Default: excludes deleted
+        return qs  # Padrão: exclui deletados
 ```
 
 ## Migration
 
-When adding soft delete to existing model:
+Ao adicionar soft delete a model existente:
 
 ```python
-# 1. Add mixin
+# 1. Adicionar mixin
 class Item(Model, SoftDeleteMixin):
     ...
 
-# 2. Generate migration
+# 2. Gerar migration
 core makemigrations
 
-# 3. Apply
+# 3. Aplicar
 core migrate
 ```
 
-The migration adds `deleted_at` column (nullable).
+A migration adiciona coluna `deleted_at` (nullable).
 
-## Properties
+## Propriedades
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `deleted_at` | `DateTime \| None` | Deletion timestamp |
-| `is_deleted` | `bool` | `True` if `deleted_at` is set |
-| `is_active` | `bool` | `True` if `deleted_at` is `None` |
+| Propriedade | Tipo | Descrição |
+|-------------|------|-----------|
+| `deleted_at` | `DateTime \| None` | Timestamp de deleção |
+| `is_deleted` | `bool` | `True` se `deleted_at` está definido |
+| `is_active` | `bool` | `True` se `deleted_at` é `None` |
 
-## Methods
+## Métodos
 
-| Method | Description |
-|--------|-------------|
-| `soft_delete(db)` | Set `deleted_at = now()` |
-| `restore(db)` | Set `deleted_at = None` |
-| `hard_delete(db)` | Permanent deletion |
+| Método | Descrição |
+|--------|-----------|
+| `soft_delete(db)` | Define `deleted_at = now()` |
+| `restore(db)` | Define `deleted_at = None` |
+| `hard_delete(db)` | Deleção permanente |
 
-## Manager Methods
+## Métodos do Manager
 
-| Method | Description |
-|--------|-------------|
-| `with_deleted()` | Include deleted records |
-| `only_deleted()` | Only deleted records |
-| `active()` | Only active records (default) |
+| Método | Descrição |
+|--------|-----------|
+| `with_deleted()` | Incluir registros deletados |
+| `only_deleted()` | Apenas registros deletados |
+| `active()` | Apenas registros ativos (padrão) |
 | `soft_delete_by(**filters)` | Bulk soft delete |
 | `restore_by(**filters)` | Bulk restore |
 
-## Next
+## Próximos Passos
 
-- [QuerySets](12-querysets.md) — Querying data
+- [QuerySets](12-querysets.md) — Consultas de dados
 - [Tenancy](32-tenancy.md) — Multi-tenant
+- [Settings](02-settings.md) — Todas as configurações

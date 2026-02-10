@@ -1,180 +1,198 @@
 # DateTime
 
-Timezone-aware datetime handling.
+Sistema de datetime timezone-aware com configuração plug-and-play. Defina timezone no Settings e tudo é configurado automaticamente.
 
-## Configuration
+## Configuração Plug-and-Play
 
 ```python
 # src/settings.py
 class AppSettings(Settings):
-    timezone: str = "UTC"
-    use_tz: bool = True
+    timezone: str = "America/Sao_Paulo"  # Timezone padrão
+    use_tz: bool = True                   # Usar datetimes aware
     datetime_format: str = "%Y-%m-%dT%H:%M:%S%z"
     date_format: str = "%Y-%m-%d"
     time_format: str = "%H:%M:%S"
 ```
 
-## timezone API
+**Zero configuração explícita**: Você NÃO precisa chamar `configure_datetime()`. O sistema é auto-configurado no startup.
 
-Django-style API for datetime operations.
+```python
+# Verificar se DateTime foi configurado
+from core.config import is_datetime_configured
 
-### Current Time
+if is_datetime_configured():
+    print("DateTime pronto!")
+```
+
+## Settings de DateTime
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `timezone` | `str` | `"UTC"` | Timezone padrão da aplicação |
+| `use_tz` | `bool` | `True` | Usar datetimes aware (com timezone) |
+| `datetime_format` | `str` | `"%Y-%m-%dT%H:%M:%S%z"` | Formato padrão de datetime |
+| `date_format` | `str` | `"%Y-%m-%d"` | Formato padrão de data |
+| `time_format` | `str` | `"%H:%M:%S"` | Formato padrão de hora |
+
+## API timezone (Django-style)
+
+### Tempo Atual
 
 ```python
 from core.datetime import timezone
 
-# Current UTC datetime
+# Datetime atual em UTC
 now = timezone.now()
 
-# Current datetime in specific timezone
+# Datetime atual em timezone específico
 now_sp = timezone.now("America/Sao_Paulo")
 
-# Current UTC datetime (explicit)
+# Datetime UTC (explícito)
 utc_now = timezone.utcnow()
 
-# Current date
+# Data atual
 today = timezone.today()
 ```
 
-### Timezone Conversion
+### Conversão de Timezone
 
 ```python
 from core.datetime import timezone
 
 dt = timezone.now()
 
-# Convert to timezone
+# Converter para timezone
 local = timezone.localtime(dt, "America/Sao_Paulo")
 
-# Convert to UTC
+# Converter para UTC
 utc = timezone.make_aware(naive_dt, "UTC")
 ```
 
-### Timezone Management
+### Gerenciamento de Timezone
 
 ```python
 from core.datetime import timezone
 
-# Set default timezone
+# Definir timezone padrão (thread-local)
 timezone.activate("America/Sao_Paulo")
 
-# Reset to UTC
+# Resetar para UTC
 timezone.deactivate()
 
-# Get current timezone
+# Obter timezone atual
 tz = timezone.get_current_timezone()
 ```
 
-### Aware/Naive Check
+### Verificar Aware/Naive
 
 ```python
 from core.datetime import timezone
 
-timezone.is_aware(dt)   # True if has timezone
-timezone.is_naive(dt)   # True if no timezone
+timezone.is_aware(dt)   # True se tem timezone
+timezone.is_naive(dt)   # True se não tem timezone
 
-# Make aware
+# Tornar aware
 aware_dt = timezone.make_aware(naive_dt, "UTC")
 
-# Make naive
+# Tornar naive
 naive_dt = timezone.make_naive(aware_dt)
 ```
 
-### Comparisons
+### Comparações
 
 ```python
 from core.datetime import timezone
 
-timezone.is_past(dt)       # True if before now
-timezone.is_future(dt)     # True if after now
-timezone.is_today(dt)      # True if same day
-timezone.is_yesterday(dt)  # True if yesterday
-timezone.is_tomorrow(dt)   # True if tomorrow
+timezone.is_past(dt)       # True se antes de agora
+timezone.is_future(dt)     # True se depois de agora
+timezone.is_today(dt)      # True se mesmo dia
+timezone.is_yesterday(dt)  # True se ontem
+timezone.is_tomorrow(dt)   # True se amanhã
 ```
 
-### Formatting
+### Formatação
 
 ```python
 from core.datetime import timezone
 
-# Format datetime
+# Formatar datetime
 formatted = timezone.format(dt, "%Y-%m-%d %H:%M:%S")
 
-# Parse string
+# Parse de string
 dt = timezone.parse("2024-01-15 10:30:00", "%Y-%m-%d %H:%M:%S")
 ```
 
-### Calculations
+### Cálculos
 
 ```python
 from core.datetime import timezone
 
-# Add time
+# Adicionar tempo
 future = timezone.add(dt, days=7, hours=3)
 
-# Subtract time
+# Subtrair tempo
 past = timezone.subtract(dt, days=30)
 
-# Difference
+# Diferença
 seconds = timezone.diff(dt1, dt2, unit="seconds")
 minutes = timezone.diff(dt1, dt2, unit="minutes")
 hours = timezone.diff(dt1, dt2, unit="hours")
 days = timezone.diff(dt1, dt2, unit="days")
 ```
 
-### Range Helpers
+### Helpers de Range
 
 ```python
 from core.datetime import timezone
 
-# Start/end of day
+# Início/fim do dia
 start = timezone.start_of_day(dt)
 end = timezone.end_of_day(dt)
 
-# Start/end of month
+# Início/fim do mês
 start = timezone.start_of_month(dt)
 end = timezone.end_of_month(dt)
 
-# Start/end of year
+# Início/fim do ano
 start = timezone.start_of_year(dt)
 end = timezone.end_of_year(dt)
 ```
 
-### Create DateTime
+### Criar DateTime
 
 ```python
 from core.datetime import timezone
 
-# Create datetime
+# Criar datetime
 dt = timezone.datetime(2024, 1, 15, 10, 30, 0, tz="UTC")
 
-# From timestamp
+# De timestamp
 dt = timezone.from_timestamp(1705315800)
 
-# From ISO string
+# De string ISO
 dt = timezone.from_iso("2024-01-15T10:30:00Z")
 ```
 
-## DateTime Class
+## Classe DateTime
 
-Custom datetime subclass.
+Subclasse customizada de datetime.
 
 ```python
 from core.datetime import DateTime
 
-# Create
+# Criar
 dt = DateTime.now()
 dt = DateTime.from_timestamp(1705315800)
 dt = DateTime.from_iso("2024-01-15T10:30:00Z")
 
-# Convert
+# Converter
 dt.to_timezone("America/Sao_Paulo")
 dt.to_utc()
 dt.to_iso()
 dt.to_timestamp()
 ```
 
-## In Models
+## Em Models
 
 ### Auto Timestamps
 
@@ -186,36 +204,38 @@ from sqlalchemy.orm import Mapped
 class Post(Model):
     __tablename__ = "posts"
     
-    # Set on INSERT only
+    # Definido apenas no INSERT
     created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
     
-    # Set on INSERT and UPDATE
+    # Definido no INSERT e UPDATE
     updated_at: Mapped[DateTime] = Field.datetime(auto_now=True)
     
-    # Optional datetime
+    # Datetime opcional
     published_at: Mapped[DateTime | None] = Field.datetime(nullable=True)
 ```
 
-### Storage
+### Armazenamento
 
-All datetimes are stored in UTC:
+Todos os datetimes são armazenados em UTC:
 
-- PostgreSQL: `TIMESTAMP WITH TIME ZONE`
-- SQLite: `DATETIME`
-- MySQL: `DATETIME`
+| Banco | Tipo |
+|-------|------|
+| PostgreSQL | `TIMESTAMP WITH TIME ZONE` |
+| SQLite | `DATETIME` |
+| MySQL | `DATETIME` |
 
-## Querying
+## Queries
 
 ```python
 from core.datetime import timezone
 
-# Filter by date
+# Filtrar por data
 posts = await Post.objects.using(db).filter(
     created_at__gte=timezone.start_of_day(),
     created_at__lt=timezone.end_of_day(),
 ).all()
 
-# Filter by range
+# Filtrar por range
 start = timezone.datetime(2024, 1, 1)
 end = timezone.datetime(2024, 12, 31)
 posts = await Post.objects.using(db).filter(
@@ -223,7 +243,7 @@ posts = await Post.objects.using(db).filter(
 ).all()
 ```
 
-## Standalone Functions
+## Funções Standalone
 
 ```python
 from core.datetime import (
@@ -243,65 +263,70 @@ from core.datetime import (
     end_of_day,
 )
 
-# Usage
+# Uso
 current = now()
 formatted = format_datetime(current, "%Y-%m-%d")
 tomorrow = add_days(current, 1)
 ```
 
-## Timezone Names
+## Nomes de Timezone
 
-Supported formats:
+Formatos suportados:
 
 ```python
-# Standard names
+# Nomes padrão
 timezone.now("UTC")
 timezone.now("America/Sao_Paulo")
 timezone.now("Europe/London")
 
-# Offset strings
+# Strings de offset
 timezone.now("+03:00")
 timezone.now("-05:00")
 ```
 
-## Best Practices
+## Boas Práticas
 
-1. **Always use UTC for storage**
-   ```python
-   # Good
-   created_at = timezone.now()  # UTC
-   
-   # Bad
-   created_at = datetime.now()  # Local time
-   ```
+### 1. Sempre use UTC para armazenamento
 
-2. **Convert for display only**
-   ```python
-   # Store in UTC
-   post.created_at = timezone.now()
-   
-   # Convert for user display
-   local_time = timezone.localtime(post.created_at, user.timezone)
-   ```
+```python
+# Bom
+created_at = timezone.now()  # UTC
 
-3. **Use auto timestamps**
-   ```python
-   # Good
-   created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
-   
-   # Avoid manual setting
-   ```
+# Ruim
+created_at = datetime.now()  # Hora local
+```
 
-4. **Always use aware datetimes**
-   ```python
-   # Good
-   dt = timezone.now()
-   
-   # Bad
-   dt = datetime.utcnow()  # Naive datetime
-   ```
+### 2. Converta apenas para exibição
 
-## Next
+```python
+# Armazene em UTC
+post.created_at = timezone.now()
 
-- [Fields](10-fields.md) — Field types
-- [Models](03-models.md) — Model basics
+# Converta para exibição ao usuário
+local_time = timezone.localtime(post.created_at, user.timezone)
+```
+
+### 3. Use auto timestamps
+
+```python
+# Bom
+created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+
+# Evite definição manual
+```
+
+### 4. Sempre use datetimes aware
+
+```python
+# Bom
+dt = timezone.now()
+
+# Ruim
+dt = datetime.utcnow()  # Datetime naive
+```
+
+## Próximos Passos
+
+- [Fields](10-fields.md) — Tipos de campos
+- [Models](03-models.md) — Básico de models
+- [Settings](02-settings.md) — Todas as configurações

@@ -1,8 +1,8 @@
 # Multi-Tenancy
 
-Data isolation for multi-tenant applications.
+Isolamento de dados para aplicações multi-tenant com configuração via Settings.
 
-## Data Isolation
+## Isolamento de Dados
 
 ```mermaid
 flowchart TB
@@ -36,13 +36,13 @@ flowchart TB
     style FILTER fill:#e3f2fd
 ```
 
-## Tenant Resolution
+## Resolução de Tenant
 
 ```mermaid
 flowchart LR
-    subgraph "Resolution Methods"
+    subgraph "Métodos de Resolução"
         H[Header<br/>X-Tenant-ID]
-        S[Subdomain<br/>tenant.app.com]
+        S[Subdomínio<br/>tenant.app.com]
         P[Path<br/>/tenant/...]
         T[Token<br/>JWT claim]
     end
@@ -58,16 +58,38 @@ flowchart LR
     style CTX fill:#c8e6c9
 ```
 
-## Setup
+## Configuração via Settings
 
 ```python
 # src/settings.py
 class AppSettings(Settings):
+    # Habilita multi-tenancy
     tenancy_enabled: bool = True
-    tenancy_field: str = "workspace_id"  # Default FK field
+    
+    # Campo FK nos models
+    tenancy_field: str = "workspace_id"
+    
+    # Atributo do usuário com tenant ID
+    tenancy_user_attribute: str = "workspace_id"
+    
+    # Header HTTP para tenant (fallback)
+    tenancy_header: str = "X-Tenant-ID"
+    
+    # Rejeitar requests sem tenant
+    tenancy_require: bool = False
 ```
 
-## Tenant Model
+## Settings de Tenancy
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `tenancy_enabled` | `bool` | `False` | Habilita multi-tenancy automático |
+| `tenancy_field` | `str` | `"workspace_id"` | Nome do campo de tenant nos models |
+| `tenancy_user_attribute` | `str` | `"workspace_id"` | Atributo do usuário com tenant ID |
+| `tenancy_header` | `str` | `"X-Tenant-ID"` | Header HTTP para tenant (fallback) |
+| `tenancy_require` | `bool` | `False` | Rejeitar requests sem tenant |
+
+## Model de Tenant
 
 ```python
 from core import Model, Field
@@ -83,7 +105,7 @@ class Workspace(Model):
 
 ## TenantMixin
 
-Add to models that belong to a tenant:
+Adicione aos models que pertencem a um tenant:
 
 ```python
 from core import Model, Field
@@ -96,49 +118,49 @@ class Project(Model, TenantMixin):
     
     id: Mapped[int] = Field.pk()
     name: Mapped[str] = Field.string(max_length=200)
-    # workspace_id is added by TenantMixin
+    # workspace_id é adicionado pelo TenantMixin
 ```
 
-## Querying
+## Queries
 
-### Filter by Tenant
+### Filtrar por Tenant
 
 ```python
-# Explicit tenant
+# Tenant explícito
 projects = await Project.objects.using(db).for_tenant(workspace_id).all()
 
-# From context (set by middleware)
+# Do contexto (definido pelo middleware)
 projects = await Project.objects.using(db).for_tenant().all()
 ```
 
-### Cross-Tenant Query
+### Query Cross-Tenant
 
 ```python
-# All projects (admin use)
+# Todos os projetos (uso admin)
 all_projects = await Project.objects.using(db).all()
 ```
 
 ## TenantMiddleware
 
-Auto-sets tenant context from request:
+Auto-define contexto de tenant a partir do request:
 
 ```python
 # src/settings.py
 class AppSettings(Settings):
     middleware: list[str] = [
-        "tenant",  # or "tenancy"
+        "tenant",  # ou "tenancy"
         "auth",
     ]
 ```
 
-The middleware extracts tenant from:
-1. `X-Tenant-ID` header
-2. User's default tenant
+O middleware extrai tenant de:
+1. Header `X-Tenant-ID`
+2. Tenant padrão do usuário
 3. Query parameter `?tenant_id=`
 
-## Set Tenant Context
+## Definir Contexto de Tenant
 
-### In Middleware
+### No Middleware
 
 ```python
 from core.tenancy import set_tenant_context
@@ -150,7 +172,7 @@ class CustomTenantMiddleware(ASGIMiddleware):
         return None
 ```
 
-### In View
+### Na View
 
 ```python
 from core.tenancy import set_tenant_context
@@ -158,11 +180,11 @@ from core.tenancy import set_tenant_context
 async def my_view(request, db):
     set_tenant_context(request.user.workspace_id)
     
-    # Now for_tenant() uses this context
+    # Agora for_tenant() usa este contexto
     projects = await Project.objects.using(db).for_tenant().all()
 ```
 
-## ViewSet Integration
+## Integração com ViewSet
 
 ```python
 from core import ModelViewSet
@@ -172,7 +194,7 @@ class ProjectViewSet(ModelViewSet):
     model = Project
     
     async def get_queryset(self, db):
-        # Auto-filter by tenant
+        # Auto-filtra por tenant
         return Project.objects.using(db).for_tenant(
             self.request.state.tenant_id
         )
@@ -182,7 +204,7 @@ class ProjectViewSet(ModelViewSet):
         await instance.save(db)
 ```
 
-## Subdomain Tenancy
+## Tenancy por Subdomínio
 
 ```python
 class SubdomainTenantMiddleware(ASGIMiddleware):
@@ -201,10 +223,10 @@ class SubdomainTenantMiddleware(ASGIMiddleware):
         return None
 ```
 
-## Path-Based Tenancy
+## Tenancy por Path
 
 ```python
-# Routes: /workspaces/{workspace_id}/projects/
+# Rotas: /workspaces/{workspace_id}/projects/
 
 class ProjectViewSet(ModelViewSet):
     model = Project
@@ -215,7 +237,7 @@ class ProjectViewSet(ModelViewSet):
 
 ## FlexibleTenantMixin
 
-For models that can be tenant-scoped or global:
+Para models que podem ser tenant-scoped ou globais:
 
 ```python
 from core.tenancy import FlexibleTenantMixin
@@ -225,25 +247,25 @@ class Template(Model, FlexibleTenantMixin):
     
     id: Mapped[int] = Field.pk()
     name: Mapped[str] = Field.string(max_length=100)
-    # workspace_id is nullable
+    # workspace_id é nullable
 ```
 
 ```python
-# Global templates (workspace_id = NULL)
+# Templates globais (workspace_id = NULL)
 global_templates = await Template.objects.using(db).filter(
     workspace_id__isnull=True
 ).all()
 
-# Tenant templates
+# Templates do tenant
 tenant_templates = await Template.objects.using(db).for_tenant(workspace_id).all()
 
-# Both
+# Ambos
 all_templates = await Template.objects.using(db).filter(
     Q(workspace_id__isnull=True) | Q(workspace_id=workspace_id)
 ).all()
 ```
 
-## With Soft Delete
+## Com Soft Delete
 
 ```python
 from core.models import TenantSoftDeleteManager
@@ -254,28 +276,41 @@ class Project(Model, TenantMixin, SoftDeleteMixin):
 ```
 
 ```python
-# Filter by tenant + exclude deleted
+# Filtra por tenant + exclui deletados
 projects = await Project.objects.using(db).for_tenant(workspace_id).all()
 
-# Include deleted
+# Incluir deletados
 projects = await Project.objects.using(db).for_tenant(workspace_id).with_deleted().all()
 ```
 
-## Custom Tenant Field
+## Campo de Tenant Customizado
 
 ```python
 class Project(Model, TenantMixin):
     __tablename__ = "projects"
     
-    # Override default field name
+    # Sobrescreve nome do campo padrão
     tenant_field = "organization_id"
     
     organization_id: Mapped[int] = Field.foreign_key("organizations.id")
 ```
 
-## Complete Example
+## Exemplo Completo
 
 ```python
+# src/settings.py
+class AppSettings(Settings):
+    tenancy_enabled: bool = True
+    tenancy_field: str = "workspace_id"
+    tenancy_user_attribute: str = "workspace_id"
+    tenancy_require: bool = True
+    
+    middleware: list[str] = [
+        "timing",
+        "tenant",
+        "auth",
+    ]
+
 # src/apps/workspaces/models.py
 from core import Model, Field
 from sqlalchemy.orm import Mapped
@@ -315,7 +350,8 @@ class ProjectViewSet(ModelViewSet):
         await instance.save(db)
 ```
 
-## Next
+## Próximos Passos
 
-- [Soft Delete](22-soft-delete.md) — Logical deletion
-- [QuerySets](12-querysets.md) — Querying data
+- [Soft Delete](22-soft-delete.md) — Deleção lógica
+- [QuerySets](12-querysets.md) — Consultas de dados
+- [Settings](02-settings.md) — Todas as configurações

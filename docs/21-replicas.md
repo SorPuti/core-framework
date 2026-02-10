@@ -1,41 +1,41 @@
 # Database Replicas
 
-Read/write split for database scaling.
+Separação read/write para escalabilidade de banco de dados.
 
-## Architecture
+## Arquitetura
 
 ```mermaid
 flowchart LR
-    subgraph App["Application"]
+    subgraph App["Aplicação"]
         VS[ViewSet]
     end
     
     subgraph "Database Layer"
         VS --> |SELECT| READ[(Replica<br/>Read-only)]
         VS --> |INSERT/UPDATE/DELETE| WRITE[(Primary<br/>Read-Write)]
-        WRITE --> |Replication| READ
+        WRITE --> |Replicação| READ
     end
     
     style READ fill:#e3f2fd
     style WRITE fill:#fff3e0
 ```
 
-## When to Use
+## Quando Usar
 
 ```mermaid
 flowchart TB
-    subgraph "Use Replica (db.read)"
-        R1[List queries]
-        R2[Search/Filter]
-        R3[Reports]
+    subgraph "Usar Replica (db.read)"
+        R1[Queries de listagem]
+        R2[Busca/Filtro]
+        R3[Relatórios]
         R4[Analytics]
     end
     
-    subgraph "Use Primary (db.write)"
-        W1[Create records]
-        W2[Update records]
-        W3[Delete records]
-        W4[Transactions]
+    subgraph "Usar Primary (db.write)"
+        W1[Criar registros]
+        W2[Atualizar registros]
+        W3[Deletar registros]
+        W4[Transações]
     end
     
     style R1 fill:#e3f2fd
@@ -48,7 +48,7 @@ flowchart TB
     style W4 fill:#fff3e0
 ```
 
-## Configuration
+## Configuração via Settings
 
 ```python
 # src/settings.py
@@ -58,9 +58,13 @@ class AppSettings(Settings):
     
     # Replica (read)
     database_read_url: str = "postgresql+asyncpg://user:pass@replica:5432/db"
+    
+    # Pool da replica (opcional, default: 2x do write)
+    database_read_pool_size: int = 10
+    database_read_max_overflow: int = 20
 ```
 
-Or via environment:
+Ou via ambiente:
 
 ```bash
 # .env
@@ -68,36 +72,44 @@ DATABASE_URL=postgresql+asyncpg://user:pass@primary:5432/db
 DATABASE_READ_URL=postgresql+asyncpg://user:pass@replica:5432/db
 ```
 
-## How It Works
+## Settings de Replicas
 
-When `database_read_url` is configured:
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `database_read_url` | `str \| None` | `None` | URL do banco de leitura (replica) |
+| `database_read_pool_size` | `int \| None` | `None` | Pool size para replica (default: 2x write) |
+| `database_read_max_overflow` | `int \| None` | `None` | Max overflow para replica (default: 2x write) |
 
-1. Write operations → Primary database
-2. Read operations → Replica database
-3. You choose which to use via dependencies
+## Como Funciona
+
+Quando `database_read_url` está configurado:
+
+1. Operações de escrita → Banco Primary
+2. Operações de leitura → Banco Replica
+3. Você escolhe qual usar via dependencies
 
 ## Dependencies
 
 ### get_db_replicas
 
-Returns `DatabaseSession` with `.read` and `.write` properties.
+Retorna `DatabaseSession` com propriedades `.read` e `.write`.
 
 ```python
 from core.database import get_db_replicas, DatabaseSession
 from fastapi import Depends
 
 async def my_view(db: DatabaseSession = Depends(get_db_replicas)):
-    # Read from replica
+    # Lê da replica
     users = await User.objects.using(db.read).all()
     
-    # Write to primary
+    # Escreve no primary
     user = User(name="John")
     await user.save(db.write)
 ```
 
 ### get_write_db
 
-Write-only session.
+Sessão somente escrita.
 
 ```python
 from core.database import get_write_db
@@ -110,7 +122,7 @@ async def create_user(db: AsyncSession = Depends(get_write_db)):
 
 ### get_read_db
 
-Read-only session.
+Sessão somente leitura.
 
 ```python
 from core.database import get_read_db
@@ -125,100 +137,100 @@ async def list_users(db: AsyncSession = Depends(get_read_db)):
 from core.database import DBSession, WriteSession, ReadSession
 
 async def my_view(
-    db: DBSession,           # DatabaseSession with .read/.write
-    write_db: WriteSession,  # AsyncSession for writes
-    read_db: ReadSession,    # AsyncSession for reads
+    db: DBSession,           # DatabaseSession com .read/.write
+    write_db: WriteSession,  # AsyncSession para escrita
+    read_db: ReadSession,    # AsyncSession para leitura
 ):
     pass
 ```
 
-## QuerySet Usage
+## Uso com QuerySet
 
 ```python
-# Explicit read
+# Leitura explícita
 users = await User.objects.using(db.read).filter(active=True).all()
 
-# Explicit write
+# Escrita explícita
 await User.objects.using(db.write).filter(id=1).update(name="Jane")
 ```
 
-## Pool Configuration
+## Configuração de Pool
 
 ```python
 # src/settings.py
 class AppSettings(Settings):
-    # Write pool
+    # Pool de escrita
     database_pool_size: int = 5
     database_max_overflow: int = 10
     database_pool_timeout: int = 30
     database_pool_recycle: int = 3600
     
-    # Read pool (defaults to 2x write)
+    # Pool de leitura (default: 2x escrita)
     database_read_pool_size: int | None = None  # Default: 10
     database_read_max_overflow: int | None = None  # Default: 20
 ```
 
-## Check Replica Status
+## Verificar Status da Replica
 
 ```python
 from core.database import is_replica_configured
 
 if is_replica_configured():
-    print("Using separate read replica")
+    print("Usando replica de leitura separada")
 else:
-    print("Using single database")
+    print("Usando banco único")
 ```
 
-## DatabaseSession Methods
+## Métodos de DatabaseSession
 
 ```python
 db: DatabaseSession = Depends(get_db_replicas)
 
-# Properties
-db.write    # Write session (primary)
-db.read     # Read session (replica)
-db.primary  # Alias for write
-db.replica  # Alias for read
+# Propriedades
+db.write    # Sessão de escrita (primary)
+db.read     # Sessão de leitura (replica)
+db.primary  # Alias para write
+db.replica  # Alias para read
 
-# Check if using replica
-db.is_using_replica()  # True if read != write
+# Verificar se usa replica
+db.is_using_replica()  # True se read != write
 
-# Transaction control
-await db.commit()    # Commit write session
-await db.rollback()  # Rollback write session
-await db.close()     # Close both sessions
+# Controle de transação
+await db.commit()    # Commit da sessão de escrita
+await db.rollback()  # Rollback da sessão de escrita
+await db.close()     # Fecha ambas as sessões
 ```
 
-## Read-After-Write Consistency
+## Consistência Read-After-Write
 
-**Important:** Replicas may have replication lag.
+**Importante:** Replicas podem ter lag de replicação.
 
 ```python
 async def create_and_read(db: DatabaseSession = Depends(get_db_replicas)):
-    # Create on primary
+    # Cria no primary
     user = User(name="John")
     await user.save(db.write)
     await db.commit()
     
-    # Read from primary (not replica) for consistency
+    # Lê do primary (não da replica) para consistência
     user = await User.objects.using(db.write).get(id=user.id)
     
-    # Or wait for replication
+    # Ou aguarda replicação
     await asyncio.sleep(0.1)
     user = await User.objects.using(db.read).get(id=user.id)
 ```
 
-## Fallback Behavior
+## Comportamento de Fallback
 
-If `database_read_url` is not set or equals `database_url`:
+Se `database_read_url` não está definido ou é igual a `database_url`:
 
-- `db.read` and `db.write` return the same session
-- `is_replica_configured()` returns `False`
-- No behavior change needed in code
+- `db.read` e `db.write` retornam a mesma sessão
+- `is_replica_configured()` retorna `False`
+- Nenhuma mudança de comportamento necessária no código
 
-## ViewSet Integration
+## Integração com ViewSet
 
-ViewSets use `get_db` by default (single session). For replicas:
+ViewSets usam `get_db` por padrão (sessão única). Para replicas:
 
 ```python
 from core.database import get_db_replicas
@@ -226,27 +238,27 @@ from core.database import get_db_replicas
 class UserViewSet(ModelViewSet):
     model = User
     
-    # Override to use replicas
+    # Sobrescreve para usar replicas
     async def get_queryset(self, db):
-        # db is from get_db, but you can use replicas
+        # db é de get_db, mas você pode usar replicas
         return User.objects.using(db)
 ```
 
-Or configure globally:
+Ou configure globalmente:
 
 ```python
-# In CoreApp setup
+# No setup do CoreApp
 from core.dependencies import set_session_factory
 from core.database import get_db_replicas
 
 set_session_factory(get_db_replicas)
 ```
 
-## Initialization
+## Inicialização
 
-Replicas are auto-initialized by CoreApp when `database_read_url` is set.
+Replicas são auto-inicializadas pelo CoreApp quando `database_read_url` está definido.
 
-Manual initialization:
+Inicialização manual:
 
 ```python
 from core.database import init_replicas
@@ -259,7 +271,7 @@ await init_replicas(
 )
 ```
 
-## Next
+## Próximos Passos
 
-- [QuerySets](12-querysets.md) — Querying data
-- [Settings](02-settings.md) — Configuration
+- [QuerySets](12-querysets.md) — Consultas de dados
+- [Settings](02-settings.md) — Todas as configurações

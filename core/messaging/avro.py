@@ -39,14 +39,30 @@ import json
 from pydantic import BaseModel
 
 
-# Default namespace for Avro schemas
+def _get_default_namespace() -> str:
+    """
+    Retorna o namespace padrão para schemas Avro.
+    
+    Usa Settings.avro_default_namespace se disponível,
+    senão usa o fallback hardcoded.
+    """
+    try:
+        from core.config import get_settings, is_configured
+        if is_configured():
+            return get_settings().avro_default_namespace
+    except Exception:
+        pass
+    return "com.core.events"
+
+
+# Constante para compatibilidade (use _get_default_namespace() para valor dinâmico)
 DEFAULT_NAMESPACE = "com.core.events"
 
 
 def _python_type_to_avro(
     python_type: type,
     field_name: str = "",
-    namespace: str = DEFAULT_NAMESPACE,
+    namespace: str | None = None,
 ) -> dict[str, Any] | str | list:
     """
     Convert Python type to Avro type.
@@ -54,11 +70,14 @@ def _python_type_to_avro(
     Args:
         python_type: Python type annotation
         field_name: Field name (for nested records)
-        namespace: Avro namespace
+        namespace: Avro namespace (usa Settings.avro_default_namespace se None)
     
     Returns:
         Avro type definition
     """
+    if namespace is None:
+        namespace = _get_default_namespace()
+    
     origin = get_origin(python_type)
     args = get_args(python_type)
     
@@ -166,18 +185,20 @@ def _python_type_to_avro(
 
 def _pydantic_to_avro_schema(
     model: type[BaseModel],
-    namespace: str = DEFAULT_NAMESPACE,
+    namespace: str | None = None,
 ) -> dict[str, Any]:
     """
     Convert Pydantic model to Avro schema.
     
     Args:
         model: Pydantic model class
-        namespace: Avro namespace
+        namespace: Avro namespace (usa Settings.avro_default_namespace se None)
     
     Returns:
         Avro schema dict
     """
+    if namespace is None:
+        namespace = _get_default_namespace()
     fields = []
     hints = get_type_hints(model)
     
@@ -234,8 +255,10 @@ class AvroModelMeta(type(BaseModel)):
         if name == "AvroModel":
             return cls
         
-        # Cache the Avro schema
-        avro_namespace = getattr(cls, "__avro_namespace__", DEFAULT_NAMESPACE)
+        # Cache the Avro schema (usa namespace do Settings se não definido na classe)
+        avro_namespace = getattr(cls, "__avro_namespace__", None)
+        if avro_namespace is None:
+            avro_namespace = _get_default_namespace()
         cls._avro_schema_cache = _pydantic_to_avro_schema(cls, avro_namespace)
         
         return cls
@@ -265,8 +288,8 @@ class AvroModel(BaseModel, metaclass=AvroModelMeta):
         event = UserCreatedEvent.from_avro(avro_bytes)
     """
     
-    # Override in subclass to set namespace
-    __avro_namespace__: str = DEFAULT_NAMESPACE
+    # Override in subclass to set namespace (usa Settings.avro_default_namespace se None)
+    __avro_namespace__: str | None = None
     
     # Cached schema (set by metaclass)
     _avro_schema_cache: dict[str, Any] | None = None
@@ -280,10 +303,10 @@ class AvroModel(BaseModel, metaclass=AvroModelMeta):
             Avro schema dict
         """
         if cls._avro_schema_cache is None:
-            cls._avro_schema_cache = _pydantic_to_avro_schema(
-                cls,
-                getattr(cls, "__avro_namespace__", DEFAULT_NAMESPACE),
-            )
+            avro_namespace = getattr(cls, "__avro_namespace__", None)
+            if avro_namespace is None:
+                avro_namespace = _get_default_namespace()
+            cls._avro_schema_cache = _pydantic_to_avro_schema(cls, avro_namespace)
         return cls._avro_schema_cache
     
     @classmethod
@@ -348,7 +371,7 @@ class AvroModel(BaseModel, metaclass=AvroModelMeta):
 
 
 def avro_schema(
-    namespace: str = DEFAULT_NAMESPACE,
+    namespace: str | None = None,
     name: str | None = None,
 ):
     """
@@ -361,14 +384,15 @@ def avro_schema(
             email: str
     
     Args:
-        namespace: Avro namespace
+        namespace: Avro namespace (usa Settings.avro_default_namespace se None)
         name: Optional schema name (defaults to class name)
     
     Returns:
         Decorated class with __avro_schema__ method
     """
     def decorator(cls: type[BaseModel]) -> type[BaseModel]:
-        schema = _pydantic_to_avro_schema(cls, namespace)
+        ns = namespace if namespace is not None else _get_default_namespace()
+        schema = _pydantic_to_avro_schema(cls, ns)
         
         if name:
             schema["name"] = name

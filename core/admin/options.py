@@ -3,6 +3,15 @@ ModelAdmin — Classe base para configuração de models no admin.
 
 Define como cada model é exibido e editado no admin panel.
 Inspirado no Django Admin, com melhorias para async e Pydantic.
+
+Tipagem Genérica:
+    Para autocomplete de campos no PyCharm, use ModelAdmin[Model]:
+    
+        @admin.register(Domain)
+        class DomainAdmin(ModelAdmin[Domain]):
+            list_display = ("id", "domain", "is_verified")
+    
+    O tipo genérico não afeta runtime, apenas análise estática.
 """
 
 from __future__ import annotations
@@ -10,9 +19,16 @@ from __future__ import annotations
 import inspect
 import logging
 import re
-from typing import Any, ClassVar, TYPE_CHECKING
+from typing import Any, ClassVar, Generic, TYPE_CHECKING
 
 from core.admin.exceptions import AdminRegistrationError
+from core.admin.types import (
+    ModelT,
+    WidgetConfig,
+    FieldsetConfig,
+    IconType,
+    PermissionType,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -270,23 +286,41 @@ def _detect_m2m_relationships(model: type) -> list[dict[str, Any]]:
     return results
 
 
-class ModelAdmin:
+class ModelAdmin(Generic[ModelT]):
     """
     Classe base para configuração de exibição de um model no admin.
     
-    Exemplo:
+    Suporta tipagem genérica para melhor autocomplete no PyCharm:
+    
         @admin.register(User)
-        class UserAdmin(ModelAdmin):
+        class UserAdmin(ModelAdmin[User]):
             list_display = ("id", "email", "is_active")
             search_fields = ("email",)
             ordering = ("-created_at",)
             display_name = "Usuário"
+    
+    O parâmetro de tipo [User] é opcional e não afeta runtime.
+    Serve apenas para análise estática e autocomplete.
+    
+    Attributes:
+        display_name: Nome singular para exibição (ex: "Usuário")
+        display_name_plural: Nome plural (ex: "Usuários")
+        icon: Nome do ícone Lucide (ex: "user", "globe", "settings")
+        list_display: Campos a exibir na listagem
+        list_display_links: Campos que são links para o detail
+        list_filter: Campos para filtros laterais
+        search_fields: Campos para busca textual
+        ordering: Ordenação padrão (prefixo "-" para DESC)
+        readonly_fields: Campos somente leitura
+        fieldsets: Agrupamento de campos em seções
+        widgets: Configuração de widgets por campo
+        help_texts: Textos de ajuda por campo
     """
     
     # -- Metadados --
     display_name: str | None = None
     display_name_plural: str | None = None
-    icon: str = "file"  # Lucide icon name
+    icon: IconType | str = "file"  # Lucide icon name
     
     # -- List View --
     list_display: tuple[str, ...] = ()
@@ -302,7 +336,7 @@ class ModelAdmin:
     fields: tuple[str, ...] | None = None
     exclude: tuple[str, ...] = ()
     readonly_fields: tuple[str, ...] = ()
-    fieldsets: list[tuple[str, dict[str, Any]]] | None = None
+    fieldsets: list[FieldsetConfig] | None = None
     help_texts: dict[str, str] = {}
     
     # -- Password field (virtual) --
@@ -311,17 +345,17 @@ class ModelAdmin:
     password_field: str | None = None
     
     # -- Widget overrides per field --
-    # Dict mapping field_name → override dict:
-    #   {"widget": "...", "label": "...", "help_text": "...",
+    # Dict mapping field_name → WidgetConfig:
+    #   {"widget": "email", "label": "E-mail", "help_text": "...",
     #    "required_on_create": True, "required_on_edit": False}
-    widgets: dict[str, dict[str, Any]] = {}
+    widgets: dict[str, WidgetConfig] = {}
     
     # -- Permissions --
-    permissions: tuple[str, ...] = ("view", "add", "change", "delete")
+    permissions: tuple[PermissionType | str, ...] = ("view", "add", "change", "delete")
     exclude_actions: tuple[str, ...] = ()
     
     # -- Internal (set by registry) --
-    model: type | None = None
+    model: type[ModelT] | None = None
     _model_fields: list[str] = []
     _pk_field: str = "id"
     _app_label: str = ""
@@ -334,7 +368,7 @@ class ModelAdmin:
         if "actions" not in cls.__dict__:
             cls.actions = list(cls.actions) if hasattr(cls, "actions") else ["delete_selected"]
     
-    def bind(self, model: type) -> None:
+    def bind(self, model: type[ModelT]) -> None:
         """
         Vincula este ModelAdmin a um model SQLAlchemy.
         Chamado durante o registro. Valida a configuração.

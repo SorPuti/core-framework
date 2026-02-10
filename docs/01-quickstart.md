@@ -1,8 +1,8 @@
 # Quickstart
 
-Create a working API in 5 minutes.
+Crie uma API funcional em 5 minutos.
 
-## Architecture Overview
+## Visão Geral da Arquitetura
 
 ```mermaid
 flowchart TB
@@ -29,58 +29,61 @@ flowchart TB
     style MD fill:#e8f5e9
 ```
 
-## Requirements
+## Requisitos
 
 - Python 3.12+
-- PostgreSQL (or SQLite for dev)
+- PostgreSQL (ou SQLite para dev)
 
-## Install
+## Instalação
 
 ```bash
-# Global install (recommended)
+# Instalação global (recomendado)
 pipx install core-framework
 
-# Or per-project
+# Ou por projeto
 pip install core-framework
 ```
 
-## Create Project
+## Criar Projeto
 
 ```bash
 core init my-api
 cd my-api
 ```
 
-This creates:
+Isso cria:
 
 ```
 my-api/
 ├── src/
-│   ├── settings.py      # Configuration
+│   ├── settings.py      # Configuração
 │   ├── main.py          # Entry point
 │   └── apps/
-│       ├── models.py    # Model imports
-│       └── users/       # Example app
+│       ├── models.py    # Imports de models
+│       └── users/       # App de exemplo
 ├── migrations/
 ├── .env
 └── pyproject.toml
 ```
 
-## Configure
+## Configurar
 
-Edit `src/settings.py`:
+Edite `src/settings.py`:
 
 ```python
 from core.config import Settings, configure
 
 class AppSettings(Settings):
-    app_name: str = "My API"
-    user_model: str = "src.apps.users.models.User"  # Required for auth
+    app_name: str = "Minha API"
+    
+    # Auth - auto-configurado quando user_model definido
+    user_model: str = "src.apps.users.models.User"
+    models_module: str = "src.apps"
 
 settings = configure(settings_class=AppSettings)
 ```
 
-Edit `.env`:
+Edite `.env`:
 
 ```env
 DATABASE_URL=postgresql+asyncpg://user:pass@localhost/mydb
@@ -88,7 +91,7 @@ SECRET_KEY=change-me-in-production
 DEBUG=true
 ```
 
-## Create Model
+## Criar Model
 
 ```python
 # src/apps/posts/models.py
@@ -104,14 +107,14 @@ class Post(Model):
     published: Mapped[bool] = Field.boolean(default=False)
 ```
 
-Import in barrel file:
+Importe no arquivo barrel:
 
 ```python
 # src/apps/models.py
 from src.apps.posts.models import Post  # noqa
 ```
 
-## Create ViewSet
+## Criar ViewSet
 
 ```python
 # src/apps/posts/views.py
@@ -121,10 +124,10 @@ from .models import Post
 
 class PostViewSet(ModelViewSet):
     model = Post
-    permission_classes = [AllowAny]  # Public access
+    permission_classes = [AllowAny]  # Acesso público
 ```
 
-## Create Routes
+## Criar Rotas
 
 ```python
 # src/apps/posts/routes.py
@@ -135,7 +138,7 @@ router = AutoRouter(prefix="/posts", tags=["Posts"])
 router.register("", PostViewSet)
 ```
 
-## Register Routes
+## Registrar Rotas
 
 ```python
 # src/main.py
@@ -151,37 +154,73 @@ api.include_router(posts_router)
 app = CoreApp(routers=[api])
 ```
 
-## Run
+## Executar
 
 ```bash
-# Create migration
+# Criar migration
 core makemigrations --name add_posts
 
-# Apply migration
+# Aplicar migration
 core migrate
 
-# Start server
+# Iniciar servidor
 core run
 ```
 
-## Test
+## Testar
 
-Open http://localhost:8000/docs
+Abra http://localhost:8000/docs
 
-Generated endpoints:
+Endpoints gerados:
 
-| Method | Path | Action |
-|--------|------|--------|
-| GET | /api/v1/posts/ | List |
-| POST | /api/v1/posts/ | Create |
-| GET | /api/v1/posts/{id} | Get one |
-| PUT | /api/v1/posts/{id} | Update |
-| PATCH | /api/v1/posts/{id} | Partial update |
-| DELETE | /api/v1/posts/{id} | Delete |
+| Método | Path | Ação |
+|--------|------|------|
+| GET | /api/v1/posts/ | Listar |
+| POST | /api/v1/posts/ | Criar |
+| GET | /api/v1/posts/{id} | Obter um |
+| PUT | /api/v1/posts/{id} | Atualizar |
+| PATCH | /api/v1/posts/{id} | Atualização parcial |
+| DELETE | /api/v1/posts/{id} | Deletar |
 
-## Next
+## Exemplo com Auto-Configuração Completa
 
-- [Settings](02-settings.md) — Configuration options
-- [Models](03-models.md) — Field types, relationships
-- [ViewSets](04-viewsets.md) — Custom actions, hooks
-- [Auth](05-auth.md) — JWT authentication
+```python
+# src/settings.py
+from core.config import Settings, PydanticField, configure
+
+class AppSettings(Settings):
+    # ══════════════════════════════════════════════════════════════════
+    # Aplicação
+    # ══════════════════════════════════════════════════════════════════
+    app_name: str = "Minha API"
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Auth (auto-configurado)
+    # ══════════════════════════════════════════════════════════════════
+    user_model: str = "src.apps.users.models.User"
+    models_module: str = "src.apps"
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Middleware
+    # ══════════════════════════════════════════════════════════════════
+    middleware: list[str] = [
+        "timing",
+        "request_id",
+        "auth",
+    ]
+    
+    # ══════════════════════════════════════════════════════════════════
+    # Campos customizados
+    # ══════════════════════════════════════════════════════════════════
+    stripe_key: str = PydanticField(default="", description="Stripe API Key")
+
+# Configura TUDO automaticamente
+settings = configure(settings_class=AppSettings)
+```
+
+## Próximos Passos
+
+- [Settings](02-settings.md) — Opções de configuração
+- [Models](03-models.md) — Tipos de campos, relacionamentos
+- [ViewSets](04-viewsets.md) — Actions customizadas, hooks
+- [Auth](05-auth.md) — Autenticação JWT

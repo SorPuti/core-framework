@@ -1,5 +1,10 @@
 """
 Redis Streams broker implementation.
+
+Supports three connection modes:
+- standalone: Single Redis instance (default)
+- cluster: Redis Cluster with multiple nodes
+- sentinel: Redis Sentinel for high availability
 """
 
 from __future__ import annotations
@@ -22,6 +27,9 @@ class RedisBroker(MessageBroker):
     
     Lightweight alternative to Kafka using Redis Streams.
     Good for smaller deployments or when Redis is already in use.
+    
+    Supports standalone, cluster, and sentinel modes via settings:
+        redis_mode: "standalone" | "cluster" | "sentinel"
     
     Example:
         broker = RedisBroker()
@@ -50,32 +58,25 @@ class RedisBroker(MessageBroker):
         self._connected = False
     
     async def connect(self) -> None:
-        """Connect to Redis."""
+        """Connect to Redis (supports standalone, cluster, and sentinel modes)."""
         if self._connected:
             return
         
-        try:
-            import redis.asyncio as redis
-        except ImportError:
-            raise ImportError(
-                "redis is required for Redis support. "
-                "Install with: pip install redis"
-            )
+        from core.messaging.redis.connection import create_redis_client
         
-        self._redis = redis.from_url(
-            self._redis_url,
-            max_connections=self._settings.redis_max_connections,
+        # Create client based on mode (standalone, cluster, sentinel)
+        self._redis = await create_redis_client(
+            url=self._redis_url,
+            **self._extra_config,
         )
-        
-        # Test connection
-        await self._redis.ping()
         
         # Initialize producer
         self._producer = RedisProducer(redis_url=self._redis_url)
         await self._producer.start()
         
         self._connected = True
-        logger.info(f"Connected to Redis: {self._redis_url}")
+        mode = getattr(self._settings, "redis_mode", "standalone")
+        logger.info(f"Connected to Redis ({mode}): {self._redis_url}")
     
     async def disconnect(self) -> None:
         """Disconnect from Redis."""

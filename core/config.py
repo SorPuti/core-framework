@@ -18,12 +18,15 @@ import secrets
 import warnings
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, TypeVar, cast, overload
 
 from pydantic import Field as PydanticField, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger("core.config")
+
+# TypeVar para get_settings() genérico - permite autocomplete de subclasses
+_SettingsT = TypeVar("_SettingsT", bound="Settings")
 
 
 # =========================================================================
@@ -624,6 +627,10 @@ class Settings(BaseSettings):
         default="dead-letter",
         description="Tópico para mensagens que falharam",
     )
+    avro_default_namespace: str = PydanticField(
+        default="com.core.events",
+        description="Namespace padrão para schemas Avro (ex: com.mycompany.events)",
+    )
     
     # =========================================================================
     # TASKS / WORKERS
@@ -668,11 +675,32 @@ class Settings(BaseSettings):
     
     redis_url: str = PydanticField(
         default="redis://localhost:6379/0",
-        description="URL de conexão Redis",
+        description=(
+            "URL de conexão Redis. Formatos suportados:\n"
+            "- Standalone: redis://host:6379/0\n"
+            "- Cluster: redis://node1:6379,node2:6379,node3:6379 (com redis_mode='cluster')\n"
+            "- Sentinel: redis://sentinel1:26379,sentinel2:26379 (com redis_mode='sentinel')"
+        ),
+    )
+    redis_mode: Literal["standalone", "cluster", "sentinel"] = PydanticField(
+        default="standalone",
+        description="Modo de conexão Redis: standalone, cluster ou sentinel",
+    )
+    redis_sentinel_master: str = PydanticField(
+        default="mymaster",
+        description="Nome do master para Redis Sentinel",
     )
     redis_max_connections: int = PydanticField(
         default=10,
         description="Máximo de conexões no pool",
+    )
+    redis_socket_timeout: float = PydanticField(
+        default=5.0,
+        description="Timeout de socket em segundos",
+    )
+    redis_stream_max_len: int = PydanticField(
+        default=10000,
+        description="Tamanho máximo de streams Redis (MAXLEN)",
     )
     
     # =========================================================================
@@ -999,18 +1027,25 @@ def _configure_auth_from_settings() -> None:
         ) from exc
 
 
-def get_settings() -> Settings:
+@overload
+def get_settings() -> Settings: ...
+
+@overload
+def get_settings(settings_type: type[_SettingsT]) -> _SettingsT: ...
+
+def get_settings(settings_type: type[_SettingsT] | None = None) -> Settings | _SettingsT:
     """
     Retorna a instância global de Settings.
-    
-    Função pura: apenas retorna o singleton já configurado.
-    Não executa side-effects, não faz auto-configuração.
     
     Se settings ainda não foi carregado, executa bootstrap uma vez.
     Após o bootstrap inicial, apenas retorna o valor cacheado.
     
+    Args:
+        settings_type: Classe de Settings para cast de tipo (opcional).
+                       Usado apenas para inferência estática, não afeta runtime.
+    
     Returns:
-        Settings instance (singleton)
+        Settings instance (singleton), tipado como a classe passada se fornecida.
     
     Raises:
         RuntimeError: Se bootstrap falhar (src.settings não encontrado)
@@ -1018,15 +1053,13 @@ def get_settings() -> Settings:
     global _settings
 
     if _settings is not None:
+        if settings_type is not None:
+            return cast(_SettingsT, _settings)
         return _settings
 
-    # Bootstrap uma única vez
     bootstrap_project_settings()
 
-    # Após bootstrap, settings deve estar configurado
-    # (src.settings chama configure() internamente)
     if _settings is None:
-        # Fallback: cria Settings padrão se nenhum foi configurado
         env_files = _resolve_env_files_at_bootstrap()
         _settings = _settings_class(_env_file=env_files)
         logger.warning(
@@ -1034,35 +1067,54 @@ def get_settings() -> Settings:
             "Configure explicitly in src/settings.py via configure()."
         )
 
-    # NOTA: Auth NÃO é configurado aqui automaticamente.
-    # O lifecycle correto é:
-    # 1. get_settings() → carrega configurações
-    # 2. App/CLI importa models
-    # 3. configure_auth() é chamado explicitamente (em src/main.py ou CoreApp)
-    #
-    # Isso garante que User model está disponível antes de configure_auth().
+    # NOTA: Auto-configuração é executada em configure(), não aqui.
+    # Se get_settings() é chamado antes de configure() (ex: import circular),
+    # o bootstrap carrega src.settings que chama configure() internamente.
 
+    if settings_type is not None:
+        return cast(_SettingsT, _settings)
     return _settings
 
 
 # =========================================================================
 # Auto-configuration helpers (plug-and-play)
 # =========================================================================
+#
+# Sistema de auto-configuração: basta definir valores no Settings e todos
+# os subsistemas são configurados automaticamente. Zero configuração explícita.
+#
+# Ordem de configuração (respeitando dependências):
+#   1. DateTime (sem dependências)
+#   2. Models (pré-carrega para resolver relacionamentos)
+#   3. Auth (depende de models)
+#   4. Kafka/Messaging (sem dependências, mas opcional)
+#   5. Tasks (depende de kafka se habilitado)
+#
+# =========================================================================
 
 _datetime_configured = False
 _auth_configured = False
+_kafka_configured = False
+_tasks_configured = False
+_models_loaded = False
 
 
-def _auto_configure_datetime(settings: Settings) -> None:
+def _auto_configure_datetime(settings: Settings) -> bool:
     """
     Auto-configura o sistema de DateTime a partir das Settings.
     
-    Chamado automaticamente por configure().
+    Configurado automaticamente quando:
+    - timezone != "UTC" (valor padrão)
+    - OU use_tz está definido
+    - OU qualquer formato de data/hora customizado
+    
+    Returns:
+        True se configurado, False se já estava ou falhou
     """
     global _datetime_configured
     
     if _datetime_configured:
-        return
+        return False
     
     try:
         from core.datetime import configure_datetime
@@ -1075,73 +1127,89 @@ def _auto_configure_datetime(settings: Settings) -> None:
             time_format=settings.time_format,
         )
         _datetime_configured = True
-        logger.debug("DateTime auto-configured from Settings")
+        logger.debug("DateTime auto-configured (timezone=%s)", settings.timezone)
+        return True
+    except ImportError:
+        # core.datetime não existe - OK, módulo opcional
+        return False
     except Exception as e:
         logger.warning("Failed to auto-configure DateTime: %s", e)
+        return False
 
 
-def auto_configure_auth(settings: Settings | None = None) -> bool:
+def _auto_configure_models(settings: Settings) -> bool:
+    """
+    Pré-carrega o módulo de models para registrar todos no SQLAlchemy.
+    
+    Isso é CRÍTICO para resolver relacionamentos circulares como:
+        User → relationship("workspaces.WorkspaceUser") → WorkspaceUser
+    
+    Sem pré-carregar, WorkspaceUser não existiria no registry quando
+    User fosse importado, causando erro de relacionamento.
+    
+    Returns:
+        True se carregou models, False se já estava ou falhou
+    """
+    global _models_loaded
+    
+    if _models_loaded:
+        return False
+    
+    models_module = getattr(settings, "models_module", None)
+    if not models_module:
+        return False
+    
+    # Suporta string única ou lista de módulos
+    modules = [models_module] if isinstance(models_module, str) else list(models_module)
+    
+    loaded_any = False
+    for module_path in modules:
+        try:
+            import_module(module_path)
+            logger.debug("Pre-loaded models module: %s", module_path)
+            loaded_any = True
+        except ImportError as e:
+            # Não é erro crítico - o módulo pode não existir ainda
+            logger.debug(
+                "Could not pre-load models module '%s': %s (continuing)",
+                module_path, e
+            )
+    
+    _models_loaded = loaded_any
+    return loaded_any
+
+
+def _auto_configure_auth(settings: Settings) -> bool:
     """
     Auto-configura o sistema de Auth a partir das Settings.
     
-    Pode ser chamado explicitamente ou é chamado automaticamente pelo CoreApp.
+    Configurado automaticamente quando:
+    - user_model está definido no Settings
     
-    IMPORTANTE: Esta função importa models_module ANTES de resolver user_model
-    para garantir que todos os models relacionados estejam registrados no
-    SQLAlchemy registry. Isso resolve problemas de dependência circular como:
-    
-        User → WorkspaceUser → User
-    
-    Quando User define relationship("workspaces.WorkspaceUser"), o SQLAlchemy
-    precisa que WorkspaceUser já esteja registrado. Importando models_module
-    primeiro, garantimos que todos os models estejam disponíveis.
-    
-    Args:
-        settings: Settings instance (usa get_settings() se None)
+    IMPORTANTE: Requer que models já tenham sido pré-carregados
+    para resolver relacionamentos corretamente.
     
     Returns:
-        True se configurado com sucesso, False se já configurado ou falhou
-    
-    Nota:
-        Esta função é idempotente - pode ser chamada múltiplas vezes sem efeito.
-        A configuração só ocorre se user_model estiver definido nas Settings.
+        True se configurado, False se já estava, não aplicável, ou falhou
     """
     global _auth_configured
     
     if _auth_configured:
         return False
     
-    if settings is None:
-        settings = get_settings()
-    
     # Verifica se user_model está configurado
     if not settings.user_model:
-        logger.debug("Auth not auto-configured: user_model not set in Settings")
+        logger.debug("Auth: skipped (user_model not set)")
         return False
     
     try:
         from core.auth import configure_auth as _configure_auth
         
-        # ══════════════════════════════════════════════════════════════════════
-        # IMPORTANTE: Importar models_module ANTES de resolver user_model
-        # ══════════════════════════════════════════════════════════════════════
-        # Isso garante que todos os models estejam registrados no SQLAlchemy
-        # registry antes de resolver relacionamentos. Sem isso, relacionamentos
-        # como User.workspace_users → "workspaces.WorkspaceUser" falhariam
-        # porque WorkspaceUser ainda não existe no registry.
-        #
-        # Fluxo CORRETO:
-        #   1. Importar models_module (registra TODOS os models)
-        #   2. Resolver user_model (agora WorkspaceUser já existe)
-        #   3. Configurar auth
-        # ══════════════════════════════════════════════════════════════════════
-        _preload_models_module(settings)
-        
         # Resolve user_model string para classe
         user_class = _resolve_user_model(settings.user_model)
         if user_class is None:
             logger.warning(
-                "Auth not auto-configured: could not resolve user_model '%s'",
+                "Auth: could not resolve user_model '%s'",
                 settings.user_model
             )
             return False
@@ -1175,57 +1243,156 @@ def auto_configure_auth(settings: Settings | None = None) -> bool:
             warn_missing_middleware=settings.auth_warn_missing_middleware,
         )
         _auth_configured = True
-        logger.debug("Auth auto-configured from Settings (user_model=%s)", settings.user_model)
+        logger.debug("Auth auto-configured (user_model=%s)", settings.user_model)
         return True
+    except ImportError:
+        # core.auth não existe - OK, módulo opcional
+        return False
     except Exception as e:
         logger.warning("Failed to auto-configure Auth: %s", e)
         return False
 
 
-def _preload_models_module(settings: Settings) -> None:
+def _auto_configure_kafka(settings: Settings) -> bool:
     """
-    Pré-carrega o módulo de models para registrar todos os models no SQLAlchemy.
+    Auto-configura o sistema de Kafka/Messaging a partir das Settings.
     
-    Esta função é chamada ANTES de resolver user_model para garantir que todos
-    os models relacionados (como WorkspaceUser, Workspace, etc.) já estejam
-    registrados no SQLAlchemy registry quando o User for importado.
+    Configurado automaticamente quando:
+    - kafka_enabled = True
     
-    Isso resolve o problema clássico de dependência circular:
+    O sistema de messaging já lê diretamente do Settings, então esta
+    função apenas valida e registra que foi configurado.
     
-        User → relationship("workspaces.WorkspaceUser") → WorkspaceUser não existe!
+    Returns:
+        True se configurado, False se já estava, não aplicável, ou falhou
+    """
+    global _kafka_configured
     
-    Com o pré-carregamento:
+    if _kafka_configured:
+        return False
     
-        1. Importa models_module (registra WorkspaceUser, Workspace, etc.)
-        2. Importa User (agora WorkspaceUser já existe no registry)
-        3. SQLAlchemy resolve os relacionamentos corretamente
+    if not settings.kafka_enabled:
+        logger.debug("Kafka: skipped (kafka_enabled=False)")
+        return False
+    
+    try:
+        # Valida configuração básica
+        if not settings.kafka_bootstrap_servers:
+            logger.warning(
+                "Kafka enabled but kafka_bootstrap_servers not set. "
+                "Set KAFKA_BOOTSTRAP_SERVERS in .env"
+            )
+            return False
+        
+        # O sistema de messaging já usa get_settings() internamente,
+        # então não precisa de configuração explícita. Apenas validamos.
+        _kafka_configured = True
+        logger.debug(
+            "Kafka auto-configured (backend=%s, servers=%s)",
+            settings.kafka_backend,
+            settings.kafka_bootstrap_servers,
+        )
+        return True
+    except Exception as e:
+        logger.warning("Failed to auto-configure Kafka: %s", e)
+        return False
+
+
+def _auto_configure_tasks(settings: Settings) -> bool:
+    """
+    Auto-configura o sistema de Tasks/Workers a partir das Settings.
+    
+    Configurado automaticamente quando:
+    - task_enabled = True
+    
+    Returns:
+        True se configurado, False se já estava, não aplicável, ou falhou
+    """
+    global _tasks_configured
+    
+    if _tasks_configured:
+        return False
+    
+    if not settings.task_enabled:
+        logger.debug("Tasks: skipped (task_enabled=False)")
+        return False
+    
+    try:
+        # O sistema de tasks já usa get_settings() internamente
+        _tasks_configured = True
+        logger.debug(
+            "Tasks auto-configured (queue=%s, concurrency=%d)",
+            settings.task_default_queue,
+            settings.task_worker_concurrency,
+        )
+        return True
+    except Exception as e:
+        logger.warning("Failed to auto-configure Tasks: %s", e)
+        return False
+
+
+def _run_auto_configuration(settings: Settings) -> dict[str, bool]:
+    """
+    Executa auto-configuração de todos os subsistemas.
+    
+    Ordem de execução respeita dependências:
+    1. DateTime (sem dependências)
+    2. Models (pré-carrega para auth)
+    3. Auth (depende de models)
+    4. Kafka (sem dependências)
+    5. Tasks (sem dependências diretas)
+    
+    Returns:
+        Dict com status de cada subsistema configurado
+    """
+    results = {}
+    
+    # 1. DateTime - sempre primeiro, sem dependências
+    results["datetime"] = _auto_configure_datetime(settings)
+    
+    # 2. Models - pré-carrega antes de auth
+    results["models"] = _auto_configure_models(settings)
+    
+    # 3. Auth - depende de models carregados
+    results["auth"] = _auto_configure_auth(settings)
+    
+    # 4. Kafka - independente
+    results["kafka"] = _auto_configure_kafka(settings)
+    
+    # 5. Tasks - independente (mas pode usar kafka)
+    results["tasks"] = _auto_configure_tasks(settings)
+    
+    # Log resumo
+    configured = [k for k, v in results.items() if v]
+    if configured:
+        logger.info("Auto-configured subsystems: %s", ", ".join(configured))
+    
+    return results
+
+
+# =========================================================================
+# Funções públicas de verificação de estado
+# =========================================================================
+
+def auto_configure_auth(settings: Settings | None = None) -> bool:
+    """
+    Auto-configura o sistema de Auth a partir das Settings.
+    
+    NOTA: Esta função é chamada automaticamente por configure().
+    Você NÃO precisa chamá-la explicitamente.
+    
+    Mantida como API pública para casos onde você precisa forçar
+    a reconfiguração ou verificar se auth foi configurado.
     
     Args:
-        settings: Settings instance com models_module configurado
+        settings: Settings instance (usa get_settings() se None)
     
-    Note:
-        - Silenciosamente ignora erros (não bloqueia o startup)
-        - Suporta models_module como string ou lista de strings
-        - Compatível com a convenção Django de barrel files
+    Returns:
+        True se configurado com sucesso, False se já configurado ou falhou
     """
-    models_module = getattr(settings, "models_module", None)
-    if not models_module:
-        return
-    
-    # Suporta string única ou lista de módulos
-    modules = [models_module] if isinstance(models_module, str) else list(models_module)
-    
-    for module_path in modules:
-        try:
-            import_module(module_path)
-            logger.debug("Pre-loaded models module: %s", module_path)
-        except ImportError as e:
-            # Não é erro crítico - o módulo pode não existir ainda
-            # ou pode ser um path inválido. O startup continua.
-            logger.debug(
-                "Could not pre-load models module '%s': %s (continuing anyway)",
-                module_path, e
-            )
+    if settings is None:
+        settings = get_settings()
+    return _auto_configure_auth(settings)
 
 
 def _resolve_user_model(user_model_path: str) -> type | None:
@@ -1252,6 +1419,39 @@ def is_auth_configured() -> bool:
     return _auth_configured
 
 
+def is_datetime_configured() -> bool:
+    """Verifica se o sistema de datetime foi configurado."""
+    return _datetime_configured
+
+
+def is_kafka_configured() -> bool:
+    """Verifica se o sistema de kafka/messaging foi configurado."""
+    return _kafka_configured
+
+
+def is_tasks_configured() -> bool:
+    """Verifica se o sistema de tasks foi configurado."""
+    return _tasks_configured
+
+
+def get_configured_subsystems() -> dict[str, bool]:
+    """
+    Retorna status de todos os subsistemas.
+    
+    Útil para debugging e health checks.
+    
+    Returns:
+        Dict com nome do subsistema → bool configurado
+    """
+    return {
+        "datetime": _datetime_configured,
+        "models": _models_loaded,
+        "auth": _auth_configured,
+        "kafka": _kafka_configured,
+        "tasks": _tasks_configured,
+    }
+
+
 def configure(
     settings_class: type[Settings] | None = None,
     **overrides: Any,
@@ -1259,7 +1459,14 @@ def configure(
     """
     Configura o framework registrando a instância global de Settings.
     
-    Chamado por src/settings.py para registrar AppSettings.
+    Auto-configura TODOS os subsistemas baseado nos valores do Settings:
+    - DateTime (timezone, formatos)
+    - Auth (se user_model definido)
+    - Kafka (se kafka_enabled=True)
+    - Tasks (se task_enabled=True)
+    
+    Você NÃO precisa chamar configure_auth(), configure_datetime(), etc.
+    Basta definir os valores no Settings e tudo é configurado automaticamente.
     
     Args:
         settings_class: Classe de Settings customizada
@@ -1276,9 +1483,18 @@ def configure(
         from core.config import Settings, configure
         
         class AppSettings(Settings):
-            user_model: str = "app.models.User"
+            # Auth - configurado automaticamente
+            user_model: str = "src.apps.users.models.User"
+            
+            # Kafka - configurado automaticamente se enabled
+            kafka_enabled: bool = True
+            kafka_bootstrap_servers: str = "kafka:9092"
+            
+            # Tasks - configurado automaticamente se enabled
+            task_enabled: bool = True
         
         settings = configure(settings_class=AppSettings)
+        # Pronto! Auth, Kafka e Tasks já estão configurados.
     """
     global _settings, _settings_class
     
@@ -1312,15 +1528,17 @@ def configure(
     logger.debug("Settings configured: %s", _settings_class.__name__)
     
     # =========================================================================
-    # Auto-configure subsystems from Settings (plug-and-play)
+    # Auto-configure ALL subsystems from Settings (plug-and-play)
+    # =========================================================================
+    # Ordem respeita dependências:
+    # 1. DateTime (sem dependências)
+    # 2. Models (pré-carrega para auth)
+    # 3. Auth (depende de models)
+    # 4. Kafka (independente)
+    # 5. Tasks (independente)
     # =========================================================================
     
-    # 1. DateTime configuration
-    _auto_configure_datetime(_settings)
-    
-    # 2. Auth configuration (deferred until user_model is available)
-    # Auth is configured lazily when first accessed or when CoreApp starts
-    # This allows user_model to be imported after configure() is called
+    _run_auto_configuration(_settings)
     
     return _settings
 
@@ -1334,9 +1552,14 @@ def reset_settings() -> None:
     """
     Reseta configurações para testes.
     
+    Reseta:
+    - Settings singleton
+    - Todos os flags de auto-configuração (datetime, auth, kafka, tasks)
+    
     AVISO: Apenas para testes. Não usar em production.
     """
     global _settings, _settings_class
+    global _datetime_configured, _auth_configured, _kafka_configured, _tasks_configured, _models_loaded
     
     if _settings is not None and _settings.environment == "production":
         raise RuntimeError(
@@ -1346,6 +1569,13 @@ def reset_settings() -> None:
     
     _settings = None
     _settings_class = Settings
+    
+    # Reset todos os flags de auto-configuração
+    _datetime_configured = False
+    _auth_configured = False
+    _kafka_configured = False
+    _tasks_configured = False
+    _models_loaded = False
 
 
 # =========================================================================

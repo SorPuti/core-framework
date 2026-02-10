@@ -1,5 +1,7 @@
 """
 Redis Streams consumer implementation.
+
+Supports standalone, cluster, and sentinel modes via settings.
 """
 
 from __future__ import annotations
@@ -23,6 +25,9 @@ class RedisConsumer(Consumer):
     
     Uses Redis Streams consumer groups (XREADGROUP) for
     reliable message consumption with acknowledgment.
+    
+    Supports standalone, cluster, and sentinel modes via settings:
+        redis_mode: "standalone" | "cluster" | "sentinel"
     
     Example:
         consumer = RedisConsumer(
@@ -69,17 +74,11 @@ class RedisConsumer(Consumer):
         if self._running:
             return
         
-        try:
-            import redis.asyncio as redis
-        except ImportError:
-            raise ImportError(
-                "redis is required for Redis support. "
-                "Install with: pip install redis"
-            )
+        from core.messaging.redis.connection import create_redis_client
         
-        self._redis = redis.from_url(
-            self._redis_url,
-            max_connections=self._settings.redis_max_connections,
+        # Create client based on mode (standalone, cluster, sentinel)
+        self._redis = await create_redis_client(
+            url=self._redis_url,
             **self._extra_config,
         )
         

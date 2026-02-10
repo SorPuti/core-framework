@@ -1,99 +1,125 @@
 # CLI Reference
 
-All commands available via `core` CLI.
+Todos os comandos disponíveis via CLI `core`.
 
-## Project
+## Projeto
 
 ```bash
-# Create new project
+# Criar novo projeto
 core init my-api
 core init my-api --python 3.13
+core init my-api --minimal  # Projeto mínimo
 
-# Create new app
+# Criar nova app
 core createapp posts
 ```
 
-## Server
+## Servidor
 
 ```bash
-# Development server (hot reload)
+# Servidor de desenvolvimento (hot reload)
 core run
 
-# Production
+# Produção
 core run --no-reload --workers 4 --host 0.0.0.0 --port 8000
 ```
 
-## Database
+## Banco de Dados
 
 ```bash
-# Create migration
+# Criar migration
 core makemigrations --name add_posts
 
-# Apply migrations
+# Aplicar migrations
 core migrate
 
-# Show migration status
+# Mostrar status das migrations
 core showmigrations
 
-# Rollback last migration
+# Rollback última migration
 core rollback
 
-# Rollback to specific migration
+# Rollback para migration específica
 core rollback 0002
 
-# Database info
+# Info do banco
 core dbinfo
 
-# Reset database (DESTRUCTIVE)
+# Reset do banco (DESTRUTIVO)
 core reset_db --yes
 ```
 
 ## Auth
 
 ```bash
-# Create superuser
+# Criar superusuário
 core createsuperuser
 
-# Collect permissions from models
+# Coletar permissões dos models
 core collectpermissions
 ```
 
 ## Debug
 
 ```bash
-# List all routes
+# Listar todas as rotas
 core routes
 
-# Check configuration
+# Verificar configuração
 core check
 
-# Interactive shell
+# Shell interativo
 core shell
 ```
 
 ## Deployment
 
 ```bash
-# Generate Dockerfile
+# Gerar Dockerfile
 core docker generate
 
-# Generate docker-compose.yml
+# Gerar docker-compose.yml
 core docker compose
 
-# Generate Kubernetes manifests
+# Gerar manifests Kubernetes
 core deploy kubernetes
 
-# Generate PM2 config
+# Gerar config PM2
 core deploy pm2
 ```
 
-## Workers (Enterprise)
+## Kafka / Messaging
 
 ```bash
-# Start background worker
+# Listar topics
+core kafka topics
+
+# Criar topic
+core kafka create-topic my-topic --partitions 3
+
+# Deletar topic
+core kafka delete-topic my-topic
+
+# Consumir mensagens
+core kafka consume my-topic --group my-service
+
+# Executar worker específico
+core kafka worker MyWorker
+
+# Executar todos os workers
+core kafka worker --all
+
+# Executar worker com opções
+core kafka worker MyWorker --concurrency 8
+```
+
+## Workers / Tasks
+
+```bash
+# Iniciar worker de background
 core runworker
 
-# List workers
+# Listar workers
 core workers_list
 
 # Scheduler
@@ -101,60 +127,69 @@ core scheduler start
 core scheduler stop
 ```
 
-## Kafka (Enterprise)
-
-```bash
-# List topics
-core topics_list
-
-# Create topic
-core topics_create my-topic --partitions 3
-
-# Delete topic
-core topics_delete my-topic
-
-# Start consumer
-core consumer start
-```
-
 ## Testing
 
 ```bash
-# Run tests
+# Executar testes
 core test
 
-# With coverage
+# Com coverage
 core test --cov
 
-# Specific file
+# Arquivo específico
 core test tests/test_posts.py
 ```
 
-## Version
+## Versão
 
 ```bash
 core version
 core --version
 ```
 
-## Help
+## Ajuda
 
 ```bash
 core --help
 core <command> --help
 ```
 
-## Common Options
+## Opções Comuns
 
-Most commands support:
+A maioria dos comandos suporta:
 
-| Option | Description |
-|--------|-------------|
-| `--help` | Show help |
-| `--dry-run` | Preview without executing |
-| `--yes` | Skip confirmations |
+| Opção | Descrição |
+|-------|-----------|
+| `--help` | Mostrar ajuda |
+| `--dry-run` | Preview sem executar |
+| `--yes` | Pular confirmações |
 
-## Next
+## Configuração via Settings
 
-- [Migrations](41-migrations.md) — Migration details
-- [Permissions](08-permissions.md) — Access control
+O CLI usa configurações do Settings:
+
+```python
+class AppSettings(Settings):
+    # CLI / Discovery
+    migrations_dir: str = "./migrations"
+    app_label: str = "main"
+    models_module: str = "app.models"
+    workers_module: str | None = None  # Auto-discovery
+    tasks_module: str | None = None    # Auto-discovery
+    app_module: str = "src.main"
+```
+
+| Setting | Descrição |
+|---------|-----------|
+| `migrations_dir` | Diretório de migrations |
+| `app_label` | Label da aplicação |
+| `models_module` | Módulo dos models |
+| `workers_module` | Módulo dos workers (auto-discovery se None) |
+| `tasks_module` | Módulo das tasks (auto-discovery se None) |
+| `app_module` | Módulo da aplicação principal |
+
+## Próximos Passos
+
+- [Migrations](41-migrations.md) — Detalhes de migrations
+- [Permissions](08-permissions.md) — Controle de acesso
+- [Settings](02-settings.md) — Todas as configurações
