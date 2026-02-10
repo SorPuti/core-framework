@@ -44,6 +44,10 @@ from core.admin.types import (
     ColumnInfo,
     ModelT,
 )
+from core.admin._typing import (
+    model_fields,
+    get_model_field_names,
+)
 
 # ── Models internos do Admin — importados no module-level para garantir ──
 # que são registrados no Base.metadata e visíveis ao sistema de migrações.
@@ -107,6 +111,9 @@ __all__ = [
     "WidgetType",
     "ColumnInfo",
     "ModelT",
+    # Helpers para autocomplete de campos
+    "model_fields",
+    "get_model_field_names",
     # Models internos
     "AuditLog",
     "AdminSession",
