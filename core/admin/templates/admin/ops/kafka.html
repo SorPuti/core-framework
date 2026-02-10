@@ -1,0 +1,490 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Kafka Dashboard — {{ site_header }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="kafkaDashboard()" x-init="init()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Kafka Dashboard</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Cluster overview, consumer groups, and topics</p>
+        </div>
+        <button @click="refresh()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+            <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+            Refresh
+        </button>
+    </div>
+
+    <!-- Error State -->
+    <template x-if="error">
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
+            <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <div>
+                    <p class="font-medium text-red-800 dark:text-red-200">Kafka not available</p>
+                    <p class="text-sm text-red-600 dark:text-red-300" x-text="error"></p>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Cluster Overview Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Brokers</span>
+                <svg class="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="overview.brokers_count || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Topics</span>
+                <svg class="w-4 h-4 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="overview.topics_count || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Partitions</span>
+                <svg class="w-4 h-4 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="overview.partitions_count || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Consumer Groups</span>
+                <svg class="w-4 h-4 text-orange-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="overview.consumer_groups_count || 0"></p>
+        </div>
+    </div>
+
+    <!-- Cluster Info -->
+    <template x-if="overview.cluster_id">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
+            <div class="flex items-center gap-4 text-sm">
+                <div>
+                    <span class="text-gray-400">Cluster ID:</span>
+                    <span class="font-mono text-gray-700 dark:text-gray-300 ml-1" x-text="overview.cluster_id"></span>
+                </div>
+                <div>
+                    <span class="text-gray-400">Controller:</span>
+                    <span class="font-mono text-gray-700 dark:text-gray-300 ml-1" x-text="'Broker ' + overview.controller_id"></span>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Throughput Chart -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Throughput</h3>
+            <div class="flex items-center gap-2">
+                <select x-model="throughputPeriod" @change="loadThroughput()" class="text-xs bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1">
+                    <option value="1h">Last 1h</option>
+                    <option value="6h">Last 6h</option>
+                    <option value="24h">Last 24h</option>
+                </select>
+            </div>
+        </div>
+        <div class="h-48">
+            <canvas id="throughputChart"></canvas>
+        </div>
+        <div class="flex items-center justify-center gap-6 mt-2 text-xs">
+            <div class="flex items-center gap-1.5">
+                <span class="w-3 h-0.5 bg-green-500 rounded"></span>
+                <span class="text-gray-500">Produce Rate</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <span class="w-3 h-0.5 bg-blue-500 rounded"></span>
+                <span class="text-gray-500">Consume Rate</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consumer Groups -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Consumer Groups</h3>
+            <span class="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full" x-text="consumerGroups.length + ' group(s)'"></span>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Group ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">State</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Members</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Lag</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Topics</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="group in consumerGroups" :key="group.group_id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3">
+                                <span class="font-mono text-gray-900 dark:text-white" x-text="group.group_id"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full"
+                                      :class="getStateClass(group.state)">
+                                    <span class="w-1.5 h-1.5 rounded-full" :class="getStateDotClass(group.state)"></span>
+                                    <span x-text="group.state"></span>
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-center text-gray-700 dark:text-gray-300" x-text="group.members_count"></td>
+                            <td class="px-4 py-3 text-center">
+                                <span :class="group.total_lag > 0 ? 'text-amber-600 font-semibold' : 'text-gray-500'" x-text="group.total_lag.toLocaleString()"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex flex-wrap gap-1">
+                                    <template x-for="topic in group.topics.slice(0, 3)" :key="topic">
+                                        <span class="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded" x-text="topic"></span>
+                                    </template>
+                                    <template x-if="group.topics.length > 3">
+                                        <span class="text-[10px] text-gray-400" x-text="'+' + (group.topics.length - 3) + ' more'"></span>
+                                    </template>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <button @click="showGroupDetail(group.group_id)" class="text-primary-500 hover:text-primary-600 text-xs font-medium">
+                                    Details
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="!loading && consumerGroups.length === 0">
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+                                No consumer groups found
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Topics -->
+    <div>
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Topics</h3>
+            <span class="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full" x-text="topics.length + ' topic(s)'"></span>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Topic Name</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Partitions</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Replication</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="topic in topics" :key="topic.name">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3">
+                                <span class="font-mono text-gray-900 dark:text-white" x-text="topic.name"></span>
+                            </td>
+                            <td class="px-4 py-3 text-center text-gray-700 dark:text-gray-300" x-text="topic.partitions"></td>
+                            <td class="px-4 py-3 text-center text-gray-700 dark:text-gray-300" x-text="topic.replication_factor"></td>
+                            <td class="px-4 py-3 text-center">
+                                <button @click="showTopicDetail(topic.name)" class="text-primary-500 hover:text-primary-600 text-xs font-medium">
+                                    Details
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="!loading && topics.length === 0">
+                        <tr>
+                            <td colspan="4" class="px-4 py-8 text-center text-gray-400">
+                                No topics found
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Consumer Group Detail Modal -->
+    <div x-show="showGroupModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="showGroupModal = false"></div>
+            <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+                <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="selectedGroup?.group_id"></h3>
+                    <button @click="showGroupModal = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="p-6" x-show="selectedGroup">
+                    <!-- Group Info -->
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">State</span>
+                            <p class="font-semibold text-gray-900 dark:text-white" x-text="selectedGroup?.state"></p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">Coordinator</span>
+                            <p class="font-semibold text-gray-900 dark:text-white" x-text="'Broker ' + selectedGroup?.coordinator"></p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">Total Lag</span>
+                            <p class="font-semibold" :class="selectedGroup?.total_lag > 0 ? 'text-amber-600' : 'text-gray-900 dark:text-white'" x-text="selectedGroup?.total_lag?.toLocaleString()"></p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">Members</span>
+                            <p class="font-semibold text-gray-900 dark:text-white" x-text="selectedGroup?.members?.length || 0"></p>
+                        </div>
+                    </div>
+
+                    <!-- Members -->
+                    <template x-if="selectedGroup?.members?.length > 0">
+                        <div class="mb-6">
+                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Members</h4>
+                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-gray-200 dark:border-gray-600">
+                                            <th class="px-3 py-2 text-left text-xs text-gray-500">Member ID</th>
+                                            <th class="px-3 py-2 text-left text-xs text-gray-500">Client ID</th>
+                                            <th class="px-3 py-2 text-left text-xs text-gray-500">Host</th>
+                                            <th class="px-3 py-2 text-center text-xs text-gray-500">Partitions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="member in selectedGroup.members" :key="member.member_id">
+                                            <tr>
+                                                <td class="px-3 py-2 font-mono text-xs text-gray-700 dark:text-gray-300" x-text="member.member_id.substring(0, 20) + '...'"></td>
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="member.client_id"></td>
+                                                <td class="px-3 py-2 font-mono text-gray-700 dark:text-gray-300" x-text="member.host"></td>
+                                                <td class="px-3 py-2 text-center text-gray-700 dark:text-gray-300" x-text="member.partitions?.length || 0"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Offsets by Topic -->
+                    <template x-if="selectedGroup?.offsets && Object.keys(selectedGroup.offsets).length > 0">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Offsets by Topic</h4>
+                            <template x-for="(partitions, topic) in selectedGroup.offsets" :key="topic">
+                                <div class="mb-4">
+                                    <p class="text-xs font-mono text-gray-500 mb-2" x-text="topic"></p>
+                                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden">
+                                        <table class="w-full text-sm">
+                                            <thead>
+                                                <tr class="border-b border-gray-200 dark:border-gray-600">
+                                                    <th class="px-3 py-2 text-left text-xs text-gray-500">Partition</th>
+                                                    <th class="px-3 py-2 text-right text-xs text-gray-500">Current Offset</th>
+                                                    <th class="px-3 py-2 text-right text-xs text-gray-500">End Offset</th>
+                                                    <th class="px-3 py-2 text-right text-xs text-gray-500">Lag</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="p in partitions" :key="p.partition">
+                                                    <tr>
+                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="p.partition"></td>
+                                                        <td class="px-3 py-2 text-right font-mono text-gray-700 dark:text-gray-300" x-text="p.current_offset.toLocaleString()"></td>
+                                                        <td class="px-3 py-2 text-right font-mono text-gray-700 dark:text-gray-300" x-text="p.end_offset.toLocaleString()"></td>
+                                                        <td class="px-3 py-2 text-right font-mono" :class="p.lag > 0 ? 'text-amber-600 font-semibold' : 'text-gray-500'" x-text="p.lag.toLocaleString()"></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+function kafkaDashboard() {
+    return {
+        loading: false,
+        error: null,
+        overview: {},
+        consumerGroups: [],
+        topics: [],
+        throughputPeriod: '6h',
+        throughputChart: null,
+        showGroupModal: false,
+        selectedGroup: null,
+
+        async init() {
+            await this.refresh();
+            this.initChart();
+            await this.loadThroughput();
+        },
+
+        async refresh() {
+            this.loading = true;
+            this.error = null;
+            try {
+                await Promise.all([
+                    this.loadOverview(),
+                    this.loadConsumerGroups(),
+                    this.loadTopics(),
+                ]);
+            } catch (e) {
+                console.error('Error refreshing:', e);
+            }
+            this.loading = false;
+        },
+
+        async loadOverview() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/kafka/overview');
+                const data = await resp.json();
+                if (data.error && !data.enabled) {
+                    this.error = data.error;
+                } else {
+                    this.overview = data;
+                }
+            } catch (e) {
+                this.error = 'Failed to connect to Kafka';
+            }
+        },
+
+        async loadConsumerGroups() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/kafka/consumer-groups');
+                const data = await resp.json();
+                this.consumerGroups = data.items || [];
+            } catch (e) {
+                console.error('Error loading consumer groups:', e);
+            }
+        },
+
+        async loadTopics() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/kafka/topics');
+                const data = await resp.json();
+                this.topics = data.items || [];
+            } catch (e) {
+                console.error('Error loading topics:', e);
+            }
+        },
+
+        initChart() {
+            const ctx = document.getElementById('throughputChart');
+            if (!ctx) return;
+
+            const isDark = document.documentElement.classList.contains('dark');
+            const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+
+            this.throughputChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Produce Rate',
+                            data: [],
+                            borderColor: '#22c55e',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                        },
+                        {
+                            label: 'Consume Rate',
+                            data: [],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: gridColor },
+                            ticks: { maxTicksLimit: 8 },
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: gridColor },
+                        },
+                    },
+                },
+            });
+        },
+
+        async loadThroughput() {
+            try {
+                const resp = await fetch(`{{ admin_prefix }}/api/ops/kafka/throughput?period=${this.throughputPeriod}`);
+                const data = await resp.json();
+
+                if (this.throughputChart && data.labels) {
+                    // Format labels to show time only
+                    const labels = data.labels.map(l => {
+                        const d = new Date(l);
+                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    });
+
+                    this.throughputChart.data.labels = labels;
+                    this.throughputChart.data.datasets[0].data = data.produce_rate || [];
+                    this.throughputChart.data.datasets[1].data = data.consume_rate || [];
+                    this.throughputChart.update();
+                }
+            } catch (e) {
+                console.error('Error loading throughput:', e);
+            }
+        },
+
+        async showGroupDetail(groupId) {
+            try {
+                const resp = await fetch(`{{ admin_prefix }}/api/ops/kafka/consumer-groups/${groupId}`);
+                this.selectedGroup = await resp.json();
+                this.showGroupModal = true;
+            } catch (e) {
+                console.error('Error loading group detail:', e);
+            }
+        },
+
+        async showTopicDetail(topicName) {
+            // Could open a modal similar to group detail
+            alert('Topic: ' + topicName + '\nPartitions detail coming soon...');
+        },
+
+        getStateClass(state) {
+            const s = (state || '').toLowerCase();
+            if (s === 'stable') return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
+            if (s === 'empty') return 'bg-gray-100 dark:bg-gray-700 text-gray-500';
+            if (s.includes('rebalancing')) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+            if (s === 'dead') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+            return 'bg-gray-100 dark:bg-gray-700 text-gray-500';
+        },
+
+        getStateDotClass(state) {
+            const s = (state || '').toLowerCase();
+            if (s === 'stable') return 'bg-green-500';
+            if (s === 'empty') return 'bg-gray-400';
+            if (s.includes('rebalancing')) return 'bg-amber-500';
+            if (s === 'dead') return 'bg-red-500';
+            return 'bg-gray-400';
+        },
+    };
+}
+</script>
+{% endblock %}

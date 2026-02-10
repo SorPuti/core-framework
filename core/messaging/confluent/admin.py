@@ -1,8 +1,8 @@
 """
-Confluent Kafka admin client for topic management.
+Confluent Kafka admin client for topic and consumer group management.
 
 High-performance admin using confluent-kafka (librdkafka).
-Provides topic creation, deletion, listing, and description.
+Provides topic creation, deletion, listing, description, and consumer group monitoring.
 
 Compatible with KafkaAdmin (aiokafka) — same interface.
 """
@@ -10,7 +10,7 @@ Compatible with KafkaAdmin (aiokafka) — same interface.
 from __future__ import annotations
 
 from typing import Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 import asyncio
 
@@ -18,6 +18,9 @@ from core.config import get_settings
 
 
 logger = logging.getLogger(__name__)
+
+
+# ─── Dataclasses ─────────────────────────────────────────────────
 
 
 @dataclass
@@ -28,6 +31,82 @@ class TopicInfo:
     partitions: int
     replication_factor: int
     configs: dict[str, str]
+
+
+@dataclass
+class BrokerInfo:
+    """Information about a Kafka broker."""
+    
+    id: int
+    host: str
+    port: int
+    rack: str | None = None
+
+
+@dataclass
+class PartitionInfo:
+    """Information about a topic partition."""
+    
+    partition: int
+    leader: int
+    replicas: list[int] = field(default_factory=list)
+    isr: list[int] = field(default_factory=list)
+
+
+@dataclass
+class PartitionOffset:
+    """Offset information for a partition."""
+    
+    topic: str
+    partition: int
+    current_offset: int
+    end_offset: int
+    lag: int
+
+
+@dataclass
+class MemberInfo:
+    """Information about a consumer group member."""
+    
+    member_id: str
+    client_id: str
+    host: str
+    partitions: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class ConsumerGroupInfo:
+    """Basic information about a consumer group."""
+    
+    group_id: str
+    state: str  # Stable, Empty, Rebalancing, Dead, PreparingRebalance, CompletingRebalance
+    members_count: int
+    topics: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ConsumerGroupDetail:
+    """Detailed information about a consumer group."""
+    
+    group_id: str
+    state: str
+    coordinator: int
+    protocol_type: str
+    protocol: str
+    members: list[MemberInfo] = field(default_factory=list)
+    offsets: dict[str, list[PartitionOffset]] = field(default_factory=dict)
+    total_lag: int = 0
+
+
+@dataclass
+class ClusterInfo:
+    """Information about the Kafka cluster."""
+    
+    cluster_id: str | None
+    brokers: list[BrokerInfo] = field(default_factory=list)
+    controller_id: int = -1
+    topics_count: int = 0
+    partitions_count: int = 0
 
 
 class ConfluentAdmin:
@@ -293,3 +372,327 @@ class ConfluentAdmin:
                 replication_factor=replication,
                 configs=configs,
             )
+
+    # ─── Consumer Group Methods ─────────────────────────────────────
+
+    async def list_consumer_groups(self) -> list[ConsumerGroupInfo]:
+        """
+        List all consumer groups with basic information.
+        
+        Returns:
+            List of ConsumerGroupInfo with group_id, state, members_count, topics
+        """
+        if not self._admin:
+            await self.connect()
+        
+        loop = asyncio.get_event_loop()
+        
+        try:
+            # List consumer groups
+            future = self._admin.list_consumer_groups()
+            groups_result = await loop.run_in_executor(None, future.result)
+            
+            result = []
+            group_ids = []
+            
+            for group in groups_result.valid:
+                group_ids.append(group.group_id)
+                result.append(ConsumerGroupInfo(
+                    group_id=group.group_id,
+                    state=str(group.state) if hasattr(group, 'state') else "Unknown",
+                    members_count=0,
+                    topics=[],
+                ))
+            
+            # Describe groups to get more details
+            if group_ids:
+                try:
+                    futures = self._admin.describe_consumer_groups(group_ids)
+                    for group_id, desc_future in futures.items():
+                        try:
+                            desc = await loop.run_in_executor(None, desc_future.result)
+                            for group_info in result:
+                                if group_info.group_id == group_id:
+                                    group_info.state = str(desc.state)
+                                    group_info.members_count = len(desc.members)
+                                    # Extract topics from member assignments
+                                    topics = set()
+                                    for member in desc.members:
+                                        if member.assignment and member.assignment.topic_partitions:
+                                            for tp in member.assignment.topic_partitions:
+                                                topics.add(tp.topic)
+                                    group_info.topics = list(topics)
+                                    break
+                        except Exception as e:
+                            logger.warning(f"Error describing group {group_id}: {e}")
+                except Exception as e:
+                    logger.warning(f"Error describing consumer groups: {e}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error listing consumer groups: {e}")
+            return []
+
+    async def describe_consumer_group(self, group_id: str) -> ConsumerGroupDetail | None:
+        """
+        Get detailed information about a consumer group.
+        
+        Args:
+            group_id: Consumer group ID
+            
+        Returns:
+            ConsumerGroupDetail with members, offsets, and lag information
+        """
+        if not self._admin:
+            await self.connect()
+        
+        loop = asyncio.get_event_loop()
+        
+        try:
+            futures = self._admin.describe_consumer_groups([group_id])
+            desc_future = futures.get(group_id)
+            
+            if not desc_future:
+                return None
+            
+            desc = await loop.run_in_executor(None, desc_future.result)
+            
+            # Build member info
+            members = []
+            topics = set()
+            
+            for member in desc.members:
+                partitions = []
+                if member.assignment and member.assignment.topic_partitions:
+                    for tp in member.assignment.topic_partitions:
+                        topics.add(tp.topic)
+                        partitions.append({
+                            "topic": tp.topic,
+                            "partition": tp.partition,
+                        })
+                
+                members.append(MemberInfo(
+                    member_id=member.member_id,
+                    client_id=member.client_id or "",
+                    host=member.host or "",
+                    partitions=partitions,
+                ))
+            
+            # Get offsets for this group
+            offsets = await self.get_consumer_group_offsets(group_id, list(topics))
+            
+            # Calculate total lag
+            total_lag = sum(
+                po.lag for topic_offsets in offsets.values() for po in topic_offsets
+            )
+            
+            return ConsumerGroupDetail(
+                group_id=desc.group_id,
+                state=str(desc.state),
+                coordinator=desc.coordinator.id if desc.coordinator else -1,
+                protocol_type=desc.protocol_type or "",
+                protocol=desc.protocol or "",
+                members=members,
+                offsets=offsets,
+                total_lag=total_lag,
+            )
+            
+        except Exception as e:
+            logger.error(f"Error describing consumer group {group_id}: {e}")
+            return None
+
+    async def get_consumer_group_offsets(
+        self,
+        group_id: str,
+        topics: list[str] | None = None,
+    ) -> dict[str, list[PartitionOffset]]:
+        """
+        Get committed offsets for a consumer group with lag calculation.
+        
+        Args:
+            group_id: Consumer group ID
+            topics: Optional list of topics to filter (if None, gets all)
+            
+        Returns:
+            Dict mapping topic names to list of PartitionOffset
+        """
+        if not self._admin:
+            await self.connect()
+        
+        loop = asyncio.get_event_loop()
+        result: dict[str, list[PartitionOffset]] = {}
+        
+        try:
+            from confluent_kafka import TopicPartition, Consumer
+            
+            # List committed offsets for the group
+            futures = self._admin.list_consumer_group_offsets([group_id])
+            offsets_future = futures.get(group_id)
+            
+            if not offsets_future:
+                return result
+            
+            offsets_result = await loop.run_in_executor(None, offsets_future.result)
+            
+            if not offsets_result.topic_partitions:
+                return result
+            
+            # Group by topic
+            topic_partitions: dict[str, list[TopicPartition]] = {}
+            committed_offsets: dict[str, dict[int, int]] = {}
+            
+            for tp in offsets_result.topic_partitions:
+                topic = tp.topic
+                
+                if topics and topic not in topics:
+                    continue
+                
+                if topic not in topic_partitions:
+                    topic_partitions[topic] = []
+                    committed_offsets[topic] = {}
+                
+                topic_partitions[topic].append(tp)
+                committed_offsets[topic][tp.partition] = tp.offset
+            
+            # Create a consumer to get end offsets
+            consumer_config = {
+                "bootstrap.servers": self._bootstrap_servers,
+                "group.id": f"admin-offset-check-{group_id}",
+                "enable.auto.commit": False,
+            }
+            
+            if self._settings.kafka_security_protocol != "PLAINTEXT":
+                consumer_config["security.protocol"] = self._settings.kafka_security_protocol
+                if self._settings.kafka_sasl_mechanism:
+                    consumer_config["sasl.mechanism"] = self._settings.kafka_sasl_mechanism
+                    consumer_config["sasl.username"] = self._settings.kafka_sasl_username
+                    consumer_config["sasl.password"] = self._settings.kafka_sasl_password
+            
+            consumer = Consumer(consumer_config)
+            
+            try:
+                for topic, tps in topic_partitions.items():
+                    # Get watermark offsets (low, high) for each partition
+                    partition_offsets = []
+                    
+                    for tp in tps:
+                        try:
+                            low, high = consumer.get_watermark_offsets(tp, timeout=5.0)
+                            current = committed_offsets[topic].get(tp.partition, 0)
+                            lag = max(0, high - current)
+                            
+                            partition_offsets.append(PartitionOffset(
+                                topic=topic,
+                                partition=tp.partition,
+                                current_offset=current,
+                                end_offset=high,
+                                lag=lag,
+                            ))
+                        except Exception as e:
+                            logger.warning(f"Error getting watermarks for {tp}: {e}")
+                            partition_offsets.append(PartitionOffset(
+                                topic=topic,
+                                partition=tp.partition,
+                                current_offset=committed_offsets[topic].get(tp.partition, 0),
+                                end_offset=0,
+                                lag=0,
+                            ))
+                    
+                    result[topic] = partition_offsets
+                    
+            finally:
+                consumer.close()
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting consumer group offsets for {group_id}: {e}")
+            return result
+
+    async def get_cluster_info(self) -> ClusterInfo:
+        """
+        Get information about the Kafka cluster.
+        
+        Returns:
+            ClusterInfo with brokers, controller, topics, and partitions count
+        """
+        if not self._admin:
+            await self.connect()
+        
+        loop = asyncio.get_event_loop()
+        
+        try:
+            # Get cluster metadata
+            metadata = await loop.run_in_executor(
+                None, lambda: self._admin.list_topics(timeout=10)
+            )
+            
+            brokers = []
+            for broker_id, broker in metadata.brokers.items():
+                brokers.append(BrokerInfo(
+                    id=broker_id,
+                    host=broker.host,
+                    port=broker.port,
+                    rack=None,  # Not available in basic metadata
+                ))
+            
+            # Count topics and partitions (excluding internal)
+            topics_count = 0
+            partitions_count = 0
+            
+            for topic_name, topic_meta in metadata.topics.items():
+                if not topic_name.startswith("__"):
+                    topics_count += 1
+                    partitions_count += len(topic_meta.partitions)
+            
+            return ClusterInfo(
+                cluster_id=metadata.cluster_id,
+                brokers=brokers,
+                controller_id=metadata.controller_id or -1,
+                topics_count=topics_count,
+                partitions_count=partitions_count,
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting cluster info: {e}")
+            return ClusterInfo(cluster_id=None)
+
+    async def describe_topic_partitions(self, name: str) -> list[PartitionInfo]:
+        """
+        Get detailed partition information for a topic.
+        
+        Args:
+            name: Topic name
+            
+        Returns:
+            List of PartitionInfo with leader, replicas, and ISR
+        """
+        if not self._admin:
+            await self.connect()
+        
+        loop = asyncio.get_event_loop()
+        
+        try:
+            metadata = await loop.run_in_executor(
+                None, lambda: self._admin.list_topics(topic=name, timeout=10)
+            )
+            
+            topic_meta = metadata.topics.get(name)
+            if not topic_meta:
+                return []
+            
+            result = []
+            for partition_id, partition_meta in topic_meta.partitions.items():
+                result.append(PartitionInfo(
+                    partition=partition_id,
+                    leader=partition_meta.leader,
+                    replicas=list(partition_meta.replicas),
+                    isr=list(partition_meta.isrs),
+                ))
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error describing topic partitions for {name}: {e}")
+            return []

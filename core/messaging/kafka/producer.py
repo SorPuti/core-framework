@@ -138,7 +138,7 @@ class KafkaProducer(Producer):
         key: str | None = None,
         headers: dict[str, str] | None = None,
         wait: bool | None = None,
-    ) -> None:
+    ) -> Any:
         """
         Send a message to a topic.
         
@@ -150,6 +150,9 @@ class KafkaProducer(Producer):
             wait: If True, waits for broker acknowledgment.
                   If False, returns immediately (fire-and-forget).
                   If None, uses kafka_fire_and_forget setting (inverted).
+        
+        Returns:
+            RecordMetadata with partition and offset (if wait=True)
         
         Note:
             For high-throughput scenarios, use wait=False or send_fire_and_forget().
@@ -169,21 +172,54 @@ class KafkaProducer(Producer):
         if headers:
             kafka_headers = [(k, v.encode()) for k, v in headers.items()]
         
-        if wait:
-            await self._producer.send_and_wait(
-                resolved_topic,
-                value=message,
+        # Event tracking (if enabled)
+        event_id = None
+        if headers:
+            event_id = headers.get("event_id")
+        
+        if event_id:
+            from core.admin.event_tracking import get_event_tracker
+            tracker = get_event_tracker()
+            await tracker.track_outgoing(
+                event_id=event_id,
+                event_name=headers.get("event_name", "unknown") if headers else "unknown",
+                topic=resolved_topic,
+                payload=message,
+                headers=headers,
                 key=key,
-                headers=kafka_headers,
             )
-        else:
-            # Fire-and-forget: returns Future, doesn't wait
-            await self._producer.send(
-                resolved_topic,
-                value=message,
-                key=key,
-                headers=kafka_headers,
-            )
+        
+        try:
+            if wait:
+                result = await self._producer.send_and_wait(
+                    resolved_topic,
+                    value=message,
+                    key=key,
+                    headers=kafka_headers,
+                )
+                
+                # Mark as sent in tracker
+                if event_id:
+                    await tracker.mark_sent(
+                        event_id=event_id,
+                        partition=result.partition,
+                        offset=result.offset,
+                    )
+                
+                return result
+            else:
+                # Fire-and-forget: returns Future, doesn't wait
+                return await self._producer.send(
+                    resolved_topic,
+                    value=message,
+                    key=key,
+                    headers=kafka_headers,
+                )
+        except Exception as e:
+            # Mark as failed in tracker
+            if event_id:
+                await tracker.mark_failed(event_id=event_id, error=str(e))
+            raise
     
     async def send_fire_and_forget(
         self,

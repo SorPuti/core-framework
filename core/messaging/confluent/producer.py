@@ -181,7 +181,7 @@ class ConfluentProducer(Producer):
         headers: dict[str, str] | None = None,
         wait: bool | None = None,
         on_delivery: Callable | None = None,
-    ) -> None:
+    ) -> Any:
         """
         Send a message to a topic.
         
@@ -197,6 +197,9 @@ class ConfluentProducer(Producer):
                   If False, fire-and-forget (maximum throughput).
                   If None, uses kafka_fire_and_forget setting (inverted).
             on_delivery: Optional callback(err, msg) for async confirmation
+            
+        Returns:
+            Delivery result (if wait=True)
         """
         if not self._started:
             await self.start()
@@ -217,21 +220,77 @@ class ConfluentProducer(Producer):
         if headers:
             kafka_headers = [(k, v.encode("utf-8")) for k, v in headers.items()]
         
-        # Send
-        self._producer.produce(
-            topic=resolved_topic,
-            value=value,
-            key=key_bytes,
-            headers=kafka_headers,
-            on_delivery=on_delivery,
-        )
+        # Event tracking (if enabled)
+        event_id = None
+        tracker = None
+        if headers:
+            event_id = headers.get("event_id")
         
-        # Poll to trigger callbacks (non-blocking)
-        self._producer.poll(0)
+        if event_id:
+            from core.admin.event_tracking import get_event_tracker
+            tracker = get_event_tracker()
+            await tracker.track_outgoing(
+                event_id=event_id,
+                event_name=headers.get("event_name", "unknown") if headers else "unknown",
+                topic=resolved_topic,
+                payload=message,
+                headers=headers,
+                key=key,
+            )
         
-        if wait:
-            # Block until delivered
-            self._producer.flush()
+        # Track delivery result for event tracking
+        delivery_result = {"partition": None, "offset": None, "error": None}
+        
+        def _track_delivery(err, msg):
+            """Callback to track delivery result."""
+            if err:
+                delivery_result["error"] = str(err)
+            else:
+                delivery_result["partition"] = msg.partition()
+                delivery_result["offset"] = msg.offset()
+            
+            # Call user's callback if provided
+            if on_delivery:
+                on_delivery(err, msg)
+        
+        try:
+            # Send
+            self._producer.produce(
+                topic=resolved_topic,
+                value=value,
+                key=key_bytes,
+                headers=kafka_headers,
+                on_delivery=_track_delivery if event_id else on_delivery,
+            )
+            
+            # Poll to trigger callbacks (non-blocking)
+            self._producer.poll(0)
+            
+            if wait:
+                # Block until delivered
+                self._producer.flush()
+                
+                # Update tracker with result
+                if event_id and tracker:
+                    if delivery_result["error"]:
+                        await tracker.mark_failed(
+                            event_id=event_id,
+                            error=delivery_result["error"],
+                        )
+                    elif delivery_result["partition"] is not None:
+                        await tracker.mark_sent(
+                            event_id=event_id,
+                            partition=delivery_result["partition"],
+                            offset=delivery_result["offset"],
+                        )
+                
+                return delivery_result
+                
+        except Exception as e:
+            # Mark as failed in tracker
+            if event_id and tracker:
+                await tracker.mark_failed(event_id=event_id, error=str(e))
+            raise
     
     async def send_avro(
         self,

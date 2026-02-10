@@ -276,3 +276,248 @@ class AdminSession(Model):
     
     def __repr__(self) -> str:
         return f"<AdminSession user_id={self.user_id} active={self.is_active}>"
+
+
+class EventLog(Model):
+    """
+    Tracking de eventos Kafka para auditoria, monitoramento e reprocessamento.
+    
+    Registra todos os eventos enviados (OUT) e recebidos (IN) pelo sistema,
+    permitindo visualização no Operations Center, análise de throughput,
+    e reenvio de eventos com falha.
+    
+    Campos principais:
+    - event_id: UUID único do evento (do header Kafka)
+    - event_name: Nome do evento (ex: user.created, order.placed)
+    - topic: Tópico Kafka
+    - direction: IN (recebido) ou OUT (enviado)
+    - status: pending, sent, delivered, failed, requeued
+    
+    Usado pelo interceptor do KafkaProducer/KafkaConsumer para tracking automático.
+    """
+    __tablename__ = "admin_event_logs"
+    
+    id: Mapped[int] = Field.pk()
+    
+    # Identificação do evento
+    event_id: Mapped[str] = Field.string(max_length=64, unique=True, index=True)
+    event_name: Mapped[str] = Field.string(max_length=255, index=True)
+    
+    # Kafka metadata
+    topic: Mapped[str] = Field.string(max_length=255, index=True)
+    partition: Mapped[int | None] = Field.integer(nullable=True)
+    offset: Mapped[int | None] = Field.integer(nullable=True)
+    key: Mapped[str | None] = Field.string(max_length=255, nullable=True)
+    
+    # Headers (JSON serializado)
+    headers_json: Mapped[str | None] = Field.text(nullable=True)
+    
+    # Payload
+    payload_json: Mapped[str] = Field.text()
+    payload_schema: Mapped[str | None] = Field.string(max_length=255, nullable=True)  # Nome do AvroModel
+    payload_size_bytes: Mapped[int] = Field.integer(default=0)
+    
+    # Status e direção
+    direction: Mapped[str] = Field.string(max_length=10, index=True)  # IN ou OUT
+    status: Mapped[str] = Field.string(max_length=20, index=True)  # pending, sent, delivered, failed, requeued
+    
+    # Timestamps
+    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True, index=True)
+    sent_at: Mapped[DateTime | None] = Field.datetime(nullable=True)
+    delivered_at: Mapped[DateTime | None] = Field.datetime(nullable=True)
+    
+    # Erros e retries
+    error: Mapped[str | None] = Field.text(nullable=True)
+    retry_count: Mapped[int] = Field.integer(default=0)
+    
+    # Source tracking
+    source_service: Mapped[str | None] = Field.string(max_length=100, nullable=True)
+    source_worker_id: Mapped[str | None] = Field.string(max_length=64, nullable=True)
+    
+    # Referência para reenvio (aponta para o evento original se for um requeue)
+    original_event_id: Mapped[str | None] = Field.string(max_length=64, nullable=True, index=True)
+    
+    def __repr__(self) -> str:
+        return f"<EventLog {self.event_name} [{self.status}] {self.direction} {self.event_id[:8]}>"
+    
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa o evento para JSON/WebSocket."""
+        import json
+        return {
+            "id": self.id,
+            "event_id": self.event_id,
+            "event_name": self.event_name,
+            "topic": self.topic,
+            "partition": self.partition,
+            "offset": self.offset,
+            "key": self.key,
+            "headers": json.loads(self.headers_json) if self.headers_json else None,
+            "payload": json.loads(self.payload_json) if self.payload_json else None,
+            "payload_schema": self.payload_schema,
+            "payload_size_bytes": self.payload_size_bytes,
+            "direction": self.direction,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
+            "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
+            "error": self.error,
+            "retry_count": self.retry_count,
+            "source_service": self.source_service,
+            "source_worker_id": self.source_worker_id,
+            "original_event_id": self.original_event_id,
+        }
+    
+    @classmethod
+    async def log_outgoing(
+        cls,
+        db: "AsyncSession",
+        *,
+        event_id: str,
+        event_name: str,
+        topic: str,
+        payload: dict | str,
+        headers: dict | None = None,
+        key: str | None = None,
+        schema_name: str | None = None,
+        source_service: str | None = None,
+        source_worker_id: str | None = None,
+    ) -> "EventLog":
+        """
+        Registra um evento de saída (antes de enviar ao Kafka).
+        
+        Args:
+            db: Sessão do banco
+            event_id: UUID do evento
+            event_name: Nome do evento
+            topic: Tópico Kafka de destino
+            payload: Dados do evento (dict ou JSON string)
+            headers: Headers Kafka
+            key: Chave de particionamento
+            schema_name: Nome do schema Avro (se aplicável)
+            source_service: Nome do serviço de origem
+            source_worker_id: ID do worker de origem
+        """
+        import json
+        
+        payload_str = json.dumps(payload) if isinstance(payload, dict) else payload
+        headers_str = json.dumps(headers) if headers else None
+        
+        log = cls(
+            event_id=event_id,
+            event_name=event_name,
+            topic=topic,
+            key=key,
+            headers_json=headers_str,
+            payload_json=payload_str,
+            payload_schema=schema_name,
+            payload_size_bytes=len(payload_str.encode("utf-8")),
+            direction="OUT",
+            status="pending",
+            source_service=source_service,
+            source_worker_id=source_worker_id,
+        )
+        await log.save(db)
+        return log
+    
+    @classmethod
+    async def mark_sent(
+        cls,
+        db: "AsyncSession",
+        event_id: str,
+        partition: int,
+        offset: int,
+    ) -> None:
+        """Marca um evento como enviado com sucesso."""
+        from core.datetime import timezone
+        from sqlalchemy import update
+        
+        stmt = (
+            update(cls)
+            .where(cls.event_id == event_id)
+            .values(
+                status="sent",
+                partition=partition,
+                offset=offset,
+                sent_at=timezone.now(),
+            )
+        )
+        await db.execute(stmt)
+        await db.commit()
+    
+    @classmethod
+    async def mark_failed(
+        cls,
+        db: "AsyncSession",
+        event_id: str,
+        error: str,
+    ) -> None:
+        """Marca um evento como falho."""
+        from sqlalchemy import update
+        
+        stmt = (
+            update(cls)
+            .where(cls.event_id == event_id)
+            .values(
+                status="failed",
+                error=error[:5000],  # Limita tamanho do erro
+            )
+        )
+        await db.execute(stmt)
+        await db.commit()
+    
+    @classmethod
+    async def log_incoming(
+        cls,
+        db: "AsyncSession",
+        *,
+        event_id: str,
+        event_name: str,
+        topic: str,
+        partition: int,
+        offset: int,
+        payload: dict | str,
+        headers: dict | None = None,
+        key: str | None = None,
+        schema_name: str | None = None,
+        source_worker_id: str | None = None,
+    ) -> "EventLog":
+        """
+        Registra um evento de entrada (recebido do Kafka).
+        
+        Args:
+            db: Sessão do banco
+            event_id: UUID do evento (do header)
+            event_name: Nome do evento (do header)
+            topic: Tópico Kafka de origem
+            partition: Partição de onde veio
+            offset: Offset no Kafka
+            payload: Dados do evento
+            headers: Headers Kafka
+            key: Chave de particionamento
+            schema_name: Nome do schema Avro
+            source_worker_id: ID do worker que recebeu
+        """
+        import json
+        from core.datetime import timezone
+        
+        payload_str = json.dumps(payload) if isinstance(payload, dict) else payload
+        headers_str = json.dumps(headers) if headers else None
+        
+        log = cls(
+            event_id=event_id,
+            event_name=event_name,
+            topic=topic,
+            partition=partition,
+            offset=offset,
+            key=key,
+            headers_json=headers_str,
+            payload_json=payload_str,
+            payload_schema=schema_name,
+            payload_size_bytes=len(payload_str.encode("utf-8")),
+            direction="IN",
+            status="delivered",
+            delivered_at=timezone.now(),
+            source_worker_id=source_worker_id,
+        )
+        await log.save(db)
+        return log

@@ -459,30 +459,54 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         user: Any = Depends(check_superuser_access),
     ) -> dict:
         """
-        Delete an OFFLINE worker record (Issue #19).
+        Delete an OFFLINE or stale worker record.
         
-        Only allows deletion of workers with OFFLINE status.
+        Allows deletion of workers that are:
+        1. Explicitly marked as OFFLINE in the database, OR
+        2. Marked as ONLINE but stale (no heartbeat for >2 minutes)
+        
+        This fixes the issue where frontend shows worker as OFFLINE (based on
+        stale heartbeat) but database still has status=ONLINE.
         """
         try:
             from core.models import get_session
             from core.admin.models import WorkerHeartbeat
-            from sqlalchemy import delete as sa_delete
+            from core.datetime import timezone
+            from datetime import timedelta
+            from sqlalchemy import select
 
             db = await get_session()
             async with db:
-                stmt = (
-                    sa_delete(WorkerHeartbeat)
-                    .where(WorkerHeartbeat.worker_id == worker_id)
-                    .where(WorkerHeartbeat.status == "OFFLINE")
-                )
+                # First, fetch the worker to check its state
+                stmt = select(WorkerHeartbeat).where(WorkerHeartbeat.worker_id == worker_id)
                 result = await db.execute(stmt)
-                await db.commit()
-
-                if result.rowcount == 0:
+                worker = result.scalar_one_or_none()
+                
+                if not worker:
+                    raise HTTPException(404, "Worker not found")
+                
+                # Check if worker can be deleted:
+                # 1. Status is OFFLINE in database, OR
+                # 2. Status is ONLINE but stale (>2min without heartbeat)
+                now = timezone.now()
+                stale_threshold = now - timedelta(minutes=2)
+                
+                is_offline = worker.status == "OFFLINE"
+                is_stale = (
+                    worker.status == "ONLINE" 
+                    and worker.last_heartbeat 
+                    and worker.last_heartbeat < stale_threshold
+                )
+                
+                if not (is_offline or is_stale):
                     raise HTTPException(
                         400,
-                        "Worker not found or is not OFFLINE. Only OFFLINE workers can be removed.",
+                        "Worker is still active. Only OFFLINE or stale workers can be removed.",
                     )
+                
+                # Delete the worker
+                await db.delete(worker)
+                await db.commit()
 
                 return {"status": "deleted", "worker_id": worker_id}
         except HTTPException:
@@ -614,7 +638,799 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         from core.admin.resource_inventory import ResourceInventory
         return await ResourceInventory.collect(site)
 
+    # =====================================================================
+    # Kafka - Cluster Overview
+    # =====================================================================
+
+    @router.get("/kafka/overview")
+    async def kafka_overview(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Get Kafka cluster overview.
+        
+        Returns cluster info, broker count, topics, partitions, and consumer groups.
+        """
+        try:
+            admin = await _get_kafka_admin()
+            if not admin:
+                return {"error": "Kafka not configured", "enabled": False}
+            
+            cluster_info = await admin.get_cluster_info()
+            consumer_groups = await admin.list_consumer_groups()
+            
+            return {
+                "enabled": True,
+                "cluster_id": cluster_info.cluster_id,
+                "brokers": [
+                    {"id": b.id, "host": b.host, "port": b.port, "rack": b.rack}
+                    for b in cluster_info.brokers
+                ],
+                "brokers_count": len(cluster_info.brokers),
+                "controller_id": cluster_info.controller_id,
+                "topics_count": cluster_info.topics_count,
+                "partitions_count": cluster_info.partitions_count,
+                "consumer_groups_count": len(consumer_groups),
+            }
+        except Exception as e:
+            logger.error(f"Error getting Kafka overview: {e}")
+            return {"error": str(e), "enabled": False}
+
+    @router.get("/kafka/consumer-groups")
+    async def kafka_consumer_groups(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        List all Kafka consumer groups with state and lag info.
+        """
+        try:
+            admin = await _get_kafka_admin()
+            if not admin:
+                return {"items": [], "error": "Kafka not configured"}
+            
+            groups = await admin.list_consumer_groups()
+            
+            # Get lag for each group
+            items = []
+            for group in groups:
+                detail = await admin.describe_consumer_group(group.group_id)
+                items.append({
+                    "group_id": group.group_id,
+                    "state": group.state,
+                    "members_count": group.members_count,
+                    "topics": group.topics,
+                    "total_lag": detail.total_lag if detail else 0,
+                })
+            
+            return {"items": items, "total": len(items)}
+        except Exception as e:
+            logger.error(f"Error listing consumer groups: {e}")
+            return {"items": [], "error": str(e)}
+
+    @router.get("/kafka/consumer-groups/{group_id}")
+    async def kafka_consumer_group_detail(
+        request: Request,
+        group_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Get detailed information about a consumer group.
+        
+        Includes members, topic assignments, and per-partition lag.
+        """
+        try:
+            admin = await _get_kafka_admin()
+            if not admin:
+                raise HTTPException(503, "Kafka not configured")
+            
+            detail = await admin.describe_consumer_group(group_id)
+            if not detail:
+                raise HTTPException(404, f"Consumer group '{group_id}' not found")
+            
+            return {
+                "group_id": detail.group_id,
+                "state": detail.state,
+                "coordinator": detail.coordinator,
+                "protocol_type": detail.protocol_type,
+                "protocol": detail.protocol,
+                "members": [
+                    {
+                        "member_id": m.member_id,
+                        "client_id": m.client_id,
+                        "host": m.host,
+                        "partitions": m.partitions,
+                    }
+                    for m in detail.members
+                ],
+                "offsets": {
+                    topic: [
+                        {
+                            "partition": po.partition,
+                            "current_offset": po.current_offset,
+                            "end_offset": po.end_offset,
+                            "lag": po.lag,
+                        }
+                        for po in offsets
+                    ]
+                    for topic, offsets in detail.offsets.items()
+                },
+                "total_lag": detail.total_lag,
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error getting consumer group detail: {e}")
+            raise HTTPException(500, str(e))
+
+    @router.get("/kafka/topics")
+    async def kafka_topics(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        List all Kafka topics with partition info.
+        """
+        try:
+            admin = await _get_kafka_admin()
+            if not admin:
+                return {"items": [], "error": "Kafka not configured"}
+            
+            topic_names = await admin.list_topics()
+            
+            items = []
+            for name in topic_names:
+                info = await admin.describe_topic(name)
+                if info:
+                    items.append({
+                        "name": info.name,
+                        "partitions": info.partitions,
+                        "replication_factor": info.replication_factor,
+                    })
+            
+            return {"items": items, "total": len(items)}
+        except Exception as e:
+            logger.error(f"Error listing topics: {e}")
+            return {"items": [], "error": str(e)}
+
+    @router.get("/kafka/topics/{topic_name}")
+    async def kafka_topic_detail(
+        request: Request,
+        topic_name: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Get detailed information about a topic.
+        
+        Includes partition details with leader, replicas, and ISR.
+        """
+        try:
+            admin = await _get_kafka_admin()
+            if not admin:
+                raise HTTPException(503, "Kafka not configured")
+            
+            info = await admin.describe_topic(topic_name)
+            if not info:
+                raise HTTPException(404, f"Topic '{topic_name}' not found")
+            
+            partitions = await admin.describe_topic_partitions(topic_name)
+            
+            return {
+                "name": info.name,
+                "partitions_count": info.partitions,
+                "replication_factor": info.replication_factor,
+                "configs": info.configs,
+                "partitions": [
+                    {
+                        "partition": p.partition,
+                        "leader": p.leader,
+                        "replicas": p.replicas,
+                        "isr": p.isr,
+                    }
+                    for p in partitions
+                ],
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error getting topic detail: {e}")
+            raise HTTPException(500, str(e))
+
+    @router.get("/kafka/throughput")
+    async def kafka_throughput(
+        request: Request,
+        period: str = Query("6h", description="Period: 1h, 6h, 24h, 7d"),
+        granularity: str = Query("5min", description="Granularity: 1min, 5min, 15min, 1h"),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Get Kafka throughput data for charts.
+        
+        Returns event counts aggregated by time buckets for produce/consume rate visualization.
+        Based on EventLog data (requires event tracking to be enabled).
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import EventLog
+            from core.datetime import timezone
+            from datetime import timedelta
+            from sqlalchemy import select, func
+            
+            # Parse period
+            period_map = {"1h": 1, "6h": 6, "24h": 24, "7d": 168}
+            hours = period_map.get(period, 6)
+            
+            # Parse granularity
+            granularity_map = {"1min": 60, "5min": 300, "15min": 900, "1h": 3600}
+            bucket_seconds = granularity_map.get(granularity, 300)
+            
+            now = timezone.now()
+            start = now - timedelta(hours=hours)
+            
+            db = await get_session()
+            async with db:
+                # Query events grouped by time bucket and direction
+                # Using date_trunc for PostgreSQL or strftime for SQLite
+                stmt = (
+                    select(
+                        EventLog.direction,
+                        func.count().label("count"),
+                        # Truncate to bucket
+                        func.date_trunc("minute", EventLog.created_at).label("bucket"),
+                    )
+                    .where(EventLog.created_at >= start)
+                    .group_by(EventLog.direction, "bucket")
+                    .order_by("bucket")
+                )
+                
+                result = await db.execute(stmt)
+                rows = result.all()
+                
+                # Build time series
+                labels = []
+                produce_rate = []
+                consume_rate = []
+                
+                # Group by bucket
+                buckets: dict[str, dict[str, int]] = {}
+                for row in rows:
+                    bucket_key = row.bucket.isoformat() if row.bucket else ""
+                    if bucket_key not in buckets:
+                        buckets[bucket_key] = {"OUT": 0, "IN": 0}
+                    buckets[bucket_key][row.direction] = row.count
+                
+                for bucket_key in sorted(buckets.keys()):
+                    labels.append(bucket_key)
+                    produce_rate.append(buckets[bucket_key].get("OUT", 0))
+                    consume_rate.append(buckets[bucket_key].get("IN", 0))
+                
+                return {
+                    "labels": labels,
+                    "produce_rate": produce_rate,
+                    "consume_rate": consume_rate,
+                    "period_start": start.isoformat(),
+                    "period_end": now.isoformat(),
+                    "granularity_seconds": bucket_seconds,
+                }
+        except Exception as e:
+            logger.error(f"Error getting Kafka throughput: {e}")
+            return {"labels": [], "produce_rate": [], "consume_rate": [], "error": str(e)}
+
+    @router.get("/kafka/consumer-groups/{group_id}/lag-history")
+    async def kafka_consumer_group_lag_history(
+        request: Request,
+        group_id: str,
+        period: str = Query("6h", description="Period: 1h, 6h, 24h, 7d"),
+        granularity: str = Query("5min", description="Granularity: 1min, 5min, 15min, 1h"),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Get consumer group lag history for charts.
+        
+        Note: This requires periodic lag snapshots to be stored.
+        For now, returns current lag only (historical tracking TBD).
+        """
+        try:
+            admin = await _get_kafka_admin()
+            if not admin:
+                raise HTTPException(503, "Kafka not configured")
+            
+            detail = await admin.describe_consumer_group(group_id)
+            if not detail:
+                raise HTTPException(404, f"Consumer group '{group_id}' not found")
+            
+            # For now, return current lag as a single point
+            # Historical tracking would require periodic snapshots
+            from core.datetime import timezone
+            now = timezone.now()
+            
+            return {
+                "labels": [now.isoformat()],
+                "lag": [detail.total_lag],
+                "topics": {
+                    topic: [sum(po.lag for po in offsets)]
+                    for topic, offsets in detail.offsets.items()
+                },
+                "note": "Historical lag tracking requires periodic snapshots (not yet implemented)",
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error getting lag history: {e}")
+            raise HTTPException(500, str(e))
+
+    # =====================================================================
+    # Events - Event Log Tracking
+    # =====================================================================
+
+    @router.get("/events")
+    async def events_list(
+        request: Request,
+        page: int = Query(1, ge=1),
+        per_page: int = Query(50, ge=1, le=200),
+        topic: str = Query("", description="Filter by topic"),
+        event_name: str = Query("", description="Filter by event name"),
+        status: str = Query("", description="Filter by status"),
+        direction: str = Query("", description="Filter by direction (IN/OUT)"),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        List event logs with filters and pagination.
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import EventLog
+            from core.querysets import QuerySet
+
+            db = await get_session()
+            async with db:
+                qs = QuerySet(EventLog, db)
+
+                if topic:
+                    qs = qs.filter(topic=topic)
+                if event_name:
+                    qs = qs.filter(event_name=event_name)
+                if status:
+                    qs = qs.filter(status=status)
+                if direction:
+                    qs = qs.filter(direction=direction.upper())
+
+                total = await qs.count()
+                items = await qs.order_by("-created_at").offset(
+                    (page - 1) * per_page
+                ).limit(per_page).all()
+
+                return {
+                    "items": [e.to_dict() for e in items],
+                    "total": total,
+                    "page": page,
+                    "per_page": per_page,
+                    "total_pages": (total + per_page - 1) // per_page if per_page else 1,
+                }
+        except Exception as e:
+            logger.warning("Failed to list events: %s", e)
+            return {"items": [], "total": 0, "page": 1, "per_page": per_page, "total_pages": 0}
+
+    @router.get("/events/stats")
+    async def events_stats(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Get event statistics.
+        
+        Returns counts by status, direction, top topics, and throughput.
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import EventLog
+            from core.datetime import timezone
+            from datetime import timedelta
+            from sqlalchemy import select, func
+
+            db = await get_session()
+            async with db:
+                # Total count
+                total_stmt = select(func.count()).select_from(EventLog)
+                total = (await db.execute(total_stmt)).scalar() or 0
+
+                # Count by status
+                status_stmt = (
+                    select(EventLog.status, func.count())
+                    .group_by(EventLog.status)
+                )
+                status_result = await db.execute(status_stmt)
+                by_status = {row[0]: row[1] for row in status_result}
+
+                # Count by direction
+                direction_stmt = (
+                    select(EventLog.direction, func.count())
+                    .group_by(EventLog.direction)
+                )
+                direction_result = await db.execute(direction_stmt)
+                by_direction = {row[0]: row[1] for row in direction_result}
+
+                # Top topics
+                topics_stmt = (
+                    select(EventLog.topic, func.count().label("count"))
+                    .group_by(EventLog.topic)
+                    .order_by(func.count().desc())
+                    .limit(10)
+                )
+                topics_result = await db.execute(topics_stmt)
+                top_topics = [{"topic": row[0], "count": row[1]} for row in topics_result]
+
+                # Top event names
+                names_stmt = (
+                    select(EventLog.event_name, func.count().label("count"))
+                    .group_by(EventLog.event_name)
+                    .order_by(func.count().desc())
+                    .limit(10)
+                )
+                names_result = await db.execute(names_stmt)
+                top_events = [{"event_name": row[0], "count": row[1]} for row in names_result]
+
+                # Throughput (last 5 minutes)
+                now = timezone.now()
+                five_min_ago = now - timedelta(minutes=5)
+                throughput_stmt = (
+                    select(func.count())
+                    .select_from(EventLog)
+                    .where(EventLog.created_at >= five_min_ago)
+                )
+                recent_count = (await db.execute(throughput_stmt)).scalar() or 0
+                throughput_per_min = recent_count / 5.0
+
+                # Success rate
+                sent = by_status.get("sent", 0)
+                delivered = by_status.get("delivered", 0)
+                failed = by_status.get("failed", 0)
+                success_total = sent + delivered + failed
+                success_rate = ((sent + delivered) / success_total * 100) if success_total > 0 else 100.0
+
+                return {
+                    "total": total,
+                    "by_status": by_status,
+                    "by_direction": by_direction,
+                    "top_topics": top_topics,
+                    "top_events": top_events,
+                    "throughput_per_min": round(throughput_per_min, 2),
+                    "success_rate": round(success_rate, 2),
+                    "sent": sent,
+                    "delivered": delivered,
+                    "failed": failed,
+                    "pending": by_status.get("pending", 0),
+                }
+        except Exception as e:
+            logger.warning("Failed to get event stats: %s", e)
+            return {"total": 0, "by_status": {}, "by_direction": {}}
+
+    @router.get("/events/timeline")
+    async def events_timeline(
+        request: Request,
+        period: str = Query("1h", description="Period: 1h, 6h, 24h, 7d"),
+        granularity: str = Query("1min", description="Granularity: 1min, 5min, 15min, 1h"),
+        topic: str = Query("", description="Filter by topic"),
+        event_name: str = Query("", description="Filter by event name"),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Get event timeline data for charts.
+        
+        Returns aggregated event counts by time bucket for visualization.
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import EventLog
+            from core.datetime import timezone
+            from datetime import timedelta
+            from sqlalchemy import select, func, and_
+
+            # Parse period
+            period_map = {"1h": 1, "6h": 6, "24h": 24, "7d": 168}
+            hours = period_map.get(period, 1)
+
+            # Parse granularity
+            granularity_map = {"1min": 60, "5min": 300, "15min": 900, "1h": 3600}
+            bucket_seconds = granularity_map.get(granularity, 60)
+
+            now = timezone.now()
+            start = now - timedelta(hours=hours)
+
+            db = await get_session()
+            async with db:
+                # Build filters
+                filters = [EventLog.created_at >= start]
+                if topic:
+                    filters.append(EventLog.topic == topic)
+                if event_name:
+                    filters.append(EventLog.event_name == event_name)
+
+                # Query events grouped by time bucket and status
+                stmt = (
+                    select(
+                        EventLog.status,
+                        func.count().label("count"),
+                        func.date_trunc("minute", EventLog.created_at).label("bucket"),
+                    )
+                    .where(and_(*filters))
+                    .group_by(EventLog.status, "bucket")
+                    .order_by("bucket")
+                )
+
+                result = await db.execute(stmt)
+                rows = result.all()
+
+                # Build time series
+                buckets: dict[str, dict[str, int]] = {}
+                for row in rows:
+                    bucket_key = row.bucket.isoformat() if row.bucket else ""
+                    if bucket_key not in buckets:
+                        buckets[bucket_key] = {"total": 0, "sent": 0, "delivered": 0, "failed": 0, "pending": 0}
+                    buckets[bucket_key][row.status] = row.count
+                    buckets[bucket_key]["total"] += row.count
+
+                labels = sorted(buckets.keys())
+                datasets = {
+                    "total": [buckets[k]["total"] for k in labels],
+                    "sent": [buckets[k]["sent"] for k in labels],
+                    "delivered": [buckets[k]["delivered"] for k in labels],
+                    "failed": [buckets[k]["failed"] for k in labels],
+                    "pending": [buckets[k]["pending"] for k in labels],
+                }
+
+                return {
+                    "labels": labels,
+                    "datasets": datasets,
+                    "period_start": start.isoformat(),
+                    "period_end": now.isoformat(),
+                    "granularity_seconds": bucket_seconds,
+                }
+        except Exception as e:
+            logger.error(f"Error getting events timeline: {e}")
+            return {"labels": [], "datasets": {}, "error": str(e)}
+
+    @router.get("/events/range")
+    async def events_in_range(
+        request: Request,
+        start: str = Query(..., description="Start datetime (ISO format)"),
+        end: str = Query(..., description="End datetime (ISO format)"),
+        topic: str = Query("", description="Filter by topic"),
+        status: str = Query("", description="Filter by status"),
+        page: int = Query(1, ge=1),
+        per_page: int = Query(50, ge=1, le=200),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Get events in a specific time range.
+        
+        Used for drill-down when clicking on chart points.
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import EventLog
+            from core.querysets import QuerySet
+            from datetime import datetime
+
+            # Parse dates
+            start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+
+            db = await get_session()
+            async with db:
+                qs = QuerySet(EventLog, db)
+                qs = qs.filter(created_at__gte=start_dt, created_at__lte=end_dt)
+
+                if topic:
+                    qs = qs.filter(topic=topic)
+                if status:
+                    qs = qs.filter(status=status)
+
+                total = await qs.count()
+                items = await qs.order_by("-created_at").offset(
+                    (page - 1) * per_page
+                ).limit(per_page).all()
+
+                return {
+                    "items": [e.to_dict() for e in items],
+                    "total": total,
+                    "page": page,
+                    "per_page": per_page,
+                    "total_pages": (total + per_page - 1) // per_page if per_page else 1,
+                    "range_start": start,
+                    "range_end": end,
+                }
+        except Exception as e:
+            logger.error(f"Error getting events in range: {e}")
+            return {"items": [], "total": 0, "error": str(e)}
+
+    @router.get("/events/{event_id}")
+    async def event_detail(
+        request: Request,
+        event_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Get detailed information about a specific event.
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import EventLog
+            from core.querysets import QuerySet
+
+            db = await get_session()
+            async with db:
+                qs = QuerySet(EventLog, db)
+                item = await qs.filter(event_id=event_id).first()
+                if not item:
+                    raise HTTPException(404, "Event not found")
+                return {"item": item.to_dict()}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @router.post("/events/{event_id}/resend")
+    async def event_resend(
+        request: Request,
+        event_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Resend an event to its original topic.
+        
+        Creates a new EventLog entry referencing the original event.
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import EventLog
+            from core.querysets import QuerySet
+            from core.config import get_settings
+            import uuid
+            import json
+
+            db = await get_session()
+            async with db:
+                qs = QuerySet(EventLog, db)
+                original = await qs.filter(event_id=event_id).first()
+                if not original:
+                    raise HTTPException(404, "Event not found")
+
+                # Get producer
+                settings = get_settings()
+                if not settings.kafka_enabled:
+                    raise HTTPException(503, "Kafka not configured")
+
+                backend = getattr(settings, "kafka_backend", "aiokafka")
+                if backend == "confluent":
+                    from core.messaging.confluent import ConfluentProducer
+                    producer = ConfluentProducer()
+                else:
+                    from core.messaging.kafka import KafkaProducer
+                    producer = KafkaProducer()
+
+                await producer.start()
+
+                try:
+                    # Create new event ID
+                    new_event_id = str(uuid.uuid4())
+
+                    # Parse original payload and headers
+                    payload = json.loads(original.payload_json) if original.payload_json else {}
+                    headers = json.loads(original.headers_json) if original.headers_json else {}
+
+                    # Update headers with new event ID and resend info
+                    headers["event_id"] = new_event_id
+                    headers["original_event_id"] = original.event_id
+                    headers["resent_at"] = timezone.now().isoformat()
+
+                    # Create new EventLog entry
+                    new_log = EventLog(
+                        event_id=new_event_id,
+                        event_name=original.event_name,
+                        topic=original.topic,
+                        key=original.key,
+                        headers_json=json.dumps(headers),
+                        payload_json=original.payload_json,
+                        payload_schema=original.payload_schema,
+                        payload_size_bytes=original.payload_size_bytes,
+                        direction="OUT",
+                        status="pending",
+                        original_event_id=original.event_id,
+                        source_service="admin-resend",
+                    )
+                    await new_log.save(db)
+
+                    # Send to Kafka
+                    result = await producer.send(
+                        original.topic,
+                        payload,
+                        key=original.key,
+                        headers=[(k, v.encode() if isinstance(v, str) else v) for k, v in headers.items()],
+                    )
+
+                    # Update log with result
+                    from core.datetime import timezone
+                    new_log.status = "sent"
+                    new_log.partition = result.partition if hasattr(result, "partition") else None
+                    new_log.offset = result.offset if hasattr(result, "offset") else None
+                    new_log.sent_at = timezone.now()
+                    await new_log.save(db)
+
+                    return {
+                        "status": "resent",
+                        "new_event_id": new_event_id,
+                        "original_event_id": original.event_id,
+                        "topic": original.topic,
+                    }
+
+                finally:
+                    await producer.stop()
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error resending event: {e}")
+            raise HTTPException(500, str(e))
+
+    @router.post("/events/purge")
+    async def events_purge(
+        request: Request,
+        days: int = Query(30, ge=1, description="Purge events older than N days"),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Purge old event logs.
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import EventLog
+            from core.datetime import timezone
+            from datetime import timedelta
+            from sqlalchemy import delete
+
+            cutoff = timezone.now() - timedelta(days=days)
+
+            db = await get_session()
+            async with db:
+                stmt = delete(EventLog).where(EventLog.created_at < cutoff)
+                result = await db.execute(stmt)
+                await db.commit()
+                return {"purged": result.rowcount, "older_than_days": days}
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
     return router
+
+
+# ─── Kafka Admin Helper ─────────────────────────────────────────────
+
+
+async def _get_kafka_admin():
+    """
+    Get the appropriate Kafka admin client based on configuration.
+    
+    Returns KafkaAdmin (aiokafka) or ConfluentAdmin based on kafka_backend setting.
+    """
+    from core.config import get_settings
+    
+    settings = get_settings()
+    
+    if not settings.kafka_enabled:
+        return None
+    
+    backend = getattr(settings, "kafka_backend", "aiokafka")
+    
+    if backend == "confluent":
+        from core.messaging.confluent import ConfluentAdmin
+        admin = ConfluentAdmin()
+    else:
+        from core.messaging.kafka import KafkaAdmin
+        admin = KafkaAdmin()
+    
+    await admin.connect()
+    return admin
 
 
 # ─── Serializers ─────────────────────────────────────────────────

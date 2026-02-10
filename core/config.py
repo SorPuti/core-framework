@@ -831,6 +831,19 @@ class Settings(BaseSettings):
         default=24,
         description="Hours to keep OFFLINE worker records before auto-cleanup (0 = disabled)",
     )
+    ops_event_tracking: bool = PydanticField(
+        default=False,
+        description=(
+            "Enable Kafka event tracking for the Operations Center. "
+            "When enabled, all Kafka events (sent/received) are logged to the database "
+            "and can be viewed in the Events dashboard. Useful for debugging and monitoring "
+            "but may impact performance in high-throughput scenarios."
+        ),
+    )
+    ops_event_retention_days: int = PydanticField(
+        default=7,
+        description="Days to retain event log records before purge",
+    )
     auto_collect_permissions: bool = PydanticField(
         default=False,
         description="Auto-generate CRUD permissions for all models on startup (default: False)",

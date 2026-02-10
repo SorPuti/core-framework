@@ -48,6 +48,11 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         ops_router = create_ops_api(site)
         router.include_router(ops_router)
         
+        # WebSocket endpoint for real-time updates
+        from core.admin.ws_events import create_ws_router
+        ws_router = create_ws_router(site)
+        router.include_router(ws_router)
+        
         from core.admin.log_handler import setup_log_buffer
         setup_log_buffer()
     
@@ -366,6 +371,28 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
             return _templates.TemplateResponse("admin/ops/periodic.html", ctx)
+        
+        @router.get("/ops/kafka/", response_class=HTMLResponse)
+        async def ops_kafka(request: Request) -> Response:
+            """Kafka Dashboard — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/kafka.html", ctx)
+        
+        @router.get("/ops/events/", response_class=HTMLResponse)
+        async def ops_events(request: Request) -> Response:
+            """Events Panel — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/events.html", ctx)
     
     # =========================================================================
     # Model Routes (HTML)

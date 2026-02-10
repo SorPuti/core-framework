@@ -184,6 +184,10 @@ class ConfluentConsumer(Consumer):
                     # Process message
                     try:
                         value = json.loads(msg.value().decode("utf-8"))
+                        
+                        # Track incoming event (if enabled)
+                        await self._track_incoming_event(msg, value)
+                        
                         await self.process_message(value)
                     except json.JSONDecodeError:
                         logger.error(f"Failed to decode message: {msg.value()}")
@@ -201,6 +205,62 @@ class ConfluentConsumer(Consumer):
             pass
         except Exception as e:
             logger.error(f"Consumer loop error: {e}", exc_info=True)
+    
+    async def _track_incoming_event(self, msg: Any, value: dict) -> None:
+        """
+        Track an incoming Kafka message for the Operations Center.
+        
+        Args:
+            msg: Raw Kafka message from confluent-kafka
+            value: Deserialized message value
+        """
+        from core.admin.event_tracking import get_event_tracker
+        
+        tracker = get_event_tracker()
+        if not tracker.is_enabled():
+            return
+        
+        try:
+            # Extract headers
+            headers_dict = {}
+            if msg.headers():
+                for key, val in msg.headers():
+                    if val:
+                        headers_dict[key] = val.decode("utf-8") if isinstance(val, bytes) else str(val)
+            
+            # Get event_id and event_name from headers
+            event_id = headers_dict.get("event_id")
+            event_name = headers_dict.get("event_name", "unknown")
+            
+            # If no event_id in headers, try to get from message value
+            if not event_id:
+                event_id = value.get("id") or value.get("event_id")
+                if not event_name or event_name == "unknown":
+                    event_name = value.get("name") or value.get("event_name", "unknown")
+            
+            # Generate event_id if still not found
+            if not event_id:
+                import uuid
+                event_id = str(uuid.uuid4())
+            
+            # Get key
+            key = None
+            if msg.key():
+                key = msg.key().decode("utf-8") if isinstance(msg.key(), bytes) else str(msg.key())
+            
+            await tracker.track_incoming(
+                event_id=event_id,
+                event_name=event_name,
+                topic=msg.topic(),
+                partition=msg.partition(),
+                offset=msg.offset(),
+                payload=value,
+                headers=headers_dict if headers_dict else None,
+                key=key,
+                source_worker_id=self.group_id,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to track incoming event: {e}")
     
     async def stop(self) -> None:
         """Stop consuming messages."""

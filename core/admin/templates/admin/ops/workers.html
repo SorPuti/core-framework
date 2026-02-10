@@ -3,17 +3,23 @@
 {% block title %}Workers — {{ site_header }}{% endblock %}
 
 {% block content %}
-<div class="p-6" x-data="workersView()" x-init="loadData(); loadRegistered()">
+<div class="p-6" x-data="workersView()" x-init="loadData(); loadRegistered(); connectWebSocket()">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Worker Manager</h1>
             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Active workers and registered message processors</p>
         </div>
-        <button @click="loadData(); loadRegistered()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
-            <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
-            Refresh
-        </button>
+        <div class="flex items-center gap-2">
+            <span x-show="wsConnected" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-full">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                Live
+            </span>
+            <button @click="loadData(); loadRegistered()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                Refresh
+            </button>
+        </div>
     </div>
 
     <!-- Active Workers -->
@@ -136,6 +142,9 @@ function workersView() {
         loading: true,
         activeWorkers: [],
         registeredWorkers: [],
+        ws: null,
+        wsConnected: false,
+
         async loadData() {
             this.loading = true;
             try {
@@ -144,6 +153,7 @@ function workersView() {
                 this.activeWorkers = data.items || [];
             } catch (e) { console.error(e); } finally { this.loading = false; }
         },
+
         async loadRegistered() {
             try {
                 const resp = await fetch('{{ admin_prefix }}/api/ops/workers/registered');
@@ -151,6 +161,53 @@ function workersView() {
                 this.registeredWorkers = data.items || [];
             } catch (e) {}
         },
+
+        connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            this.ws = new WebSocket(`${protocol}//${window.location.host}{{ admin_prefix }}/ws/ops/events`);
+
+            this.ws.onopen = () => {
+                this.wsConnected = true;
+            };
+
+            this.ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'worker_heartbeat') {
+                    this.handleWorkerHeartbeat(data.data);
+                } else if (data.type === 'worker_offline') {
+                    this.handleWorkerOffline(data.data);
+                }
+            };
+
+            this.ws.onclose = () => {
+                this.wsConnected = false;
+                // Reconnect after delay
+                setTimeout(() => this.connectWebSocket(), 3000);
+            };
+
+            this.ws.onerror = () => {
+                this.wsConnected = false;
+            };
+        },
+
+        handleWorkerHeartbeat(worker) {
+            const idx = this.activeWorkers.findIndex(w => w.worker_id === worker.worker_id);
+            if (idx >= 0) {
+                // Update existing worker
+                this.activeWorkers[idx] = { ...this.activeWorkers[idx], ...worker };
+            } else {
+                // Add new worker
+                this.activeWorkers.push(worker);
+            }
+        },
+
+        handleWorkerOffline(data) {
+            const idx = this.activeWorkers.findIndex(w => w.worker_id === data.worker_id);
+            if (idx >= 0) {
+                this.activeWorkers[idx].status = 'OFFLINE';
+            }
+        },
+
         async removeWorker(workerId) {
             if (!confirm('Remove this offline worker from the list?')) return;
             try {

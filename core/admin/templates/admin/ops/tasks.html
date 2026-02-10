@@ -3,7 +3,7 @@
 {% block title %}Tasks — {{ site_header }}{% endblock %}
 
 {% block content %}
-<div class="p-6" x-data="tasksView()" x-init="loadData(); loadStats()">
+<div class="p-6" x-data="tasksView()" x-init="loadData(); loadStats(); connectWebSocket()">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
         <div>
@@ -11,6 +11,10 @@
             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Monitor and manage task executions</p>
         </div>
         <div class="flex items-center gap-2">
+            <span x-show="wsConnected" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-full">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                Live
+            </span>
             <button @click="loadData(); loadStats()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
                 <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
                 Refresh
@@ -168,6 +172,9 @@ function tasksView() {
         filterStatus: '',
         filterTaskName: '',
         detailTask: null,
+        ws: null,
+        wsConnected: false,
+
         async loadData() {
             this.loading = true;
             try {
@@ -185,12 +192,65 @@ function tasksView() {
                 this.loading = false;
             }
         },
+
         async loadStats() {
             try {
                 const resp = await fetch('{{ admin_prefix }}/api/ops/tasks/stats');
                 this.stats = await resp.json();
             } catch (e) {}
         },
+
+        connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            this.ws = new WebSocket(`${protocol}//${window.location.host}{{ admin_prefix }}/ws/ops/events`);
+
+            this.ws.onopen = () => {
+                this.wsConnected = true;
+            };
+
+            this.ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'task_started') {
+                    this.handleTaskStarted(data.data);
+                } else if (data.type === 'task_finished') {
+                    this.handleTaskFinished(data.data);
+                }
+            };
+
+            this.ws.onclose = () => {
+                this.wsConnected = false;
+                // Reconnect after delay
+                setTimeout(() => this.connectWebSocket(), 3000);
+            };
+
+            this.ws.onerror = () => {
+                this.wsConnected = false;
+            };
+        },
+
+        handleTaskStarted(task) {
+            // Add to top of list if on first page with no filters
+            if (this.page === 1 && !this.filterStatus && !this.filterTaskName) {
+                this.items.unshift(task);
+                if (this.items.length > 50) this.items.pop();
+                this.total++;
+            }
+            // Update stats
+            if (this.stats.running !== undefined) this.stats.running++;
+            if (this.stats.total !== undefined) this.stats.total++;
+        },
+
+        handleTaskFinished(task) {
+            const idx = this.items.findIndex(t => t.task_id === task.task_id);
+            if (idx >= 0) {
+                this.items[idx] = { ...this.items[idx], ...task };
+            }
+            // Update stats
+            if (this.stats.running !== undefined && this.stats.running > 0) this.stats.running--;
+            if (task.status === 'SUCCESS' && this.stats.success !== undefined) this.stats.success++;
+            if (task.status === 'FAILURE' && this.stats.failure !== undefined) this.stats.failure++;
+        },
+
         statusClass(s) {
             const map = {
                 'SUCCESS': 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
@@ -202,9 +262,11 @@ function tasksView() {
             };
             return map[s] || map['PENDING'];
         },
+
         showDetail(task) {
             this.detailTask = task;
         },
+
         async retryTask(taskId) {
             if (!confirm('Retry this task?')) return;
             try {

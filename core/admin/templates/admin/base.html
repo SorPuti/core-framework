@@ -50,8 +50,8 @@
         .toast-enter { animation: toast-in 0.3s ease forwards; }
         .toast-exit { animation: toast-out 0.2s ease forwards; }
         
-        /* Smooth accordion */
-        .accordion-content { transition: max-height 0.25s ease, opacity 0.2s ease; overflow: hidden; }
+        /* Smooth accordion - handled by Alpine x-collapse plugin */
+        /* .accordion-content { transition: max-height 0.25s ease, opacity 0.2s ease; overflow: hidden; } */
         
         /* Active nav indicator */
         .nav-active { background: var(--admin-primary-light); color: var(--admin-primary); font-weight: 600; border-left-color: var(--admin-primary) !important; }
@@ -164,32 +164,7 @@
         </template>
     </div>
     
-    <div class="flex h-screen overflow-hidden" x-data="{ 
-        sidebarOpen: window.innerWidth >= 1024,
-        sidebarSearch: '',
-        expandedApps: JSON.parse(localStorage.getItem('admin_expanded_apps') || '{}'),
-        appModels: [{% for app in apps %}{ app_label: '{{ app.app_label | e }}', models: [{% for m in app.models %}{ display_name_plural: '{{ m.display_name_plural | e }}' }{% if not loop.last %},{% endif %}{% endfor %}] }{% if not loop.last %},{% endif %}{% endfor %}],
-        toggleApp(label) {
-            this.expandedApps[label] = !this.expandedApps[label];
-            localStorage.setItem('admin_expanded_apps', JSON.stringify(this.expandedApps));
-        },
-        isAppExpanded(label) {
-            if (this.expandedApps[label] === undefined) return true;
-            return this.expandedApps[label];
-        },
-        matchesAppSearch(appLabel) {
-            if (!this.sidebarSearch) return true;
-            const q = this.sidebarSearch.toLowerCase();
-            if (appLabel.toLowerCase().includes(q)) return true;
-            const app = this.appModels.find(a => a.app_label === appLabel);
-            if (!app) return true;
-            return app.models.some(m => (m.display_name_plural || '').toLowerCase().includes(q));
-        },
-        matchesModelSearch(displayName) {
-            if (!this.sidebarSearch) return true;
-            return displayName.toLowerCase().includes(this.sidebarSearch.toLowerCase());
-        }
-    }">
+    <div class="flex h-screen overflow-hidden" x-data="sidebarManager()">
         
         <!-- Mobile overlay -->
         <div x-show="sidebarOpen" 
@@ -260,7 +235,8 @@
                 {% if ops_enabled %}
                 <div class="mt-3">
                     <button 
-                        @click="toggleApp('__ops__')"
+                        type="button"
+                        @click.prevent.stop="toggleApp('__ops__')"
                         class="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider hover:text-gray-600 dark:hover:text-gray-300 transition-colors rounded-md group"
                     >
                         <span class="flex items-center gap-2">
@@ -316,7 +292,8 @@
                      x-show="matchesAppSearch('{{ app.app_label }}')">
                     <!-- App Header (Accordion Toggle) -->
                     <button 
-                        @click="toggleApp('{{ app.app_label }}')"
+                        type="button"
+                        @click.prevent.stop="toggleApp('{{ app.app_label }}')"
                         class="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider hover:text-gray-600 dark:hover:text-gray-300 transition-colors rounded-md group"
                     >
                         <span class="flex items-center gap-2">
@@ -445,6 +422,59 @@
     </div>
     
     <script>
+        // Sidebar manager - handles accordion expand/collapse state
+        function sidebarManager() {
+            // Pre-parse localStorage once
+            let savedExpanded = {};
+            try {
+                savedExpanded = JSON.parse(localStorage.getItem('admin_expanded_apps') || '{}');
+            } catch (e) {
+                savedExpanded = {};
+            }
+            
+            return {
+                sidebarOpen: window.innerWidth >= 1024,
+                sidebarSearch: '',
+                expandedApps: savedExpanded,
+                appModels: [{% for app in apps %}{ app_label: '{{ app.app_label | e }}', models: [{% for m in app.models %}{ display_name_plural: '{{ m.display_name_plural | e }}' }{% if not loop.last %},{% endif %}{% endfor %}] }{% if not loop.last %},{% endif %}{% endfor %}],
+                
+                toggleApp(label) {
+                    // Toggle state immediately
+                    const newState = !this.expandedApps[label];
+                    this.expandedApps[label] = newState;
+                    
+                    // Persist to localStorage asynchronously (non-blocking)
+                    requestAnimationFrame(() => {
+                        try {
+                            localStorage.setItem('admin_expanded_apps', JSON.stringify(this.expandedApps));
+                        } catch (e) {
+                            // Ignore storage errors
+                        }
+                    });
+                },
+                
+                isAppExpanded(label) {
+                    // Default to expanded if not set
+                    if (this.expandedApps[label] === undefined) return true;
+                    return !!this.expandedApps[label];
+                },
+                
+                matchesAppSearch(appLabel) {
+                    if (!this.sidebarSearch) return true;
+                    const q = this.sidebarSearch.toLowerCase();
+                    if (appLabel.toLowerCase().includes(q)) return true;
+                    const app = this.appModels.find(a => a.app_label === appLabel);
+                    if (!app) return true;
+                    return app.models.some(m => (m.display_name_plural || '').toLowerCase().includes(q));
+                },
+                
+                matchesModelSearch(displayName) {
+                    if (!this.sidebarSearch) return true;
+                    return displayName.toLowerCase().includes(this.sidebarSearch.toLowerCase());
+                }
+            };
+        }
+        
         // Theme manager - persists user preference with multiple fallbacks
         function themeManager() {
             return {

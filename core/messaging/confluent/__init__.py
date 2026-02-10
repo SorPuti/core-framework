@@ -46,11 +46,30 @@ Usage:
 from core.messaging.confluent.producer import ConfluentProducer
 from core.messaging.confluent.consumer import ConfluentConsumer
 from core.messaging.confluent.broker import ConfluentBroker
-from core.messaging.confluent.admin import ConfluentAdmin
+from core.messaging.confluent.admin import (
+    ConfluentAdmin,
+    TopicInfo,
+    BrokerInfo,
+    PartitionInfo,
+    PartitionOffset,
+    MemberInfo,
+    ConsumerGroupInfo,
+    ConsumerGroupDetail,
+    ClusterInfo,
+)
 
 __all__ = [
     "ConfluentBroker",
     "ConfluentProducer",
     "ConfluentConsumer",
     "ConfluentAdmin",
+    # Types
+    "TopicInfo",
+    "BrokerInfo",
+    "PartitionInfo",
+    "PartitionOffset",
+    "MemberInfo",
+    "ConsumerGroupInfo",
+    "ConsumerGroupDetail",
+    "ClusterInfo",
 ]

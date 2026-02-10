@@ -183,6 +183,9 @@ class KafkaConsumer(Consumer):
                     break
                 
                 try:
+                    # Track incoming event (if enabled)
+                    await self._track_incoming_event(message)
+                    
                     await self.process_message(message.value)
                 except Exception as e:
                     logger.error(
@@ -194,6 +197,61 @@ class KafkaConsumer(Consumer):
             pass
         except Exception as e:
             logger.error(f"Consumer loop error: {e}", exc_info=True)
+    
+    async def _track_incoming_event(self, message: Any) -> None:
+        """
+        Track an incoming Kafka message for the Operations Center.
+        
+        Args:
+            message: Raw Kafka message from aiokafka
+        """
+        from core.admin.event_tracking import get_event_tracker
+        
+        tracker = get_event_tracker()
+        if not tracker.is_enabled():
+            return
+        
+        try:
+            # Extract headers
+            headers_dict = {}
+            if message.headers:
+                for key, value in message.headers:
+                    if value:
+                        headers_dict[key] = value.decode("utf-8") if isinstance(value, bytes) else str(value)
+            
+            # Get event_id and event_name from headers
+            event_id = headers_dict.get("event_id")
+            event_name = headers_dict.get("event_name", "unknown")
+            
+            # If no event_id in headers, try to get from message value
+            if not event_id and isinstance(message.value, dict):
+                event_id = message.value.get("id") or message.value.get("event_id")
+                if not event_name or event_name == "unknown":
+                    event_name = message.value.get("name") or message.value.get("event_name", "unknown")
+            
+            # Generate event_id if still not found
+            if not event_id:
+                import uuid
+                event_id = str(uuid.uuid4())
+            
+            # Get key
+            key = None
+            if message.key:
+                key = message.key.decode("utf-8") if isinstance(message.key, bytes) else str(message.key)
+            
+            await tracker.track_incoming(
+                event_id=event_id,
+                event_name=event_name,
+                topic=message.topic,
+                partition=message.partition,
+                offset=message.offset,
+                payload=message.value if isinstance(message.value, dict) else {"raw": str(message.value)},
+                headers=headers_dict if headers_dict else None,
+                key=key,
+                source_worker_id=self.group_id,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to track incoming event: {e}")
     
     async def process_message(self, message: dict[str, Any]) -> None:
         """

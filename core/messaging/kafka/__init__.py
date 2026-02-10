@@ -27,11 +27,30 @@ Usage:
 from core.messaging.kafka.producer import KafkaProducer
 from core.messaging.kafka.consumer import KafkaConsumer
 from core.messaging.kafka.broker import KafkaBroker
-from core.messaging.kafka.admin import KafkaAdmin
+from core.messaging.kafka.admin import (
+    KafkaAdmin,
+    TopicInfo,
+    BrokerInfo,
+    PartitionInfo,
+    PartitionOffset,
+    MemberInfo,
+    ConsumerGroupInfo,
+    ConsumerGroupDetail,
+    ClusterInfo,
+)
 
 __all__ = [
     "KafkaBroker",
     "KafkaProducer",
     "KafkaConsumer",
     "KafkaAdmin",
+    # Types
+    "TopicInfo",
+    "BrokerInfo",
+    "PartitionInfo",
+    "PartitionOffset",
+    "MemberInfo",
+    "ConsumerGroupInfo",
+    "ConsumerGroupDetail",
+    "ClusterInfo",
 ]
