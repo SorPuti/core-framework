@@ -29,7 +29,7 @@ Example:
 
 from __future__ import annotations
 
-from typing import Any, get_type_hints, get_origin, get_args, Union
+from typing import Any, ClassVar, get_type_hints, get_origin, get_args, Union
 from datetime import datetime, date, time
 from decimal import Decimal
 from enum import Enum
@@ -92,16 +92,16 @@ def _python_type_to_avro(
             # Union of multiple types
             return [_python_type_to_avro(t, field_name, namespace) for t in args]
     
-    # Handle list/List
-    if origin is list:
+    # Handle list/List (both parameterized and bare)
+    if origin is list or python_type is list:
         item_type = args[0] if args else Any
         return {
             "type": "array",
             "items": _python_type_to_avro(item_type, field_name, namespace),
         }
     
-    # Handle dict/Dict
-    if origin is dict:
+    # Handle dict/Dict (both parameterized and bare)
+    if origin is dict or python_type is dict:
         value_type = args[1] if len(args) > 1 else Any
         return {
             "type": "map",
@@ -197,12 +197,37 @@ def _pydantic_to_avro_schema(
     Returns:
         Avro schema dict
     """
+    from pydantic_core import PydanticUndefined
+    
     if namespace is None:
         namespace = _get_default_namespace()
-    fields = []
-    hints = get_type_hints(model)
     
-    for field_name, field_type in hints.items():
+    # Internal fields to skip (not part of the data model)
+    internal_fields = {
+        "__avro_namespace__",
+        "_avro_schema_cache",
+        "__class_vars__",
+        "__private_attributes__",
+        "__pydantic_fields_set__",
+        "__pydantic_extra__",
+        "__pydantic_private__",
+        "model_config",
+        "model_fields",
+        "model_computed_fields",
+    }
+    
+    fields = []
+    
+    # Use model_fields instead of get_type_hints to get only actual data fields
+    for field_name, model_field in model.model_fields.items():
+        # Skip internal/private fields
+        if field_name in internal_fields or field_name.startswith("_"):
+            continue
+        
+        field_type = model_field.annotation
+        if field_type is None:
+            continue
+        
         avro_type = _python_type_to_avro(field_type, field_name, namespace)
         
         field_def: dict[str, Any] = {
@@ -210,23 +235,29 @@ def _pydantic_to_avro_schema(
             "type": avro_type,
         }
         
-        # Add default if field has one
-        model_field = model.model_fields.get(field_name)
-        if model_field is not None:
-            if model_field.default is not None:
-                field_def["default"] = model_field.default
-            elif model_field.default_factory is not None:
-                # Can't represent factory in Avro, use null if optional
-                if isinstance(avro_type, list) and "null" in avro_type:
-                    field_def["default"] = None
+        # Add default if field has a real default value (not PydanticUndefined)
+        if model_field.default is not PydanticUndefined:
+            default_val = model_field.default
+            # Convert to JSON-serializable value
+            if default_val is None:
+                field_def["default"] = None
+            elif isinstance(default_val, (str, int, float, bool)):
+                field_def["default"] = default_val
+            elif isinstance(default_val, (list, dict)):
+                field_def["default"] = default_val
+            # Skip complex defaults that can't be represented in Avro
+        elif model_field.default_factory is not None:
+            # Can't represent factory in Avro, use null if optional
+            if isinstance(avro_type, list) and "null" in avro_type:
+                field_def["default"] = None
         
-        # Handle Optional fields - set default to null
-        if isinstance(avro_type, list) and avro_type[0] == "null":
+        # Handle Optional fields - set default to null if no default specified
+        if isinstance(avro_type, list) and len(avro_type) > 0 and avro_type[0] == "null":
             if "default" not in field_def:
                 field_def["default"] = None
         
         # Add doc from field description
-        if model_field and model_field.description:
+        if model_field.description:
             field_def["doc"] = model_field.description
         
         fields.append(field_def)
@@ -288,11 +319,9 @@ class AvroModel(BaseModel, metaclass=AvroModelMeta):
         event = UserCreatedEvent.from_avro(avro_bytes)
     """
     
-    # Override in subclass to set namespace (usa Settings.avro_default_namespace se None)
-    __avro_namespace__: str | None = None
-    
-    # Cached schema (set by metaclass)
-    _avro_schema_cache: dict[str, Any] | None = None
+    # Class variables (not model fields) - ClassVar excludes from Pydantic schema
+    __avro_namespace__: ClassVar[str | None] = None  # Override in subclass to set namespace
+    _avro_schema_cache: ClassVar[dict[str, Any] | None] = None  # Cached schema (set by metaclass)
     
     @classmethod
     def __avro_schema__(cls) -> dict[str, Any]:

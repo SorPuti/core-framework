@@ -19,7 +19,7 @@
                 </button>
             </template>
             <button @click="refresh()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
-                <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
                 Refresh
             </button>
         </div>
@@ -31,7 +31,7 @@
                 :class="activeTab === 'topics' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
                 class="px-4 py-2 text-sm font-medium rounded-lg transition-all">
             <span class="flex items-center gap-2">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 Topics
                 <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600" x-text="topics.length"></span>
             </span>
@@ -40,7 +40,7 @@
                 :class="activeTab === 'schemas' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
                 class="px-4 py-2 text-sm font-medium rounded-lg transition-all">
             <span class="flex items-center gap-2">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 Avro Schemas
                 <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600" x-text="schemas.length"></span>
             </span>
@@ -49,7 +49,7 @@
                 :class="activeTab === 'events' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
                 class="px-4 py-2 text-sm font-medium rounded-lg transition-all">
             <span class="flex items-center gap-2">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 Event Log
                 <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600" x-text="stats.total || 0"></span>
             </span>
@@ -58,138 +58,138 @@
 
     <!-- Tab: Topics -->
     <div x-show="activeTab === 'topics'" x-cloak>
-        <!-- Info Banner -->
-        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
-            <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                <div>
-                    <p class="text-sm font-medium text-blue-800 dark:text-blue-200">Registered Topics</p>
-                    <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">
-                        Topics are defined using <code class="font-mono bg-blue-100 dark:bg-blue-800 px-1 rounded">class MyTopic(Topic)</code> in your code.
-                        They are auto-discovered from your models and topics modules.
-                    </p>
-                </div>
+        <!-- Topics Table -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Registered Topics</h3>
+                <p class="text-xs text-gray-500 mt-0.5">Topics defined in your application code</p>
             </div>
-        </div>
-
-        <!-- Topics Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <template x-for="topic in topics" :key="topic.name">
-                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-300 dark:hover:border-primary-600 transition-colors">
-                    <div class="flex items-start justify-between mb-3">
-                        <div class="flex-1 min-w-0">
-                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white truncate" x-text="topic.class_name"></h4>
-                            <p class="text-[10px] font-mono text-gray-400 mt-0.5 truncate" x-text="topic.name"></p>
-                        </div>
-                        <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded-full ml-2"
-                              :class="topic.has_avro_schema ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'">
-                            <span x-text="topic.has_avro_schema ? 'Avro' : 'JSON'"></span>
-                        </span>
-                    </div>
-                    
-                    <div class="space-y-2 text-xs">
-                        <div class="flex items-center justify-between">
-                            <span class="text-gray-400">Schema</span>
-                            <span class="font-mono text-gray-700 dark:text-gray-300" x-text="topic.schema || '—'"></span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-gray-400">Partitions</span>
-                            <span class="text-gray-700 dark:text-gray-300" x-text="topic.partitions"></span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-gray-400">Cleanup</span>
-                            <span class="text-gray-700 dark:text-gray-300" x-text="topic.cleanup_policy"></span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-gray-400">Serializer</span>
-                            <span class="font-mono text-gray-700 dark:text-gray-300" x-text="topic.value_serializer"></span>
-                        </div>
-                    </div>
-                </div>
-            </template>
-            
-            <template x-if="!loading && topics.length === 0">
-                <div class="col-span-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
-                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <p class="text-gray-500 dark:text-gray-400 font-medium">No topics registered</p>
-                    <p class="text-xs text-gray-400 mt-2">
-                        Define topics in <code class="font-mono text-primary-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">src/infra/topics.py</code>
-                    </p>
-                    <pre class="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs font-mono text-left max-w-md mx-auto overflow-x-auto">from core.messaging import Topic
-
-class UserEvents(Topic):
-    name = "user-events"
-    partitions = 3</pre>
-                </div>
-            </template>
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Topic Name</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Class</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Schema</th>
+                        <th class="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Partitions</th>
+                        <th class="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Serializer</th>
+                        <th class="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Cleanup</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="topic in topics" :key="topic.name">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                            <td class="px-5 py-3">
+                                <code class="text-xs font-mono text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 rounded" x-text="topic.name"></code>
+                            </td>
+                            <td class="px-5 py-3">
+                                <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="topic.class_name"></span>
+                            </td>
+                            <td class="px-5 py-3">
+                                <template x-if="topic.schema">
+                                    <span class="inline-flex items-center gap-1.5">
+                                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="topic.schema"></span>
+                                        <span x-show="topic.has_avro_schema" class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">AVRO</span>
+                                    </span>
+                                </template>
+                                <template x-if="!topic.schema">
+                                    <span class="text-gray-400">—</span>
+                                </template>
+                            </td>
+                            <td class="px-5 py-3 text-center">
+                                <span class="text-sm text-gray-700 dark:text-gray-300" x-text="topic.partitions"></span>
+                            </td>
+                            <td class="px-5 py-3 text-center">
+                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full"
+                                      :class="topic.value_serializer === 'avro' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'"
+                                      x-text="topic.value_serializer.toUpperCase()"></span>
+                            </td>
+                            <td class="px-5 py-3 text-center">
+                                <span class="text-xs text-gray-500" x-text="topic.cleanup_policy"></span>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="!loading && topics.length === 0">
+                        <tr>
+                            <td colspan="6" class="px-5 py-12 text-center">
+                                <svg class="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                <p class="text-gray-500 dark:text-gray-400 font-medium">No topics registered</p>
+                                <p class="text-xs text-gray-400 mt-2 max-w-sm mx-auto">
+                                    Define topics using <code class="font-mono text-primary-500">class MyTopic(Topic)</code> in your code
+                                </p>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
         </div>
     </div>
 
     <!-- Tab: Avro Schemas -->
     <div x-show="activeTab === 'schemas'" x-cloak>
-        <!-- Info Banner -->
-        <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4 mb-6">
-            <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <div>
-                    <p class="text-sm font-medium text-purple-800 dark:text-purple-200">Avro Schemas</p>
-                    <p class="text-xs text-purple-600 dark:text-purple-300 mt-1">
-                        AvroModels are auto-discovered from your code. Define them using <code class="font-mono bg-purple-100 dark:bg-purple-800 px-1 rounded">class MyEvent(AvroModel)</code>.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Schemas List -->
-        <div class="space-y-4">
+        <!-- Schemas Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <template x-for="schema in schemas" :key="schema.name">
                 <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                        <div>
-                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white" x-text="schema.name"></h4>
-                            <p class="text-[10px] font-mono text-gray-400 mt-0.5" x-text="schema.namespace"></p>
+                    <!-- Header -->
+                    <div class="px-5 py-4 bg-gradient-to-r from-purple-500/10 to-indigo-500/10 dark:from-purple-500/20 dark:to-indigo-500/20 border-b border-gray-100 dark:border-gray-700">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    <h4 class="text-base font-bold text-gray-900 dark:text-white" x-text="schema.name"></h4>
+                                </div>
+                                <p class="text-xs font-mono text-gray-500 mt-1" x-text="schema.namespace || 'No namespace'"></p>
+                            </div>
+                            <span class="px-2 py-1 text-[10px] font-bold rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">AVRO</span>
                         </div>
-                        <button @click="schema._expanded = !schema._expanded" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                            <svg class="w-5 h-5 transition-transform" :class="schema._expanded ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                    
+                    <!-- Fields -->
+                    <div class="px-5 py-4">
+                        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Fields</div>
+                        <div class="space-y-2">
+                            <template x-for="field in schema.fields || []" :key="field.name">
+                                <div class="flex items-center gap-3 py-2 px-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                    <div class="flex-1 min-w-0">
+                                        <span class="font-mono text-sm font-medium text-gray-900 dark:text-white" x-text="field.name"></span>
+                                    </div>
+                                    <div class="flex-shrink-0">
+                                        <code class="text-xs font-mono px-2 py-1 rounded"
+                                              :class="getTypeColor(field.type)"
+                                              x-text="formatType(field.type)"></code>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="!schema.fields || schema.fields.length === 0">
+                                <div class="text-center py-4 text-gray-400 text-sm">No fields defined</div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="px-5 py-3 bg-gray-50 dark:bg-gray-700/20 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                        <span class="text-xs text-gray-400" x-text="(schema.fields?.length || 0) + ' field(s)'"></span>
+                        <button @click="schema._expanded = !schema._expanded" 
+                                class="text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1">
+                            <span x-text="schema._expanded ? 'Hide JSON' : 'View JSON'"></span>
+                            <svg class="w-3.5 h-3.5 transition-transform" :class="schema._expanded ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                         </button>
                     </div>
                     
-                    <!-- Fields Preview -->
-                    <div class="px-5 py-3 bg-gray-50 dark:bg-gray-700/30">
-                        <div class="flex flex-wrap gap-2">
-                            <template x-for="field in schema.fields?.slice(0, 6) || []" :key="field.name">
-                                <span class="inline-flex items-center gap-1 px-2 py-1 text-[10px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded">
-                                    <span class="font-medium text-gray-700 dark:text-gray-300" x-text="field.name"></span>
-                                    <span class="text-gray-400">:</span>
-                                    <span class="font-mono text-purple-600 dark:text-purple-400" x-text="field.type.substring(0, 20)"></span>
-                                </span>
-                            </template>
-                            <template x-if="schema.fields?.length > 6">
-                                <span class="text-[10px] text-gray-400" x-text="'+' + (schema.fields.length - 6) + ' more'"></span>
-                            </template>
+                    <!-- JSON Schema (Expandable) -->
+                    <div x-show="schema._expanded" x-collapse class="border-t border-gray-100 dark:border-gray-700">
+                        <div class="p-4 bg-gray-900 dark:bg-gray-950 overflow-x-auto">
+                            <pre class="text-xs font-mono text-green-400" x-text="JSON.stringify(schema.schema, null, 2)"></pre>
                         </div>
-                    </div>
-                    
-                    <!-- Full Schema (Expandable) -->
-                    <div x-show="schema._expanded" x-collapse class="px-5 py-3 border-t border-gray-100 dark:border-gray-700">
-                        <pre class="text-xs font-mono text-gray-600 dark:text-gray-400 overflow-x-auto" x-text="JSON.stringify(schema.schema, null, 2)"></pre>
                     </div>
                 </div>
             </template>
             
             <template x-if="!loading && schemas.length === 0">
-                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+                <div class="col-span-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
                     <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     <p class="text-gray-500 dark:text-gray-400 font-medium">No Avro schemas found</p>
-                    <p class="text-xs text-gray-400 mt-2">
-                        Define Avro models for type-safe serialization
-                    </p>
-                    <pre class="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs font-mono text-left max-w-md mx-auto overflow-x-auto">from core.messaging import AvroModel
-
-class UserEvent(AvroModel):
-    user_id: int
-    email: str
-    created_at: datetime</pre>
+                    <p class="text-xs text-gray-400 mt-2">Define Avro models for type-safe serialization</p>
                 </div>
             </template>
         </div>
@@ -357,12 +357,14 @@ function eventsPanel() {
         ws: null,
 
         async init() {
+            this.loading = true;
             await Promise.all([
                 this.loadTopics(),
                 this.loadSchemas(),
                 this.loadStats(),
                 this.loadEvents()
             ]);
+            this.loading = false;
         },
 
         async refresh() {
@@ -404,7 +406,6 @@ function eventsPanel() {
         },
 
         async loadEvents() {
-            this.loading = true;
             try {
                 let url = `{{ admin_prefix }}/api/ops/events?page=${this.pagination.page}&per_page=${this.pagination.per_page}`;
                 if (this.filters.topic) url += `&topic=${encodeURIComponent(this.filters.topic)}`;
@@ -418,8 +419,6 @@ function eventsPanel() {
                 this.pagination.total_pages = data.total_pages || 1;
             } catch (e) {
                 console.error('Failed to load events:', e);
-            } finally {
-                this.loading = false;
             }
         },
 
@@ -478,6 +477,45 @@ function eventsPanel() {
             if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
             if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
             return d.toLocaleDateString();
+        },
+
+        formatType(type) {
+            if (!type) return 'any';
+            // Clean up type display
+            let t = String(type);
+            if (t.startsWith('[')) {
+                // Union type like ["null", "string"]
+                try {
+                    const arr = JSON.parse(t.replace(/'/g, '"'));
+                    if (Array.isArray(arr) && arr.includes('null')) {
+                        const nonNull = arr.filter(x => x !== 'null')[0];
+                        if (typeof nonNull === 'object') {
+                            return (nonNull.type || 'object') + '?';
+                        }
+                        return nonNull + '?';
+                    }
+                } catch (e) {}
+            }
+            if (t.startsWith('{')) {
+                try {
+                    const obj = JSON.parse(t.replace(/'/g, '"'));
+                    if (obj.type === 'map') return 'map<string>';
+                    if (obj.type === 'array') return 'array';
+                    if (obj.logicalType) return obj.logicalType;
+                    return obj.type || 'object';
+                } catch (e) {}
+            }
+            return t;
+        },
+
+        getTypeColor(type) {
+            const t = this.formatType(type).toLowerCase();
+            if (t.includes('string')) return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
+            if (t.includes('long') || t.includes('int') || t.includes('double') || t.includes('float')) return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400';
+            if (t.includes('bool')) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+            if (t.includes('timestamp') || t.includes('date') || t.includes('time')) return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
+            if (t.includes('map') || t.includes('array')) return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400';
+            return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
         },
 
         getStatusClass(status) {

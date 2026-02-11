@@ -257,7 +257,7 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        # Use describe_cluster to get metadata
+        consumer = None
         try:
             from aiokafka import AIOKafkaConsumer
             
@@ -266,14 +266,22 @@ class KafkaAdmin:
                 bootstrap_servers=self._bootstrap_servers,
             )
             await consumer.start()
-            topics = list(await consumer.topics())
-            await consumer.stop()
+            
+            # Get topics - this returns a set
+            topics_set = await consumer.topics()
+            topics = list(topics_set) if topics_set else []
             
             # Filter internal topics
             return [t for t in topics if not t.startswith("__")]
         except Exception as e:
-            logger.error(f"Error listing topics: {e}")
+            logger.error(f"Error listing topics: {e}", exc_info=True)
             return []
+        finally:
+            if consumer:
+                try:
+                    await consumer.stop()
+                except Exception:
+                    pass
     
     async def describe_topic(self, name: str) -> TopicInfo | None:
         """

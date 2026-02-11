@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import traceback
 from typing import Any, TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -372,10 +371,13 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         
         Executes the task directly in this process (synchronous execution).
         This is useful for testing and debugging without needing a worker.
+        Records execution in the database for history tracking.
         """
         # Import tasks_module to ensure periodic tasks are registered
         from core.config import get_settings
         import importlib
+        import uuid
+        import time
         
         settings = get_settings()
         tasks_module = getattr(settings, "tasks_module", None)
@@ -386,7 +388,6 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                 logger.debug(f"Could not import tasks_module '{tasks_module}': {e}")
         
         from core.tasks.registry import get_periodic_tasks
-        import uuid
 
         tasks = get_periodic_tasks()
         if task_name not in tasks:
@@ -394,24 +395,72 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
 
         pt = tasks[task_name]
         task_id = str(uuid.uuid4())
+        start_time = time.perf_counter()
         
-        # Execute the task directly (no need for worker/scheduler)
+        # Try to record execution start in database
+        recorded = False
         try:
-            # Get the underlying function and execute it
+            from core.models import get_session
+            from core.admin.models import TaskExecution
+            
+            db = await get_session()
+            async with db:
+                await TaskExecution.record_start(
+                    db,
+                    task_name=task_name,
+                    task_id=task_id,
+                    queue=pt.queue,
+                    worker_id="admin-panel",
+                )
+                recorded = True
+        except Exception as db_err:
+            logger.debug(f"Could not create task execution record: {db_err}")
+        
+        # Execute the task directly
+        result = None
+        error = None
+        status = "SUCCESS"
+        
+        try:
             result = await pt.func()
-            
-            # Mark as run
             pt.mark_run()
-            
-            return {
-                "status": "executed",
-                "task_id": task_id,
-                "result": str(result) if result is not None else None,
-                "message": f"Task '{task_name}' executed successfully"
-            }
         except Exception as e:
             logger.error(f"Failed to execute periodic task {task_name}: {e}", exc_info=True)
-            raise HTTPException(500, f"Task execution failed: {e}")
+            error = str(e)
+            status = "FAILURE"
+        
+        # Calculate duration
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
+        
+        # Update execution record
+        if recorded:
+            try:
+                from core.models import get_session
+                from core.admin.models import TaskExecution
+                
+                db = await get_session()
+                async with db:
+                    await TaskExecution.record_finish(
+                        db,
+                        task_id=task_id,
+                        status=status,
+                        result_json=str(result) if result is not None else None,
+                        error=error,
+                        duration_ms=duration_ms,
+                    )
+            except Exception as db_err:
+                logger.debug(f"Could not update task execution record: {db_err}")
+        
+        if error:
+            raise HTTPException(500, f"Task execution failed: {error}")
+        
+        return {
+            "status": "executed",
+            "task_id": task_id,
+            "result": str(result) if result is not None else None,
+            "duration_ms": duration_ms,
+            "message": f"Task '{task_name}' executed successfully"
+        }
 
     # =====================================================================
     # Workers
@@ -822,9 +871,16 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         try:
             admin = await _get_kafka_admin()
             if not admin:
-                return {"items": [], "error": "Kafka not configured"}
+                return {"items": [], "total": 0, "error": "Kafka not configured"}
             
-            topic_names = await admin.list_topics()
+            try:
+                topic_names = await admin.list_topics()
+            except Exception as list_err:
+                logger.error(f"Error listing topics from Kafka: {list_err}", exc_info=True)
+                return {"items": [], "total": 0, "error": f"Failed to list topics: {list_err}"}
+            
+            if not topic_names:
+                return {"items": [], "total": 0}
             
             items = []
             for name in topic_names:
@@ -835,6 +891,12 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                             "name": info.name,
                             "partitions": info.partitions,
                             "replication_factor": info.replication_factor,
+                        })
+                    else:
+                        items.append({
+                            "name": name,
+                            "partitions": 0,
+                            "replication_factor": 0,
                         })
                 except Exception as topic_err:
                     logger.debug(f"Could not describe topic {name}: {topic_err}")
@@ -847,8 +909,8 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             
             return {"items": items, "total": len(items)}
         except Exception as e:
-            logger.error(f"Error listing topics: {e}", exc_info=True)
-            return {"items": [], "error": str(e)}
+            logger.error(f"Error in kafka_topics endpoint: {e}", exc_info=True)
+            return {"items": [], "total": 0, "error": str(e)}
 
     @router.get("/kafka/topics/{topic_name}")
     async def kafka_topic_detail(
