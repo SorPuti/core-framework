@@ -309,6 +309,111 @@
             </div>
         </div>
     </div>
+
+    <!-- Topic Detail Modal -->
+    <div x-show="showTopicModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="showTopicModal = false"></div>
+            <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+                <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white font-mono" x-text="selectedTopic?.name"></h3>
+                        <p class="text-xs text-gray-400 mt-0.5">Topic Details</p>
+                    </div>
+                    <button @click="showTopicModal = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="p-6" x-show="selectedTopic">
+                    <!-- Topic Info -->
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">Partitions</span>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="selectedTopic?.partitions_count || selectedTopic?.partitions || 0"></p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">Replication Factor</span>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="selectedTopic?.replication_factor || 1"></p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">Status</span>
+                            <p class="text-lg font-semibold text-green-600">Active</p>
+                        </div>
+                    </div>
+
+                    <!-- Partitions Table -->
+                    <template x-if="selectedTopic?.partitions && selectedTopic.partitions.length > 0">
+                        <div class="mb-6">
+                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Partition Distribution</h4>
+                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-gray-200 dark:border-gray-600">
+                                            <th class="px-3 py-2 text-left text-xs text-gray-500">Partition</th>
+                                            <th class="px-3 py-2 text-center text-xs text-gray-500">Leader</th>
+                                            <th class="px-3 py-2 text-left text-xs text-gray-500">Replicas</th>
+                                            <th class="px-3 py-2 text-left text-xs text-gray-500">ISR</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="p in selectedTopic.partitions" :key="p.partition">
+                                            <tr class="border-b border-gray-100 dark:border-gray-700 last:border-0">
+                                                <td class="px-3 py-2 font-mono text-gray-700 dark:text-gray-300" x-text="p.partition"></td>
+                                                <td class="px-3 py-2 text-center">
+                                                    <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full" x-text="'Broker ' + p.leader"></span>
+                                                </td>
+                                                <td class="px-3 py-2">
+                                                    <div class="flex flex-wrap gap-1">
+                                                        <template x-for="r in p.replicas" :key="r">
+                                                            <span class="text-[10px] bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded" x-text="r"></span>
+                                                        </template>
+                                                    </div>
+                                                </td>
+                                                <td class="px-3 py-2">
+                                                    <div class="flex flex-wrap gap-1">
+                                                        <template x-for="i in p.isr" :key="i">
+                                                            <span class="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded" x-text="i"></span>
+                                                        </template>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Registered Schema (if linked to a Topic class) -->
+                    <template x-if="selectedTopic?.schema">
+                        <div class="mb-6">
+                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Schema (Avro)</h4>
+                            <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                                <pre class="text-xs text-green-400 font-mono whitespace-pre-wrap" x-text="JSON.stringify(selectedTopic.schema, null, 2)"></pre>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Topic Configs -->
+                    <template x-if="selectedTopic?.configs && Object.keys(selectedTopic.configs).length > 0">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Configuration</h4>
+                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                                <dl class="grid grid-cols-2 gap-2 text-sm">
+                                    <template x-for="(value, key) in selectedTopic.configs" :key="key">
+                                        <div class="flex justify-between py-1 border-b border-gray-200 dark:border-gray-600 last:border-0">
+                                            <dt class="font-mono text-gray-500" x-text="key"></dt>
+                                            <dd class="font-mono text-gray-900 dark:text-white" x-text="value"></dd>
+                                        </div>
+                                    </template>
+                                </dl>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -324,6 +429,8 @@ function kafkaDashboard() {
         throughputChart: null,
         showGroupModal: false,
         selectedGroup: null,
+        showTopicModal: false,
+        selectedTopic: null,
 
         async init() {
             await this.refresh();
@@ -463,8 +570,17 @@ function kafkaDashboard() {
         },
 
         async showTopicDetail(topicName) {
-            // Could open a modal similar to group detail
-            alert('Topic: ' + topicName + '\nPartitions detail coming soon...');
+            try {
+                const resp = await fetch(`{{ admin_prefix }}/api/ops/kafka/topics/${encodeURIComponent(topicName)}`);
+                if (resp.ok) {
+                    this.selectedTopic = await resp.json();
+                    this.showTopicModal = true;
+                } else {
+                    console.error('Error loading topic detail:', resp.status);
+                }
+            } catch (e) {
+                console.error('Error loading topic detail:', e);
+            }
         },
 
         getStateClass(state) {

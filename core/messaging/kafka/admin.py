@@ -249,43 +249,67 @@ class KafkaAdmin:
     
     async def list_topics(self) -> list[str]:
         """
-        List all topics.
+        List all topics (names only).
         
         Returns:
-            List of topic names
+            List of topic names (excludes internal __ topics)
+        """
+        topics_info = await self.list_topics_with_info()
+        return [t.name for t in topics_info]
+    
+    async def list_topics_with_info(self) -> list[TopicInfo]:
+        """
+        List all topics with partition info using AdminClient metadata.
+        
+        Uses describe_topics() for explicit broker metadata fetch.
+        Never uses Consumer (avoids lazy metadata issues).
+        
+        Returns:
+            List of TopicInfo
         """
         if not self._admin:
             await self.connect()
         
-        consumer = None
-        try:
-            from aiokafka import AIOKafkaConsumer
-            
-            # Temporary consumer to get metadata
-            consumer = AIOKafkaConsumer(
-                bootstrap_servers=self._bootstrap_servers,
-            )
-            await consumer.start()
-            
-            # Get topics - this returns a set
-            topics_set = await consumer.topics()
-            topics = list(topics_set) if topics_set else []
-            
-            # Filter internal topics
-            return [t for t in topics if not t.startswith("__")]
-        except Exception as e:
-            logger.error(f"Error listing topics: {e}", exc_info=True)
+        # Get cluster metadata via AdminClient
+        metadata = await self._admin.describe_cluster()
+        
+        # Get all topic names from cluster
+        # Note: _client.cluster is populated after describe_cluster()
+        cluster = self._admin._client.cluster
+        all_topics = cluster.topics()
+        
+        if not all_topics:
             return []
-        finally:
-            if consumer:
-                try:
-                    await consumer.stop()
-                except Exception:
-                    pass
+        
+        # Filter internal topics and build result
+        result = []
+        for name in all_topics:
+            if name.startswith("__"):
+                continue
+            
+            partitions = cluster.partitions_for_topic(name)
+            partition_count = len(partitions) if partitions else 0
+            
+            # Get replication factor from first partition metadata
+            replication_factor = 1
+            if partitions:
+                first_partition = next(iter(partitions))
+                partition_meta = cluster.partition_for_topic(name, first_partition)
+                if partition_meta and partition_meta.replicas:
+                    replication_factor = len(partition_meta.replicas)
+            
+            result.append(TopicInfo(
+                name=name,
+                partitions=partition_count,
+                replication_factor=replication_factor,
+                configs={},
+            ))
+        
+        return result
     
     async def describe_topic(self, name: str) -> TopicInfo | None:
         """
-        Get detailed information about a topic.
+        Get detailed information about a single topic using AdminClient.
         
         Args:
             name: Topic name
@@ -296,29 +320,29 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        try:
-            from aiokafka import AIOKafkaConsumer
-            
-            consumer = AIOKafkaConsumer(
-                bootstrap_servers=self._bootstrap_servers,
-            )
-            await consumer.start()
-            
-            partitions = consumer.partitions_for_topic(name)
-            await consumer.stop()
-            
-            if partitions is None:
-                return None
-            
-            return TopicInfo(
-                name=name,
-                partitions=len(partitions),
-                replication_factor=1,  # Would need describe_configs for accurate value
-                configs={},
-            )
-        except Exception as e:
-            logger.error(f"Error describing topic {name}: {e}")
+        # Force metadata refresh
+        await self._admin.describe_cluster()
+        
+        cluster = self._admin._client.cluster
+        partitions = cluster.partitions_for_topic(name)
+        
+        if partitions is None:
             return None
+        
+        # Get replication factor from first partition
+        replication_factor = 1
+        if partitions:
+            first_partition = next(iter(partitions))
+            partition_meta = cluster.partition_for_topic(name, first_partition)
+            if partition_meta and partition_meta.replicas:
+                replication_factor = len(partition_meta.replicas)
+        
+        return TopicInfo(
+            name=name,
+            partitions=len(partitions),
+            replication_factor=replication_factor,
+            configs={},
+        )
     
     async def ensure_topics(
         self,
@@ -414,56 +438,56 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        try:
-            descriptions = await self._admin.describe_consumer_groups([group_id])
-            
-            if not descriptions:
-                return None
-            
-            desc = descriptions[0]
-            
-            # Build member info
-            members = []
-            topics = set()
-            for member in desc.members:
-                partitions = []
-                if member.assignment:
-                    for tp in member.assignment:
-                        topics.add(tp.topic)
-                        partitions.append({
-                            "topic": tp.topic,
-                            "partition": tp.partition,
-                        })
-                
-                members.append(MemberInfo(
-                    member_id=member.member_id,
-                    client_id=member.client_id,
-                    host=member.host or "",
-                    partitions=partitions,
-                ))
-            
-            # Get offsets for this group
-            offsets = await self.get_consumer_group_offsets(group_id, list(topics))
-            
-            # Calculate total lag
-            total_lag = sum(
-                po.lag for topic_offsets in offsets.values() for po in topic_offsets
-            )
-            
-            return ConsumerGroupDetail(
-                group_id=desc.group_id,
-                state=desc.state,
-                coordinator=desc.coordinator.node_id if desc.coordinator else -1,
-                protocol_type=desc.protocol_type or "",
-                protocol=desc.protocol or "",
-                members=members,
-                offsets=offsets,
-                total_lag=total_lag,
-            )
-            
-        except Exception as e:
-            logger.error(f"Error describing consumer group {group_id}: {e}")
+        descriptions = await self._admin.describe_consumer_groups([group_id])
+        
+        if not descriptions:
             return None
+        
+        desc = descriptions[0]
+        
+        # Build member info
+        members = []
+        topics = set()
+        for member in desc.members:
+            partitions = []
+            if member.assignment:
+                for tp in member.assignment:
+                    topics.add(tp.topic)
+                    partitions.append({
+                        "topic": tp.topic,
+                        "partition": tp.partition,
+                    })
+            
+            members.append(MemberInfo(
+                member_id=member.member_id,
+                client_id=member.client_id,
+                host=member.host or "",
+                partitions=partitions,
+            ))
+        
+        # Get offsets for this group (if topics exist)
+        offsets: dict[str, list[PartitionOffset]] = {}
+        total_lag = 0
+        
+        if topics:
+            try:
+                offsets = await self.get_consumer_group_offsets(group_id, list(topics))
+                total_lag = sum(
+                    po.lag for topic_offsets in offsets.values() for po in topic_offsets
+                )
+            except Exception as e:
+                logger.warning(f"Could not get offsets for {group_id}: {e}")
+        
+        return ConsumerGroupDetail(
+            group_id=desc.group_id,
+            state=desc.state,
+            coordinator=desc.coordinator.node_id if desc.coordinator else -1,
+            protocol_type=desc.protocol_type or "",
+            protocol=desc.protocol or "",
+            members=members,
+            offsets=offsets,
+            total_lag=total_lag,
+        )
 
     async def get_consumer_group_offsets(
         self,
@@ -483,75 +507,48 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        result: dict[str, list[PartitionOffset]] = {}
+        from aiokafka import AIOKafkaConsumer, TopicPartition
+        
+        offsets_response = await self._admin.list_consumer_group_offsets(group_id)
+        if not offsets_response:
+            return {}
+        
+        consumer = AIOKafkaConsumer(bootstrap_servers=self._bootstrap_servers)
+        await consumer.start()
         
         try:
-            from aiokafka import AIOKafkaConsumer, TopicPartition
+            # Group offsets by topic
+            topic_partitions: dict[str, list[int]] = {}
+            committed_offsets: dict[str, dict[int, int]] = {}
             
-            # Get committed offsets
-            offsets_response = await self._admin.list_consumer_group_offsets(group_id)
+            for tp, offset_meta in offsets_response.items():
+                if topics and tp.topic not in topics:
+                    continue
+                topic_partitions.setdefault(tp.topic, []).append(tp.partition)
+                committed_offsets.setdefault(tp.topic, {})[tp.partition] = offset_meta.offset
             
-            if not offsets_response:
-                return result
-            
-            # Create a temporary consumer to get end offsets
-            consumer = AIOKafkaConsumer(
-                bootstrap_servers=self._bootstrap_servers,
-            )
-            await consumer.start()
-            
-            try:
-                # Group offsets by topic
-                topic_partitions: dict[str, list[int]] = {}
-                committed_offsets: dict[str, dict[int, int]] = {}
+            result: dict[str, list[PartitionOffset]] = {}
+            for topic, partitions in topic_partitions.items():
+                tps = [TopicPartition(topic, p) for p in partitions]
+                end_offsets = await consumer.end_offsets(tps)
                 
-                for tp, offset_meta in offsets_response.items():
-                    topic = tp.topic
-                    partition = tp.partition
-                    
-                    if topics and topic not in topics:
-                        continue
-                    
-                    if topic not in topic_partitions:
-                        topic_partitions[topic] = []
-                        committed_offsets[topic] = {}
-                    
-                    topic_partitions[topic].append(partition)
-                    committed_offsets[topic][partition] = offset_meta.offset
-                
-                # Get end offsets for each topic
-                for topic, partitions in topic_partitions.items():
-                    tps = [TopicPartition(topic, p) for p in partitions]
-                    end_offsets = await consumer.end_offsets(tps)
-                    
-                    partition_offsets = []
-                    for tp in tps:
-                        current = committed_offsets[topic].get(tp.partition, 0)
-                        end = end_offsets.get(tp, 0)
-                        lag = max(0, end - current)
-                        
-                        partition_offsets.append(PartitionOffset(
-                            topic=topic,
-                            partition=tp.partition,
-                            current_offset=current,
-                            end_offset=end,
-                            lag=lag,
-                        ))
-                    
-                    result[topic] = partition_offsets
-                    
-            finally:
-                await consumer.stop()
-            
+                result[topic] = [
+                    PartitionOffset(
+                        topic=topic,
+                        partition=tp.partition,
+                        current_offset=committed_offsets[topic].get(tp.partition, 0),
+                        end_offset=end_offsets.get(tp, 0),
+                        lag=max(0, end_offsets.get(tp, 0) - committed_offsets[topic].get(tp.partition, 0)),
+                    )
+                    for tp in tps
+                ]
             return result
-            
-        except Exception as e:
-            logger.error(f"Error getting consumer group offsets for {group_id}: {e}")
-            return result
+        finally:
+            await consumer.stop()
 
     async def get_cluster_info(self) -> ClusterInfo:
         """
-        Get information about the Kafka cluster.
+        Get information about the Kafka cluster using AdminClient.
         
         Returns:
             ClusterInfo with brokers, controller, topics, and partitions count
@@ -559,57 +556,35 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        try:
-            from aiokafka import AIOKafkaConsumer
-            
-            # Use a consumer to get cluster metadata
-            consumer = AIOKafkaConsumer(
-                bootstrap_servers=self._bootstrap_servers,
-            )
-            await consumer.start()
-            
-            try:
-                # Get cluster metadata
-                cluster = consumer._client.cluster
-                
-                brokers = []
-                for node in cluster.brokers():
-                    brokers.append(BrokerInfo(
-                        id=node.nodeId,
-                        host=node.host,
-                        port=node.port,
-                        rack=node.rack,
-                    ))
-                
-                # Count topics and partitions
-                topics = await consumer.topics()
-                topics_count = len([t for t in topics if not t.startswith("__")])
-                
-                partitions_count = 0
-                for topic in topics:
-                    if not topic.startswith("__"):
-                        parts = consumer.partitions_for_topic(topic)
-                        if parts:
-                            partitions_count += len(parts)
-                
-                return ClusterInfo(
-                    cluster_id=cluster.cluster_id(),
-                    brokers=brokers,
-                    controller_id=cluster.controller_id() or -1,
-                    topics_count=topics_count,
-                    partitions_count=partitions_count,
-                )
-                
-            finally:
-                await consumer.stop()
-                
-        except Exception as e:
-            logger.error(f"Error getting cluster info: {e}")
-            return ClusterInfo(cluster_id=None)
+        # Explicit metadata fetch via AdminClient
+        await self._admin.describe_cluster()
+        
+        cluster = self._admin._client.cluster
+        
+        brokers = [
+            BrokerInfo(id=node.nodeId, host=node.host, port=node.port, rack=node.rack)
+            for node in cluster.brokers()
+        ]
+        
+        all_topics = cluster.topics() or set()
+        user_topics = [t for t in all_topics if not t.startswith("__")]
+        
+        partitions_count = sum(
+            len(cluster.partitions_for_topic(t) or [])
+            for t in user_topics
+        )
+        
+        return ClusterInfo(
+            cluster_id=cluster.cluster_id(),
+            brokers=brokers,
+            controller_id=cluster.controller_id() or -1,
+            topics_count=len(user_topics),
+            partitions_count=partitions_count,
+        )
 
     async def describe_topic_partitions(self, name: str) -> list[PartitionInfo]:
         """
-        Get detailed partition information for a topic.
+        Get detailed partition information for a topic using AdminClient.
         
         Args:
             name: Topic name
@@ -620,44 +595,22 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        try:
-            from aiokafka import AIOKafkaConsumer
-            
-            consumer = AIOKafkaConsumer(
-                bootstrap_servers=self._bootstrap_servers,
-            )
-            await consumer.start()
-            
-            try:
-                partitions = consumer.partitions_for_topic(name)
-                if not partitions:
-                    return []
-                
-                result = []
-                cluster = consumer._client.cluster
-                
-                for partition_id in partitions:
-                    partition_meta = cluster.partition_for_topic(name, partition_id)
-                    if partition_meta:
-                        result.append(PartitionInfo(
-                            partition=partition_id,
-                            leader=partition_meta.leader,
-                            replicas=list(partition_meta.replicas),
-                            isr=list(partition_meta.isr),
-                        ))
-                    else:
-                        result.append(PartitionInfo(
-                            partition=partition_id,
-                            leader=-1,
-                            replicas=[],
-                            isr=[],
-                        ))
-                
-                return result
-                
-            finally:
-                await consumer.stop()
-                
-        except Exception as e:
-            logger.error(f"Error describing topic partitions for {name}: {e}")
+        # Explicit metadata fetch
+        await self._admin.describe_cluster()
+        
+        cluster = self._admin._client.cluster
+        partitions = cluster.partitions_for_topic(name)
+        
+        if not partitions:
             return []
+        
+        result = []
+        for partition_id in partitions:
+            meta = cluster.partition_for_topic(name, partition_id)
+            result.append(PartitionInfo(
+                partition=partition_id,
+                leader=meta.leader if meta else -1,
+                replicas=list(meta.replicas) if meta else [],
+                isr=list(meta.isr) if meta else [],
+            ))
+        return result

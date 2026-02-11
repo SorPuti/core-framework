@@ -277,30 +277,49 @@ class ConfluentAdmin:
 
     async def list_topics(self) -> list[str]:
         """
-        List all topics.
+        List all topics (names only).
 
         Returns:
             List of topic names (excluding internal topics)
+        """
+        topics_info = await self.list_topics_with_info()
+        return [t.name for t in topics_info]
+    
+    async def list_topics_with_info(self) -> list[TopicInfo]:
+        """
+        List all topics with partition info.
+
+        Returns:
+            List of TopicInfo
         """
         if not self._admin:
             await self.connect()
 
         loop = asyncio.get_event_loop()
 
-        try:
-            # list_topics() is synchronous in confluent-kafka
-            metadata = await loop.run_in_executor(
-                None, lambda: self._admin.list_topics(timeout=10)
-            )
+        metadata = await loop.run_in_executor(
+            None, lambda: self._admin.list_topics(timeout=10)
+        )
 
-            # Filter out internal topics (starting with __)
-            return [
-                name for name in metadata.topics.keys()
-                if not name.startswith("__")
-            ]
-        except Exception as e:
-            logger.error(f"Error listing topics: {e}")
-            return []
+        result = []
+        for name, topic_meta in metadata.topics.items():
+            if name.startswith("__"):
+                continue
+            
+            # Get replication factor from first partition
+            replication_factor = 1
+            if topic_meta.partitions:
+                first_partition = list(topic_meta.partitions.values())[0]
+                replication_factor = len(first_partition.replicas)
+            
+            result.append(TopicInfo(
+                name=name,
+                partitions=len(topic_meta.partitions),
+                replication_factor=replication_factor,
+                configs={},
+            ))
+        
+        return result
 
     async def describe_topic(self, name: str) -> TopicInfo | None:
         """
@@ -449,58 +468,58 @@ class ConfluentAdmin:
         
         loop = asyncio.get_event_loop()
         
-        try:
-            futures = self._admin.describe_consumer_groups([group_id])
-            desc_future = futures.get(group_id)
-            
-            if not desc_future:
-                return None
-            
-            desc = await loop.run_in_executor(None, desc_future.result)
-            
-            # Build member info
-            members = []
-            topics = set()
-            
-            for member in desc.members:
-                partitions = []
-                if member.assignment and member.assignment.topic_partitions:
-                    for tp in member.assignment.topic_partitions:
-                        topics.add(tp.topic)
-                        partitions.append({
-                            "topic": tp.topic,
-                            "partition": tp.partition,
-                        })
-                
-                members.append(MemberInfo(
-                    member_id=member.member_id,
-                    client_id=member.client_id or "",
-                    host=member.host or "",
-                    partitions=partitions,
-                ))
-            
-            # Get offsets for this group
-            offsets = await self.get_consumer_group_offsets(group_id, list(topics))
-            
-            # Calculate total lag
-            total_lag = sum(
-                po.lag for topic_offsets in offsets.values() for po in topic_offsets
-            )
-            
-            return ConsumerGroupDetail(
-                group_id=desc.group_id,
-                state=str(desc.state),
-                coordinator=desc.coordinator.id if desc.coordinator else -1,
-                protocol_type=desc.protocol_type or "",
-                protocol=desc.protocol or "",
-                members=members,
-                offsets=offsets,
-                total_lag=total_lag,
-            )
-            
-        except Exception as e:
-            logger.error(f"Error describing consumer group {group_id}: {e}")
+        futures = self._admin.describe_consumer_groups([group_id])
+        desc_future = futures.get(group_id)
+        
+        if not desc_future:
             return None
+        
+        desc = await loop.run_in_executor(None, desc_future.result)
+        
+        # Build member info
+        members = []
+        topics = set()
+        
+        for member in desc.members:
+            partitions = []
+            if member.assignment and member.assignment.topic_partitions:
+                for tp in member.assignment.topic_partitions:
+                    topics.add(tp.topic)
+                    partitions.append({
+                        "topic": tp.topic,
+                        "partition": tp.partition,
+                    })
+            
+            members.append(MemberInfo(
+                member_id=member.member_id,
+                client_id=member.client_id or "",
+                host=member.host or "",
+                partitions=partitions,
+            ))
+        
+        # Get offsets for this group (if topics exist)
+        offsets: dict[str, list[PartitionOffset]] = {}
+        total_lag = 0
+        
+        if topics:
+            try:
+                offsets = await self.get_consumer_group_offsets(group_id, list(topics))
+                total_lag = sum(
+                    po.lag for topic_offsets in offsets.values() for po in topic_offsets
+                )
+            except Exception as e:
+                logger.warning(f"Could not get offsets for {group_id}: {e}")
+        
+        return ConsumerGroupDetail(
+            group_id=desc.group_id,
+            state=str(desc.state),
+            coordinator=desc.coordinator.id if desc.coordinator else -1,
+            protocol_type=desc.protocol_type or "",
+            protocol=desc.protocol or "",
+            members=members,
+            offsets=offsets,
+            total_lag=total_lag,
+        )
 
     async def get_consumer_group_offsets(
         self,
