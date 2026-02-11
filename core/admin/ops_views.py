@@ -742,21 +742,24 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     async def kafka_overview(
         request: Request,
         user: Any = Depends(check_superuser_access),
-    ) -> dict:
+    ):
         """
         Get Kafka cluster overview.
         
         Returns cluster info, broker count, topics, partitions, and consumer groups.
         """
+        from fastapi.responses import JSONResponse
+        
+        admin = None
         try:
             admin = await _get_kafka_admin()
             if not admin:
-                return {"error": "Kafka not configured", "enabled": False}
+                return JSONResponse({"error": "Kafka not configured", "enabled": False})
             
             cluster_info = await admin.get_cluster_info()
             consumer_groups = await admin.list_consumer_groups()
             
-            return {
+            return JSONResponse({
                 "enabled": True,
                 "cluster_id": cluster_info.cluster_id,
                 "brokers": [
@@ -768,54 +771,82 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                 "topics_count": cluster_info.topics_count,
                 "partitions_count": cluster_info.partitions_count,
                 "consumer_groups_count": len(consumer_groups),
-            }
+            })
         except Exception as e:
-            logger.error(f"Error getting Kafka overview: {e}")
-            return {"error": str(e), "enabled": False}
+            logger.error(f"Error getting Kafka overview: {e}", exc_info=True)
+            return JSONResponse({"error": str(e), "enabled": False})
+        finally:
+            if admin:
+                try:
+                    await admin.close()
+                except Exception:
+                    pass
 
     @router.get("/kafka/consumer-groups")
     async def kafka_consumer_groups(
         request: Request,
         user: Any = Depends(check_superuser_access),
-    ) -> dict:
+    ):
         """
         List all Kafka consumer groups with state and lag info.
         """
+        from fastapi.responses import JSONResponse
+        
+        admin = None
         try:
             admin = await _get_kafka_admin()
             if not admin:
-                return {"items": [], "error": "Kafka not configured"}
+                return JSONResponse({"items": [], "error": "Kafka not configured"})
             
             groups = await admin.list_consumer_groups()
             
             # Get lag for each group
             items = []
             for group in groups:
-                detail = await admin.describe_consumer_group(group.group_id)
-                items.append({
-                    "group_id": group.group_id,
-                    "state": group.state,
-                    "members_count": group.members_count,
-                    "topics": group.topics,
-                    "total_lag": detail.total_lag if detail else 0,
-                })
+                try:
+                    detail = await admin.describe_consumer_group(group.group_id)
+                    items.append({
+                        "group_id": group.group_id,
+                        "state": group.state,
+                        "members_count": group.members_count,
+                        "topics": group.topics,
+                        "total_lag": detail.total_lag if detail else 0,
+                    })
+                except Exception as group_err:
+                    logger.debug(f"Could not describe consumer group {group.group_id}: {group_err}")
+                    items.append({
+                        "group_id": group.group_id,
+                        "state": group.state,
+                        "members_count": group.members_count,
+                        "topics": group.topics,
+                        "total_lag": 0,
+                    })
             
-            return {"items": items, "total": len(items)}
+            return JSONResponse({"items": items, "total": len(items)})
         except Exception as e:
-            logger.error(f"Error listing consumer groups: {e}")
-            return {"items": [], "error": str(e)}
+            logger.error(f"Error listing consumer groups: {e}", exc_info=True)
+            return JSONResponse({"items": [], "error": str(e)})
+        finally:
+            if admin:
+                try:
+                    await admin.close()
+                except Exception:
+                    pass
 
     @router.get("/kafka/consumer-groups/{group_id}")
     async def kafka_consumer_group_detail(
         request: Request,
         group_id: str,
         user: Any = Depends(check_superuser_access),
-    ) -> dict:
+    ):
         """
         Get detailed information about a consumer group.
         
         Includes members, topic assignments, and per-partition lag.
         """
+        from fastapi.responses import JSONResponse
+        
+        admin = None
         try:
             admin = await _get_kafka_admin()
             if not admin:
@@ -825,7 +856,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             if not detail:
                 raise HTTPException(404, f"Consumer group '{group_id}' not found")
             
-            return {
+            return JSONResponse({
                 "group_id": detail.group_id,
                 "state": detail.state,
                 "coordinator": detail.coordinator,
@@ -853,34 +884,43 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                     for topic, offsets in detail.offsets.items()
                 },
                 "total_lag": detail.total_lag,
-            }
+            })
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error getting consumer group detail: {e}")
+            logger.error(f"Error getting consumer group detail: {e}", exc_info=True)
             raise HTTPException(500, str(e))
+        finally:
+            if admin:
+                try:
+                    await admin.close()
+                except Exception:
+                    pass
 
     @router.get("/kafka/topics")
     async def kafka_topics(
         request: Request,
         user: Any = Depends(check_superuser_access),
-    ) -> dict:
+    ):
         """
         List all Kafka topics with partition info.
         """
+        from fastapi.responses import JSONResponse
+        
+        admin = None
         try:
             admin = await _get_kafka_admin()
             if not admin:
-                return {"items": [], "total": 0, "error": "Kafka not configured"}
+                return JSONResponse({"items": [], "total": 0, "error": "Kafka not configured or not reachable"})
             
             try:
                 topic_names = await admin.list_topics()
             except Exception as list_err:
                 logger.error(f"Error listing topics from Kafka: {list_err}", exc_info=True)
-                return {"items": [], "total": 0, "error": f"Failed to list topics: {list_err}"}
+                return JSONResponse({"items": [], "total": 0, "error": f"Failed to list topics: {list_err}"})
             
             if not topic_names:
-                return {"items": [], "total": 0}
+                return JSONResponse({"items": [], "total": 0})
             
             items = []
             for name in topic_names:
@@ -907,22 +947,32 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                         "error": str(topic_err),
                     })
             
-            return {"items": items, "total": len(items)}
+            return JSONResponse({"items": items, "total": len(items)})
         except Exception as e:
             logger.error(f"Error in kafka_topics endpoint: {e}", exc_info=True)
-            return {"items": [], "total": 0, "error": str(e)}
+            return JSONResponse({"items": [], "total": 0, "error": str(e)})
+        finally:
+            # Always close admin connection
+            if admin:
+                try:
+                    await admin.close()
+                except Exception:
+                    pass
 
     @router.get("/kafka/topics/{topic_name}")
     async def kafka_topic_detail(
         request: Request,
         topic_name: str,
         user: Any = Depends(check_superuser_access),
-    ) -> dict:
+    ):
         """
         Get detailed information about a topic.
         
         Includes partition details with leader, replicas, and ISR.
         """
+        from fastapi.responses import JSONResponse
+        
+        admin = None
         try:
             admin = await _get_kafka_admin()
             if not admin:
@@ -934,7 +984,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             
             partitions = await admin.describe_topic_partitions(topic_name)
             
-            return {
+            return JSONResponse({
                 "name": info.name,
                 "partitions_count": info.partitions,
                 "replication_factor": info.replication_factor,
@@ -948,12 +998,18 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                     }
                     for p in partitions
                 ],
-            }
+            })
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error getting topic detail: {e}")
+            logger.error(f"Error getting topic detail: {e}", exc_info=True)
             raise HTTPException(500, str(e))
+        finally:
+            if admin:
+                try:
+                    await admin.close()
+                except Exception:
+                    pass
 
     @router.get("/kafka/throughput")
     async def kafka_throughput(
@@ -1042,13 +1098,16 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         period: str = Query("6h", description="Period: 1h, 6h, 24h, 7d"),
         granularity: str = Query("5min", description="Granularity: 1min, 5min, 15min, 1h"),
         user: Any = Depends(check_superuser_access),
-    ) -> dict:
+    ):
         """
         Get consumer group lag history for charts.
         
         Note: This requires periodic lag snapshots to be stored.
         For now, returns current lag only (historical tracking TBD).
         """
+        from fastapi.responses import JSONResponse
+        
+        admin = None
         try:
             admin = await _get_kafka_admin()
             if not admin:
@@ -1063,7 +1122,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             from core.datetime import timezone
             now = timezone.now()
             
-            return {
+            return JSONResponse({
                 "labels": [now.isoformat()],
                 "lag": [detail.total_lag],
                 "topics": {
@@ -1071,12 +1130,18 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                     for topic, offsets in detail.offsets.items()
                 },
                 "note": "Historical lag tracking requires periodic snapshots (not yet implemented)",
-            }
+            })
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error getting lag history: {e}")
+            logger.error(f"Error getting lag history: {e}", exc_info=True)
             raise HTTPException(500, str(e))
+        finally:
+            if admin:
+                try:
+                    await admin.close()
+                except Exception:
+                    pass
 
     # =====================================================================
     # Topics & Schemas Registry
