@@ -363,14 +363,14 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         
         @router.get("/ops/periodic/", response_class=HTMLResponse)
         async def ops_periodic(request: Request) -> Response:
-            """Periodic Tasks — SUPERUSER ONLY."""
+            """Periodic Tasks — Redirect to Task Center with Scheduler tab."""
             result = _require_superuser(request)
             if result is None:
                 return RedirectResponse(f"{prefix}/login", status_code=302)
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
-            ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/periodic.html", ctx)
+            # Redirect to unified Task Center (periodic is now a tab there)
+            return RedirectResponse(f"{prefix}/ops/tasks/#scheduled", status_code=302)
         
         @router.get("/ops/kafka/", response_class=HTMLResponse)
         async def ops_kafka(request: Request) -> Response:

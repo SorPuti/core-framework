@@ -125,17 +125,20 @@ await producer.send_batch(
 )
 ```
 
-### Decorator
+### Função publish
 
 ```python
-from core.messaging import producer
+from core.messaging import publish
 
-@producer(topic="user-events")
 async def publish_user_event(user_id: int, action: str):
-    return {"user_id": user_id, "action": action}
+    """Publica evento de usuário."""
+    await publish("user-events", {"user_id": user_id, "action": action})
 
 # Uso
 await publish_user_event(1, "login")
+
+# Ou diretamente (1 linha!)
+await publish("user-events", {"user_id": 1, "action": "login"})
 ```
 
 ## Consumer
@@ -471,15 +474,16 @@ class UserCreated(AvroModel):
     created_at: str
 
 # src/handlers.py
-from core.messaging import producer, consumer
+from core.messaging import publish, consumer
+from datetime import datetime
 
-@producer(topic="user-events")
 async def publish_user_created(user_id: int, email: str):
-    return UserCreated(
+    """Publica evento de usuário criado."""
+    await publish("user-events", UserCreated(
         user_id=user_id,
         email=email,
         created_at=datetime.utcnow().isoformat()
-    ).model_dump()
+    ).model_dump())
 
 @consumer(topic="user-events", group_id="notification-service")
 async def send_welcome_email(message: dict):

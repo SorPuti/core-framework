@@ -1,107 +1,264 @@
 {% extends "admin/base.html" %}
 
-{% block title %}Tasks — {{ site_header }}{% endblock %}
+{% block title %}Task Center — {{ site_header }}{% endblock %}
 
 {% block content %}
-<div class="p-6" x-data="tasksView()" x-init="loadData(); loadStats(); connectWebSocket()">
+<div class="p-6" x-data="taskCenterView()" x-init="init()">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Task Manager</h1>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Monitor and manage task executions</p>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Task Center</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Background jobs, scheduled tasks, and execution history</p>
         </div>
         <div class="flex items-center gap-2">
             <span x-show="wsConnected" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-full">
                 <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                 Live
             </span>
-            <button @click="loadData(); loadStats()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+            <button @click="refresh()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
                 <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
                 Refresh
             </button>
         </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-        <template x-for="[label, key, color] in [['Total', 'total', 'gray'], ['Success', 'success', 'green'], ['Failed', 'failure', 'red'], ['Running', 'running', 'blue'], ['Retry', 'retry', 'amber'], ['Pending', 'pending', 'gray']]" :key="key">
-            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:border-primary-400 transition-colors" @click="filterStatus = key === 'total' ? '' : key.toUpperCase(); loadData()">
-                <p class="text-xs font-semibold uppercase tracking-wider" :class="'text-' + color + '-500'" x-text="label"></p>
-                <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1" x-text="stats[key] || 0"></p>
+    <!-- Tabs -->
+    <div class="flex items-center gap-1 mb-6 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+        <button @click="activeTab = 'executions'" 
+                :class="activeTab === 'executions' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                class="px-4 py-2 text-sm font-medium rounded-lg transition-all">
+            <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Executions
+                <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600" x-text="stats.total || 0"></span>
+            </span>
+        </button>
+        <button @click="activeTab = 'scheduled'" 
+                :class="activeTab === 'scheduled' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                class="px-4 py-2 text-sm font-medium rounded-lg transition-all">
+            <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Scheduler
+                <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600" x-text="periodicTasks.length"></span>
+            </span>
+        </button>
+        <button @click="activeTab = 'registered'" 
+                :class="activeTab === 'registered' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                class="px-4 py-2 text-sm font-medium rounded-lg transition-all">
+            <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Registry
+                <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600" x-text="registeredTasks.length"></span>
+            </span>
+        </button>
+    </div>
+
+    <!-- Tab: Executions -->
+    <div x-show="activeTab === 'executions'" x-cloak>
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+            <template x-for="[label, key, color] in [['Total', 'total', 'gray'], ['Success', 'success', 'green'], ['Failed', 'failure', 'red'], ['Running', 'running', 'blue'], ['Retry', 'retry', 'amber'], ['Pending', 'pending', 'gray']]" :key="key">
+                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:border-primary-400 transition-colors" @click="filterStatus = key === 'total' ? '' : key.toUpperCase(); loadExecutions()">
+                    <p class="text-xs font-semibold uppercase tracking-wider" :class="'text-' + color + '-500'" x-text="label"></p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1" x-text="stats[key] || 0"></p>
+                </div>
+            </template>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex items-center gap-3 mb-4">
+            <select x-model="filterStatus" @change="loadExecutions()" class="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                <option value="">All Status</option>
+                <option value="SUCCESS">Success</option>
+                <option value="FAILURE">Failure</option>
+                <option value="RUNNING">Running</option>
+                <option value="RETRY">Retry</option>
+                <option value="PENDING">Pending</option>
+                <option value="CANCELLED">Cancelled</option>
+            </select>
+            <input type="text" x-model="filterTaskName" @input.debounce.300ms="loadExecutions()" placeholder="Filter by task name..." class="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 flex-1 max-w-xs">
+        </div>
+
+        <!-- Executions Table -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 dark:bg-gray-700/50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Task</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Queue</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Duration</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Retries</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Started</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                        <template x-for="task in executions" :key="task.task_id">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                <td class="px-4 py-3">
+                                    <div class="font-medium text-gray-900 dark:text-white text-xs" x-text="task.task_name.split('.').pop()"></div>
+                                    <div class="text-[10px] font-mono text-gray-400 mt-0.5" x-text="task.task_id.substring(0, 8) + '...'"></div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full"
+                                          :class="statusClass(task.status)" x-text="task.status"></span>
+                                </td>
+                                <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="task.queue"></td>
+                                <td class="px-4 py-3 font-mono text-gray-600 dark:text-gray-300" x-text="task.duration_ms ? task.duration_ms + 'ms' : '—'"></td>
+                                <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="task.retries + '/' + task.max_retries"></td>
+                                <td class="px-4 py-3 text-xs text-gray-500" x-text="task.started_at ? new Date(task.started_at).toLocaleString() : '—'"></td>
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center gap-1">
+                                        <button @click="showDetail(task)" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="Details">
+                                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                        </button>
+                                        <template x-if="task.status === 'FAILURE' || task.status === 'CANCELLED'">
+                                            <button @click="retryTask(task.task_id)" class="p-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-gray-400 hover:text-green-600 transition-colors" title="Retry">
+                                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="!loading && executions.length === 0">
+                            <tr><td colspan="7" class="px-4 py-12 text-center text-gray-400">No task executions found</td></tr>
+                        </template>
+                    </tbody>
+                </table>
             </div>
-        </template>
+            <!-- Pagination -->
+            <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-sm">
+                <span class="text-gray-500" x-text="'Showing ' + executions.length + ' of ' + total + ' executions'"></span>
+                <div class="flex gap-1">
+                    <button @click="page > 1 && (page--, loadExecutions())" :disabled="page <= 1" class="px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-600 disabled:opacity-30">Prev</button>
+                    <button @click="page < totalPages && (page++, loadExecutions())" :disabled="page >= totalPages" class="px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-600 disabled:opacity-30">Next</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Filters -->
-    <div class="flex items-center gap-3 mb-4">
-        <select x-model="filterStatus" @change="loadData()" class="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-            <option value="">All Status</option>
-            <option value="SUCCESS">Success</option>
-            <option value="FAILURE">Failure</option>
-            <option value="RUNNING">Running</option>
-            <option value="RETRY">Retry</option>
-            <option value="PENDING">Pending</option>
-            <option value="CANCELLED">Cancelled</option>
-        </select>
-        <input type="text" x-model="filterTaskName" @input.debounce.300ms="loadData()" placeholder="Filter by task name..." class="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 flex-1 max-w-xs">
+    <!-- Tab: Scheduled (Periodic Tasks) -->
+    <div x-show="activeTab === 'scheduled'" x-cloak>
+        <!-- Info Banner -->
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <div>
+                    <p class="text-sm font-medium text-blue-800 dark:text-blue-200">Scheduler Status</p>
+                    <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">
+                        Periodic tasks are registered via <code class="font-mono bg-blue-100 dark:bg-blue-800 px-1 rounded">@periodic_task</code> decorator. 
+                        Run <code class="font-mono bg-blue-100 dark:bg-blue-800 px-1 rounded">core scheduler</code> to start the scheduler process.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Periodic Task Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="task in periodicTasks" :key="task.name">
+                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-300 dark:hover:border-primary-600 transition-colors">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1 min-w-0">
+                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white truncate" x-text="task.name.split('.').pop()"></h4>
+                            <p class="text-[10px] font-mono text-gray-400 mt-0.5 truncate" x-text="task.name"></p>
+                        </div>
+                        <button @click="toggleTask(task)" 
+                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-3" 
+                                :class="task.enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'"
+                                :title="task.enabled ? 'Click to disable' : 'Click to enable'">
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform" :class="task.enabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-2 text-xs mb-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Schedule</span>
+                            <span class="font-mono text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded" x-text="task.cron ? task.cron : ('every ' + task.interval + 's')"></span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Queue</span>
+                            <span class="text-gray-700 dark:text-gray-300" x-text="task.queue"></span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Run Count</span>
+                            <span class="font-semibold text-gray-900 dark:text-white" x-text="task.run_count"></span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Last Run</span>
+                            <span class="text-gray-600 dark:text-gray-400 text-[10px]" x-text="task.last_run ? new Date(task.last_run).toLocaleString() : 'Never'"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <button @click="runNow(task)" 
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors">
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Run Now
+                        </button>
+                        <template x-if="task.next_run && task.enabled">
+                            <span class="text-[10px] text-gray-400">
+                                Next: <span x-text="new Date(task.next_run).toLocaleTimeString()"></span>
+                            </span>
+                        </template>
+                    </div>
+                </div>
+            </template>
+            
+            <template x-if="!loading && periodicTasks.length === 0">
+                <div class="col-span-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <p class="text-gray-500 dark:text-gray-400 font-medium">No periodic tasks registered</p>
+                    <p class="text-xs text-gray-400 mt-2">
+                        Use <code class="font-mono text-primary-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">@periodic_task(cron="0 * * * *")</code> or 
+                        <code class="font-mono text-primary-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">@periodic_task(interval=60)</code>
+                    </p>
+                </div>
+            </template>
+        </div>
     </div>
 
-    <!-- Task Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="overflow-x-auto">
+    <!-- Tab: Registered Tasks -->
+    <div x-show="activeTab === 'registered'" x-cloak>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Task</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Task Name</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Type</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Queue</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Duration</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Retries</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Started</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Retry</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Timeout</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                    <template x-for="task in items" :key="task.task_id">
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                    <template x-for="task in registeredTasks" :key="task.name">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                             <td class="px-4 py-3">
-                                <div class="font-medium text-gray-900 dark:text-white text-xs" x-text="task.task_name.split('.').pop()"></div>
-                                <div class="text-[10px] font-mono text-gray-400 mt-0.5" x-text="task.task_id.substring(0, 8) + '...'"></div>
+                                <span class="font-medium text-gray-900 dark:text-white" x-text="task.name"></span>
                             </td>
                             <td class="px-4 py-3">
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full"
-                                      :class="statusClass(task.status)" x-text="task.status"></span>
+                                      :class="task.type === 'periodic' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'"
+                                      x-text="task.type"></span>
                             </td>
-                            <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="task.queue"></td>
-                            <td class="px-4 py-3 font-mono text-gray-600 dark:text-gray-300" x-text="task.duration_ms ? task.duration_ms + 'ms' : '—'"></td>
-                            <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="task.retries + '/' + task.max_retries"></td>
-                            <td class="px-4 py-3 text-xs text-gray-500" x-text="task.started_at ? new Date(task.started_at).toLocaleString() : '—'"></td>
-                            <td class="px-4 py-3">
-                                <div class="flex items-center gap-1">
-                                    <button @click="showDetail(task)" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="Details">
-                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    </button>
-                                    <template x-if="task.status === 'FAILURE' || task.status === 'CANCELLED'">
-                                        <button @click="retryTask(task.task_id)" class="p-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-gray-400 hover:text-green-600 transition-colors" title="Retry">
-                                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
-                                        </button>
-                                    </template>
-                                </div>
-                            </td>
+                            <td class="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-300" x-text="task.queue"></td>
+                            <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="task.retry || '—'"></td>
+                            <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="task.timeout ? task.timeout + 's' : '—'"></td>
                         </tr>
                     </template>
-                    <template x-if="!loading && items.length === 0">
-                        <tr><td colspan="7" class="px-4 py-12 text-center text-gray-400">No task executions found</td></tr>
+                    <template x-if="registeredTasks.length === 0">
+                        <tr><td colspan="5" class="px-4 py-12 text-center text-gray-400">No tasks registered in this process</td></tr>
                     </template>
                 </tbody>
             </table>
-        </div>
-        <!-- Pagination -->
-        <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-sm">
-            <span class="text-gray-500" x-text="'Showing ' + items.length + ' of ' + total + ' executions'"></span>
-            <div class="flex gap-1">
-                <button @click="page > 1 && (page--, loadData())" :disabled="page <= 1" class="px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-600 disabled:opacity-30">Prev</button>
-                <button @click="page < totalPages && (page++, loadData())" :disabled="page >= totalPages" class="px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-600 disabled:opacity-30">Next</button>
+            <div class="px-4 py-2.5 bg-gray-50 dark:bg-gray-700/30 border-t border-gray-100 dark:border-gray-700">
+                <p class="text-[10px] text-gray-400">
+                    <span class="font-semibold">Registered</span> = task decorators loaded in this process. 
+                    Configure <code class="font-mono text-primary-500">tasks_module</code> in settings to auto-discover tasks.
+                </p>
             </div>
         </div>
     </div>
@@ -161,10 +318,13 @@
 </div>
 
 <script>
-function tasksView() {
+function taskCenterView() {
     return {
         loading: true,
-        items: [],
+        activeTab: 'executions',
+        
+        // Executions
+        executions: [],
         total: 0,
         page: 1,
         totalPages: 1,
@@ -172,10 +332,37 @@ function tasksView() {
         filterStatus: '',
         filterTaskName: '',
         detailTask: null,
+        
+        // Periodic Tasks
+        periodicTasks: [],
+        
+        // Registered Tasks
+        registeredTasks: [],
+        
+        // WebSocket
         ws: null,
         wsConnected: false,
 
-        async loadData() {
+        async init() {
+            await Promise.all([
+                this.loadExecutions(),
+                this.loadStats(),
+                this.loadPeriodic(),
+                this.loadRegistered()
+            ]);
+            this.connectWebSocket();
+        },
+
+        async refresh() {
+            await Promise.all([
+                this.loadExecutions(),
+                this.loadStats(),
+                this.loadPeriodic(),
+                this.loadRegistered()
+            ]);
+        },
+
+        async loadExecutions() {
             this.loading = true;
             try {
                 let url = '{{ admin_prefix }}/api/ops/tasks?page=' + this.page + '&per_page=50';
@@ -183,11 +370,11 @@ function tasksView() {
                 if (this.filterTaskName) url += '&task_name=' + encodeURIComponent(this.filterTaskName);
                 const resp = await fetch(url);
                 const data = await resp.json();
-                this.items = data.items || [];
+                this.executions = data.items || [];
                 this.total = data.total || 0;
                 this.totalPages = data.total_pages || 1;
             } catch (e) {
-                console.error('Failed to load tasks:', e);
+                console.error('Failed to load executions:', e);
             } finally {
                 this.loading = false;
             }
@@ -200,52 +387,52 @@ function tasksView() {
             } catch (e) {}
         },
 
+        async loadPeriodic() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/periodic');
+                const data = await resp.json();
+                this.periodicTasks = data.items || [];
+            } catch (e) {}
+        },
+
+        async loadRegistered() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/tasks/registered');
+                const data = await resp.json();
+                this.registeredTasks = data.tasks || [];
+            } catch (e) {}
+        },
+
         connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             this.ws = new WebSocket(`${protocol}//${window.location.host}{{ admin_prefix }}/ws/ops/events`);
 
-            this.ws.onopen = () => {
-                this.wsConnected = true;
-            };
-
+            this.ws.onopen = () => { this.wsConnected = true; };
             this.ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                if (data.type === 'task_started') {
-                    this.handleTaskStarted(data.data);
-                } else if (data.type === 'task_finished') {
-                    this.handleTaskFinished(data.data);
-                }
+                if (data.type === 'task_started') this.handleTaskStarted(data.data);
+                else if (data.type === 'task_finished') this.handleTaskFinished(data.data);
             };
-
             this.ws.onclose = () => {
                 this.wsConnected = false;
-                // Reconnect after delay
                 setTimeout(() => this.connectWebSocket(), 3000);
             };
-
-            this.ws.onerror = () => {
-                this.wsConnected = false;
-            };
+            this.ws.onerror = () => { this.wsConnected = false; };
         },
 
         handleTaskStarted(task) {
-            // Add to top of list if on first page with no filters
             if (this.page === 1 && !this.filterStatus && !this.filterTaskName) {
-                this.items.unshift(task);
-                if (this.items.length > 50) this.items.pop();
+                this.executions.unshift(task);
+                if (this.executions.length > 50) this.executions.pop();
                 this.total++;
             }
-            // Update stats
             if (this.stats.running !== undefined) this.stats.running++;
             if (this.stats.total !== undefined) this.stats.total++;
         },
 
         handleTaskFinished(task) {
-            const idx = this.items.findIndex(t => t.task_id === task.task_id);
-            if (idx >= 0) {
-                this.items[idx] = { ...this.items[idx], ...task };
-            }
-            // Update stats
+            const idx = this.executions.findIndex(t => t.task_id === task.task_id);
+            if (idx >= 0) this.executions[idx] = { ...this.executions[idx], ...task };
             if (this.stats.running !== undefined && this.stats.running > 0) this.stats.running--;
             if (task.status === 'SUCCESS' && this.stats.success !== undefined) this.stats.success++;
             if (task.status === 'FAILURE' && this.stats.failure !== undefined) this.stats.failure++;
@@ -263,9 +450,7 @@ function tasksView() {
             return map[s] || map['PENDING'];
         },
 
-        showDetail(task) {
-            this.detailTask = task;
-        },
+        showDetail(task) { this.detailTask = task; },
 
         async retryTask(taskId) {
             if (!confirm('Retry this task?')) return;
@@ -273,10 +458,31 @@ function tasksView() {
                 const resp = await fetch('{{ admin_prefix }}/api/ops/tasks/' + taskId + '/retry', { method: 'POST' });
                 const data = await resp.json();
                 window.showToast('success', 'Task Retried', 'New task ID: ' + data.new_task_id);
-                this.loadData();
+                this.loadExecutions();
                 this.loadStats();
             } catch (e) {
                 window.showToast('error', 'Retry Failed', e.message);
+            }
+        },
+
+        async toggleTask(task) {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/periodic/' + encodeURIComponent(task.name) + '/toggle', { method: 'POST' });
+                const data = await resp.json();
+                task.enabled = data.enabled;
+                window.showToast('success', 'Task Updated', task.name + ' is now ' + (data.enabled ? 'enabled' : 'disabled'));
+            } catch (e) {
+                window.showToast('error', 'Error', e.message);
+            }
+        },
+
+        async runNow(task) {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/periodic/' + encodeURIComponent(task.name) + '/run', { method: 'POST' });
+                const data = await resp.json();
+                window.showToast('success', 'Task Dispatched', 'Task ID: ' + data.task_id);
+            } catch (e) {
+                window.showToast('error', 'Error', e.message);
             }
         }
     };

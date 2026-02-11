@@ -315,6 +315,18 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         user: Any = Depends(check_superuser_access),
     ) -> dict:
         """List periodic tasks (from registry + persisted state)."""
+        # Import tasks_module to ensure periodic tasks are registered
+        from core.config import get_settings
+        import importlib
+        
+        settings = get_settings()
+        tasks_module = getattr(settings, "tasks_module", None)
+        if tasks_module:
+            try:
+                importlib.import_module(tasks_module)
+            except ImportError as e:
+                logger.debug(f"Could not import tasks_module '{tasks_module}': {e}")
+        
         from core.tasks.registry import get_periodic_tasks
 
         tasks = get_periodic_tasks()
@@ -436,6 +448,18 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             return str(val)
         
         try:
+            # Import workers_module to ensure workers are registered
+            from core.config import get_settings
+            import importlib
+            
+            settings = get_settings()
+            workers_module = getattr(settings, "workers_module", None)
+            if workers_module:
+                try:
+                    importlib.import_module(workers_module)
+                except ImportError as e:
+                    logger.debug(f"Could not import workers_module '{workers_module}': {e}")
+            
             from core.messaging.workers import get_all_workers
             workers = get_all_workers()
             items = []
