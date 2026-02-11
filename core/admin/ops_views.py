@@ -1711,6 +1711,7 @@ async def _get_kafka_admin():
     Get the appropriate Kafka admin client based on configuration.
     
     Returns KafkaAdmin (aiokafka) or ConfluentAdmin based on kafka_backend setting.
+    Returns None if Kafka is not configured or connection fails.
     """
     from core.config import get_settings
     
@@ -1721,15 +1722,19 @@ async def _get_kafka_admin():
     
     backend = getattr(settings, "kafka_backend", "aiokafka")
     
-    if backend == "confluent":
-        from core.messaging.confluent import ConfluentAdmin
-        admin = ConfluentAdmin()
-    else:
-        from core.messaging.kafka import KafkaAdmin
-        admin = KafkaAdmin()
-    
-    await admin.connect()
-    return admin
+    try:
+        if backend == "confluent":
+            from core.messaging.confluent import ConfluentAdmin
+            admin = ConfluentAdmin()
+        else:
+            from core.messaging.kafka import KafkaAdmin
+            admin = KafkaAdmin()
+        
+        await admin.connect()
+        return admin
+    except Exception as e:
+        logger.warning(f"Failed to connect to Kafka admin: {e}")
+        return None
 
 
 # ─── Serializers ─────────────────────────────────────────────────
