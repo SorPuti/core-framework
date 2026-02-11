@@ -1,48 +1,6 @@
 """
 Sistema de Middleware Plugável - Django-style.
-
-Permite configurar middlewares de forma declarativa, similar ao MIDDLEWARE do Django.
-
-Uso:
-    # Em settings ou .env
-    MIDDLEWARE = [
-        "core.auth.AuthenticationMiddleware",
-        "core.tenancy.TenantMiddleware",
-        "myapp.middleware.CustomMiddleware",
-    ]
-    
-    # Ou via configuração
-    from core.middleware import configure_middleware
-    
-    configure_middleware([
-        "core.auth.AuthenticationMiddleware",
-        ("myapp.middleware.RateLimitMiddleware", {"requests_per_minute": 60}),
-    ])
-
-O framework carrega e aplica os middlewares na ordem especificada.
-
-Criando middlewares customizados (recomendado — Pure ASGI):
-    from core.middleware import ASGIMiddleware
-    
-    class MyMiddleware(ASGIMiddleware):
-        async def before_request(self, request):
-            request.state.custom_data = "hello"
-        
-        async def after_response(self, request, status_code, headers):
-            headers.append((b"x-custom", b"value"))
-
-Criando middlewares customizados (legado — BaseHTTPMiddleware):
-    from core.middleware import BaseMiddleware
-    
-    class MyMiddleware(BaseMiddleware):
-        async def before_request(self, request):
-            request.state.custom_data = "hello"
-        
-        async def after_request(self, request, response):
-            response.headers["X-Custom"] = "value"
-            return response
 """
-
 from __future__ import annotations
 
 import importlib
@@ -57,6 +15,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send, Message
+import logging
+
+logger = logging.getLogger("core.middleware")
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Awaitable, MutableSequence
@@ -247,7 +208,10 @@ class BaseMiddleware(BaseHTTPMiddleware):
         call_next: "Callable[[Request], Awaitable[Response]]",
     ) -> Response:
         if not self._should_process(request.url.path):
-            return await call_next(request)
+            try:
+                return await call_next(request)
+            except Exception as exc:
+                return self._fallback_error_response(request, exc)
         
         try:
             result = await self.before_request(request)
@@ -262,7 +226,25 @@ class BaseMiddleware(BaseHTTPMiddleware):
             error_response = await self.on_error(request, exc)
             if error_response is not None:
                 return error_response
-            raise
+            # Fallback: SEMPRE retorna uma resposta, nunca deixa vazar
+            return self._fallback_error_response(request, exc)
+    
+    def _fallback_error_response(self, request: Request, exc: Exception) -> Response:
+        """Resposta de erro garantida quando on_error não trata."""
+        from starlette.responses import JSONResponse
+        import traceback
+        
+        logger.exception(f"Unhandled error in {self.name}: {exc}")
+        
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": str(exc) or "Internal server error",
+                "type": type(exc).__name__,
+                "middleware": self.name,
+                "path": str(request.url.path),
+            },
+        )
     
     def _should_process(self, path: str) -> bool:
         if self.include_paths:

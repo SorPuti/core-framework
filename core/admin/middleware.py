@@ -12,11 +12,12 @@ Fluxo:
 from __future__ import annotations
 
 import logging
+import traceback
 from typing import Any, TYPE_CHECKING
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import Response, JSONResponse
 
 if TYPE_CHECKING:
     from starlette.types import ASGIApp
@@ -30,6 +31,9 @@ class AdminSessionMiddleware(BaseHTTPMiddleware):
     
     Registrado automaticamente pelo AdminSite.mount().
     Só intercepta rotas sob admin_url_prefix.
+    
+    IMPORTANTE: Este middleware SEMPRE retorna um Response, mesmo em caso de erro.
+    Isso evita o erro "RuntimeError: No response returned" do Starlette.
     """
     
     def __init__(self, app: "ASGIApp", admin_prefix: str = "/admin") -> None:
@@ -42,21 +46,64 @@ class AdminSessionMiddleware(BaseHTTPMiddleware):
         
         # Só intercepta rotas do admin
         if not path.startswith(self.admin_prefix):
-            return await call_next(request)
+            try:
+                return await call_next(request)
+            except Exception as exc:
+                # Não deveria acontecer, mas garante resposta
+                logger.exception(f"Unhandled error in non-admin route: {path}")
+                return self._error_response(exc, path)
         
         # Rotas públicas não precisam de resolução
         admin_path = path[len(self.admin_prefix):]
         if admin_path in ("/login", "/logout") or admin_path.startswith("/static"):
-            return await call_next(request)
+            try:
+                return await call_next(request)
+            except Exception as exc:
+                logger.exception(f"Unhandled error in public admin route: {path}")
+                return self._error_response(exc, path)
         
         # Lê cookie e resolve sessão
-        session_key = request.cookies.get("admin_session")
-        if session_key:
-            user = await self._resolve_session(session_key)
-            if user is not None:
-                request.state.admin_user = user
+        try:
+            session_key = request.cookies.get("admin_session")
+            if session_key:
+                user = await self._resolve_session(session_key)
+                if user is not None:
+                    request.state.admin_user = user
+        except Exception as exc:
+            # Erro ao resolver sessão não deve bloquear o request
+            logger.warning(f"Error resolving admin session: {exc}")
         
-        return await call_next(request)
+        # Chama o próximo handler com tratamento de erro robusto
+        try:
+            response = await call_next(request)
+            return response
+        except Exception as exc:
+            logger.exception(f"Unhandled error in admin route: {path}")
+            return self._error_response(exc, path)
+    
+    def _error_response(self, exc: Exception, path: str) -> JSONResponse:
+        """
+        Gera uma resposta de erro JSON garantida.
+        
+        NUNCA deixa o middleware sem retornar um Response.
+        """
+        error_type = type(exc).__name__
+        error_message = str(exc)
+        
+        # Log detalhado para debug
+        tb = traceback.format_exc()
+        logger.error(f"Admin middleware error response for {path}:\n{tb}")
+        
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": error_message or "Internal server error",
+                "code": "internal_error",
+                "type": error_type,
+                "path": path,
+                "traceback": tb,
+            },
+        )
     
     async def _resolve_session(self, session_key: str) -> Any | None:
         """Busca AdminSession no banco e retorna o User associado."""
