@@ -665,10 +665,18 @@ class ConfluentAdmin:
                     topics_count += 1
                     partitions_count += len(topic_meta.partitions)
             
+            # ClusterMetadata doesn't have cluster_id, use orig_broker_id as identifier
+            cluster_id = getattr(metadata, 'cluster_id', None)
+            if cluster_id is None:
+                # Fallback: use first broker as cluster identifier
+                cluster_id = f"cluster-{metadata.orig_broker_id}" if metadata.orig_broker_id else None
+            
+            controller_id = getattr(metadata, 'controller_id', -1) or -1
+            
             return ClusterInfo(
-                cluster_id=metadata.cluster_id,
+                cluster_id=cluster_id,
                 brokers=brokers,
-                controller_id=metadata.controller_id or -1,
+                controller_id=controller_id,
                 topics_count=topics_count,
                 partitions_count=partitions_count,
             )
