@@ -367,9 +367,25 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         task_name: str,
         user: Any = Depends(check_superuser_access),
     ) -> dict:
-        """Manually trigger a periodic task."""
-        from core.tasks.registry import get_periodic_tasks, get_task_producer
-        from core.tasks.base import TaskMessage
+        """
+        Manually trigger a periodic task.
+        
+        Executes the task directly in this process (synchronous execution).
+        This is useful for testing and debugging without needing a worker.
+        """
+        # Import tasks_module to ensure periodic tasks are registered
+        from core.config import get_settings
+        import importlib
+        
+        settings = get_settings()
+        tasks_module = getattr(settings, "tasks_module", None)
+        if tasks_module:
+            try:
+                importlib.import_module(tasks_module)
+            except ImportError as e:
+                logger.debug(f"Could not import tasks_module '{tasks_module}': {e}")
+        
+        from core.tasks.registry import get_periodic_tasks
         import uuid
 
         tasks = get_periodic_tasks()
@@ -377,18 +393,25 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             raise HTTPException(404, f"Periodic task '{task_name}' not found")
 
         pt = tasks[task_name]
-        msg = TaskMessage(
-            task_id=str(uuid.uuid4()),
-            task_name=task_name,
-            queue=pt.queue,
-        )
-
+        task_id = str(uuid.uuid4())
+        
+        # Execute the task directly (no need for worker/scheduler)
         try:
-            producer = await get_task_producer()
-            await producer.send(f"tasks.{msg.queue}", msg.to_dict())
-            return {"status": "dispatched", "task_id": msg.task_id}
+            # Get the underlying function and execute it
+            result = await pt.func()
+            
+            # Mark as run
+            pt.mark_run()
+            
+            return {
+                "status": "executed",
+                "task_id": task_id,
+                "result": str(result) if result is not None else None,
+                "message": f"Task '{task_name}' executed successfully"
+            }
         except Exception as e:
-            raise HTTPException(500, f"Failed to dispatch: {e}")
+            logger.error(f"Failed to execute periodic task {task_name}: {e}", exc_info=True)
+            raise HTTPException(500, f"Task execution failed: {e}")
 
     # =====================================================================
     # Workers
@@ -983,6 +1006,146 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         except Exception as e:
             logger.error(f"Error getting lag history: {e}")
             raise HTTPException(500, str(e))
+
+    # =====================================================================
+    # Topics & Schemas Registry
+    # =====================================================================
+
+    @router.get("/topics/registered")
+    async def topics_registered(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        List all registered Topic classes from the application.
+        
+        Discovers topics by importing the models/topics modules.
+        """
+        from core.config import get_settings
+        import importlib
+        
+        settings = get_settings()
+        
+        # Try to import modules that might define topics
+        modules_to_try = [
+            getattr(settings, "topics_module", None),
+            getattr(settings, "models_module", None),
+            getattr(settings, "workers_module", None),
+            "src.infra.topics",
+            "src.topics",
+            "src.events",
+        ]
+        
+        for module_name in modules_to_try:
+            if module_name:
+                try:
+                    importlib.import_module(module_name)
+                except ImportError:
+                    pass
+        
+        try:
+            from core.messaging.topics import get_all_topics
+            
+            topics = get_all_topics()
+            items = []
+            
+            for name, topic_cls in topics.items():
+                schema_name = None
+                avro_schema = None
+                
+                if hasattr(topic_cls, "schema") and topic_cls.schema:
+                    schema_name = topic_cls.schema.__name__
+                    if hasattr(topic_cls.schema, "__avro_schema__"):
+                        try:
+                            avro_schema = topic_cls.schema.__avro_schema__()
+                        except Exception:
+                            pass
+                
+                items.append({
+                    "name": name,
+                    "class_name": topic_cls.__name__,
+                    "schema": schema_name,
+                    "partitions": getattr(topic_cls, "partitions", 1),
+                    "replication_factor": getattr(topic_cls, "replication_factor", 1),
+                    "cleanup_policy": getattr(topic_cls, "cleanup_policy", "delete"),
+                    "retention_ms": getattr(topic_cls, "retention_ms", None),
+                    "value_serializer": getattr(topic_cls, "value_serializer", "json"),
+                    "has_avro_schema": avro_schema is not None,
+                })
+            
+            return {"items": items, "total": len(items)}
+        except Exception as e:
+            logger.warning("Failed to list registered topics: %s", e)
+            return {"items": [], "total": 0, "error": str(e)}
+
+    @router.get("/schemas/avro")
+    async def schemas_avro(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        List all AvroModel classes discovered in the application.
+        """
+        from core.config import get_settings
+        import importlib
+        
+        settings = get_settings()
+        
+        # Try to import modules that might define AvroModels
+        modules_to_try = [
+            getattr(settings, "topics_module", None),
+            getattr(settings, "models_module", None),
+            getattr(settings, "workers_module", None),
+            "src.infra.topics",
+            "src.topics",
+            "src.events",
+            "src.schemas",
+        ]
+        
+        for module_name in modules_to_try:
+            if module_name:
+                try:
+                    importlib.import_module(module_name)
+                except ImportError:
+                    pass
+        
+        try:
+            from core.messaging.avro import AvroModel
+            
+            # Find all AvroModel subclasses
+            items = []
+            
+            def find_avro_models(cls):
+                """Recursively find all AvroModel subclasses."""
+                for subclass in cls.__subclasses__():
+                    if subclass.__name__ != "AvroModel":
+                        try:
+                            schema = subclass.__avro_schema__()
+                            items.append({
+                                "name": subclass.__name__,
+                                "namespace": schema.get("namespace", ""),
+                                "fields": [
+                                    {
+                                        "name": f["name"],
+                                        "type": str(f["type"]) if isinstance(f["type"], (dict, list)) else f["type"],
+                                    }
+                                    for f in schema.get("fields", [])
+                                ],
+                                "schema": schema,
+                            })
+                        except Exception as e:
+                            items.append({
+                                "name": subclass.__name__,
+                                "error": str(e),
+                            })
+                    find_avro_models(subclass)
+            
+            find_avro_models(AvroModel)
+            
+            return {"items": items, "total": len(items)}
+        except Exception as e:
+            logger.warning("Failed to list Avro schemas: %s", e)
+            return {"items": [], "total": 0, "error": str(e)}
 
     # =====================================================================
     # Events - Event Log Tracking

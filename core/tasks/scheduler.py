@@ -11,6 +11,7 @@ from typing import Any
 import asyncio
 import logging
 import signal
+import sys
 
 from core.tasks.base import PeriodicTask, TaskMessage
 from core.config import get_settings
@@ -42,6 +43,7 @@ class TaskScheduler:
         self._running = False
         self._shutdown_event = asyncio.Event()
         self._task: asyncio.Task | None = None
+        self._signal_received = False
     
     async def start(self) -> None:
         """Start the scheduler."""
@@ -49,11 +51,17 @@ class TaskScheduler:
             return
         
         self._running = True
+        self._signal_received = False
         
-        # Setup signal handlers
-        loop = asyncio.get_event_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, self._handle_signal)
+        # Setup signal handlers - use threadsafe approach
+        loop = asyncio.get_running_loop()
+        
+        try:
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(sig, self._handle_signal)
+        except NotImplementedError:
+            # Windows doesn't support add_signal_handler
+            pass
         
         # Start scheduler loop
         self._task = asyncio.create_task(self._scheduler_loop())
@@ -97,8 +105,18 @@ class TaskScheduler:
     
     def _handle_signal(self) -> None:
         """Handle shutdown signal."""
-        logger.info("Received shutdown signal")
-        asyncio.create_task(self.stop())
+        if self._signal_received:
+            # Second signal - force exit
+            logger.warning("Forced shutdown")
+            sys.exit(1)
+        
+        self._signal_received = True
+        logger.info("Received shutdown signal (press Ctrl+C again to force)")
+        
+        # Schedule stop in the event loop
+        asyncio.get_running_loop().call_soon_threadsafe(
+            lambda: asyncio.create_task(self.stop())
+        )
     
     async def _scheduler_loop(self) -> None:
         """Main scheduler loop."""

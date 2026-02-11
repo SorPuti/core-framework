@@ -24,8 +24,6 @@ if ! git diff --staged --quiet 2>/dev/null; then
 
     git add pyproject.toml core/__init__.py
     git commit -m "chore: bump version to $NEW_VERSION"
-    git push origin "$CURRENT_BRANCH"
-
     echo " Done."
 else
     echo " No pending changes to commit."

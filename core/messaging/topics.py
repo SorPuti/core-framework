@@ -39,8 +39,9 @@ class TopicMeta(type):
     def __new__(mcs, name: str, bases: tuple, namespace: dict):
         cls = super().__new__(mcs, name, bases, namespace)
         
-        # Don't register the base Topic class
-        if name != "Topic" and hasattr(cls, "name") and cls.name:
+        # Don't register the base Topic class or base pattern classes
+        base_names = {"Topic", "EventTopic", "CommandTopic", "StateTopic"}
+        if name not in base_names and hasattr(cls, "name") and cls.name:
             _topic_registry[cls.name] = cls
         
         return cls
