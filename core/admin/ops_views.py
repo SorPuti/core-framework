@@ -828,17 +828,26 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             
             items = []
             for name in topic_names:
-                info = await admin.describe_topic(name)
-                if info:
+                try:
+                    info = await admin.describe_topic(name)
+                    if info:
+                        items.append({
+                            "name": info.name,
+                            "partitions": info.partitions,
+                            "replication_factor": info.replication_factor,
+                        })
+                except Exception as topic_err:
+                    logger.debug(f"Could not describe topic {name}: {topic_err}")
                     items.append({
-                        "name": info.name,
-                        "partitions": info.partitions,
-                        "replication_factor": info.replication_factor,
+                        "name": name,
+                        "partitions": 0,
+                        "replication_factor": 0,
+                        "error": str(topic_err),
                     })
             
             return {"items": items, "total": len(items)}
         except Exception as e:
-            logger.error(f"Error listing topics: {e}")
+            logger.error(f"Error listing topics: {e}", exc_info=True)
             return {"items": [], "error": str(e)}
 
     @router.get("/kafka/topics/{topic_name}")
@@ -1036,19 +1045,44 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             "src.events",
         ]
         
+        imported_modules = []
         for module_name in modules_to_try:
             if module_name:
                 try:
                     importlib.import_module(module_name)
-                except ImportError:
-                    pass
+                    imported_modules.append(module_name)
+                except ImportError as e:
+                    logger.debug(f"Could not import {module_name}: {e}")
         
         try:
-            from core.messaging.topics import get_all_topics
+            from core.messaging.topics import get_all_topics, Topic
             
+            # Get topics from registry
             topics = get_all_topics()
-            items = []
             
+            # Also find Topic subclasses directly (in case metaclass didn't register them)
+            def find_topic_subclasses(cls, found=None):
+                """Recursively find all Topic subclasses."""
+                if found is None:
+                    found = {}
+                for subclass in cls.__subclasses__():
+                    # Skip base pattern classes
+                    if subclass.__name__ in {"EventTopic", "CommandTopic", "StateTopic"}:
+                        find_topic_subclasses(subclass, found)
+                        continue
+                    # Add if it has a name
+                    if hasattr(subclass, "name") and subclass.name:
+                        found[subclass.name] = subclass
+                    find_topic_subclasses(subclass, found)
+                return found
+            
+            # Merge registry with discovered subclasses
+            discovered = find_topic_subclasses(Topic)
+            topics = {**discovered, **topics}  # Registry takes precedence
+            
+            logger.debug(f"Topics found: {len(topics)} items: {list(topics.keys())}")
+            
+            items = []
             for name, topic_cls in topics.items():
                 schema_name = None
                 avro_schema = None
@@ -1088,6 +1122,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         """
         from core.config import get_settings
         import importlib
+        import json
         
         settings = get_settings()
         
@@ -1109,6 +1144,19 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                 except ImportError:
                     pass
         
+        def sanitize_for_json(obj):
+            """Convert non-JSON-serializable objects to strings."""
+            try:
+                json.dumps(obj)
+                return obj
+            except (TypeError, ValueError):
+                if isinstance(obj, dict):
+                    return {k: sanitize_for_json(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [sanitize_for_json(v) for v in obj]
+                else:
+                    return str(obj)
+        
         try:
             from core.messaging.avro import AvroModel
             
@@ -1121,17 +1169,19 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                     if subclass.__name__ != "AvroModel":
                         try:
                             schema = subclass.__avro_schema__()
+                            # Sanitize schema to ensure JSON-serializable
+                            safe_schema = sanitize_for_json(schema)
                             items.append({
                                 "name": subclass.__name__,
-                                "namespace": schema.get("namespace", ""),
+                                "namespace": safe_schema.get("namespace", ""),
                                 "fields": [
                                     {
                                         "name": f["name"],
                                         "type": str(f["type"]) if isinstance(f["type"], (dict, list)) else f["type"],
                                     }
-                                    for f in schema.get("fields", [])
+                                    for f in safe_schema.get("fields", [])
                                 ],
-                                "schema": schema,
+                                "schema": safe_schema,
                             })
                         except Exception as e:
                             items.append({
