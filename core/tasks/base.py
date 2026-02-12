@@ -257,7 +257,14 @@ class Task:
         )
         
         producer = await get_task_producer()
-        await producer.send(f"tasks.{message.queue}", message.to_dict())
+        await producer.send(
+            f"tasks.{message.queue}",
+            message.to_dict(),
+            headers={
+                "event_id": task_id,
+                "event_name": f"task.{self.name}",
+            },
+        )
         
         return task_id
     

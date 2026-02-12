@@ -53,6 +53,16 @@ class TaskScheduler:
         self._running = True
         self._signal_received = False
         
+        # Initialize database for persistence
+        try:
+            from core.models import init_database
+            from core.config import get_settings
+            settings = get_settings()
+            await init_database(settings.database_url)
+            logger.info("Database initialized for scheduler")
+        except Exception as e:
+            logger.warning(f"Failed to initialize database: {e}")
+        
         # Setup signal handlers - use threadsafe approach
         loop = asyncio.get_running_loop()
         
@@ -151,7 +161,14 @@ class TaskScheduler:
         
         try:
             producer = await get_task_producer()
-            await producer.send(f"tasks.{task_msg.queue}", task_msg.to_dict())
+            await producer.send(
+                f"tasks.{task_msg.queue}",
+                task_msg.to_dict(),
+                headers={
+                    "event_id": task_msg.task_id,
+                    "event_name": f"periodic.{task.name}",
+                },
+            )
             
             task.mark_run()
             

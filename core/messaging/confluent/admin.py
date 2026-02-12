@@ -407,47 +407,45 @@ class ConfluentAdmin:
         loop = asyncio.get_event_loop()
         
         try:
-            # List consumer groups
-            future = self._admin.list_consumer_groups()
-            groups_result = await loop.run_in_executor(None, future.result)
+            from confluent_kafka import Consumer
             
-            result = []
-            group_ids = []
+            # Use a consumer to list groups (more compatible across versions)
+            consumer_config = {
+                "bootstrap.servers": self._bootstrap_servers,
+                "group.id": "admin-list-groups-temp",
+            }
             
-            for group in groups_result.valid:
-                group_ids.append(group.group_id)
-                result.append(ConsumerGroupInfo(
-                    group_id=group.group_id,
-                    state=str(group.state) if hasattr(group, 'state') else "Unknown",
-                    members_count=0,
-                    topics=[],
-                ))
+            if self._settings.kafka_security_protocol != "PLAINTEXT":
+                consumer_config["security.protocol"] = self._settings.kafka_security_protocol
+                if self._settings.kafka_sasl_mechanism:
+                    consumer_config["sasl.mechanism"] = self._settings.kafka_sasl_mechanism
+                    consumer_config["sasl.username"] = self._settings.kafka_sasl_username
+                    consumer_config["sasl.password"] = self._settings.kafka_sasl_password
             
-            # Describe groups to get more details
-            if group_ids:
-                try:
-                    futures = self._admin.describe_consumer_groups(group_ids)
-                    for group_id, desc_future in futures.items():
-                        try:
-                            desc = await loop.run_in_executor(None, desc_future.result)
-                            for group_info in result:
-                                if group_info.group_id == group_id:
-                                    group_info.state = str(desc.state)
-                                    group_info.members_count = len(desc.members)
-                                    # Extract topics from member assignments
-                                    topics = set()
-                                    for member in desc.members:
-                                        if member.assignment and member.assignment.topic_partitions:
-                                            for tp in member.assignment.topic_partitions:
-                                                topics.add(tp.topic)
-                                    group_info.topics = list(topics)
-                                    break
-                        except Exception as e:
-                            logger.warning(f"Error describing group {group_id}: {e}")
-                except Exception as e:
-                    logger.warning(f"Error describing consumer groups: {e}")
+            consumer = Consumer(consumer_config)
             
-            return result
+            try:
+                # list_groups() returns a ListGroupsResponse
+                groups_response = await loop.run_in_executor(
+                    None, lambda: consumer.list_groups(timeout=10)
+                )
+                
+                result = []
+                for group in groups_response:
+                    group_id = group.group if hasattr(group, 'group') else str(group)
+                    state = getattr(group, 'state', 'Unknown')
+                    members = getattr(group, 'members', [])
+                    
+                    result.append(ConsumerGroupInfo(
+                        group_id=group_id,
+                        state=str(state) if state else "Unknown",
+                        members_count=len(members) if members else 0,
+                        topics=[],
+                    ))
+                
+                return result
+            finally:
+                consumer.close()
             
         except Exception as e:
             logger.error(f"Error listing consumer groups: {e}")
@@ -468,58 +466,93 @@ class ConfluentAdmin:
         
         loop = asyncio.get_event_loop()
         
-        futures = self._admin.describe_consumer_groups([group_id])
-        desc_future = futures.get(group_id)
-        
-        if not desc_future:
-            return None
-        
-        desc = await loop.run_in_executor(None, desc_future.result)
-        
-        # Build member info
-        members = []
-        topics = set()
-        
-        for member in desc.members:
-            partitions = []
-            if member.assignment and member.assignment.topic_partitions:
-                for tp in member.assignment.topic_partitions:
-                    topics.add(tp.topic)
-                    partitions.append({
-                        "topic": tp.topic,
-                        "partition": tp.partition,
-                    })
+        try:
+            from confluent_kafka import Consumer
             
-            members.append(MemberInfo(
-                member_id=member.member_id,
-                client_id=member.client_id or "",
-                host=member.host or "",
-                partitions=partitions,
-            ))
-        
-        # Get offsets for this group (if topics exist)
-        offsets: dict[str, list[PartitionOffset]] = {}
-        total_lag = 0
-        
-        if topics:
+            # Use consumer.list_groups to get group details
+            consumer_config = {
+                "bootstrap.servers": self._bootstrap_servers,
+                "group.id": "admin-describe-group-temp",
+            }
+            
+            if self._settings.kafka_security_protocol != "PLAINTEXT":
+                consumer_config["security.protocol"] = self._settings.kafka_security_protocol
+                if self._settings.kafka_sasl_mechanism:
+                    consumer_config["sasl.mechanism"] = self._settings.kafka_sasl_mechanism
+                    consumer_config["sasl.username"] = self._settings.kafka_sasl_username
+                    consumer_config["sasl.password"] = self._settings.kafka_sasl_password
+            
+            consumer = Consumer(consumer_config)
+            
             try:
-                offsets = await self.get_consumer_group_offsets(group_id, list(topics))
-                total_lag = sum(
-                    po.lag for topic_offsets in offsets.values() for po in topic_offsets
+                groups_response = await loop.run_in_executor(
+                    None, lambda: consumer.list_groups(group=group_id, timeout=10)
                 )
-            except Exception as e:
-                logger.warning(f"Could not get offsets for {group_id}: {e}")
-        
-        return ConsumerGroupDetail(
-            group_id=desc.group_id,
-            state=str(desc.state),
-            coordinator=desc.coordinator.id if desc.coordinator else -1,
-            protocol_type=desc.protocol_type or "",
-            protocol=desc.protocol or "",
-            members=members,
-            offsets=offsets,
-            total_lag=total_lag,
-        )
+                
+                if not groups_response:
+                    return None
+                
+                group = groups_response[0]
+                group_members = getattr(group, 'members', []) or []
+                
+                # Build member info
+                members = []
+                topics = set()
+                
+                for member in group_members:
+                    member_id = getattr(member, 'id', '') or getattr(member, 'member_id', '') or ''
+                    client_id = getattr(member, 'client_id', '') or ''
+                    host = getattr(member, 'client_host', '') or getattr(member, 'host', '') or ''
+                    
+                    # Try to get assignment
+                    partitions = []
+                    assignment = getattr(member, 'assignment', None)
+                    if assignment:
+                        for tp in assignment:
+                            topic = getattr(tp, 'topic', None)
+                            partition = getattr(tp, 'partition', None)
+                            if topic:
+                                topics.add(topic)
+                                partitions.append({"topic": topic, "partition": partition})
+                    
+                    members.append(MemberInfo(
+                        member_id=member_id,
+                        client_id=client_id,
+                        host=host,
+                        partitions=partitions,
+                    ))
+                
+                # Get offsets for this group
+                offsets: dict[str, list[PartitionOffset]] = {}
+                total_lag = 0
+                
+                if topics:
+                    try:
+                        offsets = await self.get_consumer_group_offsets(group_id, list(topics))
+                        total_lag = sum(
+                            po.lag for topic_offsets in offsets.values() for po in topic_offsets
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not get offsets for {group_id}: {e}")
+                
+                state = getattr(group, 'state', 'Unknown')
+                
+                return ConsumerGroupDetail(
+                    group_id=group_id,
+                    state=str(state) if state else "Unknown",
+                    coordinator=-1,
+                    protocol_type=getattr(group, 'protocol_type', '') or '',
+                    protocol=getattr(group, 'protocol', '') or '',
+                    members=members,
+                    offsets=offsets,
+                    total_lag=total_lag,
+                )
+            finally:
+                consumer.close()
+                
+        except Exception as e:
+            logger.error(f"Error describing consumer group {group_id}: {e}")
+            return None
 
     async def get_consumer_group_offsets(
         self,
@@ -665,13 +698,17 @@ class ConfluentAdmin:
                     topics_count += 1
                     partitions_count += len(topic_meta.partitions)
             
-            # ClusterMetadata doesn't have cluster_id, use orig_broker_id as identifier
+            # ClusterMetadata attributes vary by confluent-kafka version
+            # Use getattr with defaults for maximum compatibility
             cluster_id = getattr(metadata, 'cluster_id', None)
             if cluster_id is None:
-                # Fallback: use first broker as cluster identifier
-                cluster_id = f"cluster-{metadata.orig_broker_id}" if metadata.orig_broker_id else None
+                orig_broker = getattr(metadata, 'orig_broker_id', None)
+                if orig_broker is not None:
+                    cluster_id = f"cluster-{orig_broker}"
+                else:
+                    cluster_id = "unknown"
             
-            controller_id = getattr(metadata, 'controller_id', -1) or -1
+            controller_id = getattr(metadata, 'controller_id', None) or -1
             
             return ClusterInfo(
                 cluster_id=cluster_id,

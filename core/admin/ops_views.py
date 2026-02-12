@@ -57,6 +57,408 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     router = APIRouter(prefix="/api/ops", tags=["admin-ops"])
 
     # =====================================================================
+    # Consolidated API (Operations Center unified frontend)
+    # =====================================================================
+
+    @router.get("/dashboard")
+    async def ops_dashboard(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Aggregated dashboard data: overview, health, task/event stats, workers."""
+        from core.admin.infrastructure import InfraDetector
+        services = await InfraDetector.get_service_health()
+        try:
+            from core.models import get_session
+            from core.admin.models import TaskExecution, WorkerHeartbeat, EventLog
+            from sqlalchemy import select, func
+            from core.datetime import timezone
+            from datetime import timedelta
+
+            db = await get_session()
+            async with db:
+                task_total = (await db.execute(select(func.count()).select_from(TaskExecution))).scalar() or 0
+                task_stmt = select(TaskExecution.status, func.count()).group_by(TaskExecution.status)
+                task_by_status = {r[0]: r[1] for r in (await db.execute(task_stmt))}
+                worker_count = (await db.execute(select(func.count()).select_from(WorkerHeartbeat))).scalar() or 0
+                event_total = (await db.execute(select(func.count()).select_from(EventLog))).scalar() or 0
+                event_stmt = select(EventLog.status, func.count()).group_by(EventLog.status)
+                event_by_status = {r[0]: r[1] for r in (await db.execute(event_stmt))}
+                now = timezone.now()
+                five_min = now - timedelta(minutes=5)
+                recent_events = (await db.execute(
+                    select(func.count()).select_from(EventLog).where(EventLog.created_at >= five_min)
+                )).scalar() or 0
+        except Exception as e:
+            logger.warning("Dashboard aggregate error: %s", e)
+            task_total = task_by_status = worker_count = event_total = event_by_status = 0
+            recent_events = 0
+        return {
+            "infrastructure": {"services": services},
+            "tasks": {"total": task_total, "by_status": task_by_status},
+            "workers": {"total": worker_count},
+            "events": {
+                "total": event_total,
+                "by_status": event_by_status,
+                "throughput_per_min": round(recent_events / 5.0, 2) if recent_events else 0,
+            },
+        }
+
+    @router.get("/activity")
+    async def ops_activity_list(
+        request: Request,
+        page: int = Query(1, ge=1),
+        per_page: int = Query(50, ge=1, le=200),
+        view: str = Query("tasks", description="tasks | workers | periodic"),
+        status: str = Query(""),
+        queue: str = Query(""),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Unified activity list: tasks, workers, or periodic depending on view."""
+        if view == "workers":
+            try:
+                from core.models import get_session
+                from core.admin.models import WorkerHeartbeat
+                from core.querysets import QuerySet
+                from core.datetime import timezone
+                from datetime import timedelta
+                db = await get_session()
+                async with db:
+                    qs = QuerySet(WorkerHeartbeat, db)
+                    total = await qs.count()
+                    items = await qs.order_by("-last_heartbeat").offset(
+                        (page - 1) * per_page
+                    ).limit(per_page).all()
+                    now = timezone.now()
+                    stale = now - timedelta(minutes=2)
+                    result = []
+                    for w in items:
+                        d = _serialize_worker(w)
+                        if w.status == "ONLINE" and w.last_heartbeat and w.last_heartbeat < stale:
+                            d["status"] = "OFFLINE"
+                            d["_stale"] = True
+                        result.append(d)
+                    return {"items": result, "total": total, "page": page, "per_page": per_page, "view": "workers"}
+            except Exception as e:
+                logger.warning("ops_activity workers: %s", e)
+                return {"items": [], "total": 0, "page": 1, "per_page": per_page, "view": "workers"}
+        if view == "periodic":
+            from core.config import get_settings
+            import importlib
+            settings = get_settings()
+            if getattr(settings, "tasks_module", None):
+                try:
+                    importlib.import_module(settings.tasks_module)
+                except ImportError:
+                    pass
+            from core.tasks.registry import get_periodic_tasks
+            tasks = get_periodic_tasks()
+            items = [
+                {
+                    "name": name,
+                    "cron": pt.cron,
+                    "interval": pt.interval,
+                    "queue": pt.queue,
+                    "enabled": pt.enabled,
+                    "last_run": pt.last_run.isoformat() if pt.last_run else None,
+                    "next_run": pt.next_run.isoformat() if pt.next_run else None,
+                    "run_count": pt.run_count,
+                }
+                for name, pt in tasks.items()
+            ]
+            return {"items": items, "total": len(items), "page": 1, "per_page": len(items), "view": "periodic"}
+        # default: tasks
+        try:
+            from core.models import get_session
+            from core.admin.models import TaskExecution
+            from core.querysets import QuerySet
+            db = await get_session()
+            async with db:
+                qs = QuerySet(TaskExecution, db)
+                if status:
+                    qs = qs.filter(status=status.upper())
+                if queue:
+                    qs = qs.filter(queue=queue)
+                total = await qs.count()
+                items = await qs.order_by("-created_at").offset(
+                    (page - 1) * per_page
+                ).limit(per_page).all()
+                return {
+                    "items": [_serialize_task_execution(t) for t in items],
+                    "total": total,
+                    "page": page,
+                    "per_page": per_page,
+                    "view": "tasks",
+                }
+        except Exception as e:
+            logger.warning("ops_activity tasks: %s", e)
+            return {"items": [], "total": 0, "page": 1, "per_page": per_page, "view": "tasks"}
+
+    @router.get("/activity/{entity_id}")
+    async def ops_activity_detail(
+        request: Request,
+        entity_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Detail for a task or worker by id (tries task first, then worker)."""
+        try:
+            from core.models import get_session
+            from core.admin.models import TaskExecution, WorkerHeartbeat
+            from core.querysets import QuerySet
+            db = await get_session()
+            async with db:
+                qs_task = QuerySet(TaskExecution, db)
+                task = await qs_task.filter(task_id=entity_id).first()
+                if task:
+                    return {"kind": "task", "item": _serialize_task_execution(task)}
+                qs_worker = QuerySet(WorkerHeartbeat, db)
+                worker = await qs_worker.filter(worker_id=entity_id).first()
+                if worker:
+                    return {"kind": "worker", "item": _serialize_worker(worker)}
+            raise HTTPException(404, "Activity entity not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @router.post("/activity/{entity_id}/action")
+    async def ops_activity_action(
+        request: Request,
+        entity_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Unified action: retry/cancel for tasks, toggle/run for periodic (body: { action, ... })."""
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+        action = (body or {}).get("action", "")
+        try:
+            from core.models import get_session
+            from core.admin.models import TaskExecution, WorkerHeartbeat
+            from core.querysets import QuerySet
+            db = await get_session()
+            async with db:
+                qs_task = QuerySet(TaskExecution, db)
+                task = await qs_task.filter(task_id=entity_id).first()
+                if task:
+                    if action == "retry":
+                        from core.tasks.registry import get_task_producer
+                        from core.tasks.base import TaskMessage
+                        import uuid
+                        if task.status not in ("FAILURE", "CANCELLED"):
+                            raise HTTPException(400, f"Cannot retry task with status {task.status}")
+                        new_id = str(uuid.uuid4())
+                        args = json.loads(task.args_json) if task.args_json else []
+                        kwargs = json.loads(task.kwargs_json) if task.kwargs_json else {}
+                        msg = TaskMessage(
+                            task_id=new_id, task_name=task.task_name, args=tuple(args),
+                            kwargs=kwargs, queue=task.queue, max_retries=task.max_retries,
+                        )
+                        producer = await get_task_producer()
+                        await producer.send(f"tasks.{msg.queue}", msg.to_dict())
+                        return {"status": "retried", "new_task_id": new_id}
+                    if action == "cancel":
+                        from sqlalchemy import update
+                        stmt = (
+                            update(TaskExecution)
+                            .where(TaskExecution.task_id == entity_id)
+                            .where(TaskExecution.status.in_(["PENDING", "RETRY"]))
+                            .values(status="CANCELLED")
+                        )
+                        r = await db.execute(stmt)
+                        await db.commit()
+                        if r.rowcount == 0:
+                            raise HTTPException(400, "Task not found or cannot be cancelled")
+                        return {"status": "cancelled"}
+                    raise HTTPException(400, f"Unknown action for task: {action}")
+                qs_worker = QuerySet(WorkerHeartbeat, db)
+                worker = await qs_worker.filter(worker_id=entity_id).first()
+                if worker:
+                    raise HTTPException(400, "No actions supported for worker entity")
+            from core.tasks.registry import get_periodic_tasks
+            if entity_id in get_periodic_tasks():
+                if action == "toggle":
+                    pt = get_periodic_tasks()[entity_id]
+                    pt.enabled = not pt.enabled
+                    return {"status": "ok", "enabled": pt.enabled}
+                if action == "run":
+                    import time as _time
+                    from core.tasks.registry import get_periodic_tasks as _get_pt
+                    pt = _get_pt()[entity_id]
+                    task_id = str(__import__("uuid").uuid4())
+                    start = _time.perf_counter()
+                    recorded = False
+                    try:
+                        from core.admin.models import TaskExecution
+                        db = await get_session()
+                        async with db:
+                            await TaskExecution.record_start(
+                                db, task_name=entity_id, task_id=task_id,
+                                queue=pt.queue, worker_id="admin-panel",
+                            )
+                            recorded = True
+                    except Exception:
+                        pass
+                    result, error, status = None, None, "SUCCESS"
+                    try:
+                        result = await pt.func()
+                        pt.mark_run()
+                    except Exception as e:
+                        logger.error("Periodic run %s failed: %s", entity_id, e)
+                        error = str(e)
+                        status = "FAILURE"
+                    duration_ms = int((_time.perf_counter() - start) * 1000)
+                    if recorded:
+                        try:
+                            from core.admin.models import TaskExecution
+                            db = await get_session()
+                            async with db:
+                                await TaskExecution.record_finish(
+                                    db, task_id=task_id, status=status,
+                                    result_json=str(result) if result is not None else None,
+                                    error=error, duration_ms=duration_ms,
+                                )
+                        except Exception:
+                            pass
+                    if error:
+                        raise HTTPException(500, f"Task execution failed: {error}")
+                    return {"status": "executed", "task_id": task_id, "duration_ms": duration_ms}
+            raise HTTPException(404, "Activity entity not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @router.get("/system")
+    async def ops_system(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """System info: Kafka overview, infrastructure, registered topics, schemas."""
+        from core.admin.infrastructure import InfraDetector
+        infra = await InfraDetector.collect()
+        kafka = {"enabled": False}
+        admin = await _get_kafka_admin()
+        if admin:
+            try:
+                cluster = await admin.get_cluster_info()
+                kafka = {
+                    "enabled": True,
+                    "cluster_id": cluster.cluster_id,
+                    "brokers_count": len(cluster.brokers),
+                    "topics_count": cluster.topics_count,
+                    "partitions_count": cluster.partitions_count,
+                }
+            except Exception as e:
+                kafka["error"] = str(e)
+            finally:
+                await admin.close()
+        topics_resp = await _list_registered_topics()
+        topics = topics_resp.get("items", [])
+        schemas_resp = await _list_avro_schemas()
+        schemas = schemas_resp.get("items", [])
+        return {"infrastructure": infra, "kafka": kafka, "topics": topics, "schemas": schemas}
+
+    @router.get("/system/kafka/{resource}")
+    async def ops_system_kafka(
+        request: Request,
+        resource: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Kafka resource: consumer-groups, topics, throughput (resource name + optional query params)."""
+        if resource == "consumer-groups":
+            admin = await _get_kafka_admin()
+            if not admin:
+                return {"items": [], "error": "Kafka not configured"}
+            try:
+                groups = await admin.list_consumer_groups()
+                items = []
+                for g in groups:
+                    detail = await admin.describe_consumer_group(g.group_id)
+                    items.append({
+                        "group_id": g.group_id,
+                        "state": g.state,
+                        "members_count": g.members_count,
+                        "topics": g.topics,
+                        "total_lag": detail.total_lag if detail else 0,
+                    })
+                return {"items": items, "total": len(items)}
+            except Exception as e:
+                return {"items": [], "error": str(e)}
+            finally:
+                await admin.close()
+        if resource == "topics":
+            admin = await _get_kafka_admin()
+            if not admin:
+                return {"items": [], "total": 0, "error": "Kafka not configured"}
+            try:
+                topics = await admin.list_topics_with_info()
+                items = [{"name": t.name, "partitions": t.partitions, "replication_factor": t.replication_factor} for t in topics]
+                return {"items": items, "total": len(items)}
+            except Exception as e:
+                return {"items": [], "total": 0, "error": str(e)}
+            finally:
+                await admin.close()
+        if resource == "throughput":
+            period = request.query_params.get("period", "6h")
+            granularity = request.query_params.get("granularity", "5min")
+            return await _kafka_throughput(period, granularity)
+        raise HTTPException(404, f"Unknown Kafka resource: {resource}")
+
+    @router.get("/logs")
+    async def ops_logs(
+        request: Request,
+        limit: int = Query(200, ge=1, le=5000),
+        level: str = Query(""),
+        logger_name: str = Query("", alias="logger"),
+        search: str = Query(""),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Recent logs with filters."""
+        from core.admin.log_handler import get_log_buffer
+        buffer = get_log_buffer()
+        entries = buffer.get_recent(limit=limit, level_filter=level or None, logger_filter=logger_name or None, search=search or None)
+        return {
+            "entries": [e.to_json() for e in entries],
+            "total_captured": buffer.total_count,
+            "buffer_size": buffer.buffer_size,
+            "subscribers": buffer.subscriber_count,
+        }
+
+    @router.post("/purge")
+    async def ops_purge(
+        request: Request,
+        target: str = Query("tasks", description="tasks | events"),
+        days: int = Query(30, ge=1),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Unified purge: tasks or events older than N days."""
+        if target == "events":
+            from core.models import get_session
+            from core.admin.models import EventLog
+            from core.datetime import timezone
+            from datetime import timedelta
+            from sqlalchemy import delete
+            cutoff = timezone.now() - timedelta(days=days)
+            db = await get_session()
+            async with db:
+                stmt = delete(EventLog).where(EventLog.created_at < cutoff)
+                r = await db.execute(stmt)
+                await db.commit()
+                return {"purged": r.rowcount, "target": "events", "older_than_days": days}
+        # tasks
+        from core.models import get_session
+        from core.admin.models import TaskExecution
+        from core.datetime import timezone
+        from datetime import timedelta
+        from sqlalchemy import delete
+        cutoff = timezone.now() - timedelta(days=days)
+        db = await get_session()
+        async with db:
+            stmt = delete(TaskExecution).where(TaskExecution.created_at < cutoff)
+            r = await db.execute(stmt)
+            await db.commit()
+            return {"purged": r.rowcount, "target": "tasks", "older_than_days": days}
+
+    # =====================================================================
     # Infrastructure
     # =====================================================================
 
@@ -1201,33 +1603,66 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         event_name: str = Query("", description="Filter by event name"),
         status: str = Query("", description="Filter by status"),
         direction: str = Query("", description="Filter by direction (IN/OUT)"),
+        search: str = Query("", description="Search in event_id, event_name, key"),
+        time_start: str = Query("", description="Filter events after this ISO timestamp"),
+        time_end: str = Query("", description="Filter events before this ISO timestamp"),
         user: Any = Depends(check_superuser_access),
     ) -> dict:
-        """
-        List event logs with filters and pagination.
-        """
+        """List event logs with filters, search, and pagination."""
         try:
             from core.models import get_session
             from core.admin.models import EventLog
-            from core.querysets import QuerySet
+            from sqlalchemy import select, func, or_
+            from datetime import datetime
 
             db = await get_session()
             async with db:
-                qs = QuerySet(EventLog, db)
+                filters = []
 
                 if topic:
-                    qs = qs.filter(topic=topic)
+                    filters.append(EventLog.topic == topic)
                 if event_name:
-                    qs = qs.filter(event_name=event_name)
+                    filters.append(EventLog.event_name == event_name)
                 if status:
-                    qs = qs.filter(status=status)
+                    filters.append(EventLog.status == status)
                 if direction:
-                    qs = qs.filter(direction=direction.upper())
+                    filters.append(EventLog.direction == direction.upper())
+                if search:
+                    search_pattern = f"%{search}%"
+                    filters.append(or_(
+                        EventLog.event_id.ilike(search_pattern),
+                        EventLog.event_name.ilike(search_pattern),
+                        EventLog.key.ilike(search_pattern),
+                        EventLog.topic.ilike(search_pattern),
+                    ))
+                if time_start:
+                    try:
+                        ts = datetime.fromisoformat(time_start.replace("Z", "+00:00"))
+                        filters.append(EventLog.created_at >= ts)
+                    except ValueError:
+                        pass
+                if time_end:
+                    try:
+                        te = datetime.fromisoformat(time_end.replace("Z", "+00:00"))
+                        filters.append(EventLog.created_at <= te)
+                    except ValueError:
+                        pass
 
-                total = await qs.count()
-                items = await qs.order_by("-created_at").offset(
-                    (page - 1) * per_page
-                ).limit(per_page).all()
+                base_query = select(EventLog)
+                if filters:
+                    base_query = base_query.where(*filters)
+
+                count_query = select(func.count()).select_from(base_query.subquery())
+                total = (await db.execute(count_query)).scalar() or 0
+
+                items_query = (
+                    base_query
+                    .order_by(EventLog.created_at.desc())
+                    .offset((page - 1) * per_page)
+                    .limit(per_page)
+                )
+                result = await db.execute(items_query)
+                items = result.scalars().all()
 
                 return {
                     "items": [e.to_dict() for e in items],
@@ -1664,6 +2099,171 @@ async def _get_kafka_admin():
     except Exception as e:
         logger.warning(f"Failed to connect to Kafka admin: {e}")
         return None
+
+
+async def _list_registered_topics() -> dict:
+    """Return { items, total } for registered Topic classes (used by ops_system)."""
+    from core.config import get_settings
+    import importlib
+    settings = get_settings()
+    for module_name in [
+        getattr(settings, "topics_module", None),
+        getattr(settings, "models_module", None),
+        getattr(settings, "workers_module", None),
+    ]:
+        if module_name:
+            try:
+                importlib.import_module(module_name)
+            except ImportError:
+                pass
+    try:
+        from core.messaging.topics import get_all_topics, Topic
+        topics = get_all_topics()
+
+        def find_topic_subclasses(cls, found=None):
+            if found is None:
+                found = {}
+            for subclass in cls.__subclasses__():
+                if subclass.__name__ in {"EventTopic", "CommandTopic", "StateTopic"}:
+                    find_topic_subclasses(subclass, found)
+                    continue
+                if hasattr(subclass, "name") and subclass.name:
+                    found[subclass.name] = subclass
+                find_topic_subclasses(subclass, found)
+            return found
+        discovered = find_topic_subclasses(Topic)
+        topics = {**discovered, **topics}
+        items = []
+        for name, topic_cls in topics.items():
+            schema_name = getattr(topic_cls.schema, "__name__", None) if getattr(topic_cls, "schema", None) else None
+            avro_schema = None
+            if hasattr(topic_cls, "schema") and topic_cls.schema and hasattr(topic_cls.schema, "__avro_schema__"):
+                try:
+                    avro_schema = topic_cls.schema.__avro_schema__()
+                except Exception:
+                    pass
+            items.append({
+                "name": name,
+                "class_name": topic_cls.__name__,
+                "schema": schema_name,
+                "partitions": getattr(topic_cls, "partitions", 1),
+                "replication_factor": getattr(topic_cls, "replication_factor", 1),
+                "cleanup_policy": getattr(topic_cls, "cleanup_policy", "delete"),
+                "retention_ms": getattr(topic_cls, "retention_ms", None),
+                "value_serializer": getattr(topic_cls, "value_serializer", "json"),
+                "has_avro_schema": avro_schema is not None,
+            })
+        return {"items": items, "total": len(items)}
+    except Exception as e:
+        logger.warning("_list_registered_topics: %s", e)
+        return {"items": [], "total": 0, "error": str(e)}
+
+
+async def _list_avro_schemas() -> dict:
+    """Return { items, total } for AvroModel classes (used by ops_system)."""
+    from core.config import get_settings
+    import importlib
+    settings = get_settings()
+    for module_name in [
+        getattr(settings, "topics_module", None),
+        getattr(settings, "models_module", None),
+        getattr(settings, "workers_module", None),
+        "src.schemas",
+    ]:
+        if module_name:
+            try:
+                importlib.import_module(module_name)
+            except ImportError:
+                pass
+
+    def sanitize_for_json(obj):
+        try:
+            json.dumps(obj)
+            return obj
+        except (TypeError, ValueError):
+            if isinstance(obj, dict):
+                return {k: sanitize_for_json(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [sanitize_for_json(v) for v in obj]
+            return str(obj)
+
+    try:
+        from core.messaging.avro import AvroModel
+        items = []
+
+        def find_avro_models(cls):
+            for subclass in cls.__subclasses__():
+                if subclass.__name__ != "AvroModel":
+                    try:
+                        schema = subclass.__avro_schema__()
+                        safe_schema = sanitize_for_json(schema)
+                        items.append({
+                            "name": subclass.__name__,
+                            "namespace": safe_schema.get("namespace", ""),
+                            "fields": [
+                                {"name": f["name"], "type": str(f["type"]) if isinstance(f["type"], (dict, list)) else f["type"]}
+                                for f in safe_schema.get("fields", [])
+                            ],
+                            "schema": safe_schema,
+                        })
+                    except Exception as e:
+                        items.append({"name": subclass.__name__, "error": str(e)})
+                find_avro_models(subclass)
+        find_avro_models(AvroModel)
+        return {"items": items, "total": len(items)}
+    except Exception as e:
+        logger.warning("_list_avro_schemas: %s", e)
+        return {"items": [], "total": 0, "error": str(e)}
+
+
+async def _kafka_throughput(period: str, granularity: str) -> dict:
+    """Return throughput data for charts (used by ops_system_kafka resource=throughput)."""
+    try:
+        from core.models import get_session
+        from core.admin.models import EventLog
+        from core.datetime import timezone
+        from datetime import timedelta
+        from sqlalchemy import select, func
+        period_map = {"1h": 1, "6h": 6, "24h": 24, "7d": 168}
+        hours = period_map.get(period, 6)
+        granularity_map = {"1min": 60, "5min": 300, "15min": 900, "1h": 3600}
+        bucket_seconds = granularity_map.get(granularity, 300)
+        now = timezone.now()
+        start = now - timedelta(hours=hours)
+        db = await get_session()
+        async with db:
+            stmt = (
+                select(
+                    EventLog.direction,
+                    func.count().label("count"),
+                    func.date_trunc("minute", EventLog.created_at).label("bucket"),
+                )
+                .where(EventLog.created_at >= start)
+                .group_by(EventLog.direction, "bucket")
+                .order_by("bucket")
+            )
+            result = await db.execute(stmt)
+            rows = result.all()
+            buckets = {}
+            for row in rows:
+                bucket_key = row.bucket.isoformat() if row.bucket else ""
+                if bucket_key not in buckets:
+                    buckets[bucket_key] = {"OUT": 0, "IN": 0}
+                buckets[bucket_key][row.direction] = row.count
+            labels = sorted(buckets.keys())
+            produce_rate = [buckets[k].get("OUT", 0) for k in labels]
+            consume_rate = [buckets[k].get("IN", 0) for k in labels]
+            return {
+                "labels": labels,
+                "produce_rate": produce_rate,
+                "consume_rate": consume_rate,
+                "period_start": start.isoformat(),
+                "period_end": now.isoformat(),
+                "granularity_seconds": bucket_seconds,
+            }
+    except Exception as e:
+        logger.error("_kafka_throughput: %s", e)
+        return {"labels": [], "produce_rate": [], "consume_rate": [], "error": str(e)}
 
 
 # ─── Serializers ─────────────────────────────────────────────────

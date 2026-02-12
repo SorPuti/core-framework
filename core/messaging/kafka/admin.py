@@ -261,8 +261,7 @@ class KafkaAdmin:
         """
         List all topics with partition info using AdminClient metadata.
         
-        Uses describe_topics() for explicit broker metadata fetch.
-        Never uses Consumer (avoids lazy metadata issues).
+        Uses force_metadata_update() for explicit broker metadata fetch.
         
         Returns:
             List of TopicInfo
@@ -270,11 +269,10 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        # Get cluster metadata via AdminClient
-        metadata = await self._admin.describe_cluster()
+        # Force full metadata update to get all topics
+        # describe_cluster() only gets broker info, not topics
+        await self._admin._client.force_metadata_update()
         
-        # Get all topic names from cluster
-        # Note: _client.cluster is populated after describe_cluster()
         cluster = self._admin._client.cluster
         all_topics = cluster.topics()
         
@@ -290,18 +288,12 @@ class KafkaAdmin:
             partitions = cluster.partitions_for_topic(name)
             partition_count = len(partitions) if partitions else 0
             
-            # Get replication factor from first partition metadata
-            replication_factor = 1
-            if partitions:
-                first_partition = next(iter(partitions))
-                partition_meta = cluster.partition_for_topic(name, first_partition)
-                if partition_meta and partition_meta.replicas:
-                    replication_factor = len(partition_meta.replicas)
-            
+            # Replication factor not available from basic cluster metadata
+            # Would need describe_topics for full info
             result.append(TopicInfo(
                 name=name,
                 partitions=partition_count,
-                replication_factor=replication_factor,
+                replication_factor=1,  # Default, use describe_topic for accurate value
                 configs={},
             ))
         
@@ -320,8 +312,8 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        # Force metadata refresh
-        await self._admin.describe_cluster()
+        # Force full metadata update to get topics
+        await self._admin._client.force_metadata_update()
         
         cluster = self._admin._client.cluster
         partitions = cluster.partitions_for_topic(name)
@@ -329,18 +321,10 @@ class KafkaAdmin:
         if partitions is None:
             return None
         
-        # Get replication factor from first partition
-        replication_factor = 1
-        if partitions:
-            first_partition = next(iter(partitions))
-            partition_meta = cluster.partition_for_topic(name, first_partition)
-            if partition_meta and partition_meta.replicas:
-                replication_factor = len(partition_meta.replicas)
-        
         return TopicInfo(
             name=name,
             partitions=len(partitions),
-            replication_factor=replication_factor,
+            replication_factor=1,  # Not available from basic metadata
             configs={},
         )
     
@@ -377,53 +361,67 @@ class KafkaAdmin:
         Returns:
             List of ConsumerGroupInfo with group_id, state, members_count, topics
         """
-        if not self._admin:
-            await self.connect()
+        from aiokafka.admin import AIOKafkaAdminClient
+        import asyncio as _asyncio
+        
+        result = []
         
         try:
-            # aiokafka doesn't have direct consumer group listing,
-            # we need to use the admin client's describe_consumer_groups
-            # First, list groups using a workaround
-            groups_result = await self._admin.list_consumer_groups()
+            # Use a dedicated admin client for listing
+            # (aiokafka has connection issues when mixing operations)
+            list_admin = AIOKafkaAdminClient(
+                bootstrap_servers=self._bootstrap_servers,
+            )
+            await list_admin.start()
             
-            result = []
-            for group in groups_result:
-                # Get basic info - group is a tuple (group_id, protocol_type)
-                group_id = group[0] if isinstance(group, tuple) else group
+            try:
+                groups_result = await list_admin.list_consumer_groups()
                 
-                result.append(ConsumerGroupInfo(
-                    group_id=group_id,
-                    state="Unknown",  # Will be filled by describe
-                    members_count=0,
-                    topics=[],
-                ))
+                for group in groups_result:
+                    group_id = group[0] if isinstance(group, tuple) else str(group)
+                    result.append(ConsumerGroupInfo(
+                        group_id=group_id,
+                        state="Unknown",
+                        members_count=0,
+                        topics=[],
+                    ))
+            finally:
+                await list_admin.close()
             
-            # Describe groups to get more details
+            # Delay to let connections settle (aiokafka bug workaround)
+            await _asyncio.sleep(0.5)
+            
+            # Describe groups using another fresh connection
             if result:
-                group_ids = [g.group_id for g in result]
+                describe_admin = AIOKafkaAdminClient(
+                    bootstrap_servers=self._bootstrap_servers,
+                )
+                await describe_admin.start()
+                
                 try:
-                    descriptions = await self._admin.describe_consumer_groups(group_ids)
-                    for desc in descriptions:
-                        for group_info in result:
-                            if group_info.group_id == desc.group_id:
-                                group_info.state = desc.state
-                                group_info.members_count = len(desc.members)
-                                # Extract topics from member assignments
-                                topics = set()
-                                for member in desc.members:
-                                    if member.assignment:
-                                        for tp in member.assignment:
-                                            topics.add(tp.topic)
-                                group_info.topics = list(topics)
-                                break
-                except Exception as e:
-                    logger.warning(f"Error describing consumer groups: {e}")
+                    for group_info in result:
+                        try:
+                            responses = await describe_admin.describe_consumer_groups([group_info.group_id])
+                            
+                            for response in responses:
+                                for group_tuple in response.groups:
+                                    # Tuple: (error_code, group_id, state, protocol_type, protocol, members)
+                                    _, gid, state, _, _, members = group_tuple
+                                    
+                                    if gid == group_info.group_id:
+                                        group_info.state = state or "Unknown"
+                                        group_info.members_count = len(members) if members else 0
+                                        break
+                        except Exception as e:
+                            logger.debug(f"Error describing group {group_info.group_id}: {e}")
+                finally:
+                    await describe_admin.close()
             
             return result
             
         except Exception as e:
             logger.error(f"Error listing consumer groups: {e}")
-            return []
+            return result
 
     async def describe_consumer_group(self, group_id: str) -> ConsumerGroupDetail | None:
         """
@@ -438,56 +436,78 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        descriptions = await self._admin.describe_consumer_groups([group_id])
-        
-        if not descriptions:
-            return None
-        
-        desc = descriptions[0]
-        
-        # Build member info
-        members = []
-        topics = set()
-        for member in desc.members:
-            partitions = []
-            if member.assignment:
-                for tp in member.assignment:
-                    topics.add(tp.topic)
-                    partitions.append({
-                        "topic": tp.topic,
-                        "partition": tp.partition,
-                    })
+        try:
+            # describe_consumer_groups returns list of DescribeGroupsResponse_v2
+            responses = await self._admin.describe_consumer_groups([group_id])
             
-            members.append(MemberInfo(
-                member_id=member.member_id,
-                client_id=member.client_id,
-                host=member.host or "",
-                partitions=partitions,
-            ))
-        
-        # Get offsets for this group (if topics exist)
-        offsets: dict[str, list[PartitionOffset]] = {}
-        total_lag = 0
-        
-        if topics:
+            if not responses:
+                return None
+            
+            # Find the group in responses
+            group_data = None
+            for response in responses:
+                for group_tuple in response.groups:
+                    # Tuple: (error_code, group_id, state, protocol_type, protocol, members)
+                    if group_tuple[1] == group_id:
+                        group_data = group_tuple
+                        break
+                if group_data:
+                    break
+            
+            if not group_data:
+                return None
+            
+            error_code, gid, state, protocol_type, protocol, members_data = group_data
+            
+            # Build member info
+            members = []
+            topics = set()
+            
+            for member_tuple in (members_data or []):
+                # member_tuple: (member_id, client_id, client_host, member_metadata, member_assignment)
+                member_id = member_tuple[0] if len(member_tuple) > 0 else ""
+                client_id = member_tuple[1] if len(member_tuple) > 1 else ""
+                client_host = member_tuple[2] if len(member_tuple) > 2 else ""
+                
+                partitions = []
+                # member_assignment is at index 4 (bytes or parsed)
+                # For now, we skip parsing the assignment as it's complex
+                
+                members.append(MemberInfo(
+                    member_id=member_id,
+                    client_id=client_id,
+                    host=client_host,
+                    partitions=partitions,
+                ))
+            
+            # Get offsets for this group
+            offsets: dict[str, list[PartitionOffset]] = {}
+            total_lag = 0
+            
             try:
-                offsets = await self.get_consumer_group_offsets(group_id, list(topics))
+                offsets = await self.get_consumer_group_offsets(group_id)
                 total_lag = sum(
                     po.lag for topic_offsets in offsets.values() for po in topic_offsets
                 )
+                # Extract topics from offsets
+                topics = set(offsets.keys())
             except Exception as e:
                 logger.warning(f"Could not get offsets for {group_id}: {e}")
-        
-        return ConsumerGroupDetail(
-            group_id=desc.group_id,
-            state=desc.state,
-            coordinator=desc.coordinator.node_id if desc.coordinator else -1,
-            protocol_type=desc.protocol_type or "",
-            protocol=desc.protocol or "",
-            members=members,
-            offsets=offsets,
-            total_lag=total_lag,
-        )
+            
+            return ConsumerGroupDetail(
+                group_id=gid,
+                state=state or "Unknown",
+                coordinator=-1,  # Not available in this response format
+                protocol_type=protocol_type or "",
+                protocol=protocol or "",
+                members=members,
+                offsets=offsets,
+                total_lag=total_lag,
+            )
+            
+        except Exception as e:
+            logger.error(f"Error describing consumer group {group_id}: {e}")
+            return None
 
     async def get_consumer_group_offsets(
         self,
@@ -556,14 +576,21 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        # Explicit metadata fetch via AdminClient
-        await self._admin.describe_cluster()
+        # describe_cluster returns a dict with cluster info (brokers, cluster_id, controller_id)
+        cluster_data = await self._admin.describe_cluster()
         
+        # Force full metadata update to get topics
+        await self._admin._client.force_metadata_update()
         cluster = self._admin._client.cluster
         
         brokers = [
-            BrokerInfo(id=node.nodeId, host=node.host, port=node.port, rack=node.rack)
-            for node in cluster.brokers()
+            BrokerInfo(
+                id=b["node_id"],
+                host=b["host"],
+                port=b["port"],
+                rack=b.get("rack"),
+            )
+            for b in cluster_data.get("brokers", [])
         ]
         
         all_topics = cluster.topics() or set()
@@ -575,9 +602,9 @@ class KafkaAdmin:
         )
         
         return ClusterInfo(
-            cluster_id=cluster.cluster_id(),
+            cluster_id=cluster_data.get("cluster_id"),
             brokers=brokers,
-            controller_id=cluster.controller_id() or -1,
+            controller_id=cluster_data.get("controller_id", -1) or -1,
             topics_count=len(user_topics),
             partitions_count=partitions_count,
         )
@@ -595,8 +622,10 @@ class KafkaAdmin:
         if not self._admin:
             await self.connect()
         
-        # Explicit metadata fetch
-        await self._admin.describe_cluster()
+        from aiokafka.structs import TopicPartition
+        
+        # Force full metadata update
+        await self._admin._client.force_metadata_update()
         
         cluster = self._admin._client.cluster
         partitions = cluster.partitions_for_topic(name)
@@ -606,11 +635,13 @@ class KafkaAdmin:
         
         result = []
         for partition_id in partitions:
-            meta = cluster.partition_for_topic(name, partition_id)
+            tp = TopicPartition(name, partition_id)
+            leader = cluster.leader_for_partition(tp)
+            
             result.append(PartitionInfo(
                 partition=partition_id,
-                leader=meta.leader if meta else -1,
-                replicas=list(meta.replicas) if meta else [],
-                isr=list(meta.isr) if meta else [],
+                leader=leader if leader is not None else -1,
+                replicas=[],  # Not available from basic metadata
+                isr=[],  # Not available from basic metadata
             ))
         return result

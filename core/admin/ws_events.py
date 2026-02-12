@@ -43,6 +43,43 @@ def create_ws_router(site: "AdminSite") -> APIRouter:
     """Create the WebSocket router for Operations Center."""
     router = APIRouter(tags=["admin-ws"])
 
+    async def _ws_ops_stream_handler(websocket: WebSocket) -> None:
+        """Unified stream: events, worker heartbeats, task started/finished (single endpoint)."""
+        await websocket.accept()
+        queue = subscribe_events()
+        try:
+            await websocket.send_json({
+                "type": "connected",
+                "message": "Connected to Operations Center stream",
+            })
+            while True:
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    if websocket.client_state != WebSocketState.CONNECTED:
+                        break
+                    await websocket.send_text(message)
+                except asyncio.TimeoutError:
+                    if websocket.client_state == WebSocketState.CONNECTED:
+                        await websocket.send_json({"type": "ping"})
+                    else:
+                        break
+        except WebSocketDisconnect:
+            logger.debug("WebSocket client disconnected")
+        except Exception as e:
+            logger.warning("WebSocket error: %s", e)
+        finally:
+            unsubscribe_events(queue)
+            if websocket.client_state == WebSocketState.CONNECTED:
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
+
+    @router.websocket("/ws/ops/stream")
+    async def ws_ops_stream(websocket: WebSocket):
+        """Unified real-time stream for Operations Center (events, tasks, workers)."""
+        await _ws_ops_stream_handler(websocket)
+
     @router.websocket("/ws/ops/events")
     async def ws_ops_events(websocket: WebSocket):
         """
