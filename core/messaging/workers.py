@@ -644,33 +644,74 @@ async def _run_worker_config(config: WorkerConfig) -> None:
             except Exception as e:
                 logger.debug("Heartbeat update failed: %s", e)
     
+    def _get_process_metrics() -> dict[str, float]:
+        """Get CPU and memory metrics for current process (for metadata_json)."""
+        try:
+            import psutil  # type: ignore[import-untyped]
+
+            proc = psutil.Process()
+            return {
+                "cpu_percent": round(proc.cpu_percent(interval=0) or 0, 1),
+                "memory_mb": round(proc.memory_info().rss / (1024 * 1024), 1),
+            }
+        except (ImportError, AttributeError):
+            return {}
+
     async def _update_heartbeat() -> None:
         """Flush in-memory counters to DB. Non-blocking, fire-and-forget."""
         if not _db_available:
             return
         try:
+            import json as _json
+
             from core.admin.models import WorkerHeartbeat
             from core.datetime import timezone
             from sqlalchemy import update
-            
+
+            metrics = _get_process_metrics()
+            metadata = _json.dumps(metrics) if metrics else None
+
+            values: dict[str, Any] = {
+                "active_tasks": _active,
+                "total_processed": _total_processed,
+                "total_errors": _total_errors,
+                "last_heartbeat": timezone.now(),
+                "status": "ONLINE",
+            }
+            if metadata is not None:
+                values["metadata_json"] = metadata
+
             db = await _get_session()
             async with db:
-                stmt = (
-                    update(WorkerHeartbeat)
-                    .where(WorkerHeartbeat.worker_id == worker_id)
-                    .values(
-                        active_tasks=_active,
-                        total_processed=_total_processed,
-                        total_errors=_total_errors,
-                        last_heartbeat=timezone.now(),
-                        status="ONLINE",
-                    )
-                )
+                stmt = update(WorkerHeartbeat).where(WorkerHeartbeat.worker_id == worker_id).values(**values)
                 await db.execute(stmt)
                 await db.commit()
+
+            try:
+                from core.admin.ws_events import broadcast_worker_heartbeat
+
+                payload: dict[str, Any] = {
+                    "worker_id": worker_id,
+                    "worker_type": "message",
+                    "worker_name": config.name,
+                    "hostname": socket.gethostname(),
+                    "pid": os.getpid(),
+                    "status": "ONLINE",
+                    "concurrency": config.concurrency,
+                    "active_tasks": _active,
+                    "total_processed": _total_processed,
+                    "total_errors": _total_errors,
+                    "last_heartbeat": timezone.now().isoformat(),
+                }
+                if metrics:
+                    payload["cpu_percent"] = metrics.get("cpu_percent")
+                    payload["memory_mb"] = metrics.get("memory_mb")
+                await broadcast_worker_heartbeat(payload)
+            except Exception:
+                pass
         except Exception:
             pass  # Fire-and-forget — never affect consumer
-    
+
     async def _cleanup_stale_workers() -> None:
         """Remove OFFLINE workers older than the configured TTL (Issue #19)."""
         if not _db_available or _offline_ttl_hours <= 0:

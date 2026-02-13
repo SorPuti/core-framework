@@ -264,7 +264,7 @@
     </div>
 
     <!-- Detail Modal -->
-    <div x-show="detailTask" x-cloak @click.self="detailTask = null" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div x-show="detailTaskId" x-cloak @click.self="closeDetailModal()" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
         <div class="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto shadow-xl">
             <template x-if="detailTask">
                 <div class="p-6">
@@ -273,7 +273,7 @@
                             <h3 class="text-lg font-bold text-gray-900 dark:text-white" x-text="detailTask.task_name"></h3>
                             <p class="text-xs font-mono text-gray-400 mt-1" x-text="detailTask.task_id"></p>
                         </div>
-                        <button @click="detailTask = null" class="text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        <button @click="closeDetailModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                     </div>
                     <div class="space-y-3 text-sm">
                         <div class="flex gap-3">
@@ -331,6 +331,7 @@ function taskCenterView() {
         stats: {},
         filterStatus: '',
         filterTaskName: '',
+        detailTaskId: null,
         detailTask: null,
         
         // Periodic Tasks
@@ -426,6 +427,7 @@ function taskCenterView() {
                 if (this.executions.length > 50) this.executions.pop();
                 this.total++;
             }
+            if (this.detailTaskId === task.task_id) this.updateDetailTask(task);
             if (this.stats.running !== undefined) this.stats.running++;
             if (this.stats.total !== undefined) this.stats.total++;
         },
@@ -433,9 +435,27 @@ function taskCenterView() {
         handleTaskFinished(task) {
             const idx = this.executions.findIndex(t => t.task_id === task.task_id);
             if (idx >= 0) this.executions[idx] = { ...this.executions[idx], ...task };
+            if (this.detailTaskId === task.task_id) this.updateDetailTask(task);
             if (this.stats.running !== undefined && this.stats.running > 0) this.stats.running--;
             if (task.status === 'SUCCESS' && this.stats.success !== undefined) this.stats.success++;
             if (task.status === 'FAILURE' && this.stats.failure !== undefined) this.stats.failure++;
+        },
+
+        updateDetailTask(updates) {
+            if (this.detailTask) this.detailTask = { ...this.detailTask, ...updates };
+        },
+
+        async loadTaskDetail(taskId) {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/tasks/' + taskId);
+                const data = await resp.json();
+                this.detailTask = data.item || data;
+            } catch (e) { console.error('Failed to load task detail:', e); }
+        },
+
+        closeDetailModal() {
+            this.detailTaskId = null;
+            this.detailTask = null;
         },
 
         statusClass(s) {
@@ -450,7 +470,11 @@ function taskCenterView() {
             return map[s] || map['PENDING'];
         },
 
-        showDetail(task) { this.detailTask = task; },
+        async showDetail(task) {
+            this.detailTaskId = task.task_id;
+            this.detailTask = { ...task };
+            await this.loadTaskDetail(task.task_id);
+        },
 
         async retryTask(taskId) {
             if (!confirm('Retry this task?')) return;

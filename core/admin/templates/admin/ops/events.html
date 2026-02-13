@@ -355,6 +355,8 @@ function eventsPanel() {
         // Realtime
         realtimeEnabled: false,
         ws: null,
+        liveEventQueue: [],
+        liveEventFlushTimer: null,
 
         async init() {
             this.loading = true;
@@ -431,18 +433,46 @@ function eventsPanel() {
             }
         },
 
+        eventMatchesFilters(ev, eventType) {
+            const f = this.filters;
+            if (f.topic && (ev.topic || '') !== f.topic) return false;
+            const status = ev.status || (eventType === 'kafka_sent' ? 'sent' : eventType === 'kafka_failed' ? 'failed' : eventType === 'kafka_pending' ? 'pending' : 'delivered');
+            if (f.status && (status || '').toLowerCase() !== f.status.toLowerCase()) return false;
+            const direction = ev.direction || (eventType === 'kafka_sent' || eventType === 'kafka_failed' || eventType === 'kafka_pending' ? 'OUT' : 'IN');
+            if (f.direction && direction !== f.direction) return false;
+            return true;
+        },
+
+        flushLiveEventQueue() {
+            if (this.liveEventFlushTimer) clearTimeout(this.liveEventFlushTimer);
+            this.liveEventFlushTimer = null;
+            const batch = this.liveEventQueue.splice(0, 20);
+            for (const ev of batch) {
+                this.events.unshift(ev);
+                if (this.events.length > this.pagination.per_page) this.events.pop();
+                this.pagination.total++;
+            }
+            if (batch.length > 0) this.loadStats();
+            if (this.liveEventQueue.length > 0) this.scheduleLiveEventFlush();
+        },
+
+        scheduleLiveEventFlush() {
+            if (this.liveEventFlushTimer) return;
+            this.liveEventFlushTimer = setTimeout(() => this.flushLiveEventQueue(), 500);
+        },
+
         connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             this.ws = new WebSocket(`${protocol}//${window.location.host}{{ admin_prefix }}/ws/ops/events`);
             this.ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                if (data.type?.startsWith('kafka_')) {
-                    if (data.data) {
-                        this.events.unshift(data.data);
-                        if (this.events.length > this.pagination.per_page) this.events.pop();
-                        this.pagination.total++;
-                    }
-                    this.loadStats();
+                if (data.type?.startsWith('kafka_') && data.data) {
+                    if (!this.eventMatchesFilters(data.data, data.type)) return;
+                    const ev = { ...data.data };
+                    if (!ev.status && data.type === 'kafka_sent') ev.status = 'sent';
+                    if (!ev.status && data.type === 'kafka_failed') ev.status = 'failed';
+                    this.liveEventQueue.push(ev);
+                    this.scheduleLiveEventFlush();
                 }
             };
             this.ws.onclose = () => {

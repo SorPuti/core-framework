@@ -414,7 +414,7 @@ wheels = [
 
 [[package]]
 name = "core-framework"
-version = "0.17.20"
+version = "0.17.37"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },

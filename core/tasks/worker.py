@@ -467,31 +467,72 @@ class TaskWorker:
             except Exception as e:
                 logger.debug("Heartbeat update failed: %s", e)
     
+    def _get_process_metrics(self) -> dict[str, float]:
+        """Get CPU and memory metrics for current process (for metadata_json)."""
+        try:
+            import psutil  # type: ignore[import-untyped]
+
+            proc = psutil.Process()
+            return {
+                "cpu_percent": round(proc.cpu_percent(interval=0) or 0, 1),
+                "memory_mb": round(proc.memory_info().rss / (1024 * 1024), 1),
+            }
+        except (ImportError, AttributeError):
+            return {}
+
     async def _update_heartbeat(self) -> None:
         """Update heartbeat record."""
         try:
+            import json as _json
+
             from core.models import get_session
             from core.admin.models import WorkerHeartbeat
             from core.datetime import timezone
             from sqlalchemy import update
-            
+
+            metrics = self._get_process_metrics()
+            metadata = _json.dumps(metrics) if metrics else None
+
             db = await get_session()
             async with db:
-                stmt = (
-                    update(WorkerHeartbeat)
-                    .where(WorkerHeartbeat.worker_id == self._worker_id)
-                    .values(
-                        active_tasks=len(self._active_tasks),
-                        total_processed=self._tasks_processed,
-                        total_errors=self._tasks_errors,
-                        last_heartbeat=timezone.now(),
-                        status="ONLINE",
-                    )
-                )
+                values: dict[str, Any] = {
+                    "active_tasks": len(self._active_tasks),
+                    "total_processed": self._tasks_processed,
+                    "total_errors": self._tasks_errors,
+                    "last_heartbeat": timezone.now(),
+                    "status": "ONLINE",
+                }
+                if metadata is not None:
+                    values["metadata_json"] = metadata
+
+                stmt = update(WorkerHeartbeat).where(WorkerHeartbeat.worker_id == self._worker_id).values(**values)
                 await db.execute(stmt)
                 await db.commit()
-        except Exception:
-            pass
+
+                try:
+                    import socket
+
+                    from core.admin.ws_events import broadcast_worker_heartbeat
+
+                    payload: dict[str, Any] = {
+                        "worker_id": self._worker_id,
+                        "worker_type": "task_worker",
+                        "worker_name": f"task-worker-{'-'.join(self._queues)}",
+                        "hostname": socket.gethostname(),
+                        "pid": __import__("os").getpid(),
+                        "status": "ONLINE",
+                        "concurrency": self._concurrency,
+                        "active_tasks": len(self._active_tasks),
+                        "total_processed": self._tasks_processed,
+                        "total_errors": self._tasks_errors,
+                        "last_heartbeat": timezone.now().isoformat(),
+                    }
+                    if metrics:
+                        payload["cpu_percent"] = metrics.get("cpu_percent")
+                        payload["memory_mb"] = metrics.get("memory_mb")
+                    await broadcast_worker_heartbeat(payload)
+                except Exception:
+                    pass
     
     async def _mark_offline(self) -> None:
         """Mark this worker as offline."""

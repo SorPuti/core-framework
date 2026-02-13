@@ -3,7 +3,7 @@
 {% block title %}Operations Center — {{ site_header }}{% endblock %}
 
 {% block content %}
-<div class="p-6" x-data="opsDashboard()" x-init="loadAll()">
+<div class="p-6" x-data="opsDashboard()" x-init="init()" @destroy="clearRefreshInterval()">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
         <div>
@@ -187,6 +187,49 @@ function opsDashboard() {
         workerCounts: { online: 0, draining: 0, offline: 0 },
         registeredWorkerCount: 0,
         recentLogs: [],
+        refreshIntervalId: null,
+        infraEventSource: null,
+
+        init() {
+            this.loadAll();
+            this.startAutoRefresh();
+            this.connectInfraStream();
+        },
+
+        connectInfraStream() {
+            try {
+                const url = '{{ admin_prefix }}/api/ops/infrastructure/stream';
+                const sseUrl = (window.location.protocol === 'https:' ? 'https:' : 'http:') + '//' + window.location.host + url;
+                this.infraEventSource = new EventSource(sseUrl);
+                this.infraEventSource.onmessage = (e) => {
+                    try {
+                        const data = JSON.parse(e.data);
+                        if (data.type !== 'error' && data.runtime) this.infra = data;
+                    } catch (err) {}
+                };
+                this.infraEventSource.onerror = () => {
+                    if (this.infraEventSource) { this.infraEventSource.close(); this.infraEventSource = null; }
+                };
+            } catch (e) {}
+        },
+
+        startAutoRefresh() {
+            this.clearRefreshInterval();
+            this.refreshIntervalId = setInterval(() => {
+                if (!document.hidden) this.loadAll();
+            }, 30000);
+        },
+
+        clearRefreshInterval() {
+            if (this.refreshIntervalId) {
+                clearInterval(this.refreshIntervalId);
+                this.refreshIntervalId = null;
+            }
+            if (this.infraEventSource) {
+                this.infraEventSource.close();
+                this.infraEventSource = null;
+            }
+        },
 
         async loadAll() {
             this.loading = true;

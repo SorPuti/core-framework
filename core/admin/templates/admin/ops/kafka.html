@@ -458,7 +458,12 @@
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-center text-gray-700 dark:text-gray-300" x-text="group.members_count"></td>
-                                <td class="px-4 py-3 text-center" :class="group.total_lag > 0 ? 'text-amber-600 font-semibold' : 'text-gray-500'" x-text="group.total_lag?.toLocaleString() || 0"></td>
+                                <td class="px-4 py-3 text-center">
+                                <span :class="(group.total_lag || 0) >= 1000 ? 'text-red-600 font-bold' : group.total_lag > 0 ? 'text-amber-600 font-semibold' : 'text-gray-500'" x-text="group.total_lag?.toLocaleString() || 0"></span>
+                                <template x-if="(group.total_lag || 0) >= 1000">
+                                    <span class="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400" title="Lag above threshold">!</span>
+                                </template>
+                            </td>
                             <td class="px-4 py-3 text-center">
                                     <button @click="showGroupDetail(group)" class="text-primary-500 hover:text-primary-600 text-xs font-medium">Details</button>
                             </td>
@@ -614,10 +619,30 @@ function kafkaDashboard() {
         groupModal: false,
         selectedGroup: null,
 
+        liveEventQueue: [],
+        liveEventFlushTimer: null,
+        lagPollIntervalId: null,
+        LAG_ALERT_THRESHOLD: 1000,
+
         async init() {
             await this.refresh();
             this.initChart();
             await this.loadChartData();
+            this.startLagPolling();
+        },
+
+        startLagPolling() {
+            this.clearLagPolling();
+            this.lagPollIntervalId = setInterval(() => {
+                if (this.showConsumerGroups && !document.hidden) this.loadConsumerGroups();
+            }, 30000);
+        },
+
+        clearLagPolling() {
+            if (this.lagPollIntervalId) {
+                clearInterval(this.lagPollIntervalId);
+                this.lagPollIntervalId = null;
+            }
         },
 
         async refresh() {
@@ -889,16 +914,46 @@ function kafkaDashboard() {
             }
         },
 
+        eventMatchesFilters(ev, eventType) {
+            const f = this.filters;
+            if (f.topic && (ev.topic || '') !== f.topic) return false;
+            const status = ev.status || (eventType === 'kafka_sent' ? 'sent' : eventType === 'kafka_failed' ? 'failed' : eventType === 'kafka_pending' ? 'pending' : 'delivered');
+            if (f.status && (status || '').toLowerCase() !== f.status.toLowerCase()) return false;
+            const direction = ev.direction || (eventType === 'kafka_sent' || eventType === 'kafka_failed' || eventType === 'kafka_pending' ? 'OUT' : 'IN');
+            if (f.direction && direction !== f.direction) return false;
+            return true;
+        },
+
+        flushLiveEventQueue() {
+            if (this.liveEventFlushTimer) clearTimeout(this.liveEventFlushTimer);
+            this.liveEventFlushTimer = null;
+            const batch = this.liveEventQueue.splice(0, 20);
+            for (const ev of batch) {
+                this.events.unshift(ev);
+                if (this.events.length > this.pagination.perPage) this.events.pop();
+                this.pagination.total++;
+            }
+            if (batch.length > 0) this.loadStats();
+            if (this.liveEventQueue.length > 0) this.scheduleLiveEventFlush();
+        },
+
+        scheduleLiveEventFlush() {
+            if (this.liveEventFlushTimer) return;
+            this.liveEventFlushTimer = setTimeout(() => this.flushLiveEventQueue(), 500);
+        },
+
         connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             this.ws = new WebSocket(`${protocol}//${window.location.host}{{ admin_prefix }}/ws/ops/events`);
             this.ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type?.startsWith('kafka_') && data.data) {
-                    this.events.unshift(data.data);
-                    if (this.events.length > this.pagination.perPage) this.events.pop();
-                    this.pagination.total++;
-                    this.loadStats();
+                    if (!this.eventMatchesFilters(data.data, data.type)) return;
+                    const ev = { ...data.data };
+                    if (!ev.status && data.type === 'kafka_sent') ev.status = 'sent';
+                    if (!ev.status && data.type === 'kafka_failed') ev.status = 'failed';
+                    this.liveEventQueue.push(ev);
+                    this.scheduleLiveEventFlush();
                 }
             };
             this.ws.onclose = () => {

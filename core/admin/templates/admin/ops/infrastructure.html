@@ -3,7 +3,7 @@
 {% block title %}Infrastructure — {{ site_header }}{% endblock %}
 
 {% block content %}
-<div class="p-6" x-data="infraView()" x-init="loadData()">
+<div class="p-6" x-data="infraView()" x-init="init()" @destroy="clearRefreshInterval()">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
         <div>
@@ -180,6 +180,53 @@ function infraView() {
         loading: true,
         data: null,
         error: null,
+        refreshIntervalId: null,
+        infraEventSource: null,
+
+        init() {
+            this.loadData();
+            this.startAutoRefresh();
+            this.connectInfraStream();
+        },
+
+        connectInfraStream() {
+            try {
+                const url = '{{ admin_prefix }}/api/ops/infrastructure/stream';
+                const sseUrl = (window.location.protocol === 'https:' ? 'https:' : 'http:') + '//' + window.location.host + url;
+                this.infraEventSource = new EventSource(sseUrl);
+                this.infraEventSource.onmessage = (e) => {
+                    try {
+                        const d = JSON.parse(e.data);
+                        if (d.type !== 'error' && d.runtime) {
+                            this.data = d;
+                            this.loading = false;
+                        }
+                    } catch (err) {}
+                };
+                this.infraEventSource.onerror = () => {
+                    if (this.infraEventSource) { this.infraEventSource.close(); this.infraEventSource = null; }
+                };
+            } catch (e) {}
+        },
+
+        startAutoRefresh() {
+            this.clearRefreshInterval();
+            this.refreshIntervalId = setInterval(() => {
+                if (!document.hidden) this.loadData();
+            }, 15000);
+        },
+
+        clearRefreshInterval() {
+            if (this.refreshIntervalId) {
+                clearInterval(this.refreshIntervalId);
+                this.refreshIntervalId = null;
+            }
+            if (this.infraEventSource) {
+                this.infraEventSource.close();
+                this.infraEventSource = null;
+            }
+        },
+
         async loadData() {
             this.loading = true;
             try {

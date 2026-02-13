@@ -79,6 +79,37 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         services = await InfraDetector.get_service_health()
         return {"services": services}
 
+    @router.get("/infrastructure/stream")
+    async def infrastructure_stream(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ):
+        """SSE endpoint for real-time infrastructure metrics (throttled every 12s)."""
+        from core.admin.infrastructure import InfraDetector
+
+        async def event_generator():
+            yield f"data: {json.dumps({'type': 'connected', 'message': 'Infrastructure stream connected'})}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await InfraDetector.collect()
+                    yield f"data: {json.dumps(data)}\n\n"
+                except Exception as e:
+                    logger.warning("Infrastructure stream error: %s", e)
+                    yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                await asyncio.sleep(12)
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     # =====================================================================
     # Tasks
     # =====================================================================
@@ -605,6 +636,40 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                 await db.commit()
 
                 return {"status": "deleted", "worker_id": worker_id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @router.post("/workers/{worker_id}/drain")
+    async def worker_drain(
+        request: Request,
+        worker_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Mark worker as DRAINING so it stops accepting new tasks.
+        Worker must check status periodically and respect DRAINING.
+        """
+        try:
+            from core.models import get_session
+            from core.admin.models import WorkerHeartbeat
+            from sqlalchemy import select, update
+
+            db = await get_session()
+            async with db:
+                stmt = select(WorkerHeartbeat).where(WorkerHeartbeat.worker_id == worker_id)
+                result = await db.execute(stmt)
+                worker = result.scalar_one_or_none()
+                if not worker:
+                    raise HTTPException(404, "Worker not found")
+                if worker.status != "ONLINE":
+                    raise HTTPException(400, f"Worker is {worker.status}. Only ONLINE workers can be drained.")
+                await db.execute(
+                    update(WorkerHeartbeat).where(WorkerHeartbeat.worker_id == worker_id).values(status="DRAINING")
+                )
+                await db.commit()
+                return {"status": "draining", "worker_id": worker_id}
         except HTTPException:
             raise
         except Exception as e:
@@ -1726,7 +1791,7 @@ def _serialize_task_execution(task: Any) -> dict[str, Any]:
 
 def _serialize_worker(worker: Any) -> dict[str, Any]:
     """Serialize a WorkerHeartbeat model instance."""
-    return {
+    result: dict[str, Any] = {
         "id": worker.id,
         "worker_id": worker.worker_id,
         "worker_type": worker.worker_type,
@@ -1743,3 +1808,11 @@ def _serialize_worker(worker: Any) -> dict[str, Any]:
         "last_heartbeat": worker.last_heartbeat.isoformat() if worker.last_heartbeat else None,
         "metadata_json": worker.metadata_json,
     }
+    if worker.metadata_json:
+        try:
+            meta = json.loads(worker.metadata_json)
+            result["cpu_percent"] = meta.get("cpu_percent")
+            result["memory_mb"] = meta.get("memory_mb")
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return result
