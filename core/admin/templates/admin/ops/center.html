@@ -36,6 +36,35 @@
            class="px-4 py-2 text-sm font-medium rounded-lg transition-all">Runtime</a>
     </div>
 
+    <!-- Breadcrumbs (Confluent-style) -->
+    <nav class="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 mb-4" aria-label="Breadcrumb">
+        <a :href="opsUrl({ tab: 'overview', selected: null })" @click.prevent="goTo({ tab: 'overview' })" class="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Cluster</a>
+        <template x-if="!selected">
+            <span class="flex items-center gap-1.5">
+                <span class="text-gray-300 dark:text-gray-600">/</span>
+                <span class="font-medium text-gray-700 dark:text-gray-200" x-text="tab === 'overview' ? 'Overview' : tab === 'activity' ? 'Activity' : tab === 'stream' ? 'Stream' : 'Runtime'"></span>
+                <template x-if="tab === 'activity' && view">
+                    <span class="flex items-center gap-1.5">
+                        <span class="text-gray-300 dark:text-gray-600">/</span>
+                        <span class="font-medium text-gray-700 dark:text-gray-200 capitalize" x-text="view"></span>
+                    </span>
+                </template>
+                <template x-if="tab === 'runtime' && view">
+                    <span class="flex items-center gap-1.5">
+                        <span class="text-gray-300 dark:text-gray-600">/</span>
+                        <span class="font-medium text-gray-700 dark:text-gray-200 capitalize" x-text="view"></span>
+                    </span>
+                </template>
+            </span>
+        </template>
+        <template x-if="selected">
+            <span class="flex items-center gap-1.5">
+                <span class="text-gray-300 dark:text-gray-600">/</span>
+                <span class="font-mono text-xs text-gray-700 dark:text-gray-300 truncate max-w-[200px]" x-text="selected"></span>
+            </span>
+        </template>
+    </nav>
+
     <!-- Content: list or detail full width -->
     <div class="min-h-[400px]">
         <!-- Detail view (selected entity) - full width with Back -->
@@ -48,96 +77,44 @@
             </div>
             <div id="detail-content" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <!-- Rendered by Alpine -->
-                <!-- Task detail -->
                 <template x-if="detailKind === 'task'">
                     <div class="p-6" x-data>
-                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Task execution</h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm" x-show="detailItem">
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Task ID</dt><dd class="font-mono text-xs mt-0.5 break-all" x-text="detailItem && detailItem.task_id"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Name</dt><dd class="mt-0.5 font-medium" x-text="detailItem && detailItem.task_name"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Queue</dt><dd class="mt-0.5"><a href="#" @click.prevent="goTo({ tab: 'activity', view: 'tasks' })" class="text-primary-600 dark:text-primary-400 hover:underline font-mono" x-text="detailItem && detailItem.queue"></a></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Status</dt><dd class="mt-0.5"><span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(detailItem && detailItem.status)" x-text="detailItem && detailItem.status"></span></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Worker</dt><dd class="mt-0.5"><a x-show="detailItem && detailItem.worker_id" :href="opsUrl({ tab: 'activity', view: 'workers', selected: detailItem.worker_id })" @click.prevent="goToSelected({ tab: 'activity', view: 'workers', selected: detailItem.worker_id })" class="text-primary-600 dark:text-primary-400 hover:underline font-mono truncate block" x-text="detailItem && detailItem.worker_id"></a><span x-show="detailItem && !detailItem.worker_id" class="text-gray-400">—</span></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Duration</dt><dd class="mt-0.5" x-text="detailItem && detailItem.duration_ms != null ? detailItem.duration_ms + ' ms' : '—'"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Retries</dt><dd class="mt-0.5" x-text="(detailItem && detailItem.retries) + '/' + (detailItem && detailItem.max_retries)"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Started</dt><dd class="mt-0.5 text-gray-600 dark:text-gray-300" x-text="detailItem && detailItem.started_at ? detailItem.started_at.slice(0,19) : '—'"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Finished</dt><dd class="mt-0.5 text-gray-600 dark:text-gray-300" x-text="detailItem && detailItem.finished_at ? detailItem.finished_at.slice(0,19) : '—'"></dd></div>
-                        </div>
-                        <div class="mt-4" x-show="detailItem && detailItem.error">
-                            <dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Error</dt>
-                            <pre class="mt-1 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs overflow-x-auto text-red-800 dark:text-red-200 whitespace-pre-wrap" x-text="detailItem && detailItem.error"></pre>
-                        </div>
-                        <div class="mt-4" x-show="detailItem && (detailItem.args_json || detailItem.kwargs_json)">
-                            <div class="flex gap-4">
-                                <div x-show="detailItem.args_json" class="flex-1">
-                                    <dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Args</dt>
-                                    <pre class="mt-1 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs overflow-x-auto font-mono" x-text="detailItem && (typeof detailItem.args_json === 'string' ? detailItem.args_json : JSON.stringify(detailItem.args_json, null, 2))"></pre>
-                                </div>
-                                <div x-show="detailItem.kwargs_json" class="flex-1">
-                                    <dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Kwargs</dt>
-                                    <pre class="mt-1 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs overflow-x-auto font-mono" x-text="detailItem && (typeof detailItem.kwargs_json === 'string' ? detailItem.kwargs_json : JSON.stringify(detailItem.kwargs_json, null, 2))"></pre>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <template x-if="detailItem && ['FAILURE','CANCELLED'].includes(detailItem.status)">
-                                <button @click="action('retry')" class="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600">Retry task</button>
-                            </template>
-                            <template x-if="detailItem && ['PENDING','RETRY'].includes(detailItem.status)">
-                                <button @click="action('cancel')" class="px-4 py-2 text-sm font-medium rounded-lg bg-red-500 text-white hover:bg-red-600">Cancel</button>
-                            </template>
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Task</h2>
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm" x-show="detailItem">
+                            <div><dt class="text-gray-500 dark:text-gray-400">Task ID</dt><dd class="font-mono" x-text="detailItem && detailItem.task_id"></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Name</dt><dd x-text="detailItem && detailItem.task_name"></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Queue</dt><dd><a :href="opsUrl({ tab: 'activity', view: 'tasks', selected: null })" class="text-primary-600 dark:text-primary-400 hover:underline font-mono" x-text="detailItem && detailItem.queue"></a></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Status</dt><dd><span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(detailItem && detailItem.status)" x-text="detailItem && detailItem.status"></span></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Worker</dt><dd><a :href="detailItem && detailItem.worker_id ? opsUrl({ tab: 'activity', view: 'workers', selected: detailItem.worker_id }) : '#'" class="text-primary-600 dark:text-primary-400 hover:underline font-mono" x-text="detailItem && detailItem.worker_id"></a></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Duration</dt><dd x-text="detailItem && detailItem.duration_ms != null ? detailItem.duration_ms + ' ms' : '—'"></dd></div>
+                        </dl>
+                        <div class="mt-4 flex gap-2" x-show="detailItem && ['FAILURE','CANCELLED'].includes(detailItem.status)">
+                            <button @click="action('retry')" class="px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600">Retry</button>
                         </div>
                     </div>
                 </template>
-                <!-- Worker detail -->
                 <template x-if="detailKind === 'worker'">
                     <div class="p-6" x-data>
                         <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Worker</h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm" x-show="detailItem">
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Worker ID</dt><dd class="font-mono text-xs mt-0.5 break-all" x-text="detailItem && detailItem.worker_id"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Status</dt><dd class="mt-0.5"><span class="px-2 py-0.5 rounded text-xs font-medium" :class="detailItem && detailItem.status === 'ONLINE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" x-text="detailItem && detailItem.status"></span></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Hostname</dt><dd class="mt-0.5 font-mono" x-text="detailItem && detailItem.hostname"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">PID</dt><dd class="mt-0.5" x-text="detailItem && detailItem.pid"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Queues</dt><dd class="mt-0.5 font-mono text-xs" x-text="detailItem && (detailItem.queues_json ? (typeof detailItem.queues_json === 'string' ? detailItem.queues_json : JSON.stringify(detailItem.queues_json)) : '—')"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Active tasks</dt><dd class="mt-0.5" x-text="detailItem && detailItem.active_tasks"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Total processed</dt><dd class="mt-0.5" x-text="detailItem && detailItem.total_processed"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Total errors</dt><dd class="mt-0.5" x-text="detailItem && detailItem.total_errors"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Last heartbeat</dt><dd class="mt-0.5 text-gray-600 dark:text-gray-300" x-text="detailItem && (detailItem.last_heartbeat ? detailItem.last_heartbeat.slice(0,19) : '—')"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Started</dt><dd class="mt-0.5 text-gray-600 dark:text-gray-300" x-text="detailItem && (detailItem.started_at ? detailItem.started_at.slice(0,19) : '—')"></dd></div>
-                        </div>
-                        <p class="mt-4 text-sm text-gray-500">View tasks executed by this worker in <a href="#" @click.prevent="goTo({ tab: 'activity', view: 'tasks' })" class="text-primary-600 dark:text-primary-400 hover:underline">Activity → Tasks</a> (filter by worker in future).</p>
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm" x-show="detailItem">
+                            <div><dt class="text-gray-500 dark:text-gray-400">Worker ID</dt><dd class="font-mono truncate" x-text="detailItem && detailItem.worker_id"></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Status</dt><dd><span class="px-2 py-0.5 rounded text-xs font-medium" :class="detailItem && detailItem.status === 'ONLINE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" x-text="detailItem && detailItem.status"></span></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Active tasks</dt><dd x-text="detailItem && detailItem.active_tasks"></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Total processed</dt><dd x-text="detailItem && detailItem.total_processed"></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Last heartbeat</dt><dd x-text="detailItem && detailItem.last_heartbeat"></dd></div>
+                        </dl>
                     </div>
                 </template>
-                <!-- Event detail -->
                 <template x-if="detailKind === 'event'">
                     <div class="p-6" x-data>
                         <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Event</h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm" x-show="detailItem">
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Event ID</dt><dd class="font-mono text-xs mt-0.5 break-all" x-text="detailItem && detailItem.event_id"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Topic</dt><dd class="mt-0.5"><a href="#" @click.prevent="goTo({ tab: 'runtime', view: 'kafka' })" class="text-primary-600 dark:text-primary-400 hover:underline font-mono" x-text="detailItem && detailItem.topic"></a></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Event name</dt><dd class="mt-0.5 font-medium" x-text="detailItem && detailItem.event_name"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Status</dt><dd class="mt-0.5"><span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(detailItem && detailItem.status)" x-text="detailItem && detailItem.status"></span></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Direction</dt><dd class="mt-0.5" x-text="detailItem && detailItem.direction"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Partition / Offset</dt><dd class="mt-0.5 font-mono" x-text="detailItem && (detailItem.partition != null ? detailItem.partition + ' / ' + detailItem.offset : '—')"></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Schema</dt><dd class="mt-0.5"><a x-show="detailItem && detailItem.payload_schema" href="#" @click.prevent="goTo({ tab: 'runtime', view: 'schemas' })" class="text-primary-600 dark:text-primary-400 hover:underline font-mono" x-text="detailItem && detailItem.payload_schema"></a><span x-show="detailItem && !detailItem.payload_schema" class="text-gray-400">—</span></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Source worker</dt><dd class="mt-0.5"><a x-show="detailItem && detailItem.source_worker_id" :href="opsUrl({ tab: 'activity', view: 'workers', selected: detailItem.source_worker_id })" @click.prevent="goToSelected({ tab: 'activity', view: 'workers', selected: detailItem.source_worker_id })" class="text-primary-600 dark:text-primary-400 hover:underline font-mono" x-text="detailItem && detailItem.source_worker_id"></a><span x-show="detailItem && !detailItem.source_worker_id" class="text-gray-400">—</span></dd></div>
-                            <div><dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium">Created</dt><dd class="mt-0.5 text-gray-600 dark:text-gray-300" x-text="detailItem && (detailItem.created_at ? detailItem.created_at.slice(0,19) : '—')"></dd></div>
-                        </div>
-                        <div class="mt-4" x-show="detailItem && (detailItem.payload || detailItem.headers)">
-                            <div class="space-y-4">
-                                <div x-show="detailItem.payload">
-                                    <dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium mb-1 block">Payload</dt>
-                                    <pre class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs overflow-x-auto font-mono max-h-64 overflow-y-auto" x-text="detailItem && (typeof detailItem.payload === 'object' ? JSON.stringify(detailItem.payload, null, 2) : detailItem.payload)"></pre>
-                                </div>
-                                <div x-show="detailItem && detailItem.headers && Object.keys(detailItem.headers).length">
-                                    <dt class="text-gray-500 dark:text-gray-400 text-xs uppercase font-medium mb-1 block">Headers</dt>
-                                    <pre class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs overflow-x-auto font-mono" x-text="detailItem && JSON.stringify(detailItem.headers, null, 2)"></pre>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-4">
-                            <button @click="resendEvent()" class="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600">Resend event</button>
-                        </div>
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm" x-show="detailItem">
+                            <div><dt class="text-gray-500 dark:text-gray-400">Event ID</dt><dd class="font-mono text-xs" x-text="detailItem && detailItem.event_id"></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Topic</dt><dd><a :href="opsUrl({ tab: 'runtime', view: 'kafka' })" class="text-primary-600 dark:text-primary-400 hover:underline font-mono" x-text="detailItem && detailItem.topic"></a></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Event name</dt><dd x-text="detailItem && detailItem.event_name"></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Status</dt><dd><span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(detailItem && detailItem.status)" x-text="detailItem && detailItem.status"></span></dd></div>
+                            <div><dt class="text-gray-500 dark:text-gray-400">Direction</dt><dd x-text="detailItem && detailItem.direction"></dd></div>
+                        </dl>
                     </div>
                 </template>
             </div>
@@ -145,89 +122,97 @@
 
         <!-- List view (no selection) - full width -->
         <div x-show="!selected" x-cloak>
-            <!-- Overview tab -->
+            <!-- Overview tab: Cluster overview (Confluent-style tiles) -->
             <div x-show="tab === 'overview'" x-cloak class="space-y-6">
-                <!-- Row 1: Environment + System + Services -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div class="bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl p-5 text-white shadow-lg">
-                        <p class="text-xs font-semibold text-primary-200 uppercase tracking-wider">Environment</p>
-                        <p class="text-xl font-bold mt-1" x-text="(overviewInfra.runtime && overviewInfra.runtime.label) || '—'"></p>
-                        <p class="text-sm text-primary-200 mt-0.5" x-text="(overviewInfra.system && overviewInfra.system.hostname) || ''"></p>
-                    </div>
-                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">System</p>
-                        <div class="grid grid-cols-3 gap-3 mt-3">
-                            <div class="text-center p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50">
-                                <p class="text-xl font-bold text-gray-900 dark:text-white" x-text="((overviewInfra.system || {}).cpu_percent != null ? overviewInfra.system.cpu_percent : 0) + '%'"></p>
-                                <p class="text-[10px] text-gray-500 uppercase mt-0.5">CPU</p>
-                            </div>
-                            <div class="text-center p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50">
-                                <p class="text-xl font-bold text-gray-900 dark:text-white" x-text="((overviewInfra.system || {}).memory_percent != null ? overviewInfra.system.memory_percent : 0) + '%'"></p>
-                                <p class="text-[10px] text-gray-500 uppercase mt-0.5">RAM</p>
-                            </div>
-                            <div class="text-center p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50">
-                                <p class="text-xl font-bold text-gray-900 dark:text-white" x-text="((overviewInfra.system || {}).disk_percent != null ? overviewInfra.system.disk_percent : 0) + '%'"></p>
-                                <p class="text-[10px] text-gray-500 uppercase mt-0.5">Disk</p>
-                            </div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Cluster overview</h2>
+                <!-- Row 1: Kafka / messaging tiles -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <a :href="opsUrl({ tab: 'runtime', view: 'kafka' })" @click.prevent="goTo({ tab: 'runtime', view: 'kafka' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Brokers</span>
+                            <svg class="w-4 h-4 text-gray-300 group-hover:text-primary-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                         </div>
-                    </div>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="clusterSummary.brokers"></p>
+                        <p class="text-xs text-gray-500 mt-0.5">Kafka cluster</p>
+                    </a>
+                    <a :href="opsUrl({ tab: 'runtime', view: 'kafka' })" @click.prevent="goTo({ tab: 'runtime', view: 'kafka' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Topics</span>
+                            <svg class="w-4 h-4 text-gray-300 group-hover:text-primary-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </div>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="clusterSummary.topics"></p>
+                        <p class="text-xs text-gray-500 mt-0.5">Partitions & config</p>
+                    </a>
+                    <a :href="opsUrl({ tab: 'runtime', view: 'kafka' })" @click.prevent="goTo({ tab: 'runtime', view: 'kafka' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Consumers</span>
+                            <svg class="w-4 h-4 text-gray-300 group-hover:text-primary-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </div>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="clusterSummary.consumerGroups"></p>
+                        <p class="text-xs text-gray-500 mt-0.5">Consumer groups</p>
+                    </a>
+                    <a :href="opsUrl({ tab: 'runtime', view: 'kafka' })" @click.prevent="goTo({ tab: 'runtime', view: 'kafka' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Schemas</span>
+                            <svg class="w-4 h-4 text-gray-300 group-hover:text-primary-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </div>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="clusterSummary.schemas"></p>
+                        <p class="text-xs text-gray-500 mt-0.5">Avro / registry</p>
+                    </a>
+                </div>
+                <!-- Row 2: Health & activity tiles -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Services</p>
-                        <div class="mt-3 space-y-2 max-h-24 overflow-y-auto">
-                            <template x-for="svc in (overviewInfra.services || [])" :key="svc.name">
+                        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Health</span>
+                        <div class="mt-2 space-y-1.5">
+                            <template x-for="svc in (dashboard.infrastructure && dashboard.infrastructure.services || [])" :key="svc.name">
                                 <div class="flex items-center justify-between text-sm">
-                                    <span class="text-gray-700 dark:text-gray-300 truncate" x-text="svc.name"></span>
-                                    <span class="flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium"
-                                          :class="svc.status === 'healthy' ? 'text-green-600 dark:text-green-400' : svc.status === 'unhealthy' ? 'text-red-600 dark:text-red-400' : 'text-gray-400'">
+                                    <span class="text-gray-700 dark:text-gray-300" x-text="svc.name"></span>
+                                    <span class="inline-flex items-center gap-1 text-xs font-medium"
+                                          :class="svc.status === 'healthy' ? 'text-green-600 dark:text-green-400' : svc.status === 'unhealthy' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'">
                                         <span class="w-1.5 h-1.5 rounded-full" :class="svc.status === 'healthy' ? 'bg-green-500' : svc.status === 'unhealthy' ? 'bg-red-500' : 'bg-gray-400'"></span>
                                         <span x-text="svc.status"></span>
                                     </span>
                                 </div>
                             </template>
-                            <p x-show="!(overviewInfra.services && overviewInfra.services.length)" class="text-gray-500 text-sm">—</p>
+                            <p x-show="!(dashboard.infrastructure && dashboard.infrastructure.services && dashboard.infrastructure.services.length)" class="text-xs text-gray-500">—</p>
                         </div>
                     </div>
-                </div>
-                <!-- Row 2: Tasks + Workers + Events -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <a href="#" @click.prevent="goTo({ tab: 'activity', view: 'tasks' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 transition-colors group block">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tasks</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white mt-1" x-text="dashboard.tasks && dashboard.tasks.total"></p>
-                        <div class="flex gap-4 mt-2 text-xs">
-                            <span class="text-green-600 dark:text-green-400"><span x-text="(dashboard.tasks && dashboard.tasks.by_status && dashboard.tasks.by_status.SUCCESS) || 0"></span> success</span>
-                            <span class="text-red-600 dark:text-red-400"><span x-text="(dashboard.tasks && dashboard.tasks.by_status && dashboard.tasks.by_status.FAILURE) || 0"></span> failed</span>
-                            <span class="text-blue-600 dark:text-blue-400"><span x-text="(dashboard.tasks && dashboard.tasks.by_status && dashboard.tasks.by_status.RUNNING) || 0"></span> running</span>
+                    <a :href="opsUrl({ tab: 'activity', view: 'tasks' })" @click.prevent="goTo({ tab: 'activity', view: 'tasks' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tasks</span>
+                            <svg class="w-4 h-4 text-gray-300 group-hover:text-primary-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                         </div>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="dashboard.tasks && dashboard.tasks.total"></p>
+                        <p class="text-xs text-gray-500 mt-0.5">Success <span x-text="(dashboard.tasks && dashboard.tasks.by_status && dashboard.tasks.by_status.SUCCESS) || 0"></span> · Failed <span x-text="(dashboard.tasks && dashboard.tasks.by_status && dashboard.tasks.by_status.FAILURE) || 0"></span></p>
                     </a>
-                    <a href="#" @click.prevent="goTo({ tab: 'activity', view: 'workers' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 transition-colors group block">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Workers</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white mt-1" x-text="dashboard.workers && dashboard.workers.total"></p>
-                        <p class="text-xs text-gray-500 mt-1">Active task workers</p>
+                    <a :href="opsUrl({ tab: 'activity', view: 'workers' })" @click.prevent="goTo({ tab: 'activity', view: 'workers' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Workers</span>
+                            <svg class="w-4 h-4 text-gray-300 group-hover:text-primary-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </div>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="dashboard.workers && dashboard.workers.total"></p>
+                        <p class="text-xs text-gray-500 mt-0.5">Active workers</p>
                     </a>
-                    <a href="#" @click.prevent="goTo({ tab: 'stream' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 transition-colors group block">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Events</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white mt-1" x-text="dashboard.events && dashboard.events.total"></p>
-                        <p class="text-xs text-gray-500 mt-1">Throughput <span x-text="(dashboard.events && dashboard.events.throughput_per_min) ? dashboard.events.throughput_per_min + '/min' : '—'"></span></p>
+                    <a :href="opsUrl({ tab: 'stream' })" @click.prevent="goTo({ tab: 'stream' })" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Events</span>
+                            <svg class="w-4 h-4 text-gray-300 group-hover:text-primary-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </div>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="dashboard.events && dashboard.events.total"></p>
+                        <p class="text-xs text-gray-500 mt-0.5" x-text="(dashboard.events && dashboard.events.throughput_per_min != null) ? dashboard.events.throughput_per_min + ' /min' : '—'"></p>
                     </a>
                 </div>
-                <!-- Row 3: Recent logs -->
-                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Recent logs</span>
-                        <a href="#" @click.prevent="goTo({ tab: 'runtime', view: 'logs' })" class="text-xs text-primary-500 hover:underline font-medium">View all &rarr;</a>
+                <!-- Row 3: Throughput (real-time) -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Event throughput (last 5 min)</span>
+                        <span class="text-sm font-medium text-gray-600 dark:text-gray-300" x-text="(dashboard.events && dashboard.events.throughput_per_min != null) ? dashboard.events.throughput_per_min + ' /min' : '—'"></span>
                     </div>
-                    <div class="bg-gray-900 p-4 font-mono text-xs leading-relaxed max-h-48 overflow-y-auto">
-                        <template x-for="(entry, idx) in overviewLogs" :key="idx">
-                            <div class="py-0.5 flex items-start gap-2">
-                                <span class="text-gray-500 flex-shrink-0 w-14" x-text="(entry.timestamp || '').substring(11, 19)"></span>
-                                <span class="flex-shrink-0 w-14 text-center font-semibold"
-                                      :class="{ 'text-gray-500': entry.level === 'DEBUG', 'text-green-400': entry.level === 'INFO', 'text-amber-400': entry.level === 'WARNING', 'text-red-400': entry.level === 'ERROR' }"
-                                      x-text="entry.level"></span>
-                                <span class="text-cyan-400 flex-shrink-0 w-28 truncate" x-text="entry.logger"></span>
-                                <span class="text-gray-300 truncate flex-1" x-text="entry.message"></span>
-                            </div>
+                    <div class="h-24 flex items-end gap-0.5">
+                        <template x-for="(v, i) in (throughputHistory || []).slice(-24)" :key="i">
+                            <div class="flex-1 min-w-[4px] bg-primary-500/70 dark:bg-primary-400/70 rounded-t transition-all" :style="'height:' + (Math.min(100, (v || 0) * 3) || 2) + '%'"></div>
                         </template>
-                        <p x-show="overviewLogs.length === 0 && !loading" class="text-gray-500 py-4">No recent logs</p>
                     </div>
                 </div>
             </div>
@@ -246,10 +231,8 @@
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Task</th>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Queue</th>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Duration</th>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Worker</th>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Created</th>
-                                <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th>
                             </tr></thead>
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                 <template x-for="item in activityItems" :key="item.task_id">
@@ -257,17 +240,8 @@
                                         <td class="px-4 py-2"><a :href="opsUrl({ tab: 'activity', selected: item.task_id })" @click.prevent="goToSelected({ tab: 'activity', view: 'tasks', selected: item.task_id })" class="font-mono text-primary-600 dark:text-primary-400 hover:underline" x-text="item.task_name"></a></td>
                                         <td class="px-4 py-2 font-mono text-gray-600 dark:text-gray-400" x-text="item.queue"></td>
                                         <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(item.status)" x-text="item.status"></span></td>
-                                        <td class="px-4 py-2 text-gray-500" x-text="item.duration_ms != null ? item.duration_ms + ' ms' : '—'"></td>
                                         <td class="px-4 py-2"><a :href="item.worker_id ? opsUrl({ tab: 'activity', view: 'workers', selected: item.worker_id }) : '#'" @click.prevent="item.worker_id && goToSelected({ tab: 'activity', view: 'workers', selected: item.worker_id })" class="font-mono text-primary-600 dark:text-primary-400 hover:underline truncate max-w-[120px] block" x-text="item.worker_id || '—'"></a></td>
                                         <td class="px-4 py-2 text-gray-500 text-xs" x-text="item.created_at ? item.created_at.slice(0,19) : ''"></td>
-                                        <td class="px-4 py-2 text-right">
-                                            <template x-if="['FAILURE','CANCELLED'].includes(item.status)">
-                                                <button @click.prevent="goToSelected({ tab: 'activity', view: 'tasks', selected: item.task_id })" class="text-xs text-primary-600 dark:text-primary-400 hover:underline">Retry</button>
-                                            </template>
-                                            <template x-if="['PENDING','RETRY'].includes(item.status)">
-                                                <button @click.prevent="goToSelected({ tab: 'activity', view: 'tasks', selected: item.task_id })" class="text-xs text-red-600 dark:text-red-400 hover:underline">Cancel</button>
-                                            </template>
-                                        </td>
                                     </tr>
                                 </template>
                             </tbody>
@@ -276,20 +250,16 @@
                             <thead class="bg-gray-50 dark:bg-gray-700/50"><tr>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Worker</th>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Hostname</th>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Active</th>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Processed</th>
-                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Last heartbeat</th>
                             </tr></thead>
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                 <template x-for="item in activityItems" :key="item.worker_id">
                                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                                         <td class="px-4 py-2"><a :href="opsUrl({ tab: 'activity', view: 'workers', selected: item.worker_id })" @click.prevent="goToSelected({ tab: 'activity', view: 'workers', selected: item.worker_id })" class="font-mono text-primary-600 dark:text-primary-400 hover:underline truncate max-w-[200px] block" x-text="item.worker_id"></a></td>
                                         <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs" :class="item.status === 'ONLINE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700' : 'bg-gray-100 text-gray-600'" x-text="item.status"></span></td>
-                                        <td class="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400" x-text="item.hostname || '—'"></td>
                                         <td class="px-4 py-2" x-text="item.active_tasks"></td>
                                         <td class="px-4 py-2" x-text="item.total_processed"></td>
-                                        <td class="px-4 py-2 text-gray-500 text-xs" x-text="item.last_heartbeat ? item.last_heartbeat.slice(0,19) : '—'"></td>
                                     </tr>
                                 </template>
                             </tbody>
@@ -298,23 +268,14 @@
                             <thead class="bg-gray-50 dark:bg-gray-700/50"><tr>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Name</th>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Schedule</th>
-                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Queue</th>
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Enabled</th>
-                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Last / Next run</th>
-                                <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th>
                             </tr></thead>
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                 <template x-for="item in activityItems" :key="item.name">
                                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                                         <td class="px-4 py-2 font-medium" x-text="item.name"></td>
-                                        <td class="px-4 py-2 text-gray-500 font-mono text-xs" x-text="item.cron || item.interval || '—'"></td>
-                                        <td class="px-4 py-2 font-mono text-xs" x-text="item.queue || '—'"></td>
+                                        <td class="px-4 py-2 text-gray-500" x-text="item.cron || item.interval || '—'"></td>
                                         <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs" :class="item.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'" x-text="item.enabled ? 'Yes' : 'No'"></span></td>
-                                        <td class="px-4 py-2 text-xs text-gray-500" x-text="(item.last_run ? item.last_run.slice(0,16) : '—') + ' / ' + (item.next_run ? item.next_run.slice(0,16) : '—')"></td>
-                                        <td class="px-4 py-2 text-right space-x-2">
-                                            <button @click.prevent="periodicAction(item.name, 'toggle')" class="text-xs text-primary-600 dark:text-primary-400 hover:underline" x-text="item.enabled ? 'Disable' : 'Enable'"></button>
-                                            <button @click.prevent="periodicAction(item.name, 'run')" class="text-xs text-green-600 dark:text-green-400 hover:underline">Run now</button>
-                                        </td>
                                     </tr>
                                 </template>
                             </tbody>
@@ -327,28 +288,15 @@
             <!-- Stream tab (events) -->
             <div x-show="tab === 'stream'" x-cloak class="space-y-4">
                 <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center gap-3 flex-wrap">
-                        <input type="text" x-model="filters.search" @input.debounce.300ms="applyFilters()" placeholder="Search event_id, name, key..." class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm px-3 py-1.5 w-52">
+                    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center gap-4 flex-wrap">
+                        <input type="text" x-model="filters.search" @input.debounce.300ms="applyFilters()" placeholder="Search..." class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm px-3 py-1.5 w-48">
                         <input type="text" x-model="filters.topic" @input.debounce.300ms="applyFilters()" placeholder="Topic" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm px-3 py-1.5 w-40">
-                        <select x-model="filters.status" @change="applyFilters()" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm px-3 py-1.5 w-32">
-                            <option value="">All status</option>
-                            <option value="pending">pending</option>
-                            <option value="sent">sent</option>
-                            <option value="delivered">delivered</option>
-                            <option value="failed">failed</option>
-                        </select>
-                        <select x-model="filters.direction" @change="applyFilters()" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm px-3 py-1.5 w-28">
-                            <option value="">All</option>
-                            <option value="IN">IN</option>
-                            <option value="OUT">OUT</option>
-                        </select>
                     </div>
                     <div class="overflow-x-auto max-h-[60vh]">
                         <table class="w-full text-sm">
                             <thead class="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
                                 <tr>
-                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Event ID</th>
-                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Event name</th>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Event</th>
                                     <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Topic</th>
                                     <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
                                     <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Time</th>
@@ -357,9 +305,8 @@
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                 <template x-for="ev in streamItems" :key="ev.event_id">
                                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                        <td class="px-4 py-2"><a :href="opsUrl({ tab: 'stream', selected: ev.event_id })" @click.prevent="goToSelected({ tab: 'stream', selected: ev.event_id })" class="font-mono text-primary-600 dark:text-primary-400 hover:underline text-xs truncate max-w-[140px] block" x-text="ev.event_id"></a></td>
-                                        <td class="px-4 py-2 text-gray-700 dark:text-gray-300 text-xs" x-text="ev.event_name || '—'"></td>
-                                        <td class="px-4 py-2"><a href="#" @click.prevent="goTo({ tab: 'runtime', view: 'kafka' })" class="text-primary-600 dark:text-primary-400 hover:underline font-mono text-xs" x-text="ev.topic"></a></td>
+                                        <td class="px-4 py-2"><a :href="opsUrl({ tab: 'stream', selected: ev.event_id })" @click.prevent="goToSelected({ tab: 'stream', selected: ev.event_id })" class="font-mono text-primary-600 dark:text-primary-400 hover:underline text-xs truncate max-w-[180px] block" x-text="ev.event_id"></a></td>
+                                        <td class="px-4 py-2"><a :href="opsUrl({ tab: 'runtime', view: 'kafka' })" class="text-primary-600 dark:text-primary-400 hover:underline font-mono text-xs" x-text="ev.topic"></a></td>
                                         <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(ev.status)" x-text="ev.status"></span></td>
                                         <td class="px-4 py-2 text-gray-500 text-xs" x-text="ev.created_at ? ev.created_at.slice(0,19) : ''"></td>
                                     </tr>
@@ -375,192 +322,30 @@
 
             <!-- Runtime tab -->
             <div x-show="tab === 'runtime'" x-cloak class="space-y-4">
-                <div class="flex gap-2 mb-4 flex-wrap">
-                    <a :href="opsUrl({ tab: 'runtime', view: 'kafka' })" @click.prevent="goTo({ tab: 'runtime', view: 'kafka' })" :class="view === 'kafka' ? 'bg-primary-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'" class="px-3 py-1.5 text-sm font-medium rounded-lg">Kafka / Brokers</a>
+                <div class="flex gap-2 mb-4">
+                    <a :href="opsUrl({ tab: 'runtime', view: 'kafka' })" @click.prevent="goTo({ tab: 'runtime', view: 'kafka' })" :class="view === 'kafka' ? 'bg-primary-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'" class="px-3 py-1.5 text-sm font-medium rounded-lg">Brokers / Kafka</a>
                     <a :href="opsUrl({ tab: 'runtime', view: 'logs' })" @click.prevent="goTo({ tab: 'runtime', view: 'logs' })" :class="view === 'logs' ? 'bg-primary-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'" class="px-3 py-1.5 text-sm font-medium rounded-lg">Logs</a>
-                    <a :href="opsUrl({ tab: 'runtime', view: 'topics' })" @click.prevent="goTo({ tab: 'runtime', view: 'topics' })" :class="view === 'topics' ? 'bg-primary-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'" class="px-3 py-1.5 text-sm font-medium rounded-lg">Registered topics</a>
-                    <a :href="opsUrl({ tab: 'runtime', view: 'schemas' })" @click.prevent="goTo({ tab: 'runtime', view: 'schemas' })" :class="view === 'schemas' ? 'bg-primary-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'" class="px-3 py-1.5 text-sm font-medium rounded-lg">Avro schemas</a>
                 </div>
-
-                <!-- Kafka -->
-                <div x-show="view === 'kafka'" class="space-y-4">
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                            <p class="text-xs font-semibold text-gray-400 uppercase">Cluster</p>
-                            <p class="text-sm font-mono mt-1 truncate" x-text="kafkaOverview.cluster_id || '—'"></p>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                            <p class="text-xs font-semibold text-gray-400 uppercase">Brokers</p>
-                            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1" x-text="kafkaOverview.brokers_count || 0"></p>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                            <p class="text-xs font-semibold text-gray-400 uppercase">Topics</p>
-                            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1" x-text="kafkaOverview.topics_count || 0"></p>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                            <p class="text-xs font-semibold text-gray-400 uppercase">Partitions</p>
-                            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1" x-text="kafkaOverview.partitions_count || 0"></p>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                            <p class="text-xs font-semibold text-gray-400 uppercase">Consumer groups</p>
-                            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1" x-text="kafkaOverview.consumer_groups_count || 0"></p>
-                        </div>
-                    </div>
-                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 font-medium">Consumer groups (lag for analysts)</div>
-                        <div class="overflow-x-auto max-h-[40vh]">
-                            <table class="w-full text-sm">
-                                <thead class="bg-gray-50 dark:bg-gray-700/50 sticky top-0"><tr>
-                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Group ID</th>
-                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">State</th>
-                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Members</th>
-                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Total lag</th>
-                                </tr></thead>
-                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                    <template x-for="g in kafkaConsumerGroups" :key="g.group_id">
-                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                            <td class="px-4 py-2"><a href="#" @click.prevent="loadKafkaGroupDetail(g.group_id)" class="font-mono text-primary-600 dark:text-primary-400 hover:underline" x-text="g.group_id"></a></td>
-                                            <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs" x-text="g.state"></span></td>
-                                            <td class="px-4 py-2" x-text="g.members_count"></td>
-                                            <td class="px-4 py-2"><span class="font-semibold" :class="(g.total_lag || 0) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600'" x-text="g.total_lag"></span></td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div x-show="kafkaGroupDetail" class="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-700/30">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="font-medium" x-text="'Group: ' + (kafkaGroupDetail && kafkaGroupDetail.group_id)"></span>
-                                <button @click="kafkaGroupDetail = null" class="text-xs text-gray-500 hover:underline">Close</button>
-                            </div>
-                            <p class="text-xs text-gray-500 mb-2">Offsets per topic/partition (lag)</p>
-                            <div class="overflow-x-auto max-h-64 overflow-y-auto text-xs font-mono">
-                                <template x-for="(offsets, topic) in (kafkaGroupDetail && kafkaGroupDetail.offsets) || {}" :key="topic">
-                                    <div class="mb-2">
-                                        <span class="font-semibold text-gray-700 dark:text-gray-300" x-text="topic"></span>
-                                        <table class="w-full mt-1 ml-2">
-                                            <tr><th class="text-left pr-2">Part</th><th class="text-right pr-2">Current</th><th class="text-right pr-2">End</th><th class="text-right">Lag</th></tr>
-                                            <template x-for="po in offsets" :key="po.partition">
-                                                <tr :class="po.lag > 0 ? 'text-amber-600 dark:text-amber-400' : ''">
-                                                    <td x-text="po.partition"></td>
-                                                    <td class="text-right" x-text="po.current_offset"></td>
-                                                    <td class="text-right" x-text="po.end_offset"></td>
-                                                    <td class="text-right font-medium" x-text="po.lag"></td>
-                                                </tr>
-                                            </template>
-                                        </table>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 font-medium">Topics</div>
-                        <div class="overflow-x-auto max-h-48">
-                            <table class="w-full text-sm">
-                                <thead class="bg-gray-50 dark:bg-gray-700/50"><tr>
-                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Name</th>
-                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Partitions</th>
-                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Replication</th>
-                                </tr></thead>
-                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                    <template x-for="t in kafkaTopics" :key="t.name">
-                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                            <td class="px-4 py-2 font-mono" x-text="t.name"></td>
-                                            <td class="px-4 py-2" x-text="t.partitions"></td>
-                                            <td class="px-4 py-2" x-text="t.replication_factor"></td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                        <p class="text-xs font-semibold text-gray-400 uppercase mb-2">Throughput (produce / consume rate) — last 20 buckets</p>
-                        <div class="overflow-x-auto max-h-48 overflow-y-auto text-xs">
-                            <template x-for="row in last20Throughput" :key="row.label">
-                                <div class="flex gap-4 py-1 border-b border-gray-100 dark:border-gray-700">
-                                    <span class="w-24 flex-shrink-0 text-gray-500" x-text="row.label"></span>
-                                    <span class="text-green-600 dark:text-green-400" x-text="'OUT: ' + row.produce"></span>
-                                    <span class="text-blue-600 dark:text-blue-400" x-text="'IN: ' + row.consume"></span>
-                                </div>
-                            </template>
-                            <p x-show="last20Throughput.length === 0" class="text-gray-500 py-2">No throughput data</p>
-                        </div>
+                <div x-show="view === 'kafka'" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                    <p class="text-sm text-gray-600 dark:text-gray-300" x-text="system.kafka && system.kafka.enabled ? 'Cluster ID: ' + (system.kafka.cluster_id || '—') : 'Kafka not configured or disabled.'"></p>
+                    <div class="mt-4 space-y-2" x-show="system.kafka && system.kafka.enabled">
+                        <p class="text-xs text-gray-500">Topics: <span x-text="system.kafka.topics_count"></span> · Partitions: <span x-text="system.kafka.partitions_count"></span></p>
                     </div>
                 </div>
-
-                <!-- Logs -->
                 <div x-show="view === 'logs'" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex flex-wrap gap-3 items-center">
-                        <select x-model="logLevel" @change="refreshLogs()" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm px-3 py-1.5 w-24">
-                            <option value="">All</option>
-                            <option value="DEBUG">DEBUG</option>
-                            <option value="INFO">INFO</option>
-                            <option value="WARNING">WARNING</option>
-                            <option value="ERROR">ERROR</option>
-                        </select>
-                        <input type="text" x-model="logSearch" @input.debounce.300ms="refreshLogs()" placeholder="Search message..." class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm px-3 py-1.5 w-48">
-                        <button @click="refreshLogs()" class="text-sm text-primary-600 dark:text-primary-400 hover:underline">Refresh</button>
-                    </div>
-                    <div class="bg-gray-900 p-4 font-mono text-xs max-h-[55vh] overflow-y-auto">
+                    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700">Recent logs</div>
+                    <div class="bg-gray-900 p-4 font-mono text-xs max-h-[50vh] overflow-y-auto">
                         <template x-for="(entry, idx) in logEntries" :key="idx">
-                            <div class="py-0.5 flex gap-2 items-start">
-                                <span class="text-gray-500 flex-shrink-0 w-20" x-text="(entry.timestamp || '').substring(0, 19)"></span>
-                                <span class="flex-shrink-0 w-14 font-semibold" :class="{ 'text-gray-500': entry.level === 'DEBUG', 'text-green-400': entry.level === 'INFO', 'text-amber-400': entry.level === 'WARNING', 'text-red-400': entry.level === 'ERROR' }" x-text="entry.level"></span>
-                                <span class="text-cyan-400 flex-shrink-0 w-36 truncate" x-text="entry.logger"></span>
-                                <span class="text-gray-300 break-words flex-1" x-text="entry.message"></span>
+                            <div class="py-0.5 flex gap-2">
+                                <span class="text-gray-500 flex-shrink-0" x-text="(entry.timestamp || '').substring(11, 19)"></span>
+                                <span class="flex-shrink-0 font-semibold text-green-400" x-text="entry.level"></span>
+                                <span class="text-gray-300 truncate" x-text="entry.message"></span>
                             </div>
                         </template>
-                        <p x-show="logEntries.length === 0 && !loading" class="text-gray-500 py-4">No logs</p>
-                    </div>
-                </div>
-
-                <!-- Registered topics -->
-                <div x-show="view === 'topics'" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 font-medium">Registered topics</div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead class="bg-gray-50 dark:bg-gray-700/50"><tr>
-                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Name</th>
-                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Class</th>
-                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Schema</th>
-                                <th class="px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Partitions</th>
-                                <th class="px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Serializer</th>
-                            </tr></thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                <template x-for="t in registeredTopics" :key="t.name">
-                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                        <td class="px-4 py-2 font-mono text-primary-600 dark:text-primary-400" x-text="t.name"></td>
-                                        <td class="px-4 py-2" x-text="t.class_name"></td>
-                                        <td class="px-4 py-2"><span x-text="t.schema || '—'"></span><span x-show="t.has_avro_schema" class="ml-1 px-1.5 py-0.5 text-[9px] rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600">AVRO</span></td>
-                                        <td class="px-4 py-2 text-center" x-text="t.partitions"></td>
-                                        <td class="px-4 py-2 text-center" x-text="t.value_serializer"></td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                    <p x-show="registeredTopics.length === 0 && !loading" class="px-4 py-8 text-center text-gray-500">No registered topics</p>
-                </div>
-
-                <!-- Avro schemas -->
-                <div x-show="view === 'schemas'" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 font-medium">Avro schemas</div>
-                    <div class="divide-y divide-gray-100 dark:divide-gray-700 max-h-[60vh] overflow-y-auto">
-                        <template x-for="s in avroSchemas" :key="s.name">
-                            <div class="p-4" x-data="{ open: false }">
-                                <button @click="open = !open" class="w-full flex items-center justify-between text-left">
-                                    <span class="font-mono font-medium text-gray-900 dark:text-white" x-text="s.name"></span>
-                                    <span class="text-xs text-gray-500" x-text="open ? 'Collapse' : 'Expand'"></span>
-                                </button>
-                                <div x-show="open" x-collapse class="mt-2">
-                                    <pre class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs overflow-x-auto font-mono whitespace-pre-wrap" x-text="typeof s.schema === 'object' ? JSON.stringify(s.schema, null, 2) : (s.schema || s.error || '—')"></pre>
-                                </div>
-                            </div>
+                        <template x-if="logEntries.length === 0 && !loading">
+                            <div class="text-gray-500 py-4">No logs</div>
                         </template>
                     </div>
-                    <p x-show="avroSchemas.length === 0 && !loading" class="px-4 py-8 text-center text-gray-500">No Avro schemas</p>
                 </div>
             </div>
         </div>
@@ -582,8 +367,6 @@ document.addEventListener('alpine:init', () => {
             selected: q.get('selected') || null,
             topic: q.get('topic') || '',
             search: q.get('search') || '',
-            status: q.get('status') || '',
-            direction: q.get('direction') || '',
         };
     }
     function buildQuery(params) {
@@ -595,8 +378,6 @@ document.addEventListener('alpine:init', () => {
         if (p.selected) q.set('selected', p.selected);
         if (p.topic) q.set('topic', p.topic);
         if (p.search) q.set('search', p.search);
-        if (p.status) q.set('status', p.status);
-        if (p.direction) q.set('direction', p.direction);
         const s = q.toString();
         return s ? '?' + s : '';
     }
@@ -605,31 +386,18 @@ document.addEventListener('alpine:init', () => {
         tab: 'overview',
         view: 'tasks',
         selected: null,
-        filters: { topic: '', search: '', status: '', direction: '' },
-        logLevel: '',
-        logSearch: '',
+        filters: { topic: '', search: '' },
         loading: false,
         realtimeEnabled: true,
         dashboard: {},
-        overviewInfra: {},
-        overviewLogs: [],
+        clusterSummary: { brokers: '—', topics: '—', consumerGroups: '—', schemas: '—' },
+        throughputHistory: [],
         activityItems: [],
         streamItems: [],
         logEntries: [],
         system: {},
-        kafkaOverview: {},
-        kafkaConsumerGroups: [],
-        kafkaGroupDetail: null,
-        kafkaTopics: [],
-        kafkaTopicDetail: null,
-        kafkaThroughput: { labels: [], produce_rate: [], consume_rate: [] },
-        eventsStats: {},
-        registeredTopics: [],
-        avroSchemas: [],
         detailKind: null,
         detailItem: null,
-        runtimeSelectedGroup: null,
-        runtimeSelectedTopic: null,
         _ws: null,
 
         init() {
@@ -639,8 +407,6 @@ document.addEventListener('alpine:init', () => {
             this.selected = q.selected;
             this.filters.topic = q.topic;
             this.filters.search = q.search;
-            this.filters.status = q.status;
-            this.filters.direction = q.direction;
             this.refreshCurrent();
             if (this.selected) this.loadDetail();
             this.connectWs();
@@ -651,8 +417,6 @@ document.addEventListener('alpine:init', () => {
                 this.selected = q.selected;
                 this.filters.topic = q.topic;
                 this.filters.search = q.search;
-                this.filters.status = q.status;
-                this.filters.direction = q.direction;
                 this.refreshCurrent();
                 if (this.selected) this.loadDetail();
             });
@@ -682,16 +446,16 @@ document.addEventListener('alpine:init', () => {
             if (this.selected) this.loadDetail();
         },
 
-        get last20Throughput() {
-            const L = this.kafkaThroughput.labels || [];
-            const P = this.kafkaThroughput.produce_rate || [];
-            const C = this.kafkaThroughput.consume_rate || [];
-            const start = Math.max(0, L.length - 20);
-            return L.slice(start).map((label, i) => ({
-                label: (label || '').toString().slice(11, 19),
-                produce: P[start + i] || 0,
-                consume: C[start + i] || 0,
-            }));
+        updateClusterSummary() {
+            const k = this.system && this.system.kafka;
+            const topics = this.system && this.system.topics;
+            const schemas = this.system && this.system.schemas;
+            this.clusterSummary = {
+                brokers: (k && k.enabled && k.brokers_count != null) ? String(k.brokers_count) : '—',
+                topics: (k && k.enabled && k.topics_count != null) ? String(k.topics_count) : (topics && topics.length) ? String(topics.length) : '—',
+                consumerGroups: (k && k.enabled && k.consumer_groups_count != null) ? String(k.consumer_groups_count) : '—',
+                schemas: (schemas && schemas.length) ? String(schemas.length) : '—',
+            };
         },
 
         statusClass(s) {
@@ -706,14 +470,10 @@ document.addEventListener('alpine:init', () => {
             this.loading = true;
             if (this.tab === 'overview') {
                 try {
-                    const [dr, ir, lr] = await Promise.all([
-                        fetch(api + '/dashboard').then(r => r.json()),
-                        fetch(api + '/infrastructure').then(r => r.json()),
-                        fetch(api + '/logs/recent?limit=30').then(r => r.json()),
-                    ]);
-                    this.dashboard = dr;
-                    this.overviewInfra = ir;
-                    this.overviewLogs = (lr.entries || []).map(e => typeof e === 'string' ? JSON.parse(e) : e);
+                    const [dr, sr] = await Promise.all([fetch(api + '/dashboard'), fetch(api + '/system')]);
+                    this.dashboard = await dr.json();
+                    this.system = await sr.json();
+                    this.updateClusterSummary();
                 } catch (e) {}
             }
             if (this.tab === 'activity') {
@@ -725,11 +485,9 @@ document.addEventListener('alpine:init', () => {
             }
             if (this.tab === 'stream') {
                 try {
-                    let url = api + '/events?per_page=80';
+                    let url = api + '/events?per_page=50';
                     if (this.filters.topic) url += '&topic=' + encodeURIComponent(this.filters.topic);
                     if (this.filters.search) url += '&search=' + encodeURIComponent(this.filters.search);
-                    if (this.filters.status) url += '&status=' + encodeURIComponent(this.filters.status);
-                    if (this.filters.direction) url += '&direction=' + encodeURIComponent(this.filters.direction);
                     const r = await fetch(url);
                     const d = await r.json();
                     this.streamItems = d.items || [];
@@ -740,64 +498,20 @@ document.addEventListener('alpine:init', () => {
                     const r = await fetch(api + '/system');
                     this.system = await r.json();
                 } catch (e) {}
-                if (this.view === 'kafka') {
-                    try {
-                        const [ov, cg, top, thr] = await Promise.all([
-                            fetch(api + '/kafka/overview').then(r => r.json()),
-                            fetch(api + '/kafka/consumer-groups').then(r => r.json()),
-                            fetch(api + '/kafka/topics').then(r => r.json()),
-                            fetch(api + '/kafka/throughput?period=6h&granularity=5min').then(r => r.json()),
-                        ]);
-                        this.kafkaOverview = ov.enabled ? ov : {};
-                        this.kafkaConsumerGroups = cg.items || [];
-                        this.kafkaTopics = top.items || [];
-                        this.kafkaThroughput = thr;
-                    } catch (e) {}
-                }
                 if (this.view === 'logs') {
-                    await this.refreshLogs();
-                } else {
-                    this.logEntries = [];
-                }
-                if (this.view === 'topics') {
                     try {
-                        const r = await fetch(api + '/topics/registered');
+                        const r = await fetch(api + '/logs?limit=100');
                         const d = await r.json();
-                        this.registeredTopics = d.items || [];
-                    } catch (e) { this.registeredTopics = []; }
-                }
-                if (this.view === 'schemas') {
-                    try {
-                        const r = await fetch(api + '/schemas/avro');
-                        const d = await r.json();
-                        this.avroSchemas = d.items || [];
-                    } catch (e) { this.avroSchemas = []; }
+                        this.logEntries = (d.entries || []).map(e => typeof e === 'string' ? JSON.parse(e) : e);
+                    } catch (e) { this.logEntries = []; }
                 }
             }
             this.loading = false;
         },
 
         applyFilters() {
-            this.pushState({ topic: this.filters.topic, search: this.filters.search, status: this.filters.status, direction: this.filters.direction });
+            this.pushState({ topic: this.filters.topic, search: this.filters.search });
             if (this.tab === 'stream') this.refreshCurrent();
-        },
-
-        async refreshLogs() {
-            try {
-                let url = api + '/logs/recent?limit=200';
-                if (this.logLevel) url += '&level=' + encodeURIComponent(this.logLevel);
-                if (this.logSearch) url += '&search=' + encodeURIComponent(this.logSearch);
-                const r = await fetch(url);
-                const d = await r.json();
-                this.logEntries = (d.entries || []).map(e => typeof e === 'string' ? JSON.parse(e) : e);
-            } catch (e) { this.logEntries = []; }
-        },
-
-        async loadKafkaGroupDetail(groupId) {
-            try {
-                const r = await fetch(api + '/kafka/consumer-groups/' + encodeURIComponent(groupId));
-                if (r.ok) this.kafkaGroupDetail = await r.json();
-            } catch (e) { this.kafkaGroupDetail = null; }
         },
 
         async loadDetail() {
@@ -840,27 +554,6 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {}
         },
 
-        async resendEvent() {
-            if (!this.selected || this.detailKind !== 'event') return;
-            try {
-                const r = await fetch(api + '/events/' + encodeURIComponent(this.selected) + '/resend', { method: 'POST' });
-                if (r.ok) {
-                    const d = await r.json();
-                    this.loadDetail();
-                    this.refreshCurrent();
-                }
-            } catch (e) {}
-        },
-
-        async periodicAction(name, actionName) {
-            try {
-                const r = await fetch(api + '/periodic/' + encodeURIComponent(name) + '/' + actionName, { method: 'POST' });
-                if (r.ok) {
-                    this.refreshCurrent();
-                }
-            } catch (e) {}
-        },
-
         connectWs() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const url = protocol + '//' + window.location.host + prefix + '/ws/ops/stream';
@@ -870,6 +563,12 @@ document.addEventListener('alpine:init', () => {
                     try {
                         const msg = JSON.parse(ev.data);
                         if (msg.type === 'ping' || msg.type === 'connected') return;
+                        if (msg.type === 'dashboard_snapshot' && msg.data) {
+                            this.dashboard = msg.data;
+                            const t = (msg.data.events && msg.data.events.throughput_per_min) != null ? msg.data.events.throughput_per_min : 0;
+                            this.throughputHistory = (this.throughputHistory || []).concat(t).slice(-30);
+                            return;
+                        }
                         this.refreshCurrent();
                         if (this.selected) this.loadDetail();
                     } catch (e) {}

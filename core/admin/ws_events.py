@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import Any, TYPE_CHECKING
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Request
@@ -44,9 +45,13 @@ def create_ws_router(site: "AdminSite") -> APIRouter:
     router = APIRouter(tags=["admin-ws"])
 
     async def _ws_ops_stream_handler(websocket: WebSocket) -> None:
-        """Unified stream: events, worker heartbeats, task started/finished (single endpoint)."""
+        """Unified stream: events, worker heartbeats, task started/finished, metrics push."""
         await websocket.accept()
         queue = subscribe_events()
+        metrics_interval = 10.0
+        ping_interval = 30.0
+        last_ping = time.monotonic()
+        last_metrics = 0.0
         try:
             await websocket.send_json({
                 "type": "connected",
@@ -54,15 +59,29 @@ def create_ws_router(site: "AdminSite") -> APIRouter:
             })
             while True:
                 try:
-                    message = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    wait = min(metrics_interval, ping_interval)
+                    message = await asyncio.wait_for(queue.get(), timeout=wait)
                     if websocket.client_state != WebSocketState.CONNECTED:
                         break
                     await websocket.send_text(message)
                 except asyncio.TimeoutError:
-                    if websocket.client_state == WebSocketState.CONNECTED:
-                        await websocket.send_json({"type": "ping"})
-                    else:
+                    if websocket.client_state != WebSocketState.CONNECTED:
                         break
+                    now = time.monotonic()
+                    if now - last_metrics >= metrics_interval:
+                        last_metrics = now
+                        try:
+                            from core.admin.ops_views import get_dashboard_snapshot
+                            snapshot = await get_dashboard_snapshot()
+                            await websocket.send_json({
+                                "type": "dashboard_snapshot",
+                                "data": snapshot,
+                            })
+                        except Exception as e:
+                            logger.debug("Dashboard snapshot push failed: %s", e)
+                    if now - last_ping >= ping_interval:
+                        last_ping = now
+                        await websocket.send_json({"type": "ping"})
         except WebSocketDisconnect:
             logger.debug("WebSocket client disconnected")
         except Exception as e:

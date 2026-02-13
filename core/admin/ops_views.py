@@ -52,6 +52,54 @@ async def check_superuser_access(request: Request) -> Any:
     return user
 
 
+async def get_dashboard_snapshot() -> dict:
+    """
+    Build aggregated dashboard snapshot (tasks, workers, events, infrastructure).
+    Used by GET /api/ops/dashboard and by WebSocket metrics push.
+    """
+    from core.admin.infrastructure import InfraDetector
+    services = await InfraDetector.get_service_health()
+    try:
+        from core.models import get_session
+        from core.admin.models import TaskExecution, WorkerHeartbeat, EventLog
+        from sqlalchemy import select, func
+        from core.datetime import timezone
+        from datetime import timedelta
+
+        db = await get_session()
+        async with db:
+            task_total = (await db.execute(select(func.count()).select_from(TaskExecution))).scalar() or 0
+            task_stmt = select(TaskExecution.status, func.count()).group_by(TaskExecution.status)
+            task_by_status = {r[0]: r[1] for r in (await db.execute(task_stmt))}
+            worker_count = (await db.execute(select(func.count()).select_from(WorkerHeartbeat))).scalar() or 0
+            event_total = (await db.execute(select(func.count()).select_from(EventLog))).scalar() or 0
+            event_stmt = select(EventLog.status, func.count()).group_by(EventLog.status)
+            event_by_status = {r[0]: r[1] for r in (await db.execute(event_stmt))}
+            now = timezone.now()
+            five_min = now - timedelta(minutes=5)
+            recent_events = (await db.execute(
+                select(func.count()).select_from(EventLog).where(EventLog.created_at >= five_min)
+            )).scalar() or 0
+    except Exception as e:
+        logger.warning("Dashboard aggregate error: %s", e)
+        task_total = 0
+        task_by_status = {}
+        worker_count = 0
+        event_total = 0
+        event_by_status = {}
+        recent_events = 0
+    return {
+        "infrastructure": {"services": services},
+        "tasks": {"total": task_total, "by_status": task_by_status},
+        "workers": {"total": worker_count},
+        "events": {
+            "total": event_total,
+            "by_status": event_by_status,
+            "throughput_per_min": round(recent_events / 5.0, 2) if recent_events else 0,
+        },
+    }
+
+
 def create_ops_api(site: "AdminSite") -> APIRouter:
     """Create the Operations Center API router."""
     router = APIRouter(prefix="/api/ops", tags=["admin-ops"])
@@ -66,43 +114,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Aggregated dashboard data: overview, health, task/event stats, workers."""
-        from core.admin.infrastructure import InfraDetector
-        services = await InfraDetector.get_service_health()
-        try:
-            from core.models import get_session
-            from core.admin.models import TaskExecution, WorkerHeartbeat, EventLog
-            from sqlalchemy import select, func
-            from core.datetime import timezone
-            from datetime import timedelta
-
-            db = await get_session()
-            async with db:
-                task_total = (await db.execute(select(func.count()).select_from(TaskExecution))).scalar() or 0
-                task_stmt = select(TaskExecution.status, func.count()).group_by(TaskExecution.status)
-                task_by_status = {r[0]: r[1] for r in (await db.execute(task_stmt))}
-                worker_count = (await db.execute(select(func.count()).select_from(WorkerHeartbeat))).scalar() or 0
-                event_total = (await db.execute(select(func.count()).select_from(EventLog))).scalar() or 0
-                event_stmt = select(EventLog.status, func.count()).group_by(EventLog.status)
-                event_by_status = {r[0]: r[1] for r in (await db.execute(event_stmt))}
-                now = timezone.now()
-                five_min = now - timedelta(minutes=5)
-                recent_events = (await db.execute(
-                    select(func.count()).select_from(EventLog).where(EventLog.created_at >= five_min)
-                )).scalar() or 0
-        except Exception as e:
-            logger.warning("Dashboard aggregate error: %s", e)
-            task_total = task_by_status = worker_count = event_total = event_by_status = 0
-            recent_events = 0
-        return {
-            "infrastructure": {"services": services},
-            "tasks": {"total": task_total, "by_status": task_by_status},
-            "workers": {"total": worker_count},
-            "events": {
-                "total": event_total,
-                "by_status": event_by_status,
-                "throughput_per_min": round(recent_events / 5.0, 2) if recent_events else 0,
-            },
-        }
+        return await get_dashboard_snapshot()
 
     @router.get("/activity")
     async def ops_activity_list(
@@ -340,12 +352,14 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         if admin:
             try:
                 cluster = await admin.get_cluster_info()
+                groups = await admin.list_consumer_groups()
                 kafka = {
                     "enabled": True,
                     "cluster_id": cluster.cluster_id,
                     "brokers_count": len(cluster.brokers),
                     "topics_count": cluster.topics_count,
                     "partitions_count": cluster.partitions_count,
+                    "consumer_groups_count": len(groups),
                 }
             except Exception as e:
                 kafka["error"] = str(e)
