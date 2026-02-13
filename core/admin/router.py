@@ -307,43 +307,92 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             return user  # OK
         
         @router.get("/ops/", response_class=HTMLResponse)
-        async def ops_center(request: Request) -> Response:
-            """Operations Center — single page (Overview, Activity, Stream, Runtime). SUPERUSER ONLY."""
+        async def ops_dashboard(request: Request) -> Response:
+            """Operations Center dashboard — SUPERUSER ONLY."""
             result = _require_superuser(request)
             if result is None:
                 return RedirectResponse(f"{prefix}/login", status_code=302)
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/center.html", ctx)
-
+            return _templates.TemplateResponse("admin/ops/dashboard.html", ctx)
+        
         @router.get("/ops/infrastructure/", response_class=HTMLResponse)
-        async def ops_infrastructure_redirect(request: Request) -> Response:
-            return RedirectResponse(f"{prefix}/ops/?tab=runtime", status_code=302)
-
+        async def ops_infrastructure(request: Request) -> Response:
+            """Infrastructure panel — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/infrastructure.html", ctx)
+        
         @router.get("/ops/tasks/", response_class=HTMLResponse)
-        async def ops_tasks_redirect(request: Request) -> Response:
-            return RedirectResponse(f"{prefix}/ops/?tab=activity&view=tasks", status_code=302)
-
+        async def ops_tasks(request: Request) -> Response:
+            """Task Manager — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/tasks.html", ctx)
+        
         @router.get("/ops/workers/", response_class=HTMLResponse)
-        async def ops_workers_redirect(request: Request) -> Response:
-            return RedirectResponse(f"{prefix}/ops/?tab=activity&view=workers", status_code=302)
-
+        async def ops_workers(request: Request) -> Response:
+            """Worker Manager — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/workers.html", ctx)
+        
         @router.get("/ops/logs/", response_class=HTMLResponse)
-        async def ops_logs_redirect(request: Request) -> Response:
-            return RedirectResponse(f"{prefix}/ops/?tab=runtime&view=logs", status_code=302)
-
+        async def ops_logs(request: Request) -> Response:
+            """Log Viewer with streaming — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/logs.html", ctx)
+        
         @router.get("/ops/periodic/", response_class=HTMLResponse)
-        async def ops_periodic_redirect(request: Request) -> Response:
-            return RedirectResponse(f"{prefix}/ops/?tab=activity&view=periodic", status_code=302)
-
+        async def ops_periodic(request: Request) -> Response:
+            """Periodic Tasks — Redirect to Task Center with Scheduler tab."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            # Redirect to unified Task Center (periodic is now a tab there)
+            return RedirectResponse(f"{prefix}/ops/tasks/#scheduled", status_code=302)
+        
         @router.get("/ops/kafka/", response_class=HTMLResponse)
-        async def ops_kafka_redirect(request: Request) -> Response:
-            return RedirectResponse(f"{prefix}/ops/?tab=runtime&view=kafka", status_code=302)
-
+        async def ops_kafka(request: Request) -> Response:
+            """Kafka Dashboard — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/kafka.html", ctx)
+        
         @router.get("/ops/events/", response_class=HTMLResponse)
-        async def ops_events_redirect(request: Request) -> Response:
-            return RedirectResponse(f"{prefix}/ops/?tab=stream", status_code=302)
+        async def ops_events(request: Request) -> Response:
+            """Events Panel — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/events.html", ctx)
     
     # =========================================================================
     # Model Routes (HTML)

@@ -1,0 +1,1011 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Kafka Dashboard — {{ site_header }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="kafkaDashboard()" x-init="init()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Kafka Dashboard</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Real-time event monitoring and analytics</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button @click="toggleLive()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-colors"
+                    :class="liveMode ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600'">
+                <span class="w-2 h-2 rounded-full" :class="liveMode ? 'bg-white animate-pulse' : 'bg-gray-400'"></span>
+                <span x-text="liveMode ? 'Live' : 'Paused'"></span>
+            </button>
+        <button @click="refresh()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+            Refresh
+        </button>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <template x-if="error">
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
+            <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <div>
+                    <p class="font-medium text-red-800 dark:text-red-200">Kafka not available</p>
+                    <p class="text-sm text-red-600 dark:text-red-300" x-text="error"></p>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Brokers</span>
+                <svg class="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="overview.brokers_count || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Topics</span>
+                <svg class="w-4 h-4 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="overview.topics_count || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Events</span>
+                <svg class="w-4 h-4 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="stats.total?.toLocaleString() || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Sent</span>
+                <svg class="w-4 h-4 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <p class="text-2xl font-bold text-green-600 mt-2" x-text="stats.sent?.toLocaleString() || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Failed</span>
+                <svg class="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </div>
+            <p class="text-2xl font-bold" :class="stats.failed > 0 ? 'text-red-600' : 'text-gray-400'" x-text="stats.failed?.toLocaleString() || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Rate</span>
+                <svg class="w-4 h-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                <span x-text="stats.throughput_per_min?.toFixed(0) || 0"></span>
+                <span class="text-xs font-normal text-gray-400">/min</span>
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Chart Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 mb-6 overflow-hidden">
+        <!-- Chart Header -->
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Event Throughput</h3>
+                <p class="text-xs text-gray-500 mt-0.5">Click on chart to see events at that time</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-4 text-xs">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-1 bg-green-500 rounded"></span>
+                        <span class="text-gray-500">Produced</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-1 bg-blue-500 rounded"></span>
+                        <span class="text-gray-500">Consumed</span>
+                </div>
+                </div>
+                <select x-model="chartPeriod" @change="loadChartData()" class="text-xs bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5">
+                    <option value="1h">Last 1h</option>
+                    <option value="6h">Last 6h</option>
+                    <option value="24h">Last 24h</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Chart -->
+        <div class="p-4">
+            <div class="h-64 relative">
+                <canvas id="mainChart"></canvas>
+                <!-- Selection indicator -->
+                <div x-show="selectedTimeRange" x-cloak class="absolute top-0 left-0 right-0 bg-primary-500/10 border-l-2 border-primary-500 px-3 py-2 text-xs">
+                    <span class="font-medium text-primary-600 dark:text-primary-400" x-text="selectedTimeRange"></span>
+                    <button @click="clearTimeSelection()" class="ml-2 text-gray-400 hover:text-gray-600">&times;</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Two Column Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left: Filters & Events List -->
+        <div class="lg:col-span-2 space-y-4">
+            <!-- Filters -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex flex-wrap items-end gap-3">
+                    <div class="flex-1 min-w-[150px]">
+                        <label class="text-xs text-gray-500 block mb-1">Topic</label>
+                        <select x-model="filters.topic" @change="loadEvents()" class="w-full text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2">
+                            <option value="">All Topics</option>
+                            <template x-for="t in topicsList" :key="t">
+                                <option :value="t" x-text="t"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="min-w-[120px]">
+                        <label class="text-xs text-gray-500 block mb-1">Status</label>
+                        <select x-model="filters.status" @change="loadEvents()" class="w-full text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2">
+                            <option value="">All</option>
+                            <option value="pending">Pending</option>
+                            <option value="sent">Sent</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                    <div class="min-w-[120px]">
+                        <label class="text-xs text-gray-500 block mb-1">Direction</label>
+                        <select x-model="filters.direction" @change="loadEvents()" class="w-full text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2">
+                            <option value="">All</option>
+                            <option value="OUT">Outgoing</option>
+                            <option value="IN">Incoming</option>
+                        </select>
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="text-xs text-gray-500 block mb-1">Search</label>
+                        <input type="text" x-model="filters.search" @input.debounce.300ms="loadEvents()" placeholder="Event ID, name, key..." class="w-full text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2">
+                    </div>
+                    <button @click="clearFilters()" class="px-3 py-2 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            <!-- Events List -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">Events</span>
+                    <span class="text-xs text-gray-400" x-text="pagination.total + ' total'"></span>
+                </div>
+                
+                <div class="divide-y divide-gray-100 dark:divide-gray-700 max-h-[600px] overflow-y-auto">
+                    <template x-for="event in events" :key="event.event_id">
+                        <div @click="selectEvent(event)" 
+                             class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+                             :class="selectedEvent?.event_id === event.event_id ? 'bg-primary-50 dark:bg-primary-900/20 border-l-2 border-primary-500' : ''">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-medium text-sm text-gray-900 dark:text-white truncate" x-text="event.event_name"></span>
+                                        <span class="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-semibold uppercase rounded"
+                                              :class="getStatusClass(event.status)">
+                                            <span class="w-1 h-1 rounded-full" :class="getStatusDot(event.status)"></span>
+                                            <span x-text="event.status"></span>
+                                        </span>
+                                        <span class="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-medium rounded"
+                                              :class="event.direction === 'OUT' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'"
+                                              x-text="event.direction"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <code class="text-[10px] font-mono text-gray-500 truncate" x-text="event.topic"></code>
+                                        <span class="text-gray-300 dark:text-gray-600">•</span>
+                                        <span class="text-[10px] text-gray-400" x-text="formatTime(event.created_at)"></span>
+                                    </div>
+                                </div>
+                                <svg class="w-4 h-4 text-gray-300 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <template x-if="!loading && events.length === 0">
+                        <div class="px-4 py-12 text-center">
+                            <svg class="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm">No events found</p>
+                        </div>
+                    </template>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <span class="text-xs text-gray-500" x-text="'Page ' + pagination.page + ' of ' + pagination.totalPages"></span>
+                    <div class="flex gap-1">
+                        <button @click="prevPage()" :disabled="pagination.page <= 1" class="px-3 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-600 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-700">Prev</button>
+                        <button @click="nextPage()" :disabled="pagination.page >= pagination.totalPages" class="px-3 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-600 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-700">Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Event Detail Panel -->
+        <div class="lg:col-span-1">
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 sticky top-6 overflow-hidden">
+                <!-- No Selection -->
+                <template x-if="!selectedEvent">
+                    <div class="p-8 text-center">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        <p class="text-gray-500 dark:text-gray-400 text-sm">Select an event to view details</p>
+                    </div>
+                </template>
+
+                <!-- Event Detail -->
+                <template x-if="selectedEvent">
+                    <div>
+                        <!-- Header -->
+                        <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded"
+                                          :class="getStatusClass(selectedEvent.status)">
+                                        <span class="w-1.5 h-1.5 rounded-full" :class="getStatusDot(selectedEvent.status)"></span>
+                                        <span x-text="selectedEvent.status"></span>
+                                    </span>
+                                    <span class="px-2 py-0.5 text-[10px] font-medium rounded"
+                                          :class="selectedEvent.direction === 'OUT' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600'"
+                                          x-text="selectedEvent.direction === 'OUT' ? 'Outgoing' : 'Incoming'"></span>
+                                </div>
+                                <button @click="selectedEvent = null" class="text-gray-400 hover:text-gray-600">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mt-2" x-text="selectedEvent.event_name"></h3>
+                            <p class="text-xs font-mono text-gray-500 mt-1" x-text="selectedEvent.event_id"></p>
+                        </div>
+
+                        <!-- Tabs -->
+                        <div class="flex border-b border-gray-100 dark:border-gray-700">
+                            <button @click="detailTab = 'info'" 
+                                    :class="detailTab === 'info' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                                    class="flex-1 px-4 py-2 text-xs font-medium border-b-2 transition-colors">Info</button>
+                            <button @click="detailTab = 'payload'" 
+                                    :class="detailTab === 'payload' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                                    class="flex-1 px-4 py-2 text-xs font-medium border-b-2 transition-colors">Payload</button>
+                            <button @click="detailTab = 'headers'" 
+                                    :class="detailTab === 'headers' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                                    class="flex-1 px-4 py-2 text-xs font-medium border-b-2 transition-colors">Headers</button>
+                        </div>
+
+                        <!-- Tab Content -->
+                        <div class="max-h-[500px] overflow-y-auto">
+                            <!-- Info Tab -->
+                            <div x-show="detailTab === 'info'" class="p-4 space-y-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                                        <span class="text-[10px] text-gray-400 uppercase block">Topic</span>
+                                        <code class="text-xs font-mono text-gray-900 dark:text-white break-all" x-text="selectedEvent.topic"></code>
+                                    </div>
+                                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                                        <span class="text-[10px] text-gray-400 uppercase block">Key</span>
+                                        <code class="text-xs font-mono text-gray-900 dark:text-white" x-text="selectedEvent.key || '—'"></code>
+                                    </div>
+                                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                                        <span class="text-[10px] text-gray-400 uppercase block">Partition</span>
+                                        <span class="text-sm font-semibold text-gray-900 dark:text-white" x-text="selectedEvent.partition ?? '—'"></span>
+                                    </div>
+                                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                                        <span class="text-[10px] text-gray-400 uppercase block">Offset</span>
+                                        <span class="text-sm font-semibold text-gray-900 dark:text-white" x-text="selectedEvent.offset ?? '—'"></span>
+                                    </div>
+                                </div>
+
+                                <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                                    <span class="text-[10px] text-gray-400 uppercase block mb-2">Timeline</span>
+                                    <div class="space-y-2 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                            <span class="text-gray-500">Created</span>
+                                            <span class="ml-auto font-mono text-gray-700 dark:text-gray-300" x-text="formatDateTime(selectedEvent.created_at)"></span>
+                                        </div>
+                                        <template x-if="selectedEvent.sent_at">
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                                                <span class="text-gray-500">Sent</span>
+                                                <span class="ml-auto font-mono text-gray-700 dark:text-gray-300" x-text="formatDateTime(selectedEvent.sent_at)"></span>
+                                            </div>
+                                        </template>
+                                        <template x-if="selectedEvent.delivered_at">
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                                                <span class="text-gray-500">Delivered</span>
+                                                <span class="ml-auto font-mono text-gray-700 dark:text-gray-300" x-text="formatDateTime(selectedEvent.delivered_at)"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <template x-if="selectedEvent.payload_size_bytes">
+                                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                                        <span class="text-[10px] text-gray-400 uppercase block">Payload Size</span>
+                                        <span class="text-sm font-semibold text-gray-900 dark:text-white" x-text="formatBytes(selectedEvent.payload_size_bytes)"></span>
+                                    </div>
+                                </template>
+
+                                <template x-if="selectedEvent.payload_schema">
+                                    <div class="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
+                                        <span class="text-[10px] text-purple-500 uppercase block">Schema</span>
+                                        <span class="text-sm font-semibold text-purple-700 dark:text-purple-300" x-text="selectedEvent.payload_schema"></span>
+                                    </div>
+                                </template>
+
+                                <template x-if="selectedEvent.source_service || selectedEvent.source_worker_id">
+                                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                                        <span class="text-[10px] text-gray-400 uppercase block mb-1">Source</span>
+                                        <div class="text-xs space-y-1">
+                                            <template x-if="selectedEvent.source_service">
+                                                <div class="flex justify-between">
+                                                    <span class="text-gray-500">Service</span>
+                                                    <span class="font-mono text-gray-700 dark:text-gray-300" x-text="selectedEvent.source_service"></span>
+                                                </div>
+                                            </template>
+                                            <template x-if="selectedEvent.source_worker_id">
+                                                <div class="flex justify-between">
+                                                    <span class="text-gray-500">Worker</span>
+                                                    <code class="font-mono text-gray-700 dark:text-gray-300 text-[10px]" x-text="selectedEvent.source_worker_id"></code>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <template x-if="selectedEvent.error">
+                                    <div class="bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
+                                        <span class="text-[10px] text-red-500 uppercase block mb-1">Error</span>
+                                        <pre class="text-xs font-mono text-red-700 dark:text-red-300 whitespace-pre-wrap break-all" x-text="selectedEvent.error"></pre>
+                                    </div>
+                                </template>
+
+                                <template x-if="selectedEvent.retry_count > 0">
+                                    <div class="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3">
+                                        <span class="text-[10px] text-amber-500 uppercase block">Retries</span>
+                                        <span class="text-sm font-semibold text-amber-700 dark:text-amber-300" x-text="selectedEvent.retry_count"></span>
+                                    </div>
+                                </template>
+
+                                <template x-if="selectedEvent.original_event_id">
+                                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                                        <span class="text-[10px] text-gray-400 uppercase block">Original Event</span>
+                                        <code class="text-xs font-mono text-gray-700 dark:text-gray-300 break-all" x-text="selectedEvent.original_event_id"></code>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Payload Tab -->
+                            <div x-show="detailTab === 'payload'" class="p-4">
+                                <div class="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto">
+                                    <pre class="text-xs font-mono text-green-400 whitespace-pre-wrap break-all" x-text="formatJson(selectedEvent.payload)"></pre>
+                                </div>
+                                <button @click="copyToClipboard(JSON.stringify(selectedEvent.payload, null, 2))" 
+                                        class="mt-3 w-full px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                                    Copy Payload
+                                </button>
+                            </div>
+
+                            <!-- Headers Tab -->
+                            <div x-show="detailTab === 'headers'" class="p-4">
+                                <template x-if="selectedEvent.headers && Object.keys(selectedEvent.headers).length > 0">
+                                    <div class="space-y-2">
+                                        <template x-for="(value, key) in selectedEvent.headers" :key="key">
+                                            <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                                                <span class="text-[10px] text-gray-400 uppercase block" x-text="key"></span>
+                                                <code class="text-xs font-mono text-gray-900 dark:text-white break-all" x-text="value"></code>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!selectedEvent.headers || Object.keys(selectedEvent.headers).length === 0">
+                                    <div class="text-center py-8 text-gray-400 text-sm">No headers</div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
+                            <div class="flex gap-2">
+                                <button @click="copyEventId()" class="flex-1 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                                    Copy ID
+                                </button>
+                                <template x-if="selectedEvent.status === 'failed'">
+                                    <button @click="requeueEvent()" class="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-500 rounded-lg hover:bg-primary-600 transition-colors">
+                                        Retry
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consumer Groups & Topics (Collapsible) -->
+    <div class="mt-6 space-y-4">
+    <!-- Consumer Groups -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <button @click="showConsumerGroups = !showConsumerGroups" class="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span class="text-sm font-semibold text-gray-900 dark:text-white">Consumer Groups</span>
+                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500" x-text="consumerGroups.length"></span>
+                </div>
+                <svg class="w-5 h-5 text-gray-400 transition-transform" :class="showConsumerGroups ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div x-show="showConsumerGroups" x-collapse>
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Group ID</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">State</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Members</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Lag</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="group in consumerGroups" :key="group.group_id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 py-3 font-mono text-gray-900 dark:text-white" x-text="group.group_id"></td>
+                                <td class="px-4 py-3 text-center">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full" :class="getGroupStateClass(group.state)">
+                                        <span class="w-1.5 h-1.5 rounded-full" :class="getGroupStateDot(group.state)"></span>
+                                    <span x-text="group.state"></span>
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-center text-gray-700 dark:text-gray-300" x-text="group.members_count"></td>
+                                <td class="px-4 py-3 text-center" :class="group.total_lag > 0 ? 'text-amber-600 font-semibold' : 'text-gray-500'" x-text="group.total_lag?.toLocaleString() || 0"></td>
+                            <td class="px-4 py-3 text-center">
+                                    <button @click="showGroupDetail(group)" class="text-primary-500 hover:text-primary-600 text-xs font-medium">Details</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Topics -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <button @click="showTopics = !showTopics" class="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span class="text-sm font-semibold text-gray-900 dark:text-white">Topics</span>
+                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500" x-text="topics.length"></span>
+                </div>
+                <svg class="w-5 h-5 text-gray-400 transition-transform" :class="showTopics ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div x-show="showTopics" x-collapse>
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Topic Name</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Partitions</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Replication</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="topic in topics" :key="topic.name">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 py-3 font-mono text-gray-900 dark:text-white" x-text="topic.name"></td>
+                            <td class="px-4 py-3 text-center text-gray-700 dark:text-gray-300" x-text="topic.partitions"></td>
+                            <td class="px-4 py-3 text-center text-gray-700 dark:text-gray-300" x-text="topic.replication_factor"></td>
+                            <td class="px-4 py-3 text-center">
+                                    <button @click="filterByTopic(topic.name)" class="text-primary-500 hover:text-primary-600 text-xs font-medium">View Events</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consumer Group Detail Modal -->
+    <div x-show="groupModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="groupModal = false"></div>
+            <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+                <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="selectedGroup?.group_id"></h3>
+                    <button @click="groupModal = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="p-6" x-show="selectedGroup">
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">State</span>
+                            <p class="font-semibold text-gray-900 dark:text-white" x-text="selectedGroup?.state"></p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">Coordinator</span>
+                            <p class="font-semibold text-gray-900 dark:text-white" x-text="'Broker ' + selectedGroup?.coordinator"></p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">Total Lag</span>
+                            <p class="font-semibold" :class="selectedGroup?.total_lag > 0 ? 'text-amber-600' : 'text-gray-900 dark:text-white'" x-text="selectedGroup?.total_lag?.toLocaleString()"></p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <span class="text-xs text-gray-400">Members</span>
+                            <p class="font-semibold text-gray-900 dark:text-white" x-text="selectedGroup?.members?.length || 0"></p>
+                        </div>
+                    </div>
+                    <template x-if="selectedGroup?.offsets && Object.keys(selectedGroup.offsets).length > 0">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Offsets by Topic</h4>
+                            <template x-for="(partitions, topic) in selectedGroup.offsets" :key="topic">
+                                <div class="mb-4">
+                                    <p class="text-xs font-mono text-gray-500 mb-2" x-text="topic"></p>
+                                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden">
+                                        <table class="w-full text-sm">
+                                            <thead>
+                                                <tr class="border-b border-gray-200 dark:border-gray-600">
+                                                    <th class="px-3 py-2 text-left text-xs text-gray-500">Partition</th>
+                                                    <th class="px-3 py-2 text-right text-xs text-gray-500">Current</th>
+                                                    <th class="px-3 py-2 text-right text-xs text-gray-500">End</th>
+                                                    <th class="px-3 py-2 text-right text-xs text-gray-500">Lag</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="p in partitions" :key="p.partition">
+                                                    <tr>
+                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="p.partition"></td>
+                                                        <td class="px-3 py-2 text-right font-mono text-gray-700 dark:text-gray-300" x-text="p.current_offset?.toLocaleString()"></td>
+                                                        <td class="px-3 py-2 text-right font-mono text-gray-700 dark:text-gray-300" x-text="p.end_offset?.toLocaleString()"></td>
+                                                        <td class="px-3 py-2 text-right font-mono" :class="p.lag > 0 ? 'text-amber-600 font-semibold' : 'text-gray-500'" x-text="p.lag?.toLocaleString()"></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+let _mainChart = null;
+
+function kafkaDashboard() {
+    return {
+        loading: false,
+        error: null,
+        liveMode: false,
+        ws: null,
+        
+        // Data
+        overview: {},
+        stats: {},
+        events: [],
+        consumerGroups: [],
+        topics: [],
+        topicsList: [],
+        
+        // Chart
+        chartPeriod: '6h',
+        chartData: { labels: [], produce: [], consume: [] },
+        selectedTimeRange: null,
+        
+        // Filters
+        filters: { topic: '', status: '', direction: '', search: '', timeStart: null, timeEnd: null },
+        pagination: { page: 1, perPage: 30, total: 0, totalPages: 1 },
+        
+        // Detail panel
+        selectedEvent: null,
+        detailTab: 'info',
+        
+        // Collapsible sections
+        showConsumerGroups: false,
+        showTopics: false,
+        
+        // Modals
+        groupModal: false,
+        selectedGroup: null,
+
+        async init() {
+            await this.refresh();
+            this.initChart();
+            await this.loadChartData();
+        },
+
+        async refresh() {
+            this.loading = true;
+            this.error = null;
+            try {
+                await Promise.all([
+                    this.loadOverview(),
+                    this.loadStats(),
+                    this.loadEvents(),
+                    this.loadConsumerGroups(),
+                    this.loadTopics(),
+                ]);
+            } catch (e) {
+                console.error('Refresh error:', e);
+            }
+            this.loading = false;
+        },
+
+        async loadOverview() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/kafka/overview');
+                const data = await resp.json();
+                if (data.error && !data.enabled) {
+                    this.error = data.error;
+                } else {
+                    this.overview = data;
+                }
+            } catch (e) {
+                this.error = 'Failed to connect to Kafka';
+            }
+        },
+
+        async loadStats() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/events/stats');
+                this.stats = await resp.json();
+                this.topicsList = (this.stats.top_topics || []).map(t => t.topic);
+            } catch (e) {}
+        },
+
+        async loadEvents() {
+            try {
+                let url = `{{ admin_prefix }}/api/ops/events?page=${this.pagination.page}&per_page=${this.pagination.perPage}`;
+                if (this.filters.topic) url += `&topic=${encodeURIComponent(this.filters.topic)}`;
+                if (this.filters.status) url += `&status=${this.filters.status}`;
+                if (this.filters.direction) url += `&direction=${this.filters.direction}`;
+                if (this.filters.search) url += `&search=${encodeURIComponent(this.filters.search)}`;
+                if (this.filters.timeStart) url += `&time_start=${this.filters.timeStart}`;
+                if (this.filters.timeEnd) url += `&time_end=${this.filters.timeEnd}`;
+                
+                const resp = await fetch(url);
+                const data = await resp.json();
+                this.events = data.items || [];
+                this.pagination.total = data.total || 0;
+                this.pagination.totalPages = data.total_pages || 1;
+            } catch (e) {
+                console.error('Failed to load events:', e);
+            }
+        },
+
+        async loadConsumerGroups() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/kafka/consumer-groups');
+                const data = await resp.json();
+                this.consumerGroups = data.items || [];
+            } catch (e) {}
+        },
+
+        async loadTopics() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/kafka/topics');
+                const data = await resp.json();
+                this.topics = data.items || [];
+            } catch (e) {}
+        },
+
+        initChart() {
+            if (_mainChart) {
+                _mainChart.destroy();
+                _mainChart = null;
+            }
+
+            const ctx = document.getElementById('mainChart');
+            if (!ctx) return;
+
+            const isDark = document.documentElement.classList.contains('dark');
+            const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+            const self = this;
+
+            _mainChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Produced',
+                            data: [],
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                            borderColor: '#22c55e',
+                            borderWidth: 1,
+                            borderRadius: 2,
+                        },
+                        {
+                            label: 'Consumed',
+                            data: [],
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 1,
+                            borderRadius: 2,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: isDark ? '#1f2937' : '#fff',
+                            titleColor: isDark ? '#fff' : '#111',
+                            bodyColor: isDark ? '#9ca3af' : '#6b7280',
+                            borderColor: isDark ? '#374151' : '#e5e7eb',
+                            borderWidth: 1,
+                            padding: 12,
+                            cornerRadius: 8,
+                            callbacks: {
+                                title: function(items) {
+                                    if (!items.length) return '';
+                                    const idx = items[0].dataIndex;
+                                    return self.chartData.fullLabels?.[idx] || items[0].label;
+                                },
+                                label: function(item) {
+                                    return `${item.dataset.label}: ${item.raw} events`;
+                                }
+                            }
+                        },
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { 
+                                maxTicksLimit: 12,
+                                font: { size: 10 },
+                                color: isDark ? '#9ca3af' : '#6b7280',
+                            },
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: gridColor },
+                            ticks: {
+                                font: { size: 10 },
+                                color: isDark ? '#9ca3af' : '#6b7280',
+                            },
+                        },
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const idx = elements[0].index;
+                            self.onChartClick(idx);
+                        }
+                    },
+                },
+            });
+        },
+
+        async loadChartData() {
+            if (!_mainChart) return;
+            
+            try {
+                const resp = await fetch(`{{ admin_prefix }}/api/ops/kafka/throughput?period=${this.chartPeriod}`);
+                const data = await resp.json();
+
+                if (!data.labels || data.labels.length === 0) return;
+
+                const labels = [];
+                const fullLabels = [];
+                for (let i = 0; i < data.labels.length; i++) {
+                    const l = data.labels[i];
+                    fullLabels.push(l);
+                    if (!l) { labels.push(''); continue; }
+                    const parts = String(l).split('T');
+                    if (parts.length < 2) { labels.push(l); continue; }
+                    const timePart = parts[1].split('+')[0].split('-')[0].split('.')[0];
+                    labels.push(timePart.substring(0, 5));
+                }
+
+                this.chartData = {
+                    labels: labels,
+                    fullLabels: fullLabels,
+                    produce: data.produce_rate || [],
+                    consume: data.consume_rate || [],
+                };
+
+                _mainChart.data.labels = labels;
+                _mainChart.data.datasets[0].data = data.produce_rate || [];
+                _mainChart.data.datasets[1].data = data.consume_rate || [];
+                _mainChart.update('none');
+            } catch (e) {
+                console.error('Error loading chart data:', e);
+            }
+        },
+
+        onChartClick(index) {
+            const fullLabel = this.chartData.fullLabels?.[index];
+            if (!fullLabel) return;
+
+            const clickedTime = new Date(fullLabel);
+            const startTime = new Date(clickedTime.getTime());
+            const endTime = new Date(clickedTime.getTime() + 60000);
+
+            this.filters.timeStart = startTime.toISOString();
+            this.filters.timeEnd = endTime.toISOString();
+            this.selectedTimeRange = this.chartData.labels[index] + ' - ' + this.formatDateTime(endTime.toISOString());
+            this.pagination.page = 1;
+            this.loadEvents();
+        },
+
+        clearTimeSelection() {
+            this.filters.timeStart = null;
+            this.filters.timeEnd = null;
+            this.selectedTimeRange = null;
+            this.loadEvents();
+        },
+
+        clearFilters() {
+            this.filters = { topic: '', status: '', direction: '', search: '', timeStart: null, timeEnd: null };
+            this.selectedTimeRange = null;
+            this.pagination.page = 1;
+            this.loadEvents();
+        },
+
+        filterByTopic(topic) {
+            this.filters.topic = topic;
+            this.pagination.page = 1;
+            this.loadEvents();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        selectEvent(event) {
+            this.selectedEvent = event;
+            this.detailTab = 'info';
+        },
+
+        prevPage() {
+            if (this.pagination.page > 1) {
+                this.pagination.page--;
+                this.loadEvents();
+            }
+        },
+
+        nextPage() {
+            if (this.pagination.page < this.pagination.totalPages) {
+                this.pagination.page++;
+                this.loadEvents();
+            }
+        },
+
+        toggleLive() {
+            this.liveMode = !this.liveMode;
+            if (this.liveMode) {
+                this.connectWebSocket();
+            } else {
+                this.disconnectWebSocket();
+            }
+        },
+
+        connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            this.ws = new WebSocket(`${protocol}//${window.location.host}{{ admin_prefix }}/ws/ops/events`);
+            this.ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type?.startsWith('kafka_') && data.data) {
+                    this.events.unshift(data.data);
+                    if (this.events.length > this.pagination.perPage) this.events.pop();
+                    this.pagination.total++;
+                    this.loadStats();
+                }
+            };
+            this.ws.onclose = () => {
+                if (this.liveMode) setTimeout(() => this.connectWebSocket(), 3000);
+            };
+        },
+
+        disconnectWebSocket() {
+            if (this.ws) { this.ws.close(); this.ws = null; }
+        },
+
+        async showGroupDetail(group) {
+            try {
+                const resp = await fetch(`{{ admin_prefix }}/api/ops/kafka/consumer-groups/${group.group_id}`);
+                this.selectedGroup = await resp.json();
+                this.groupModal = true;
+            } catch (e) {}
+        },
+
+        copyEventId() {
+            if (this.selectedEvent) {
+                this.copyToClipboard(this.selectedEvent.event_id);
+            }
+        },
+
+        copyToClipboard(text) {
+            navigator.clipboard.writeText(text);
+        },
+
+        async requeueEvent() {
+            if (!this.selectedEvent) return;
+            try {
+                const resp = await fetch(`{{ admin_prefix }}/api/ops/events/${this.selectedEvent.event_id}/requeue`, { method: 'POST' });
+                if (resp.ok) {
+                    this.loadEvents();
+                    this.loadStats();
+                }
+            } catch (e) {}
+        },
+
+        formatTime(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            const now = new Date();
+            const diff = (now - d) / 1000;
+            if (diff < 60) return Math.floor(diff) + 's ago';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return d.toLocaleDateString();
+        },
+
+        formatDateTime(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        },
+
+        formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        },
+
+        formatJson(obj) {
+            try {
+                return JSON.stringify(obj, null, 2);
+            } catch (e) {
+                return String(obj);
+            }
+        },
+
+        getStatusClass(status) {
+            const s = (status || '').toLowerCase();
+            if (s === 'sent' || s === 'delivered') return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
+            if (s === 'failed') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+            if (s === 'pending') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+            return 'bg-gray-100 dark:bg-gray-700 text-gray-500';
+        },
+
+        getStatusDot(status) {
+            const s = (status || '').toLowerCase();
+            if (s === 'sent' || s === 'delivered') return 'bg-green-500';
+            if (s === 'failed') return 'bg-red-500';
+            if (s === 'pending') return 'bg-amber-500';
+            return 'bg-gray-400';
+        },
+
+        getGroupStateClass(state) {
+            const s = (state || '').toLowerCase();
+            if (s === 'stable') return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
+            if (s === 'empty') return 'bg-gray-100 dark:bg-gray-700 text-gray-500';
+            if (s.includes('rebalancing')) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+            if (s === 'dead') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+            return 'bg-gray-100 dark:bg-gray-700 text-gray-500';
+        },
+
+        getGroupStateDot(state) {
+            const s = (state || '').toLowerCase();
+            if (s === 'stable') return 'bg-green-500';
+            if (s === 'empty') return 'bg-gray-400';
+            if (s.includes('rebalancing')) return 'bg-amber-500';
+            if (s === 'dead') return 'bg-red-500';
+            return 'bg-gray-400';
+        },
+    };
+}
+</script>
+{% endblock %}

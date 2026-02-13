@@ -1,0 +1,539 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Events & Messaging — {{ site_header }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="eventsPanel()" x-init="init()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Events & Messaging</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Topics, schemas, and event tracking</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <template x-if="activeTab === 'events'">
+                <button @click="toggleRealtime()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-colors"
+                        :class="realtimeEnabled ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600'">
+                    <span class="w-2 h-2 rounded-full" :class="realtimeEnabled ? 'bg-white animate-pulse' : 'bg-gray-400'"></span>
+                    <span x-text="realtimeEnabled ? 'Live' : 'Paused'"></span>
+                </button>
+            </template>
+            <button @click="refresh()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex items-center gap-1 mb-6 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+        <button @click="activeTab = 'topics'" 
+                :class="activeTab === 'topics' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                class="px-4 py-2 text-sm font-medium rounded-lg transition-all">
+            <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Topics
+                <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600" x-text="topics.length"></span>
+            </span>
+        </button>
+        <button @click="activeTab = 'schemas'" 
+                :class="activeTab === 'schemas' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                class="px-4 py-2 text-sm font-medium rounded-lg transition-all">
+            <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Avro Schemas
+                <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600" x-text="schemas.length"></span>
+            </span>
+        </button>
+        <button @click="activeTab = 'events'" 
+                :class="activeTab === 'events' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                class="px-4 py-2 text-sm font-medium rounded-lg transition-all">
+            <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Event Log
+                <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600" x-text="stats.total || 0"></span>
+            </span>
+        </button>
+    </div>
+
+    <!-- Tab: Topics -->
+    <div x-show="activeTab === 'topics'" x-cloak>
+        <!-- Topics Table -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Registered Topics</h3>
+                <p class="text-xs text-gray-500 mt-0.5">Topics defined in your application code</p>
+            </div>
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Topic Name</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Class</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Schema</th>
+                        <th class="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Partitions</th>
+                        <th class="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Serializer</th>
+                        <th class="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Cleanup</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="topic in topics" :key="topic.name">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                            <td class="px-5 py-3">
+                                <code class="text-xs font-mono text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 rounded" x-text="topic.name"></code>
+                            </td>
+                            <td class="px-5 py-3">
+                                <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="topic.class_name"></span>
+                            </td>
+                            <td class="px-5 py-3">
+                                <template x-if="topic.schema">
+                                    <span class="inline-flex items-center gap-1.5">
+                                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="topic.schema"></span>
+                                        <span x-show="topic.has_avro_schema" class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">AVRO</span>
+                                    </span>
+                                </template>
+                                <template x-if="!topic.schema">
+                                    <span class="text-gray-400">—</span>
+                                </template>
+                            </td>
+                            <td class="px-5 py-3 text-center">
+                                <span class="text-sm text-gray-700 dark:text-gray-300" x-text="topic.partitions"></span>
+                            </td>
+                            <td class="px-5 py-3 text-center">
+                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full"
+                                      :class="topic.value_serializer === 'avro' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'"
+                                      x-text="topic.value_serializer.toUpperCase()"></span>
+                            </td>
+                            <td class="px-5 py-3 text-center">
+                                <span class="text-xs text-gray-500" x-text="topic.cleanup_policy"></span>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="!loading && topics.length === 0">
+                        <tr>
+                            <td colspan="6" class="px-5 py-12 text-center">
+                                <svg class="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                <p class="text-gray-500 dark:text-gray-400 font-medium">No topics registered</p>
+                                <p class="text-xs text-gray-400 mt-2 max-w-sm mx-auto">
+                                    Define topics using <code class="font-mono text-primary-500">class MyTopic(Topic)</code> in your code
+                                </p>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Tab: Avro Schemas -->
+    <div x-show="activeTab === 'schemas'" x-cloak>
+        <!-- Schemas Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <template x-for="schema in schemas" :key="schema.name">
+                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <!-- Header -->
+                    <div class="px-5 py-4 bg-gradient-to-r from-purple-500/10 to-indigo-500/10 dark:from-purple-500/20 dark:to-indigo-500/20 border-b border-gray-100 dark:border-gray-700">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    <h4 class="text-base font-bold text-gray-900 dark:text-white" x-text="schema.name"></h4>
+                                </div>
+                                <p class="text-xs font-mono text-gray-500 mt-1" x-text="schema.namespace || 'No namespace'"></p>
+                            </div>
+                            <span class="px-2 py-1 text-[10px] font-bold rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">AVRO</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Fields -->
+                    <div class="px-5 py-4">
+                        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Fields</div>
+                        <div class="space-y-2">
+                            <template x-for="field in schema.fields || []" :key="field.name">
+                                <div class="flex items-center gap-3 py-2 px-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                    <div class="flex-1 min-w-0">
+                                        <span class="font-mono text-sm font-medium text-gray-900 dark:text-white" x-text="field.name"></span>
+                                    </div>
+                                    <div class="flex-shrink-0">
+                                        <code class="text-xs font-mono px-2 py-1 rounded"
+                                              :class="getTypeColor(field.type)"
+                                              x-text="formatType(field.type)"></code>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="!schema.fields || schema.fields.length === 0">
+                                <div class="text-center py-4 text-gray-400 text-sm">No fields defined</div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="px-5 py-3 bg-gray-50 dark:bg-gray-700/20 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                        <span class="text-xs text-gray-400" x-text="(schema.fields?.length || 0) + ' field(s)'"></span>
+                        <button @click="schema._expanded = !schema._expanded" 
+                                class="text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1">
+                            <span x-text="schema._expanded ? 'Hide JSON' : 'View JSON'"></span>
+                            <svg class="w-3.5 h-3.5 transition-transform" :class="schema._expanded ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                    </div>
+                    
+                    <!-- JSON Schema (Expandable) -->
+                    <div x-show="schema._expanded" x-collapse class="border-t border-gray-100 dark:border-gray-700">
+                        <div class="p-4 bg-gray-900 dark:bg-gray-950 overflow-x-auto">
+                            <pre class="text-xs font-mono text-green-400" x-text="JSON.stringify(schema.schema, null, 2)"></pre>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            
+            <template x-if="!loading && schemas.length === 0">
+                <div class="col-span-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <p class="text-gray-500 dark:text-gray-400 font-medium">No Avro schemas found</p>
+                    <p class="text-xs text-gray-400 mt-2">Define Avro models for type-safe serialization</p>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Tab: Event Log -->
+    <div x-show="activeTab === 'events'" x-cloak>
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Total</span>
+                    <svg class="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="stats.total?.toLocaleString() || 0"></p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Sent</span>
+                    <svg class="w-4 h-4 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <p class="text-2xl font-bold text-green-600 mt-2" x-text="stats.sent?.toLocaleString() || 0"></p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Delivered</span>
+                    <svg class="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </div>
+                <p class="text-2xl font-bold text-blue-600 mt-2" x-text="stats.delivered?.toLocaleString() || 0"></p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Failed</span>
+                    <svg class="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                </div>
+                <p class="text-2xl font-bold text-red-600 mt-2" x-text="stats.failed?.toLocaleString() || 0"></p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Throughput</span>
+                    <svg class="w-4 h-4 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </div>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                    <span x-text="stats.throughput_per_min?.toFixed(1) || 0"></span>
+                    <span class="text-xs font-normal text-gray-400">/min</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Topic</label>
+                    <select x-model="filters.topic" @change="loadEvents()" class="text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 min-w-[150px]">
+                        <option value="">All Topics</option>
+                        <template x-for="topic in stats.top_topics || []" :key="topic.topic">
+                            <option :value="topic.topic" x-text="topic.topic"></option>
+                        </template>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Status</label>
+                    <select x-model="filters.status" @change="loadEvents()" class="text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="sent">Sent</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Direction</label>
+                    <select x-model="filters.direction" @change="loadEvents()" class="text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5">
+                        <option value="">All</option>
+                        <option value="IN">Incoming</option>
+                        <option value="OUT">Outgoing</option>
+                    </select>
+                </div>
+                <div class="ml-auto">
+                    <button @click="clearFilters()" class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        Clear filters
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Events Table -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Event ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Name</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Topic</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Time</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="event in events" :key="event.event_id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3">
+                                <span class="font-mono text-xs text-gray-600 dark:text-gray-400" x-text="event.event_id?.substring(0, 12) + '...'"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="font-medium text-gray-900 dark:text-white" x-text="event.event_name"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="font-mono text-xs text-gray-600 dark:text-gray-400" x-text="event.topic"></span>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full"
+                                      :class="getStatusClass(event.status)">
+                                    <span class="w-1.5 h-1.5 rounded-full" :class="getStatusDotClass(event.status)"></span>
+                                    <span x-text="event.status"></span>
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-xs text-gray-500" x-text="formatTime(event.created_at)"></td>
+                        </tr>
+                    </template>
+                    <template x-if="!loading && events.length === 0">
+                        <tr>
+                            <td colspan="5" class="px-4 py-12 text-center text-gray-400">
+                                <svg class="w-10 h-10 mx-auto mb-3 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                <p>No events found</p>
+                                <p class="text-xs mt-1">Events are logged when you publish messages via <code class="font-mono text-primary-500">publish()</code></p>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            <!-- Pagination -->
+            <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-sm">
+                <span class="text-gray-500" x-text="'Showing ' + events.length + ' of ' + (pagination.total || 0)"></span>
+                <div class="flex gap-1">
+                    <button @click="prevPage()" :disabled="pagination.page <= 1" class="px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-600 disabled:opacity-30">Prev</button>
+                    <button @click="nextPage()" :disabled="pagination.page >= pagination.total_pages" class="px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-600 disabled:opacity-30">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function eventsPanel() {
+    return {
+        loading: true,
+        activeTab: 'topics',
+        
+        // Topics
+        topics: [],
+        
+        // Schemas
+        schemas: [],
+        
+        // Events
+        events: [],
+        stats: {},
+        filters: { topic: '', status: '', direction: '', event_name: '' },
+        pagination: { page: 1, per_page: 50, total: 0, total_pages: 1 },
+        
+        // Realtime
+        realtimeEnabled: false,
+        ws: null,
+
+        async init() {
+            this.loading = true;
+            await Promise.all([
+                this.loadTopics(),
+                this.loadSchemas(),
+                this.loadStats(),
+                this.loadEvents()
+            ]);
+            this.loading = false;
+        },
+
+        async refresh() {
+            this.loading = true;
+            await Promise.all([
+                this.loadTopics(),
+                this.loadSchemas(),
+                this.loadStats(),
+                this.loadEvents()
+            ]);
+            this.loading = false;
+        },
+
+        async loadTopics() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/topics/registered');
+                const data = await resp.json();
+                this.topics = data.items || [];
+            } catch (e) {
+                console.error('Failed to load topics:', e);
+            }
+        },
+
+        async loadSchemas() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/schemas/avro');
+                const data = await resp.json();
+                this.schemas = (data.items || []).map(s => ({ ...s, _expanded: false }));
+            } catch (e) {
+                console.error('Failed to load schemas:', e);
+            }
+        },
+
+        async loadStats() {
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/events/stats');
+                this.stats = await resp.json();
+            } catch (e) {}
+        },
+
+        async loadEvents() {
+            try {
+                let url = `{{ admin_prefix }}/api/ops/events?page=${this.pagination.page}&per_page=${this.pagination.per_page}`;
+                if (this.filters.topic) url += `&topic=${encodeURIComponent(this.filters.topic)}`;
+                if (this.filters.status) url += `&status=${this.filters.status}`;
+                if (this.filters.direction) url += `&direction=${this.filters.direction}`;
+                
+                const resp = await fetch(url);
+                const data = await resp.json();
+                this.events = data.items || [];
+                this.pagination.total = data.total || 0;
+                this.pagination.total_pages = data.total_pages || 1;
+            } catch (e) {
+                console.error('Failed to load events:', e);
+            }
+        },
+
+        toggleRealtime() {
+            this.realtimeEnabled = !this.realtimeEnabled;
+            if (this.realtimeEnabled) {
+                this.connectWebSocket();
+            } else {
+                this.disconnectWebSocket();
+            }
+        },
+
+        connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            this.ws = new WebSocket(`${protocol}//${window.location.host}{{ admin_prefix }}/ws/ops/events`);
+            this.ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type?.startsWith('kafka_')) {
+                    if (data.data) {
+                        this.events.unshift(data.data);
+                        if (this.events.length > this.pagination.per_page) this.events.pop();
+                        this.pagination.total++;
+                    }
+                    this.loadStats();
+                }
+            };
+            this.ws.onclose = () => {
+                if (this.realtimeEnabled) setTimeout(() => this.connectWebSocket(), 3000);
+            };
+        },
+
+        disconnectWebSocket() {
+            if (this.ws) { this.ws.close(); this.ws = null; }
+        },
+
+        clearFilters() {
+            this.filters = { topic: '', status: '', direction: '', event_name: '' };
+            this.pagination.page = 1;
+            this.loadEvents();
+        },
+
+        prevPage() {
+            if (this.pagination.page > 1) { this.pagination.page--; this.loadEvents(); }
+        },
+
+        nextPage() {
+            if (this.pagination.page < this.pagination.total_pages) { this.pagination.page++; this.loadEvents(); }
+        },
+
+        formatTime(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            const now = new Date();
+            const diff = (now - d) / 1000;
+            if (diff < 60) return Math.floor(diff) + 's ago';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return d.toLocaleDateString();
+        },
+
+        formatType(type) {
+            if (!type) return 'any';
+            // Clean up type display
+            let t = String(type);
+            if (t.startsWith('[')) {
+                // Union type like ["null", "string"]
+                try {
+                    const arr = JSON.parse(t.replace(/'/g, '"'));
+                    if (Array.isArray(arr) && arr.includes('null')) {
+                        const nonNull = arr.filter(x => x !== 'null')[0];
+                        if (typeof nonNull === 'object') {
+                            return (nonNull.type || 'object') + '?';
+                        }
+                        return nonNull + '?';
+                    }
+                } catch (e) {}
+            }
+            if (t.startsWith('{')) {
+                try {
+                    const obj = JSON.parse(t.replace(/'/g, '"'));
+                    if (obj.type === 'map') return 'map<string>';
+                    if (obj.type === 'array') return 'array';
+                    if (obj.logicalType) return obj.logicalType;
+                    return obj.type || 'object';
+                } catch (e) {}
+            }
+            return t;
+        },
+
+        getTypeColor(type) {
+            const t = this.formatType(type).toLowerCase();
+            if (t.includes('string')) return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
+            if (t.includes('long') || t.includes('int') || t.includes('double') || t.includes('float')) return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400';
+            if (t.includes('bool')) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+            if (t.includes('timestamp') || t.includes('date') || t.includes('time')) return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
+            if (t.includes('map') || t.includes('array')) return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400';
+            return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+        },
+
+        getStatusClass(status) {
+            const s = (status || '').toLowerCase();
+            if (s === 'sent' || s === 'delivered') return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
+            if (s === 'failed') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+            if (s === 'pending') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+            return 'bg-gray-100 dark:bg-gray-700 text-gray-500';
+        },
+
+        getStatusDotClass(status) {
+            const s = (status || '').toLowerCase();
+            if (s === 'sent' || s === 'delivered') return 'bg-green-500';
+            if (s === 'failed') return 'bg-red-500';
+            if (s === 'pending') return 'bg-amber-500';
+            return 'bg-gray-400';
+        },
+    };
+}
+</script>
+{% endblock %}

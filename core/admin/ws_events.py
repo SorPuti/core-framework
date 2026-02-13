@@ -26,7 +26,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
 from typing import Any, TYPE_CHECKING
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Request
@@ -43,61 +42,6 @@ logger = logging.getLogger("core.admin.ws_events")
 def create_ws_router(site: "AdminSite") -> APIRouter:
     """Create the WebSocket router for Operations Center."""
     router = APIRouter(tags=["admin-ws"])
-
-    async def _ws_ops_stream_handler(websocket: WebSocket) -> None:
-        """Unified stream: events, worker heartbeats, task started/finished, metrics push."""
-        await websocket.accept()
-        queue = subscribe_events()
-        metrics_interval = 10.0
-        ping_interval = 30.0
-        last_ping = time.monotonic()
-        last_metrics = 0.0
-        try:
-            await websocket.send_json({
-                "type": "connected",
-                "message": "Connected to Operations Center stream",
-            })
-            while True:
-                try:
-                    wait = min(metrics_interval, ping_interval)
-                    message = await asyncio.wait_for(queue.get(), timeout=wait)
-                    if websocket.client_state != WebSocketState.CONNECTED:
-                        break
-                    await websocket.send_text(message)
-                except asyncio.TimeoutError:
-                    if websocket.client_state != WebSocketState.CONNECTED:
-                        break
-                    now = time.monotonic()
-                    if now - last_metrics >= metrics_interval:
-                        last_metrics = now
-                        try:
-                            from core.admin.ops_views import get_dashboard_snapshot
-                            snapshot = await get_dashboard_snapshot()
-                            await websocket.send_json({
-                                "type": "dashboard_snapshot",
-                                "data": snapshot,
-                            })
-                        except Exception as e:
-                            logger.debug("Dashboard snapshot push failed: %s", e)
-                    if now - last_ping >= ping_interval:
-                        last_ping = now
-                        await websocket.send_json({"type": "ping"})
-        except WebSocketDisconnect:
-            logger.debug("WebSocket client disconnected")
-        except Exception as e:
-            logger.warning("WebSocket error: %s", e)
-        finally:
-            unsubscribe_events(queue)
-            if websocket.client_state == WebSocketState.CONNECTED:
-                try:
-                    await websocket.close()
-                except Exception:
-                    pass
-
-    @router.websocket("/ws/ops/stream")
-    async def ws_ops_stream(websocket: WebSocket):
-        """Unified real-time stream for Operations Center (events, tasks, workers)."""
-        await _ws_ops_stream_handler(websocket)
 
     @router.websocket("/ws/ops/events")
     async def ws_ops_events(websocket: WebSocket):

@@ -236,18 +236,7 @@ class TaskWorker:
         # Lazy load de modelos apenas se necessário
         await self._ensure_models_loaded()
         await self._persist_task_start(task_msg)
-        try:
-            from core.admin.ws_events import broadcast_task_started
-            await broadcast_task_started({
-                "task_id": task_msg.task_id,
-                "task_name": task_msg.task_name,
-                "queue": task_msg.queue,
-                "worker_id": self._worker_id,
-                "started_at": result.started_at.isoformat() if result.started_at else None,
-            })
-        except Exception as e:
-            logger.debug("Broadcast task_started: %s", e)
-
+        
         try:
             # Get task function
             task = get_task(task_msg.task_name)
@@ -318,24 +307,12 @@ class TaskWorker:
             retries=result.retries,
             duration_ms=duration_ms,
         )
-        try:
-            from core.admin.ws_events import broadcast_task_finished
-            await broadcast_task_finished({
-                "task_id": task_msg.task_id,
-                "task_name": task_msg.task_name,
-                "queue": task_msg.queue,
-                "status": result.status.value.upper(),
-                "duration_ms": duration_ms,
-                "error": result.error,
-            })
-        except Exception as e:
-            logger.debug("Broadcast task_finished: %s", e)
-
+        
         return result
     
     # ─── Ops: Task Persistence ────────────────────────────────────
     
-    async def _ensure_models_loaded(self) -> None:
+    async     def _ensure_models_loaded(self) -> None:
         """
         Lazy load de modelos quando necessário.
         
@@ -513,18 +490,6 @@ class TaskWorker:
                 )
                 await db.execute(stmt)
                 await db.commit()
-                try:
-                    from core.admin.ws_events import broadcast_worker_heartbeat
-                    await broadcast_worker_heartbeat({
-                        "worker_id": self._worker_id,
-                        "status": "ONLINE",
-                        "active_tasks": len(self._active_tasks),
-                        "total_processed": self._tasks_processed,
-                        "total_errors": self._tasks_errors,
-                        "last_heartbeat": timezone.now().isoformat(),
-                    })
-                except Exception:
-                    pass
         except Exception:
             pass
     
@@ -548,11 +513,6 @@ class TaskWorker:
                 )
                 await db.execute(stmt)
                 await db.commit()
-                try:
-                    from core.admin.ws_events import broadcast_worker_offline
-                    await broadcast_worker_offline(self._worker_id)
-                except Exception:
-                    pass
         except Exception:
             pass
 
