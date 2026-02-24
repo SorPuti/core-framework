@@ -1,5 +1,5 @@
 """
-Kafka producers. Docs: docs/30-messaging.md
+Kafka producers. Docs: 30-messaging.md
 """
 from core.messaging import publish
 

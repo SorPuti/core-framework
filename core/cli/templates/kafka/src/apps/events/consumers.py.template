@@ -1,5 +1,5 @@
 """
-Kafka consumers. Docs: docs/30-messaging.md
+Kafka consumers. Docs: 30-messaging.md
 """
 from core.messaging import consumer
 

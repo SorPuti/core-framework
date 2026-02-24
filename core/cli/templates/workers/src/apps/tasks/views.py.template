@@ -1,5 +1,5 @@
 """
-Task views. Docs: docs/04-viewsets.md
+Task views. Docs: 04-viewsets.md
 """
 from core import ModelViewSet, action
 from core.permissions import AllowAny

@@ -1,5 +1,5 @@
 """
-Tenant views. Docs: docs/04-viewsets.md
+Tenant views. Docs: 04-viewsets.md
 """
 from core import ModelViewSet
 from core.permissions import AllowAny

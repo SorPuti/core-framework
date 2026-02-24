@@ -1,5 +1,5 @@
 """
-Background workers. Docs: docs/31-workers.md
+Background workers. Docs: 31-workers.md
 """
 from core.workers import worker, Worker
 

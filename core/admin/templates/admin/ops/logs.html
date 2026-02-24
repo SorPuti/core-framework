@@ -1,0 +1,186 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Logs — {{ site_header }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="logsView()" x-init="init()" @destroy="disconnectStream()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Logs</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Stream em tempo real dos logs da aplicação</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-full" :class="{'opacity-50': !streamConnected}">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500" :class="streamConnected ? 'animate-pulse' : ''"></span>
+                Tempo real
+            </span>
+            <button @click="loadRecent()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                Recarregar buffer
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
+        <div class="flex flex-wrap items-end gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">Nível</label>
+                <select x-model="level" @change="reconnectStream()" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 w-32 focus:ring-primary-500 focus:border-primary-500">
+                    <option value="">Todos</option>
+                    <option value="DEBUG">DEBUG</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARNING">WARNING</option>
+                    <option value="ERROR">ERROR</option>
+                    <option value="CRITICAL">CRITICAL</option>
+                </select>
+            </div>
+            <div class="flex-1 min-w-[180px]">
+                <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">Logger</label>
+                <input type="text" x-model="logger" @input.debounce.400ms="reconnectStream()" placeholder="Ex: core.admin" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 focus:ring-primary-500 focus:border-primary-500">
+            </div>
+            <div class="flex-1 min-w-[180px]">
+                <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">Buscar na mensagem</label>
+                <input type="text" x-model="search" @input.debounce.400ms="reconnectStream()" placeholder="Texto ou worker_id" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 focus:ring-primary-500 focus:border-primary-500">
+            </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-3" x-show="totalCaptured !== null">
+            Buffer: <span class="font-medium text-gray-600 dark:text-gray-300" x-text="totalCaptured"></span> entradas
+            <template x-if="bufferSize"> — máx. <span x-text="bufferSize"></span></template>
+        </p>
+    </div>
+
+    <!-- Log viewer -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+        <div class="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+            <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Saída</span>
+            <span class="text-xs text-gray-400 font-mono" x-text="entries.length + ' linhas'"></span>
+        </div>
+        <div class="bg-[#0f172a] p-4 font-mono text-[13px] leading-relaxed max-h-[65vh] overflow-y-auto overflow-x-auto" id="logs-container">
+            <template x-for="(entry, idx) in entries" :key="'log-' + idx">
+                <div>
+                    <div class="group flex items-start gap-3 py-1.5 px-2 rounded hover:bg-white/5 border-l-2 border-transparent hover:border-primary-500/50 transition-colors" :class="entry.level === 'ERROR' || entry.level === 'CRITICAL' ? 'bg-red-500/5' : ''">
+                        <span class="text-slate-500 flex-shrink-0 w-[72px] text-[11px]" x-text="(entry.timestamp || '').substring(11, 23)"></span>
+                        <span class="flex-shrink-0 w-16 text-center text-[11px] font-semibold rounded px-1"
+                              :class="{
+                                  'text-slate-500': entry.level === 'DEBUG',
+                                  'text-emerald-400': entry.level === 'INFO',
+                                  'text-amber-400': entry.level === 'WARNING',
+                                  'text-red-400': entry.level === 'ERROR',
+                                  'text-red-300 font-bold': entry.level === 'CRITICAL'
+                              }" x-text="entry.level"></span>
+                        <span class="text-sky-400 flex-shrink-0 max-w-[200px] truncate text-[11px]" x-text="entry.logger" :title="entry.logger"></span>
+                        <span class="text-slate-300 break-words min-w-0 flex-1" x-text="entry.message"></span>
+                    </div>
+                    <template x-if="entry.exc_text">
+                        <pre class="ml-[72px] mt-0 mr-0 mb-2 text-red-300/90 text-[11px] whitespace-pre-wrap break-all font-mono pl-2 border-l-2 border-red-500/50" x-text="entry.exc_text"></pre>
+                    </template>
+                </div>
+            </template>
+            <template x-if="entries.length === 0 && !loading">
+                <div class="text-slate-500 text-center py-12 text-sm">Nenhum log ainda. O stream está ativo; novas entradas aparecerão aqui.</div>
+            </template>
+            <template x-if="loading && entries.length === 0">
+                <div class="text-slate-500 text-center py-12 text-sm flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                    Carregando...
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function logsView() {
+    return {
+        entries: [],
+        loading: true,
+        streamConnected: false,
+        level: 'INFO',
+        logger: '',
+        search: '',
+        totalCaptured: null,
+        bufferSize: null,
+        eventSource: null,
+        limit: 1000,
+
+        init() {
+            const params = new URLSearchParams(window.location.search);
+            this.search = params.get('search') || '';
+            this.level = params.get('level') || 'INFO';
+            this.logger = params.get('logger') || '';
+            this.loadRecent();
+            this.connectStream();
+        },
+
+        buildRecentUrl() {
+            let url = '{{ admin_prefix }}/api/ops/logs/recent?limit=' + this.limit;
+            if (this.level) url += '&level=' + encodeURIComponent(this.level);
+            if (this.logger) url += '&logger=' + encodeURIComponent(this.logger);
+            if (this.search) url += '&search=' + encodeURIComponent(this.search);
+            return url;
+        },
+
+        buildStreamUrl() {
+            let url = '{{ admin_prefix }}/api/ops/logs/stream?level=' + (this.level || 'DEBUG');
+            if (this.logger) url += '&logger=' + encodeURIComponent(this.logger);
+            if (this.search) url += '&search=' + encodeURIComponent(this.search);
+            return window.location.origin + url;
+        },
+
+        async loadRecent() {
+            this.loading = true;
+            try {
+                const resp = await fetch(this.buildRecentUrl());
+                const data = await resp.json();
+                const list = (data.entries || []).map(e => typeof e === 'string' ? JSON.parse(e) : e);
+                this.entries = list;
+                this.totalCaptured = data.total_captured ?? null;
+                this.bufferSize = data.buffer_size ?? null;
+            } catch (e) {
+                this.entries = [];
+            }
+            this.loading = false;
+        },
+
+        connectStream() {
+            this.disconnectStream();
+            this.streamConnected = false;
+            const url = this.buildStreamUrl();
+            this.eventSource = new EventSource(url);
+            this.eventSource.onopen = () => { this.streamConnected = true; };
+            this.eventSource.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.type === 'connected') {
+                        this.streamConnected = true;
+                        return;
+                    }
+                    this.entries.unshift(data);
+                    if (this.entries.length > this.limit) this.entries.pop();
+                } catch (err) {}
+            };
+            this.eventSource.onerror = () => {
+                this.streamConnected = false;
+                this.disconnectStream();
+            };
+        },
+
+        disconnectStream() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+            this.streamConnected = false;
+        },
+
+        reconnectStream() {
+            this.disconnectStream();
+            this.connectStream();
+            this.loadRecent();
+        }
+    };
+}
+</script>
+{% endblock %}

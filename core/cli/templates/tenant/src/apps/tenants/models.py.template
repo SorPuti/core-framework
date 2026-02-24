@@ -1,5 +1,5 @@
 """
-Tenant model. Docs: docs/32-tenancy.md
+Tenant model. Docs: 03-models.md, 32-tenancy.md
 """
 from core import Model, Field
 from core.datetime import DateTime

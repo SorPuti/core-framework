@@ -1,17 +1,12 @@
 """
-App entry point.
-Docs: docs/01-quickstart.md
+App entry point. Docs: 01-quickstart.md, 23-routing.md
+Auth e middleware vêm de src/settings.py (plug-and-play).
 """
 from core import CoreApp, AutoRouter
 from src.apps.users.routes import users_router, auth_router
 
-# API router
 api = AutoRouter(prefix="/api/v1")
 api.include_router(users_router)
 api.include_router(auth_router)
 
-# App instance - Auth is auto-configured from settings.user_model
-app = CoreApp(
-    routers=[api],
-    middleware=["auth"],  # Django-style middleware
-)
+app = CoreApp(routers=[api])

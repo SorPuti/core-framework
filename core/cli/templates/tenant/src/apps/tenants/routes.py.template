@@ -1,5 +1,5 @@
 """
-Tenant routes. Docs: docs/23-routing.md
+Tenant routes. Docs: 23-routing.md
 """
 from core import AutoRouter
 from .views import TenantViewSet

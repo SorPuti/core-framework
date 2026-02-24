@@ -1,13 +1,11 @@
 """
-App entry point - Event-driven architecture.
-Docs: docs/30-messaging.md
+App entry point - Event-driven. Docs: 23-routing.md, 30-messaging.md
+Kafka habilitado via kafka_enabled em src/settings.py.
 """
 from core import CoreApp, AutoRouter
 from src.apps.events.routes import router as events_router
 
-# API router
 api = AutoRouter(prefix="/api/v1")
 api.include_router(events_router)
 
-# App instance
 app = CoreApp(routers=[api])

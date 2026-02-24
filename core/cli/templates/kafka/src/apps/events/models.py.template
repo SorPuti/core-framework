@@ -1,6 +1,6 @@
 """
 Event model - Store events in PostgreSQL.
-Docs: docs/03-models.md
+Docs: 03-models.md, 30-messaging.md
 """
 from core import Model, Field
 from core.datetime import DateTime

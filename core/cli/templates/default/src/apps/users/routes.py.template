@@ -1,5 +1,5 @@
 """
-User routes. Docs: docs/23-routing.md
+User routes. Docs: 23-routing.md, 05-auth.md (AuthViewSet)
 """
 from core import AutoRouter
 from core.auth import AuthViewSet

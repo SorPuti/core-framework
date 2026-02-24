@@ -1,5 +1,5 @@
 """
-User views. Docs: docs/04-viewsets.md
+User views. Docs: 04-viewsets.md, 08-permissions.md
 """
 from core import ModelViewSet
 from core.permissions import IsAuthenticated

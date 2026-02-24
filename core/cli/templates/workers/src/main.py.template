@@ -1,13 +1,11 @@
 """
-App entry point - Background workers.
-Docs: docs/31-workers.md
+App entry point - Background workers. Docs: 23-routing.md, 31-workers.md
+Tasks habilitadas via task_enabled em src/settings.py. Worker: core runworker
 """
 from core import CoreApp, AutoRouter
 from src.apps.tasks.routes import router as tasks_router
 
-# API router
 api = AutoRouter(prefix="/api/v1")
 api.include_router(tasks_router)
 
-# App instance
 app = CoreApp(routers=[api])

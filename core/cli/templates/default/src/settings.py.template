@@ -1,27 +1,39 @@
 """
-App settings - Single source of truth.
-Docs: docs/02-settings.md
+App settings - Single source of truth (plug-and-play).
+Docs: 01-quickstart.md, 02-settings.md, 05-auth.md, 07-cli.md
+
+Toda configuração via Settings + .env. Não é necessário core.toml.
 """
 from core.config import Settings, configure
 
 
 class AppSettings(Settings):
     """
-    All configuration in ONE place.
-    
-    Override via environment variables or .env files:
-    - .env (base)
-    - .env.development / .env.production (per environment)
-    - OS environment variables (highest priority)
+    Toda configuração em um só lugar.
+    Prioridade: variáveis de ambiente > .env.{ENVIRONMENT} > .env > valores abaixo.
     """
-    
-    # Application
+
+    # Application (02-settings.md)
     app_name: str = "{{project_name}}"
     app_version: str = "0.1.0"
-    
-    # Auth - User model path for auto-configuration
+
+    # CLI / Discovery (07-cli.md) — core migrate, core run, core makemigrations
+    migrations_dir: str = "./migrations"
+    app_label: str = "main"
+    models_module: str = "src.apps.models"
+    app_module: str = "src.main"
+
+    # Auth (05-auth.md) — auto-configurado; middleware "auth" usa user_model
     user_model: str = "src.apps.users.models.User"
 
+    # Middleware (20-middleware.md) — aplicado automaticamente pelo CoreApp
+    middleware: list[str] = [
+        "timing",
+        "request_id",
+        "auth",
+        "logging",
+    ]
 
-# Register globally (REQUIRED)
+
+# Obrigatório: registra e auto-configura subsistemas (datetime, auth, etc.)
 settings = configure(settings_class=AppSettings)

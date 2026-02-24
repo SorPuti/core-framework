@@ -1,6 +1,6 @@
 """
 Task model - Track background jobs.
-Docs: docs/31-workers.md
+Docs: 31-workers.md
 """
 from core import Model, Field
 from core.datetime import DateTime

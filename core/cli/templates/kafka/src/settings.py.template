@@ -1,25 +1,32 @@
 """
-App settings - Kafka + PostgreSQL + Redis.
-Docs: docs/02-settings.md
+App settings - Kafka + PostgreSQL (plug-and-play).
+Docs: 02-settings.md, 07-cli.md, 30-messaging.md. Configuração via Settings + .env.
 """
 from core.config import Settings, configure
 
 
 class AppSettings(Settings):
-    """Configuration for event-driven architecture."""
-    
-    # Application
+    """Kafka e messaging auto-configurados quando kafka_enabled=True (30-messaging.md)."""
+
     app_name: str = "{{project_name}}"
     app_version: str = "0.1.0"
-    
-    # PostgreSQL (required)
+
+    # CLI / Discovery (07-cli.md)
+    migrations_dir: str = "./migrations"
+    app_label: str = "main"
+    models_module: str = "src.apps.models"
+    app_module: str = "src.main"
+
+    # Database (sobrescreva via DATABASE_URL no .env)
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost/{{project_name}}"
-    
-    # Kafka
+
+    # Kafka (30-messaging.md) — producers/consumers configurados automaticamente
+    kafka_enabled: bool = True
     kafka_bootstrap_servers: str = "localhost:9092"
-    kafka_consumer_group: str = "{{project_name}}-group"
-    
-    # Redis (for caching/sessions)
+    kafka_schema_registry_url: str | None = None  # opcional, para Avro
+    avro_default_namespace: str = "com.core.events"
+
+    # Redis
     redis_url: str = "redis://localhost:6379/0"
 
 

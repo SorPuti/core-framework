@@ -1,6 +1,5 @@
 """
-Item model with tenant isolation.
-Docs: docs/32-tenancy.md
+Item model with tenant isolation. Docs: 03-models.md, 32-tenancy.md (TenantMixin)
 """
 from core import Model, Field
 from core.tenancy import TenantMixin

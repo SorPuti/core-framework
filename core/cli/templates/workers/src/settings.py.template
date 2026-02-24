@@ -1,27 +1,37 @@
 """
-App settings - Background workers.
-Docs: docs/31-workers.md
+App settings - Background workers (plug-and-play).
+Docs: 02-settings.md, 07-cli.md, 31-workers.md. Configuração via Settings + .env.
 """
 from core.config import Settings, configure
 
 
 class AppSettings(Settings):
-    """Configuration for background task processing."""
-    
-    # Application
+    """Workers e tasks auto-configurados quando task_enabled=True (31-workers.md)."""
+
     app_name: str = "{{project_name}}"
     app_version: str = "0.1.0"
-    
-    # Database
+
+    # CLI / Discovery (07-cli.md)
+    migrations_dir: str = "./migrations"
+    app_label: str = "main"
+    models_module: str = "src.apps.models"
+    app_module: str = "src.main"
+
+    # Database (sobrescreva via DATABASE_URL no .env)
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost/{{project_name}}"
-    
-    # Redis (for task queue)
+
+    # Tasks (31-workers.md) — core runworker usa estas configs
+    task_enabled: bool = True
+    task_default_queue: str = "default"
+    task_default_retry: int = 3
+    task_default_retry_delay: int = 60
+    task_retry_backoff: bool = True
+    task_default_timeout: int = 300
+    task_worker_concurrency: int = 4
+    task_result_backend: str = "none"  # none, redis, database
+
+    # Redis (fila de tasks; obrigatório para workers)
     redis_url: str = "redis://localhost:6379/0"
-    
-    # Worker settings
-    worker_concurrency: int = 4
-    task_retry_max: int = 3
-    task_retry_delay: int = 60  # seconds
 
 
 settings = configure(settings_class=AppSettings)

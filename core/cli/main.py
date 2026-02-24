@@ -268,18 +268,25 @@ def load_config() -> dict[str, Any]:
     
     Fonte única de verdade: core.config.Settings
     
+    Garante que o .env seja lido da raiz do projeto (onde está pyproject.toml),
+    mesmo quando o comando é executado de um subdiretório.
+    
     Retrocompatibilidade: se core.toml ou pyproject.toml existirem,
     seus valores são lidos como fallback (Settings sempre prevalece).
     
     Retorna dict para compatibilidade com código existente do CLI.
     """
-    # Adiciona diretório atual ao path para permitir import de src.settings
-    cwd = os.getcwd()
-    if cwd not in sys.path:
-        sys.path.insert(0, cwd)
-    
+    # Usar raiz do projeto para .env e import de src.settings (corrige dbinfo/migrate
+    # quando DATABASE_URL está no .env e o comando é rodado de qualquer subdir)
+    root = _get_project_root()
+    root_str = str(root)
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
+    if os.getcwd() != root_str:
+        os.chdir(root_str)
+
     from core.config import get_settings
-    
+
     settings = get_settings()
     
     # Base: valores do Settings centralizado

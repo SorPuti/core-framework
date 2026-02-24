@@ -1,6 +1,6 @@
 [project]
 name = "core-framework"
-version = "0.17.43"
+version = "0.17.44"
 description = "Core Framework - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.10,<4.0"
 readme = "README.md"
@@ -84,6 +84,12 @@ testing = [
     "pytest-asyncio>=0.23.0",
     "httpx>=0.26.0",
     "faker>=20.0.0",
+]
+gcs = [
+    "google-cloud-storage>=2.0.0",
+]
+storage = [
+    "google-cloud-storage>=2.0.0",
 ]
 
 [project.urls]

@@ -1,6 +1,4 @@
 """
-Model imports - Barrel file for migrations.
-All models must be imported here for discovery.
-Docs: docs/03-models.md
+Model imports — barrel para migrations. Todos os models aqui (03-models.md, 41-migrations.md).
 """
 from src.apps.users.models import User  # noqa

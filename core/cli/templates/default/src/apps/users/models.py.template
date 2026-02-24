@@ -1,5 +1,5 @@
 """
-User model. Docs: docs/03-models.md
+User model. Docs: 03-models.md, 05-auth.md (AbstractUser, PermissionsMixin)
 """
 from sqlalchemy.orm import Mapped
 

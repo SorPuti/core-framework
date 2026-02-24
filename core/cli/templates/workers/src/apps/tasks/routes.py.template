@@ -1,5 +1,5 @@
 """
-Task routes. Docs: docs/23-routing.md
+Task routes. Docs: 23-routing.md
 """
 from core import AutoRouter
 from .views import TaskViewSet
