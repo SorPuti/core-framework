@@ -1,7 +1,4 @@
-"""
-App entry point. Docs: 01-quickstart.md, 23-routing.md
-Auth e middleware vêm de src/settings.py (plug-and-play).
-"""
+"""App entry point; middleware from settings."""
 from core import CoreApp, AutoRouter
 from src.apps.users.routes import users_router, auth_router
 

@@ -90,7 +90,9 @@ app = CoreApp(
 | `"auth"` | `AuthenticationMiddleware` | Autenticação JWT (obrigatória) |
 | `"optional_auth"` | `OptionalAuthenticationMiddleware` | Auth JWT opcional |
 | `"tenant"` | `TenantMiddleware` | Contexto multi-tenant |
-| `"security_headers"` | `SecurityHeadersMiddleware` | Headers de segurança |
+| `"security_headers"` | `SecurityHeadersMiddleware` | Headers de segurança (CSP, HSTS via Settings) |
+| `"rate_limit"` | `RateLimitMiddleware` | Rate limit por IP (429; configurável via Settings) |
+| `"content_length_limit"` | `ContentLengthLimitMiddleware` | Rejeita body > max_request_size (413) |
 | `"maintenance"` | `MaintenanceModeMiddleware` | Modo manutenção |
 | `"cors"` | `CORSMiddleware` | Tratamento CORS |
 | `"gzip"` | `GZipMiddleware` | Compressão de response |

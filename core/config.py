@@ -167,6 +167,80 @@ class Settings(BaseSettings):
     )
     
     # =========================================================================
+    # Storage / File uploads
+    # Plug-and-play: troque backend sem mudar código
+    # Inspirado em Django + django-storages (GoogleCloudStorage)
+    # =========================================================================
+    
+    storage_backend: Literal["local", "gcs"] = PydanticField(
+        default="local",
+        description=(
+            "Backend de storage de arquivos.\n"
+            "Opções:\n"
+            '- "local": sistema de arquivos local (diretório `storage_local_media_root`).\n'
+            '- "gcs": Google Cloud Storage (bucket público ou com URLs assinadas).\n\n'
+            "Quando `gcs`, configure também `storage_gcs_bucket_name`, "
+            "`storage_gcs_credentials_file` (ou credenciais padrão do GCP) e `storage_media_url`."
+        ),
+    )
+    storage_media_url: str | None = PydanticField(
+        default=None,
+        description=(
+            "Base URL pública para servir arquivos de mídia.\n"
+            "Exemplos:\n"
+            '- Local: "/media/".\n'
+            '- GCS direto: "https://storage.googleapis.com/<bucket>/".\n'
+            "- CDN: URL do seu CDN apontando para o bucket.\n\n"
+            "Se None, o backend pode construir URLs relativas ao app."
+        ),
+    )
+    storage_local_media_root: str = PydanticField(
+        default="media",
+        description=(
+            "Diretório local (relativo à raiz do projeto) onde arquivos serão salvos "
+            "quando `storage_backend='local'`.\n"
+            "Ex: 'media', 'var/media', '/mnt/storage'."
+        ),
+    )
+    storage_gcs_bucket_name: str | None = PydanticField(
+        default=None,
+        description=(
+            "Nome do bucket do Google Cloud Storage quando `storage_backend='gcs'`.\n"
+            "Equivalente a `GS_BUCKET_NAME` no django-storages."
+        ),
+    )
+    storage_gcs_project: str | None = PydanticField(
+        default=None,
+        description=(
+            "ID do projeto GCP (opcional). Se None, usa o projeto das credenciais.\n"
+            "Equivalente ao uso padrão do `google-cloud-storage`."
+        ),
+    )
+    storage_gcs_credentials_file: str | None = PydanticField(
+        default=None,
+        description=(
+            "Caminho para o JSON de credenciais de Service Account do Google Cloud.\n"
+            "Se None, usa Application Default Credentials (ADC), como em produção no GKE/Cloud Run.\n"
+            "Equivalente a `GS_CREDENTIALS` (quando configurado via arquivo) no django-storages."
+        ),
+    )
+    storage_gcs_default_acl: str | None = PydanticField(
+        default="publicRead",
+        description=(
+            "ACL padrão dos blobs criados no bucket GCS.\n"
+            "Exemplos: 'publicRead', 'private'.\n"
+            "Equivalente a `GS_DEFAULT_ACL` no django-storages."
+        ),
+    )
+    storage_gcs_expiration_seconds: int = PydanticField(
+        default=300,
+        description=(
+            "Tempo de expiração (em segundos) para URLs assinadas geradas pelo backend GCS.\n"
+            "Equivalente a `GS_EXPIRATION` no django-storages (ex: 300 = 5 minutos)."
+        ),
+    )
+    
+    # =========================================================================
     # Database
     # =========================================================================
     
@@ -436,7 +510,32 @@ class Settings(BaseSettings):
     )
     max_request_size: int = PydanticField(
         default=10 * 1024 * 1024,  # 10MB
-        description="Tamanho máximo de requisição em bytes",
+        description="Tamanho máximo de requisição em bytes (ContentLengthLimitMiddleware)",
+    )
+    
+    # =========================================================================
+    # Security middleware (rate limit, CSP)
+    # =========================================================================
+    
+    rate_limit_requests: int = PydanticField(
+        default=100,
+        description="Máximo de requests por IP por janela (RateLimitMiddleware)",
+    )
+    rate_limit_window_seconds: int = PydanticField(
+        default=60,
+        description="Janela do rate limit em segundos",
+    )
+    rate_limit_exclude_paths: list[str] = PydanticField(
+        default=["/healthz", "/readyz", "/docs", "/redoc", "/openapi.json"],
+        description="Paths excluídos do rate limit",
+    )
+    security_csp: str | None = PydanticField(
+        default=None,
+        description="Content-Security-Policy header (None = não envia). Ex: default-src 'self'",
+    )
+    security_headers_hsts: bool = PydanticField(
+        default=False,
+        description="Habilitar HSTS (Strict-Transport-Security) em HTTPS",
     )
     
     # =========================================================================
@@ -732,8 +831,8 @@ class Settings(BaseSettings):
         description="Label da aplicação (usado em migrations e CLI)",
     )
     models_module: str = PydanticField(
-        default="app.models",
-        description="Módulo Python dos models (ex: 'myapp.models')",
+        default="src.models",
+        description="Módulo Python dos models (ex: 'src.models', 'myapp.models')",
     )
     workers_module: str | None = PydanticField(
         default=None,
@@ -1131,6 +1230,7 @@ _datetime_configured = False
 _auth_configured = False
 _kafka_configured = False
 _tasks_configured = False
+_storage_configured = False
 _models_loaded = False
 
 
@@ -1333,6 +1433,90 @@ def _auto_configure_kafka(settings: Settings) -> bool:
         return False
 
 
+def _auto_configure_storage(settings: Settings) -> bool:
+    """
+    Auto-configura o backend de Storage a partir das Settings.
+    
+    Inspirado no padrão do Django/django-storages:
+    - Seleciona backend via `storage_backend`
+    - Para GCS, usa bucket + credenciais como GS_BUCKET_NAME/GS_CREDENTIALS
+    
+    Configurado automaticamente quando:
+    - storage_backend é diferente do default esperado pelo código
+      (por exemplo, 'gcs' em vez de 'local'), ou
+    - qualquer campo específico de GCS estiver definido.
+    
+    Returns:
+        True se configurado, False se já estava, não aplicável, ou falhou
+    """
+    global _storage_configured
+    
+    if _storage_configured:
+        return False
+    
+    backend = settings.storage_backend
+    
+    # Backend local não requer libs externas — apenas marca como configurado.
+    if backend == "local":
+        _storage_configured = True
+        logger.debug(
+            "Storage auto-configured (backend=local, media_root=%s)",
+            settings.storage_local_media_root,
+        )
+        return True
+    
+    if backend == "gcs":
+        # Validação básica de configuração
+        if not settings.storage_gcs_bucket_name:
+            logger.warning(
+                "Storage backend 'gcs' selecionado, mas storage_gcs_bucket_name não está definido. "
+                "Configure STORAGE_GCS_BUCKET_NAME no Settings/.env (equivalente a GS_BUCKET_NAME)."
+            )
+            return False
+        
+        try:
+            # Import opcional: só existe se o usuário instalou o extra.
+            from google.cloud import storage as gcs_storage  # type: ignore[import]
+        except ImportError:
+            logger.warning(
+                "Storage backend 'gcs' requer a dependência opcional 'google-cloud-storage'. "
+                "Instale com: pip install 'google-cloud-storage' "
+                "ou use o extra apropriado do core-framework."
+            )
+            return False
+        
+        try:
+            # Instancia um client apenas para fail-fast em casos de credenciais inválidas.
+            if settings.storage_gcs_credentials_file:
+                client = gcs_storage.Client.from_service_account_file(  # type: ignore[attr-defined]
+                    settings.storage_gcs_credentials_file,
+                    project=settings.storage_gcs_project or None,
+                )
+            else:
+                client = gcs_storage.Client(  # type: ignore[call-arg]
+                    project=settings.storage_gcs_project or None,
+                )
+            
+            # Apenas verifica se o bucket pode ser resolvido localmente.
+            client.bucket(settings.storage_gcs_bucket_name)
+            
+            _storage_configured = True
+            logger.debug(
+                "Storage auto-configured (backend=gcs, bucket=%s, project=%s)",
+                settings.storage_gcs_bucket_name,
+                settings.storage_gcs_project or "<auto>",
+            )
+            return True
+        except Exception as e:  # pragma: no cover - dependente de ambiente GCP
+            logger.warning("Failed to auto-configure GCS storage: %s", e)
+            return False
+    
+    logger.warning(
+        "Unknown storage_backend '%s'. Expected 'local' or 'gcs'.", backend
+    )
+    return False
+
+
 def _auto_configure_tasks(settings: Settings) -> bool:
     """
     Auto-configura o sistema de Tasks/Workers a partir das Settings.
@@ -1374,8 +1558,9 @@ def _run_auto_configuration(settings: Settings) -> dict[str, bool]:
     1. DateTime (sem dependências)
     2. Models (pré-carrega para auth)
     3. Auth (depende de models)
-    4. Kafka (sem dependências)
-    5. Tasks (sem dependências diretas)
+    4. Storage (sem dependências diretas)
+    5. Kafka (sem dependências)
+    6. Tasks (sem dependências diretas)
     
     Returns:
         Dict com status de cada subsistema configurado
@@ -1391,10 +1576,13 @@ def _run_auto_configuration(settings: Settings) -> dict[str, bool]:
     # 3. Auth - depende de models carregados
     results["auth"] = _auto_configure_auth(settings)
     
-    # 4. Kafka - independente
+    # 4. Storage - independente
+    results["storage"] = _auto_configure_storage(settings)
+    
+    # 5. Kafka - independente
     results["kafka"] = _auto_configure_kafka(settings)
     
-    # 5. Tasks - independente (mas pode usar kafka)
+    # 6. Tasks - independente (mas pode usar kafka)
     results["tasks"] = _auto_configure_tasks(settings)
     
     # Log resumo
@@ -1469,6 +1657,11 @@ def is_tasks_configured() -> bool:
     return _tasks_configured
 
 
+def is_storage_configured() -> bool:
+    """Verifica se o sistema de storage foi configurado."""
+    return _storage_configured
+
+
 def get_configured_subsystems() -> dict[str, bool]:
     """
     Retorna status de todos os subsistemas.
@@ -1482,6 +1675,7 @@ def get_configured_subsystems() -> dict[str, bool]:
         "datetime": _datetime_configured,
         "models": _models_loaded,
         "auth": _auth_configured,
+        "storage": _storage_configured,
         "kafka": _kafka_configured,
         "tasks": _tasks_configured,
     }
@@ -1589,12 +1783,12 @@ def reset_settings() -> None:
     
     Reseta:
     - Settings singleton
-    - Todos os flags de auto-configuração (datetime, auth, kafka, tasks)
+    - Todos os flags de auto-configuração (datetime, auth, storage, kafka, tasks)
     
     AVISO: Apenas para testes. Não usar em production.
     """
     global _settings, _settings_class
-    global _datetime_configured, _auth_configured, _kafka_configured, _tasks_configured, _models_loaded
+    global _datetime_configured, _auth_configured, _kafka_configured, _tasks_configured, _storage_configured, _models_loaded
     
     if _settings is not None and _settings.environment == "production":
         raise RuntimeError(
@@ -1610,6 +1804,7 @@ def reset_settings() -> None:
     _auth_configured = False
     _kafka_configured = False
     _tasks_configured = False
+    _storage_configured = False
     _models_loaded = False
 
 

@@ -1,6 +1,4 @@
-"""
-Tenant routes. Docs: 23-routing.md
-"""
+"""Tenant routes."""
 from core import AutoRouter
 from .views import TenantViewSet
 

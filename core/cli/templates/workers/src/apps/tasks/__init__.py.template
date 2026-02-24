@@ -1,1 +1,1 @@
-"""Tasks app - Background task processing."""
+"""Tasks app (background workers)."""

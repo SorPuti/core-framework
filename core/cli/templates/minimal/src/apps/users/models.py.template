@@ -1,18 +1,10 @@
-"""
-User model. Docs: 03-models.md, 05-auth.md
-"""
+"""User model (AbstractUser)."""
 from core import Model
 from core.auth import AbstractUser
 
 
 class User(AbstractUser, Model):
-    """
-    User model for authentication.
-    
-    Inherits from AbstractUser:
-        - email, password_hash, is_active, is_staff, is_superuser
-        - set_password(), check_password(), authenticate()
-    """
-    
+    """User with email auth."""
+
     __tablename__ = "users"
-    __abstract__ = False  # Ensure this model is not abstract
+    __abstract__ = False

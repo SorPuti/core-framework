@@ -1,6 +1,4 @@
-"""
-Event views. Docs: 04-viewsets.md
-"""
+"""Event ViewSet + publish_test action."""
 from core import ModelViewSet, action
 from core.permissions import AllowAny
 from fastapi import Request
@@ -11,14 +9,14 @@ from .producers import publish_user_created
 
 
 class EventViewSet(ModelViewSet):
-    """Event log endpoints."""
-    
+    """Event CRUD + publish_test."""
+
     model = Event
     permission_classes = [AllowAny]
     tags = ["Events"]
-    
+
     @action(methods=["POST"], detail=False)
     async def publish_test(self, request: Request, db: AsyncSession, **kwargs):
-        """Publish a test event to Kafka."""
+        """Publish test event to Kafka."""
         await publish_user_created(user_id=1, email="test@example.com")
         return {"message": "Event published to Kafka"}

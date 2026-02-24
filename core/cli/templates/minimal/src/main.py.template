@@ -1,6 +1,4 @@
-"""
-App entry point. Docs: 01-quickstart.md, 23-routing.md
-"""
+"""App entry point; middleware from settings."""
 from core import CoreApp, AutoRouter
 from src.apps.items.routes import router as items_router
 

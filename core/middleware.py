@@ -309,6 +309,8 @@ _builtin_middlewares: dict[str, str] = {
     "logging": "core.middleware.LoggingMiddleware",
     "maintenance": "core.middleware.MaintenanceModeMiddleware",
     "security_headers": "core.middleware.SecurityHeadersMiddleware",
+    "rate_limit": "core.middleware.RateLimitMiddleware",
+    "content_length_limit": "core.middleware.ContentLengthLimitMiddleware",
 }
 
 
@@ -614,22 +616,38 @@ class MaintenanceModeMiddleware(ASGIMiddleware):
 
 class SecurityHeadersMiddleware(ASGIMiddleware):
     """
-    Middleware que adiciona headers de segurança.
+    Middleware que adiciona headers de segurança (OWASP).
+    Suporta CSP (Content-Security-Policy) e HSTS configuráveis via Settings.
     """
     
     name = "SecurityHeadersMiddleware"
     order = 15
     
-    # Default security headers
+    # Default security headers (best practice)
     headers: dict[str, str] = {
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
         "X-XSS-Protection": "1; mode=block",
         "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
     }
     
     enable_hsts: bool = False
     hsts_max_age: int = 31536000  # 1 ano
+    content_security_policy: str | None = None  # CSP header value; None = não envia
+    
+    def __init__(self, app: ASGIApp, **kwargs: Any) -> None:
+        super().__init__(app, **kwargs)
+        if "content_security_policy" not in kwargs or "enable_hsts" not in kwargs:
+            try:
+                from core.config import get_settings
+                s = get_settings()
+                if "content_security_policy" not in kwargs:
+                    self.content_security_policy = getattr(s, "security_csp", None) or self.content_security_policy
+                if "enable_hsts" not in kwargs:
+                    self.enable_hsts = getattr(s, "security_headers_hsts", self.enable_hsts)
+            except Exception:
+                pass
     
     async def after_response(
         self,
@@ -641,10 +659,121 @@ class SecurityHeadersMiddleware(ASGIMiddleware):
         for header, value in self.headers.items():
             response_headers.append((header.lower().encode(), value.encode()))
         
+        if self.content_security_policy:
+            response_headers.append(
+                (b"content-security-policy", self.content_security_policy.encode())
+            )
+        
         if self.enable_hsts and scope.get("scheme") == "https":
             response_headers.append(
                 (b"strict-transport-security", f"max-age={self.hsts_max_age}".encode())
             )
+
+
+class RateLimitMiddleware(ASGIMiddleware):
+    """
+    Rate limiting por IP (in-memory). Retorna 429 quando exceder o limite.
+    Configurável via kwargs ou Settings (rate_limit_requests, rate_limit_window_seconds).
+    """
+    
+    name = "RateLimitMiddleware"
+    order = 2  # cedo na stack
+    
+    requests_per_window: int = 100
+    window_seconds: int = 60
+    exclude_paths: list[str] = ["/healthz", "/readyz", "/docs", "/redoc", "/openapi.json"]
+    
+    def __init__(self, app: ASGIApp, **kwargs: Any) -> None:
+        super().__init__(app, **kwargs)
+        try:
+            from core.config import get_settings
+            s = get_settings()
+            self.requests_per_window = getattr(s, "rate_limit_requests", self.requests_per_window)
+            self.window_seconds = getattr(s, "rate_limit_window_seconds", self.window_seconds)
+            self.exclude_paths = getattr(s, "rate_limit_exclude_paths", self.exclude_paths) or self.exclude_paths
+        except Exception:
+            pass
+        self._store: dict[str, list[float]] = {}
+        import threading
+        self._lock = threading.Lock()
+    
+    def _get_client_key(self, request: Request) -> str:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        if request.client:
+            return request.client.host or "unknown"
+        return "unknown"
+    
+    def _is_over_limit(self, key: str) -> bool:
+        now = time.time()
+        cutoff = now - self.window_seconds
+        with self._lock:
+            if key not in self._store:
+                self._store[key] = []
+            times = self._store[key]
+            times[:] = [t for t in times if t > cutoff]
+            if len(times) >= self.requests_per_window:
+                return True
+            times.append(now)
+        return False
+    
+    async def before_request(self, scope: Scope, request: Request) -> Response | None:
+        if not self._should_process(request.url.path):
+            return None
+        if self._is_over_limit(self._get_client_key(request)):
+            from starlette.responses import JSONResponse
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": "Too Many Requests",
+                    "code": "rate_limit_exceeded",
+                    "retry_after": self.window_seconds,
+                },
+                headers=[(b"retry-after", str(self.window_seconds).encode())],
+            )
+        return None
+
+
+class ContentLengthLimitMiddleware(ASGIMiddleware):
+    """
+    Rejeita requests com Content-Length acima do limite (413 Payload Too Large).
+    Usa max_request_size dos Settings quando não passado por kwargs.
+    """
+    
+    name = "ContentLengthLimitMiddleware"
+    order = 3
+    
+    max_bytes: int = 10 * 1024 * 1024  # 10MB
+    
+    def __init__(self, app: ASGIApp, **kwargs: Any) -> None:
+        super().__init__(app, **kwargs)
+        if "max_bytes" not in kwargs:
+            try:
+                from core.config import get_settings
+                self.max_bytes = getattr(get_settings(), "max_request_size", self.max_bytes)
+            except Exception:
+                pass
+    
+    async def before_request(self, scope: Scope, request: Request) -> Response | None:
+        if not self._should_process(request.url.path):
+            return None
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > self.max_bytes:
+                    from starlette.responses import JSONResponse
+                    return JSONResponse(
+                        status_code=413,
+                        content={
+                            "detail": "Request body too large",
+                            "code": "payload_too_large",
+                            "max_bytes": self.max_bytes,
+                        },
+                    )
+            except ValueError:
+                pass
+        return None
 
 
 # =============================================================================
@@ -677,4 +806,6 @@ __all__ = [
     "LoggingMiddleware",
     "MaintenanceModeMiddleware",
     "SecurityHeadersMiddleware",
+    "RateLimitMiddleware",
+    "ContentLengthLimitMiddleware",
 ]

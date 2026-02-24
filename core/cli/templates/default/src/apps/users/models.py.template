@@ -1,6 +1,4 @@
-"""
-User model. Docs: 03-models.md, 05-auth.md (AbstractUser, PermissionsMixin)
-"""
+"""User model (AbstractUser + PermissionsMixin)."""
 from sqlalchemy.orm import Mapped
 
 from core import Model, Field
@@ -8,26 +6,16 @@ from core.auth import AbstractUser, PermissionsMixin
 
 
 class User(AbstractUser, PermissionsMixin, Model):
-    """
-    Custom User model.
-    
-    Inherits from AbstractUser:
-        - email, password_hash, is_active, is_staff, is_superuser
-        - set_password(), check_password(), authenticate()
-    
-    Inherits from PermissionsMixin:
-        - groups, user_permissions, has_perm(), has_perms()
-    """
-    
+    """User with email auth and permissions."""
+
     __tablename__ = "users"
-    __abstract__ = False  # Ensure this model is not abstract
-    
-    # Profile fields
+    __abstract__ = False
+
     first_name: Mapped[str | None] = Field.string(max_length=100, nullable=True)
     last_name: Mapped[str | None] = Field.string(max_length=100, nullable=True)
-    
+
     @property
     def full_name(self) -> str:
-        """Return full name or email."""
+        """Full name or email."""
         parts = [self.first_name, self.last_name]
         return " ".join(p for p in parts if p) or self.email

@@ -1,6 +1,4 @@
-"""
-Item model with tenant isolation. Docs: 03-models.md, 32-tenancy.md (TenantMixin)
-"""
+"""Item model with tenant isolation (TenantMixin)."""
 from core import Model, Field
 from core.tenancy import TenantMixin
 from core.datetime import DateTime
@@ -9,19 +7,12 @@ import uuid
 
 
 class Item(TenantMixin, Model):
-    """
-    Item with automatic tenant isolation.
-    
-    TenantMixin adds:
-        - tenant_id: Foreign key to tenant
-        - Automatic filtering by current tenant
-        - for_tenant() queryset method
-    """
-    
+    """Item scoped by tenant (tenant_id, for_tenant)."""
+
     __tablename__ = "items"
-    
+
     id: Mapped[int] = Field.pk()
-    tenant_id: Mapped[uuid.UUID] = Field.uuid(index=True)  # From TenantMixin
+    tenant_id: Mapped[uuid.UUID] = Field.uuid(index=True)
     name: Mapped[str] = Field.string(max_length=200)
     description: Mapped[str | None] = Field.text(nullable=True)
     price: Mapped[float] = Field.float(default=0.0)

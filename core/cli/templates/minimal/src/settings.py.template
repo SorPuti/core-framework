@@ -1,20 +1,26 @@
-"""
-App settings (plug-and-play). Docs: 01-quickstart.md, 02-settings.md, 07-cli.md
-Configuração via Settings + .env. Não é necessário core.toml.
-"""
+"""App settings: single source of truth (Settings + .env)."""
 from core.config import Settings, configure
 
 
 class AppSettings(Settings):
-    """Toda configuração em um lugar. Database e CLI funcionam via .env e aqui."""
+    """Central config; override via env or .env files."""
+
     app_name: str = "{{project_name}}"
     app_version: str = "0.1.0"
 
-    # CLI / Discovery (07-cli.md)
     migrations_dir: str = "./migrations"
     app_label: str = "main"
-    models_module: str = "src.apps.models"
+    models_module: str = "src.models"
     app_module: str = "src.main"
+
+    middleware: list[str] = [
+        "timing",
+        "request_id",
+        "security_headers",
+        "rate_limit",
+        "content_length_limit",
+        "logging",
+    ]
 
 
 settings = configure(settings_class=AppSettings)

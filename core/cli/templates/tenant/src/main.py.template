@@ -1,7 +1,4 @@
-"""
-App entry point - Multi-tenant. Docs: 23-routing.md, 32-tenancy.md
-TenantMiddleware é ativado automaticamente via tenancy_enabled em src/settings.py.
-"""
+"""App entry point; tenancy from settings."""
 from core import CoreApp, AutoRouter
 from src.apps.tenants.routes import router as tenants_router
 from src.apps.items.routes import router as items_router

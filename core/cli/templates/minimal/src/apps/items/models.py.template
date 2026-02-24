@@ -1,12 +1,12 @@
-"""
-Item model. Docs: 03-models.md, 10-fields.md
-"""
+"""Item model for CRUD example."""
 from core import Model, Field
 from core.datetime import DateTime
 from sqlalchemy.orm import Mapped
 
+
 class Item(Model):
-    """Simple item model for CRUD example."""
+    """Simple item with name, price, timestamps."""
+
     __tablename__ = "items"
     
     id: Mapped[int] = Field.pk()

@@ -1,6 +1,4 @@
-"""
-Item routes. Docs: 23-routing.md
-"""
+"""Item routes."""
 from core import AutoRouter
 from .views import ItemViewSet
 

@@ -224,6 +224,7 @@ status = get_configured_subsystems()
 #     'datetime': True,
 #     'models': True,
 #     'auth': True,
+#     'storage': True,
 #     'kafka': True,
 #     'tasks': True
 # }
@@ -269,6 +270,110 @@ status = get_configured_subsystems()
 | `database_read_url` | `str \| None` | `None` | URL do banco de leitura (replica) |
 | `database_read_pool_size` | `int \| None` | `None` | Pool size para replica (default: 2x write) |
 | `database_read_max_overflow` | `int \| None` | `None` | Max overflow para replica (default: 2x write) |
+
+### Storage / File Uploads
+
+**Arquitetura inspirada em Django + django-storages (GoogleCloudStorage)**  
+Você escolhe o backend via `storage_backend` e configura os detalhes por settings, assim como no Django com `DEFAULT_FILE_STORAGE`, `GS_BUCKET_NAME`, `GS_CREDENTIALS`, etc.
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `storage_backend` | `Literal["local", "gcs"]` | `"local"` | Backend de storage de arquivos. `"local"` usa sistema de arquivos, `"gcs"` usa Google Cloud Storage (GCS) com bucket configurado |
+| `storage_media_url` | `str \| None` | `None` | Base URL pública para servir arquivos. Ex: `"/media/"`, `"https://storage.googleapis.com/<bucket>/"` ou URL de CDN |
+| `storage_local_media_root` | `str` | `"media"` | Diretório local (relativo ao projeto) para salvar arquivos quando `storage_backend="local"` |
+| `storage_gcs_bucket_name` | `str \| None` | `None` | Nome do bucket GCS quando `storage_backend="gcs"`. Equivalente a `GS_BUCKET_NAME` no django-storages |
+| `storage_gcs_project` | `str \| None` | `None` | ID do projeto GCP (opcional). Se `None`, usa o projeto das credenciais |
+| `storage_gcs_credentials_file` | `str \| None` | `None` | Caminho para o JSON de Service Account do GCP. Se `None`, usa Application Default Credentials (ADC). Equivalente a `GS_CREDENTIALS` quando configurado via arquivo |
+| `storage_gcs_default_acl` | `str \| None` | `"publicRead"` | ACL padrão dos blobs (`"publicRead"`, `"private"`, etc.). Equivalente a `GS_DEFAULT_ACL` |
+| `storage_gcs_expiration_seconds` | `int` | `300` | Validade (segundos) de URLs assinadas geradas pelo backend GCS. Equivalente a `GS_EXPIRATION` (ex: 300 = 5 minutos) |
+
+#### Exemplo: Storage Local (padrão)
+
+```python
+# src/settings.py
+from core.config import Settings, configure
+
+
+class AppSettings(Settings):
+    # Storage local (files em disco)
+    storage_backend: str = "local"
+    storage_local_media_root: str = "media"
+    storage_media_url: str = "/media/"
+
+
+settings = configure(settings_class=AppSettings)
+```
+
+```bash
+# .env
+STORAGE_BACKEND=local
+STORAGE_LOCAL_MEDIA_ROOT=media
+STORAGE_MEDIA_URL=/media/
+```
+
+#### Exemplo: Google Cloud Storage (estilo Django)
+
+Configuração equivalente ao uso do `GoogleCloudStorage` do `django-storages`:
+
+```python
+# Django (referência)
+DEFAULT_FILE_STORAGE = "storages.backends.gcloud.GoogleCloudStorage"
+GS_BUCKET_NAME = "minha-api-media"
+MEDIA_URL = "https://storage.googleapis.com/minha-api-media/"
+```
+
+No Core Framework, o modelo de Settings faz esse papel:
+
+```python
+# src/settings.py
+from core.config import Settings, configure
+
+
+class AppSettings(Settings):
+    # Storage: Google Cloud Storage
+    storage_backend: str = "gcs"
+    storage_gcs_bucket_name: str = "minha-api-media"
+    storage_media_url: str = "https://storage.googleapis.com/minha-api-media/"
+
+    # Opcional: projeto e credenciais explícitas
+    storage_gcs_project: str | None = "meu-projeto-gcp"
+    storage_gcs_credentials_file: str | None = "config/gcp-service-account.json"
+    storage_gcs_default_acl: str | None = "publicRead"
+    storage_gcs_expiration_seconds: int = 300  # 5 minutos (URLs assinadas)
+
+
+settings = configure(settings_class=AppSettings)
+```
+
+```bash
+# .env - Google Cloud Storage
+
+# Seleciona backend GCS (equivalente a DEFAULT_FILE_STORAGE com GoogleCloudStorage)
+STORAGE_BACKEND=gcs
+
+# Bucket (equivalente a GS_BUCKET_NAME)
+STORAGE_GCS_BUCKET_NAME=minha-api-media
+
+# URL base pública (equivalente a MEDIA_URL em Django)
+STORAGE_MEDIA_URL=https://storage.googleapis.com/minha-api-media/
+
+# Projeto (opcional)
+STORAGE_GCS_PROJECT=meu-projeto-gcp
+
+# Caminho do JSON de Service Account (opcional se usar ADC)
+STORAGE_GCS_CREDENTIALS_FILE=config/gcp-service-account.json
+
+# ACL padrão (equivalente a GS_DEFAULT_ACL)
+STORAGE_GCS_DEFAULT_ACL=publicRead
+
+# Expiração de URLs assinadas (equivalente a GS_EXPIRATION)
+STORAGE_GCS_EXPIRATION_SECONDS=300
+```
+
+**Comportamento plug-and-play**:
+
+- **Local**: defina `STORAGE_BACKEND=local` e os arquivos serão gravados no diretório `STORAGE_LOCAL_MEDIA_ROOT`, servidos a partir de `STORAGE_MEDIA_URL` (por exemplo, via Nginx ou um endpoint de arquivos estáticos).
+- **GCS**: troque para `STORAGE_BACKEND=gcs` e configure os campos `STORAGE_GCS_*`. O framework auto-configura o cliente GCS (se `google-cloud-storage` estiver instalado) e valida bucket/projeto, no mesmo espírito do `django-storages`.
 
 ### API
 
@@ -382,7 +487,17 @@ middleware: list[str] = [
 | Setting | Tipo | Default | Descrição |
 |---------|------|---------|-----------|
 | `request_timeout` | `int` | `30` | Timeout de requisições (segundos) |
-| `max_request_size` | `int` | `10485760` | Tamanho máximo de request (10MB) |
+| `max_request_size` | `int` | `10485760` | Tamanho máximo de request (10MB); usado por `content_length_limit` |
+
+### Security middleware
+
+| Setting | Tipo | Default | Descrição |
+|---------|------|---------|-----------|
+| `rate_limit_requests` | `int` | `100` | Máximo de requests por IP por janela (`rate_limit`) |
+| `rate_limit_window_seconds` | `int` | `60` | Janela do rate limit (segundos) |
+| `rate_limit_exclude_paths` | `list[str]` | `["/healthz", "/readyz", "/docs", ...]` | Paths excluídos do rate limit |
+| `security_csp` | `str \| None` | `None` | Valor do header Content-Security-Policy (`security_headers`) |
+| `security_headers_hsts` | `bool` | `False` | Habilitar HSTS em HTTPS |
 
 ### Logging
 

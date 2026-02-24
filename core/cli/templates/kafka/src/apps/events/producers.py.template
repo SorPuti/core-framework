@@ -1,11 +1,9 @@
-"""
-Kafka producers. Docs: 30-messaging.md
-"""
+"""Kafka producers (user.created, order.placed)."""
 from core.messaging import publish
 
 
 async def publish_user_created(user_id: int, email: str):
-    """Publish user created event."""
+    """Publish user.created event."""
     await publish("user.created", {
         "user_id": user_id,
         "email": email,
@@ -14,7 +12,7 @@ async def publish_user_created(user_id: int, email: str):
 
 
 async def publish_order_placed(order_id: int, total: float):
-    """Publish order placed event."""
+    """Publish order.placed event."""
     await publish("order.placed", {
         "order_id": order_id,
         "total": total,

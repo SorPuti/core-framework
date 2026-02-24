@@ -1,21 +1,18 @@
-"""
-Kafka consumers. Docs: 30-messaging.md
-"""
+"""Kafka consumers (user.created, order.placed)."""
 from core.messaging import consumer
 
 
 @consumer(topic="user.created", group="{{project_name}}-group")
 async def handle_user_created(message: dict):
-    """Handle user created event."""
+    """Handle user.created message."""
     user_id = message.get("user_id")
     email = message.get("email")
     print(f"User created: {user_id} - {email}")
-    # Add your business logic here
 
 
 @consumer(topic="order.placed", group="{{project_name}}-group")
 async def handle_order_placed(message: dict):
-    """Handle order placed event."""
+    """Handle order.placed message."""
     order_id = message.get("order_id")
     total = message.get("total")
     print(f"Order placed: {order_id} - ${total}")

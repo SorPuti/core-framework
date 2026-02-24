@@ -1,6 +1,4 @@
-"""
-Event routes. Docs: 23-routing.md
-"""
+"""Event routes."""
 from core import AutoRouter
 from .views import EventViewSet
 

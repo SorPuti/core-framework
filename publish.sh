@@ -5,7 +5,7 @@
 #      ./publish.sh 0.18.0    # publica versão exata
 #      ./publish.sh minor     # 0.17.38 -> 0.18.0
 #      ./publish.sh --dry-run # só mostra o que faria
-
+source .venv/bin/activate
 set -e
 cd "$(dirname "$0")"
 

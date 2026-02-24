@@ -1,7 +1,4 @@
-"""
-App entry point - Event-driven. Docs: 23-routing.md, 30-messaging.md
-Kafka habilitado via kafka_enabled em src/settings.py.
-"""
+"""App entry point; Kafka from settings."""
 from core import CoreApp, AutoRouter
 from src.apps.events.routes import router as events_router
 

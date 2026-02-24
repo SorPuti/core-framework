@@ -1,0 +1,2 @@
+"""Models barrel for discovery (models_module = src.models)."""
+from src.apps.models import *  # noqa: F401, F403

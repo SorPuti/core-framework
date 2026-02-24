@@ -1,7 +1,4 @@
-"""
-App entry point - Background workers. Docs: 23-routing.md, 31-workers.md
-Tasks habilitadas via task_enabled em src/settings.py. Worker: core runworker
-"""
+"""App entry point; workers via core runworker."""
 from core import CoreApp, AutoRouter
 from src.apps.tasks.routes import router as tasks_router
 

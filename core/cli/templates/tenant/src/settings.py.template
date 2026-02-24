@@ -1,26 +1,30 @@
-"""
-App settings - Multi-tenant (plug-and-play).
-Docs: 02-settings.md, 07-cli.md, 32-tenancy.md. Configuração via Settings + .env.
-"""
+"""App settings: multi-tenant (Settings + .env)."""
 from core.config import Settings, configure
 
 
 class AppSettings(Settings):
-    """Multi-tenant: database e tenancy configurados automaticamente (32-tenancy.md)."""
+    """Central config with tenancy; override via env."""
 
     app_name: str = "{{project_name}}"
     app_version: str = "0.1.0"
 
-    # CLI / Discovery (07-cli.md)
     migrations_dir: str = "./migrations"
     app_label: str = "main"
-    models_module: str = "src.apps.models"
+    models_module: str = "src.models"
     app_module: str = "src.main"
 
-    # Database (sobrescreva via DATABASE_URL no .env)
+    middleware: list[str] = [
+        "timing",
+        "request_id",
+        "security_headers",
+        "rate_limit",
+        "content_length_limit",
+        "auth",
+        "logging",
+    ]
+
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost/{{project_name}}"
 
-    # Tenancy (32-tenancy.md) — TenantMiddleware e filtro automático por tenant
     tenancy_enabled: bool = True
     tenancy_header: str = "X-Tenant-ID"
     tenancy_field: str = "workspace_id"

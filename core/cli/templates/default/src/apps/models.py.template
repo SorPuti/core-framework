@@ -1,4 +1,2 @@
-"""
-Model imports — barrel para migrations. Todos os models aqui (03-models.md, 41-migrations.md).
-"""
+"""Barrel: import all models here for migrations."""
 from src.apps.users.models import User  # noqa

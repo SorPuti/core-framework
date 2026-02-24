@@ -1,26 +1,30 @@
-"""
-App settings - Kafka + PostgreSQL (plug-and-play).
-Docs: 02-settings.md, 07-cli.md, 30-messaging.md. Configuração via Settings + .env.
-"""
+"""App settings: Kafka + PostgreSQL (Settings + .env)."""
 from core.config import Settings, configure
 
 
 class AppSettings(Settings):
-    """Kafka e messaging auto-configurados quando kafka_enabled=True (30-messaging.md)."""
+    """Central config with Kafka; override via env."""
 
     app_name: str = "{{project_name}}"
     app_version: str = "0.1.0"
 
-    # CLI / Discovery (07-cli.md)
     migrations_dir: str = "./migrations"
     app_label: str = "main"
-    models_module: str = "src.apps.models"
+    models_module: str = "src.models"
     app_module: str = "src.main"
 
-    # Database (sobrescreva via DATABASE_URL no .env)
+    middleware: list[str] = [
+        "timing",
+        "request_id",
+        "security_headers",
+        "rate_limit",
+        "content_length_limit",
+        "auth",
+        "logging",
+    ]
+
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost/{{project_name}}"
 
-    # Kafka (30-messaging.md) — producers/consumers configurados automaticamente
     kafka_enabled: bool = True
     kafka_bootstrap_servers: str = "localhost:9092"
     kafka_schema_registry_url: str | None = None  # opcional, para Avro

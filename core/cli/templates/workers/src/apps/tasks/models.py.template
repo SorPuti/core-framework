@@ -1,7 +1,4 @@
-"""
-Task model - Track background jobs.
-Docs: 31-workers.md
-"""
+"""Task model for background job tracking."""
 from core import Model, Field
 from core.datetime import DateTime
 from core.choices import TextChoices
@@ -9,7 +6,8 @@ from sqlalchemy.orm import Mapped
 
 
 class TaskStatus(TextChoices):
-    """Task status choices."""
+    """Task status enum."""
+
     PENDING = "pending", "Pending"
     RUNNING = "running", "Running"
     COMPLETED = "completed", "Completed"
@@ -18,8 +16,8 @@ class TaskStatus(TextChoices):
 
 
 class Task(Model):
-    """Background task tracking."""
-    
+    """Background task record (name, status, payload, result)."""
+
     __tablename__ = "tasks"
     
     id: Mapped[int] = Field.pk()

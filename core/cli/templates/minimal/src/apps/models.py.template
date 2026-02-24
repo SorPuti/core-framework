@@ -1,5 +1,3 @@
-"""
-Model imports. Todos os models devem ser importados aqui (41-migrations.md).
-"""
+"""Barrel: import all models here for migrations."""
 from src.apps.items.models import Item  # noqa
 from src.apps.users.models import User  # noqa

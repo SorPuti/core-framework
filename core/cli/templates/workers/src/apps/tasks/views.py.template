@@ -1,6 +1,4 @@
-"""
-Task views. Docs: 04-viewsets.md
-"""
+"""Task ViewSet with enqueue actions."""
 from core import ModelViewSet, action
 from core.permissions import AllowAny
 from fastapi import Request
@@ -11,18 +9,17 @@ from .workers import send_email_task, process_data_task
 
 
 class TaskViewSet(ModelViewSet):
-    """Task management endpoints."""
-    
+    """Task CRUD + enqueue_email / enqueue_process actions."""
+
     model = Task
     permission_classes = [AllowAny]
     tags = ["Tasks"]
-    
+
     @action(methods=["POST"], detail=False)
     async def enqueue_email(self, request: Request, db: AsyncSession, **kwargs):
-        """Enqueue an email task."""
+        """Queue send_email task."""
         data = await request.json()
-        
-        # Create task record
+
         task = Task(
             name="send_email",
             payload=data,
@@ -30,8 +27,7 @@ class TaskViewSet(ModelViewSet):
         )
         db.add(task)
         await db.commit()
-        
-        # Dispatch to worker
+
         await send_email_task.delay(
             to=data.get("to"),
             subject=data.get("subject"),
@@ -39,12 +35,12 @@ class TaskViewSet(ModelViewSet):
         )
         
         return {"task_id": task.id, "status": "queued"}
-    
+
     @action(methods=["POST"], detail=False)
     async def enqueue_process(self, request: Request, db: AsyncSession, **kwargs):
-        """Enqueue a data processing task."""
+        """Queue process_data task."""
         data = await request.json()
-        
+
         task = Task(
             name="process_data",
             payload=data,

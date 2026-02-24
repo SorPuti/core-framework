@@ -1,6 +1,4 @@
-"""
-Item views with tenant isolation. Docs: 04-viewsets.md, 32-tenancy.md
-"""
+"""Item ViewSet with tenant-scoped queryset."""
 from core import ModelViewSet
 from core.permissions import AllowAny
 from core.tenancy import get_current_tenant
@@ -8,17 +6,13 @@ from .models import Item
 
 
 class ItemViewSet(ModelViewSet):
-    """
-    Item CRUD with automatic tenant filtering.
-    
-    All queries are automatically scoped to current tenant.
-    """
-    
+    """Item CRUD scoped to current tenant."""
+
     model = Item
-    permission_classes = [AllowAny]  # Change to IsAuthenticated in production
+    permission_classes = [AllowAny]
     tags = ["Items"]
-    
+
     def get_queryset(self, db):
-        """Filter items by current tenant."""
+        """Scope to current tenant."""
         tenant_id = get_current_tenant()
         return Item.objects.using(db).for_tenant(tenant_id)

@@ -45,6 +45,103 @@ if TYPE_CHECKING:
 # Cache para modelos parciais (PATCH)
 _partial_model_cache: dict[type, type] = {}
 
+# Cache for model-based fallback schemas (OpenAPI docs when user does not set input_schema/output_schema)
+_fallback_schemas_cache: dict[type, tuple[type[BaseModel], type[BaseModel]]] = {}
+
+# SQLAlchemy column type -> Python type for OpenAPI fallback schemas
+_SA_TYPE_MAP: dict[str, type] = {
+    "INTEGER": int,
+    "BIGINT": int,
+    "SMALLINT": int,
+    "VARCHAR": str,
+    "STRING": str,
+    "TEXT": str,
+    "CHAR": str,
+    "BOOLEAN": bool,
+    "FLOAT": float,
+    "NUMERIC": float,
+    "DECIMAL": float,
+    "JSON": dict,
+    "JSONB": dict,
+}
+
+
+def _openapi_python_type_for_column(col: Any) -> type:
+    """Resolve Python type for a SQLAlchemy column (for doc-only fallback schemas)."""
+    type_str = str(col.type).upper()
+    for key, py_type in _SA_TYPE_MAP.items():
+        if key in type_str:
+            return py_type
+    if "UUID" in type_str:
+        from uuid import UUID
+        return UUID
+    if "DATETIME" in type_str or "TIMESTAMP" in type_str or "DATE" in type_str:
+        from datetime import datetime
+        return datetime
+    return str
+
+
+def _build_fallback_schemas_from_model(
+    model: type,
+) -> tuple[type[InputSchema], type[OutputSchema]]:
+    """
+    Build input/output Pydantic schemas from a SQLAlchemy model for OpenAPI docs.
+    Used when the ViewSet does not define input_schema/output_schema.
+    """
+    if model in _fallback_schemas_cache:
+        return _fallback_schemas_cache[model]
+    try:
+        table = getattr(model, "__table__", None)
+        if table is None:
+            raise ValueError("Model has no __table__")
+    except Exception:
+        # Return minimal placeholder schemas so docs still show something
+        inp = create_model(
+            f"{getattr(model, '__name__', 'Model')}InputFallback",
+            __base__=InputSchema,
+            body=(dict[str, Any], ...),
+        )
+        out = create_model(
+            f"{getattr(model, '__name__', 'Model')}OutputFallback",
+            __base__=OutputSchema,
+            id=(int, ...),
+            data=(dict[str, Any], ...),
+        )
+        _fallback_schemas_cache[model] = (inp, out)
+        return inp, out
+
+    name = getattr(model, "__name__", "Model")
+    out_fields: dict[str, Any] = {}
+    in_fields: dict[str, Any] = {}
+
+    for col in table.columns:
+        py_type = _openapi_python_type_for_column(col)
+        ann = py_type if not col.nullable else Optional[py_type]
+        default = None if col.nullable else ...
+        out_fields[col.name] = (ann, default)
+
+        # Input: skip PK and autoincrement
+        if getattr(col, "primary_key", False) or getattr(col, "autoincrement", False):
+            continue
+        in_ann = py_type if not col.nullable and col.default is None and col.server_default is None else Optional[py_type]
+        in_default = None if (col.nullable or col.default is not None or col.server_default is not None) else ...
+        in_fields[col.name] = (in_ann, in_default)
+
+    if not in_fields:
+        in_fields["body"] = (dict[str, Any], ...)
+    out_schema = create_model(
+        f"{name}OutputFallback",
+        __base__=OutputSchema,
+        **out_fields,
+    )
+    in_schema = create_model(
+        f"{name}InputFallback",
+        __base__=InputSchema,
+        **in_fields,
+    )
+    _fallback_schemas_cache[model] = (in_schema, out_schema)
+    return in_schema, out_schema
+
 
 def _make_partial_model(schema: type[BaseModel]) -> type[BaseModel]:
     """
@@ -90,23 +187,28 @@ def _resolve_schemas(
     viewset_class: type,
 ) -> tuple[type[InputSchema] | None, type[OutputSchema] | None]:
     """
-    Resolve input e output schemas a partir de uma classe ViewSet.
-    
-    Verifica atributos de classe primeiro, depois serializer_class.
-    
-    Returns:
-        Tupla de (input_schema, output_schema), None para cada se não encontrado
+    Resolve input and output schemas from a ViewSet class.
+    Uses serializer_class if set; falls back to model-based schemas for OpenAPI docs when missing.
     """
     input_schema = getattr(viewset_class, "input_schema", None)
     output_schema = getattr(viewset_class, "output_schema", None)
-    
+
     serializer_class = getattr(viewset_class, "serializer_class", None)
-    
     if not input_schema and serializer_class:
         input_schema = getattr(serializer_class, "input_schema", None)
     if not output_schema and serializer_class:
         output_schema = getattr(serializer_class, "output_schema", None)
-    
+
+    # Fallback for OpenAPI: when user did not set schemas, build from model so docs are not null
+    model = getattr(viewset_class, "model", None)
+    if model is not None:
+        if input_schema is None or output_schema is None:
+            fallback_in, fallback_out = _build_fallback_schemas_from_model(model)
+            if input_schema is None:
+                input_schema = fallback_in
+            if output_schema is None:
+                output_schema = fallback_out
+
     return input_schema, output_schema
 
 
@@ -538,27 +640,33 @@ class Router(APIRouter):
                           - False: só registra actions com detail=False
                           - None: registra todas as actions
         """
+        viewset_input_schema, viewset_output_schema = _resolve_schemas(viewset_class)
+
         for name, method in inspect.getmembers(viewset_class, predicate=inspect.isfunction):
             if not getattr(method, "is_action", False):
                 continue
-            
+
             action_methods = method.methods
             detail = method.detail
             url_path = method.url_path
-            
+
             # Filtra por detail se especificado
             if detail_filter is not None and detail != detail_filter:
                 continue
-            
+
             if detail:
                 path = f"{prefix}/{{{lookup_url_kwarg}}}/{url_path}"
             else:
                 path = f"{prefix}/{url_path}"
-            
-            # Resolve schemas da action (se definidos no decorator @action)
+
+            # Action schemas: from @action or fallback to viewset/model so OpenAPI docs are not null
             action_input_schema = getattr(method, "action_input_schema", None)
             action_output_schema = getattr(method, "action_output_schema", None)
-            
+            if action_input_schema is None and viewset_input_schema is not None:
+                action_input_schema = viewset_input_schema
+            if action_output_schema is None and viewset_output_schema is not None:
+                action_output_schema = viewset_output_schema
+
             # Cria endpoint para cada método HTTP
             for http_method in action_methods:
                 route_name = f"{basename}-{name}"

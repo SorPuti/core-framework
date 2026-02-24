@@ -1,15 +1,13 @@
-"""
-Tenant views. Docs: 04-viewsets.md
-"""
+"""Tenant CRUD ViewSet."""
 from core import ModelViewSet
 from core.permissions import AllowAny
 from .models import Tenant
 
 
 class TenantViewSet(ModelViewSet):
-    """Tenant management endpoints."""
-    
+    """Tenant list/create/retrieve/update/delete."""
+
     model = Tenant
-    permission_classes = [AllowAny]  # Change to IsAuthenticated in production
+    permission_classes = [AllowAny]
     unique_fields = ["name", "slug"]
     tags = ["Tenants"]

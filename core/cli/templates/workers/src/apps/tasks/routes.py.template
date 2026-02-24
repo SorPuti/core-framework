@@ -1,6 +1,4 @@
-"""
-Task routes. Docs: 23-routing.md
-"""
+"""Task routes."""
 from core import AutoRouter
 from .views import TaskViewSet
 

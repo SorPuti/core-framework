@@ -1,6 +1,4 @@
-"""
-Tenant model. Docs: 03-models.md, 32-tenancy.md
-"""
+"""Tenant model for multi-tenant isolation."""
 from core import Model, Field
 from core.datetime import DateTime
 from sqlalchemy.orm import Mapped
@@ -8,8 +6,8 @@ import uuid
 
 
 class Tenant(Model):
-    """Tenant for multi-tenant isolation."""
-    
+    """Workspace/tenant entity."""
+
     __tablename__ = "tenants"
     
     id: Mapped[uuid.UUID] = Field.uuid_pk()
