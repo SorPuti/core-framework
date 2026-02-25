@@ -129,7 +129,7 @@
         {% for action in admin_actions %}
         {% if not action.requires_selection %}
         <button
-            @click="runAdminAction('{{ action.name }}', false, '{{ action.confirm|replace(\"'\", \"&#39;\") }}')"
+            @click="runAdminAction({{ action.name|tojson }}, false, {{ (action.confirm or '')|tojson }})"
             class="inline-flex items-center px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-all">
             {{ action.description }}
         </button>
@@ -151,7 +151,7 @@
         {% endif %}
         {% for action in admin.get_actions_metadata() %}
         {% if action.requires_selection %}
-        <button @click="runAdminAction('{{ action.name }}', true, '{{ action.confirm|replace(\"'\", \"&#39;\") }}')"
+        <button @click="runAdminAction({{ action.name|tojson }}, true, {{ (action.confirm or '')|tojson }})"
                 class="ml-4 inline-flex items-center gap-1 text-sm text-primary-700 hover:text-primary-900 font-medium transition-colors">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 17l4 4 4-4"/><path d="M12 12v9"/><path d="M20.88 18.09A10 10 0 1 0 3.12 18.1"/></svg>
             {{ action.description }}
