@@ -140,6 +140,7 @@ core run
 | [Exceptions](34-exceptions.md) | Tratamento de erros |
 | [DateTime](35-datetime.md) | Tratamento de timezone |
 | [Security](36-security.md) | Boas práticas de segurança |
+| [Storage](37-storage.md) | Armazenamento de arquivos (local / Google Cloud Storage) e uso no Admin |
 
 ### Referência
 

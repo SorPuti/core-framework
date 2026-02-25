@@ -48,6 +48,7 @@ WidgetType = Literal[
     "choices",
     "fk",
     "m2m_select",
+    "file_upload",
 ]
 
 

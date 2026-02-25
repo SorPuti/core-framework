@@ -131,11 +131,28 @@ def _detect_widget(col_name: str, field_type: str, all_columns: list[str]) -> st
     if name == "email" or name.endswith("_email") or name == "email_address":
         return "email"
     
-    # URL
-    if name in ("url", "website", "homepage", "avatar_url", "image_url", "photo_url"):
+    # URL (exclui campos que são path de arquivo — tratados como file_upload)
+    if name in ("url", "website", "homepage") or name.endswith("_link"):
         return "url"
-    if name.endswith("_url") or name.endswith("_link"):
+    if name.endswith("_url") and not any(
+        x in name for x in ("avatar", "image", "photo", "picture", "file", "attachment")
+    ):
         return "url"
+    
+    # File / Image path — widget especial de upload no admin (storage-aware)
+    if name in (
+        "file", "file_path", "attachment", "attachment_path",
+        "image", "image_path", "avatar", "avatar_path", "photo", "photo_path",
+        "picture", "picture_path", "cover", "cover_path", "logo", "logo_path",
+    ):
+        return "file_upload"
+    if name.endswith("_file") or name.endswith("_path"):
+        if any(x in name for x in ("image", "photo", "avatar", "picture", "cover", "logo", "file", "attachment")):
+            return "file_upload"
+    if name.endswith("_url") and any(
+        x in name for x in ("avatar", "image", "photo", "picture", "file", "attachment")
+    ):
+        return "file_upload"
     
     # Color
     if name in ("color", "hex_color", "bg_color", "text_color", "background_color"):
@@ -756,6 +773,15 @@ class ModelAdmin(Generic[ModelT]):
                     if "required_on_edit" in override:
                         extra["required_on_edit"] = override["required_on_edit"]
                 
+                # ── File upload: storage_field + accept (após override para respeitar widget final) ──
+                if widget == "file_upload":
+                    extra["storage_field"] = True
+                    name_lower = col.name.lower()
+                    if any(x in name_lower for x in ("image", "photo", "avatar", "picture", "cover", "logo")):
+                        extra["accept"] = "image/*"
+                    else:
+                        extra["accept"] = None
+                
                 columns.append({
                     "name": col.name,
                     "type": field_type,
@@ -897,6 +923,19 @@ class ModelAdmin(Generic[ModelT]):
                         result.append(m2m["name"])
 
         return result
+
+    def get_storage_file_fields(self) -> list[str]:
+        """
+        Retorna os nomes dos campos que armazenam path/URL de arquivo (widget file_upload).
+        
+        Usado pelo admin para: oferecer opção "deletar arquivo(s) físico(s)" na exclusão
+        e para efetivamente remover os arquivos do storage quando o usuário confirmar.
+        """
+        try:
+            from core.storage import get_storage_file_fields as _get_storage_file_fields
+            return _get_storage_file_fields(self)
+        except Exception:
+            return []
 
     def get_display_fields(self) -> list[str]:
         """Retorna campos para exibição no detail view (includes M2M)."""

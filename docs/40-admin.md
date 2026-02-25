@@ -144,6 +144,39 @@ class PostAdmin(ModelAdmin[Post]):
 | `choices` | Select dropdown (enum) |
 | `fk` | Foreign key (autocomplete) |
 | `m2m_select` | Many-to-many select |
+| `file_upload` | Upload de arquivo (storage local ou GCS); drag-and-drop, preview |
+
+## Campos de arquivo (Storage) e exclusão
+
+Quando o model tem campos que armazenam **path ou URL de arquivo** (ex.: `image`, `avatar`, `file_path`, `attachment_url`), o admin detecta automaticamente e exibe o widget **file_upload**:
+
+- **Detecção automática**: nomes como `image`, `avatar`, `photo`, `file_path`, `attachment`, `*_url` (para imagem/arquivo) viram `file_upload`.
+- **Widget no formulário**: área de drag-and-drop, preview (imagem ou ícone), link para o arquivo atual e botão para remover.
+- **Upload**: o arquivo é enviado para o backend configurado em Settings (`storage_backend`: local ou GCS). O valor retornado (path ou URL) é salvo no campo.
+
+Configure o storage em `src/settings.py` (veja [Settings — Storage](02-settings.md#storage--file-uploads)). Documentação completa da API e fluxo: [Storage (37-storage.md)](37-storage.md).
+
+### Exclusão e arquivos físicos
+
+Ao **deletar** um registro (botão "Delete" na tela de edição):
+
+1. Abre um **modal de confirmação**.
+2. Se o model tiver campos file_upload com valor, aparece a opção: **"Also delete X file(s) from storage"**.
+3. Se marcar, o backend remove o(s) arquivo(s) do disco ou do bucket GCS ao deletar o registro.
+
+Assim você evita arquivo órfão no storage. Em **bulk delete** (listagem), o body da requisição pode incluir `"delete_physical_files": true` para o mesmo efeito.
+
+### Forçar widget file_upload em um campo
+
+Se o nome da coluna não for detectado automaticamente, use `widgets`:
+
+```python
+@admin.register(Profile)
+class ProfileAdmin(ModelAdmin[Profile]):
+    widgets = {
+        "cover_image": {"widget": "file_upload", "label": "Cover image"},
+    }
+```
 
 ## Ícones (Lucide)
 

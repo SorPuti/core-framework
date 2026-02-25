@@ -375,6 +375,8 @@ STORAGE_GCS_EXPIRATION_SECONDS=300
 - **Local**: defina `STORAGE_BACKEND=local` e os arquivos serão gravados no diretório `STORAGE_LOCAL_MEDIA_ROOT`, servidos a partir de `STORAGE_MEDIA_URL` (por exemplo, via Nginx ou um endpoint de arquivos estáticos).
 - **GCS**: troque para `STORAGE_BACKEND=gcs` e configure os campos `STORAGE_GCS_*`. O framework auto-configura o cliente GCS (se `google-cloud-storage` estiver instalado) e valida bucket/projeto, no mesmo espírito do `django-storages`.
 
+**Ver também**: [Storage (37-storage.md)](37-storage.md) — API `core.storage`, uso no Admin e como servir arquivos locais.
+
 ### API
 
 | Setting | Tipo | Default | Descrição |
@@ -778,4 +780,5 @@ settings = configure(settings_class=AppSettings)
 - [Models](03-models.md) — Modelos de banco de dados
 - [Auth](05-auth.md) — Sistema de autenticação
 - [Messaging](30-messaging.md) — Kafka e eventos
+- [Storage](37-storage.md) — Armazenamento de arquivos (local / GCS) e uso no Admin
 - [Admin](40-admin.md) — Painel administrativo

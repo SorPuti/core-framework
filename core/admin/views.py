@@ -10,7 +10,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from core.admin.permissions import check_admin_access, check_model_permission
@@ -542,6 +545,46 @@ def create_api_views(site: Any) -> APIRouter:
             site.errors.add_runtime_error(model.__name__, e)
             raise HTTPException(500, detail=str(e))
     
+    @router.post("/{app_label}/{model_name}/upload-file")
+    async def upload_file_view(
+        app_label: str,
+        model_name: str,
+        field: str = Form(...),
+        file: UploadFile = File(...),
+        user: Any = Depends(check_admin_access),
+    ) -> dict:
+        """Upload de arquivo para um campo file_upload do model. Retorna path/URL para salvar no campo."""
+        result = site.get_model_by_name(app_label, model_name)
+        if not result:
+            raise HTTPException(404, f"Model '{app_label}.{model_name}' not found in admin")
+        _model, admin_instance = result
+        has_perm = await check_model_permission(user, app_label, model_name, "change")
+        if not has_perm:
+            raise HTTPException(403, f"No permission to upload for {model_name}")
+        file_fields = admin_instance.get_storage_file_fields()
+        if field not in file_fields:
+            raise HTTPException(400, detail=f"Field '{field}' is not a file upload field for this model")
+        if not file.filename:
+            raise HTTPException(400, detail="No file provided")
+        try:
+            content = await file.read()
+        except Exception as e:
+            logger.warning("Upload read error: %s", e)
+            raise HTTPException(400, detail="Failed to read file")
+        safe_name = Path(file.filename).name
+        safe_name = "".join(c for c in safe_name if c.isalnum() or c in "._- ").strip() or "file"
+        from datetime import datetime
+        now = datetime.utcnow()
+        prefix = now.strftime("%Y/%m")
+        key = f"{prefix}/{uuid.uuid4().hex}_{safe_name}"
+        try:
+            from core.storage import save_file
+            path_or_url = save_file(key, content, file.content_type or None)
+        except Exception as e:
+            logger.warning("Storage save error: %s", e)
+            raise HTTPException(500, detail=str(e))
+        return {"path": path_or_url, "url": path_or_url if path_or_url.startswith("http") else None}
+    
     @router.post("/{app_label}/{model_name}")
     async def create_view(
         request: Request,
@@ -832,9 +875,10 @@ def create_api_views(site: Any) -> APIRouter:
         app_label: str,
         model_name: str,
         pk: str,
+        delete_physical_files: bool = Query(False, description="Also delete associated file(s) from storage"),
         user: Any = Depends(check_admin_access),
     ) -> dict:
-        """Delete — remove um objeto."""
+        """Delete — remove um objeto. Opcionalmente remove arquivos físicos dos campos file_upload."""
         result = site.get_model_by_name(app_label, model_name)
         if not result:
             raise HTTPException(404, f"Model '{app_label}.{model_name}' not found in admin")
@@ -861,6 +905,13 @@ def create_api_views(site: Any) -> APIRouter:
                     raise HTTPException(404, f"{admin_instance.display_name} with {pk_field}={pk} not found")
                 
                 obj_repr = repr(obj)
+                
+                if delete_physical_files:
+                    from core.storage import get_storage_file_fields, collect_file_paths, delete_file
+                    file_fields = get_storage_file_fields(admin_instance)
+                    paths = collect_file_paths(obj, file_fields)
+                    for path in paths:
+                        delete_file(path)
                 
                 await admin_instance.before_delete(db, obj)
                 await obj.delete(db)
@@ -891,7 +942,7 @@ def create_api_views(site: Any) -> APIRouter:
         model_name: str,
         user: Any = Depends(check_admin_access),
     ) -> dict:
-        """Bulk delete — remove múltiplos objetos."""
+        """Bulk delete — remove múltiplos objetos. Body pode incluir delete_physical_files: true."""
         result = site.get_model_by_name(app_label, model_name)
         if not result:
             raise HTTPException(404, f"Model '{app_label}.{model_name}' not found in admin")
@@ -904,6 +955,7 @@ def create_api_views(site: Any) -> APIRouter:
         
         body = await request.json()
         pks = body.get("ids", [])
+        delete_physical_files = body.get("delete_physical_files", False)
         
         if not pks:
             raise HTTPException(400, "No IDs provided")
@@ -915,10 +967,17 @@ def create_api_views(site: Any) -> APIRouter:
         try:
             async with db:
                 pk_field = admin_instance._pk_field
+                if delete_physical_files:
+                    from core.storage import get_storage_file_fields, collect_file_paths, delete_file
+                    file_fields = get_storage_file_fields(admin_instance)
                 for pk in pks:
                     pk_typed = _cast_pk(model, pk_field, pk)
                     obj = await admin_instance.get_queryset(db).filter(**{pk_field: pk_typed}).first()
                     if obj:
+                        if delete_physical_files and file_fields:
+                            paths = collect_file_paths(obj, file_fields)
+                            for path in paths:
+                                delete_file(path)
                         await admin_instance.before_delete(db, obj)
                         await obj.delete(db)
                         await admin_instance.after_delete(db, obj)
