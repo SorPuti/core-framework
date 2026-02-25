@@ -27,6 +27,81 @@ pip install "core-framework[gcs]"
 pip install google-cloud-storage
 ```
 
+## Como obter credenciais e dados no Google Cloud
+
+Para configurar o GCS no seu projeto, você precisa de: **ID do projeto**, **nome do bucket** e **arquivo JSON da Service Account** (credenciais). Tudo isso você obtém no [Google Cloud Console](https://console.cloud.google.com/).
+
+### 1. ID do projeto (`STORAGE_GCS_PROJECT`)
+
+- No topo da página do Console, ao lado do logo do Google Cloud, aparece o **nome do projeto** e um **ID** (ex.: `meu-projeto-123456`).
+- Clique no nome do projeto para abrir o seletor; o **ID do projeto** está logo abaixo do nome.
+- Use esse ID em `storage_gcs_project` (ou deixe em branco se for usar só o JSON — o projeto já vem dentro do JSON).
+
+### 2. Bucket (`STORAGE_GCS_BUCKET_NAME`)
+
+- No menu lateral: **Storage** → **Buckets** (ou [Cloud Storage → Buckets](https://console.cloud.google.com/storage/browser)).
+- Se ainda não tiver bucket: **CREATE BUCKET** → escolha nome (ex.: `minha-app-uploads`), região e tipo de acesso. Anote o **nome do bucket** (só o nome, ex.: `minha-app-uploads`).
+- Esse nome vai em `storage_gcs_bucket_name` / `STORAGE_GCS_BUCKET_NAME`.
+
+### 3. Service Account e arquivo JSON (credenciais)
+
+É isso que o framework usa para **autenticar** e gravar/ler no bucket (o “token” que o GCP pede é esse JSON).
+
+1. No menu lateral: **IAM & Admin** → **Service Accounts** (ou [Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts)).
+2. **CREATE SERVICE ACCOUNT**:
+   - Nome: ex. `storage-uploader`.
+   - ID: pode deixar o sugerido.
+   - **Create and Continue**.
+3. **Grant access** (opcional nesta tela): pode pular; vamos dar permissão no bucket.
+4. **Done**.
+5. Na lista, clique na Service Account que você criou.
+6. Aba **KEYS** → **ADD KEY** → **Create new key** → tipo **JSON** → **Create**.  
+   O navegador baixa um arquivo `.json` (ex.: `meu-projeto-xxxxx.json`). **Guarde em local seguro e não commite no Git.**
+
+Coloque o arquivo no projeto (ex.: `config/gcp-service-account.json` ou `.secrets/gcs.json`) e aponte no Settings:
+
+- **Settings / .env**: `storage_gcs_credentials_file` = caminho para esse arquivo (ex.: `config/gcp-service-account.json`).
+
+**Permissão no bucket**: a Service Account precisa poder escrever e ler objetos no bucket.
+
+- Vá em **Storage** → **Buckets** → clique no seu bucket.
+- Aba **PERMISSIONS** → **GRANT ACCESS**.
+- **New principals**: cole o e-mail da Service Account (ex.: `storage-uploader@meu-projeto.iam.gserviceaccount.com`).
+- **Role**: ex. **Storage Object Admin** (leitura + escrita + exclusão de objetos). Para só upload/leitura: **Storage Object Creator** + **Storage Object Viewer**.
+- **Save**.
+
+### 4. URL pública dos arquivos (`STORAGE_MEDIA_URL`)
+
+Para o frontend (e o admin) abrirem os arquivos por link, você precisa da URL base do bucket:
+
+- **Bucket público (recomendado para mídia)**:
+  - Formato: `https://storage.googleapis.com/SEU_BUCKET_NAME/`
+  - Ex.: se o bucket é `minha-app-uploads` → `https://storage.googleapis.com/minha-app-uploads/`
+  - Para o bucket ser público: no bucket → **PERMISSIONS** → **Public access** → garantir que “Public access” está permitido; nos objetos, ACL `publicRead` (o framework já pode definir isso ao subir, se `storage_gcs_default_acl="publicRead"`).
+
+- **Bucket privado**: aí você serviria via signed URLs ou outro esquema; a URL base pode ser a mesma, mas o acesso depende de signed URL ou IAM. Para começar, bucket público + `storage_media_url = "https://storage.googleapis.com/SEU_BUCKET_NAME/"` é o mais simples.
+
+Resumo do que vai no seu projeto:
+
+| Onde pegar no GCP | Variável / Setting | Exemplo |
+|-------------------|--------------------|--------|
+| Topo do Console (ID do projeto) | `STORAGE_GCS_PROJECT` | `meu-projeto-123456` |
+| Storage → Buckets (nome do bucket) | `STORAGE_GCS_BUCKET_NAME` | `minha-app-uploads` |
+| IAM → Service Accounts → Keys → JSON baixado | `STORAGE_GCS_CREDENTIALS_FILE` (caminho do arquivo) | `config/gcp-service-account.json` |
+| Montado por você com o nome do bucket | `STORAGE_MEDIA_URL` | `https://storage.googleapis.com/minha-app-uploads/` |
+
+Exemplo de `.env`:
+
+```bash
+STORAGE_BACKEND=gcs
+STORAGE_GCS_PROJECT=meu-projeto-123456
+STORAGE_GCS_BUCKET_NAME=minha-app-uploads
+STORAGE_GCS_CREDENTIALS_FILE=config/gcp-service-account.json
+STORAGE_MEDIA_URL=https://storage.googleapis.com/minha-app-uploads/
+```
+
+**Segurança**: adicione o caminho do JSON ao `.gitignore` (ex.: `config/gcp-service-account.json` ou `.secrets/`).
+
 ## API: `core.storage`
 
 ### `save_file(relative_path, content, content_type=None) -> str`

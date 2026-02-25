@@ -70,7 +70,13 @@ unregister = default_site.unregister
 admin = default_site
 
 
-def action(description: str = ""):
+def action(
+    description: str = "",
+    *,
+    requires_selection: bool = False,
+    confirm: str = "",
+    permission: str = "change",
+):
     """
     Decorator para custom actions no ModelAdmin.
     
@@ -82,6 +88,9 @@ def action(description: str = ""):
     def decorator(func):
         func._admin_action = True
         func.short_description = description or func.__name__.replace("_", " ").title()
+        func.requires_selection = requires_selection
+        func.confirm_message = confirm
+        func.required_permission = permission
         return func
     return decorator
 

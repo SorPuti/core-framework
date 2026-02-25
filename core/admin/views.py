@@ -1002,6 +1002,102 @@ def create_api_views(site: Any) -> APIRouter:
         except Exception as e:
             logger.error("Error in bulk delete for %s: %s", model_name, e)
             raise HTTPException(400, detail=str(e))
+
+    @router.post("/{app_label}/{model_name}/action/{action_name}")
+    async def run_admin_action(
+        request: Request,
+        app_label: str,
+        model_name: str,
+        action_name: str,
+        user: Any = Depends(check_admin_access),
+    ) -> dict:
+        """Execute a custom ModelAdmin action."""
+        result = site.get_model_by_name(app_label, model_name)
+        if not result:
+            raise HTTPException(404, f"Model '{app_label}.{model_name}' not found in admin")
+
+        model, admin_instance = result
+        action_method = getattr(admin_instance, action_name, None)
+        if action_method is None or not getattr(action_method, "_admin_action", False):
+            raise HTTPException(404, f"Action '{action_name}' not found")
+
+        required_permission = str(getattr(action_method, "required_permission", "change") or "change")
+        if required_permission in {"view", "add", "change", "delete"}:
+            has_perm = await check_model_permission(user, app_label, model_name, required_permission)
+            if not has_perm:
+                raise HTTPException(403, f"No permission to run action '{action_name}'")
+
+        try:
+            payload = await request.json()
+            if not isinstance(payload, dict):
+                payload = {}
+        except Exception:
+            payload = {}
+
+        ids = payload.get("ids") or []
+        requires_selection = bool(getattr(action_method, "requires_selection", False))
+        if requires_selection and not ids:
+            raise HTTPException(400, "This action requires selected items")
+
+        from core.models import get_session
+        db = await get_session()
+
+        try:
+            async with db:
+                pk_field = admin_instance._pk_field
+                queryset = admin_instance.get_queryset(db)
+                if ids:
+                    casted_ids = []
+                    for value in ids:
+                        casted_ids.append(_cast_pk(model, pk_field, str(value)))
+                    queryset = queryset.filter(**{f"{pk_field}__in": casted_ids})
+
+                kwargs: dict[str, Any] = {"db": db}
+                sig = action_method.__signature__ if hasattr(action_method, "__signature__") else None
+                if sig is None:
+                    import inspect as _inspect
+                    sig = _inspect.signature(action_method)
+
+                for name in sig.parameters:
+                    if name == "db":
+                        continue
+                    if name == "request":
+                        kwargs[name] = request
+                    elif name == "user":
+                        kwargs[name] = user
+                    elif name in {"payload", "data", "body"}:
+                        kwargs[name] = payload
+                    elif name in {"ids", "selected_ids"}:
+                        kwargs[name] = ids
+                    elif name in {"queryset", "qs"}:
+                        kwargs[name] = queryset
+
+                action_result = action_method(**kwargs)
+                if hasattr(action_result, "__await__"):
+                    action_result = await action_result
+
+                await db.commit()
+                await _log_action(
+                    db,
+                    user,
+                    request,
+                    f"action:{action_name}",
+                    admin_instance,
+                    None,
+                    object_id=",".join(str(v) for v in ids) if ids else None,
+                    object_repr=f"Admin action {action_name}",
+                    changes={"payload": payload},
+                )
+                await db.commit()
+
+                if isinstance(action_result, dict):
+                    return {"success": True, **action_result}
+                return {"success": True, "message": f"Action '{action_name}' executed successfully"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Error running admin action %s on %s: %s", action_name, model_name, e)
+            raise HTTPException(400, detail=str(e))
     
     return router
 

@@ -121,6 +121,22 @@
             </button>
         </div>
     </div>
+
+    {% set admin_actions = admin.get_actions_metadata() %}
+    {% if admin_actions %}
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl mb-4 p-3 flex flex-wrap items-center gap-2">
+        <span class="text-xs text-gray-400 uppercase tracking-wider">Ações rápidas</span>
+        {% for action in admin_actions %}
+        {% if not action.requires_selection %}
+        <button
+            @click="runAdminAction('{{ action.name }}', false, '{{ action.confirm|replace(\"'\", \"&#39;\") }}')"
+            class="inline-flex items-center px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-all">
+            {{ action.description }}
+        </button>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
     
     <!-- Bulk Actions Bar -->
     <div x-show="selectedIds.length > 0" x-cloak x-transition
@@ -133,6 +149,15 @@
             Delete selected
         </button>
         {% endif %}
+        {% for action in admin.get_actions_metadata() %}
+        {% if action.requires_selection %}
+        <button @click="runAdminAction('{{ action.name }}', true, '{{ action.confirm|replace(\"'\", \"&#39;\") }}')"
+                class="ml-4 inline-flex items-center gap-1 text-sm text-primary-700 hover:text-primary-900 font-medium transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 17l4 4 4-4"/><path d="M12 12v9"/><path d="M20.88 18.09A10 10 0 1 0 3.12 18.1"/></svg>
+            {{ action.description }}
+        </button>
+        {% endif %}
+        {% endfor %}
         <button @click="selectedIds = []" class="ml-auto text-sm text-primary-600 dark:text-primary-400 hover:text-primary-800 transition-colors">
             Deselect all
         </button>
@@ -372,6 +397,36 @@ function listView() {
                 } else {
                     window.showToast('error', 'Error', 'Failed to delete selected items');
                 }
+            } catch (e) {
+                window.showToast('error', 'Network Error', e.message);
+            }
+        },
+
+        async runAdminAction(actionName, requiresSelection, confirmMessage) {
+            if (requiresSelection && this.selectedIds.length === 0) {
+                window.showToast('warning', 'Nenhum item selecionado', 'Selecione ao menos um item.');
+                return;
+            }
+
+            const promptText = confirmMessage && confirmMessage.length > 0
+                ? confirmMessage
+                : `Executar ação "${actionName}"?`;
+            if (!confirm(promptText)) return;
+
+            try {
+                const resp = await fetch(`{{ admin_prefix }}/api/{{ app_label }}/{{ model_name }}/action/${actionName}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: this.selectedIds }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    window.showToast('error', 'Erro', data.detail || `Falha ao executar ${actionName}`);
+                    return;
+                }
+                window.showToast('success', 'Sucesso', data.message || `Ação ${actionName} executada.`);
+                this.selectedIds = [];
+                await this.loadData();
             } catch (e) {
                 window.showToast('error', 'Network Error', e.message);
             }

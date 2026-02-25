@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any, ClassVar, Optional, TYPE_CHECKING
 from collections.abc import Callable
 import inspect
+import logging
 
 from fastapi import APIRouter, Request, Depends, Body
 from pydantic import BaseModel, create_model
@@ -36,6 +37,8 @@ from core.serializers import (
 
 if TYPE_CHECKING:
     from core.views import ViewSet, APIView
+
+logger = logging.getLogger("core.routing")
 
 
 # =============================================================================
@@ -210,6 +213,98 @@ def _resolve_schemas(
                 output_schema = fallback_out
 
     return input_schema, output_schema
+
+
+def _is_dynamic_path_segment(segment: str) -> bool:
+    """Return True when segment represents a dynamic parameter."""
+    if segment.startswith("{") and segment.endswith("}"):
+        return True
+    # Regex-style FastAPI segments (e.g. (?P<id>[^/]+))
+    return "(?P<" in segment
+
+
+def _default_custom_action_sort_key(
+    action_name: str,
+    url_path: str,
+    detail: bool,
+) -> tuple[int, int, int, int, int, str]:
+    """
+    Automatic route ordering:
+    - more static segments first
+    - fewer dynamic segments first
+    - path wildcards / regex segments last
+    - longer paths first
+    """
+    segments = [seg for seg in (url_path or "").strip("/").split("/") if seg]
+    static_count = 0
+    dynamic_count = 0
+    wildcard_count = 0
+    regex_count = 0
+
+    for segment in segments:
+        if segment.startswith("{") and segment.endswith("}"):
+            dynamic_count += 1
+            inner = segment[1:-1]
+            if ":" in inner:
+                _, converter = inner.split(":", 1)
+                if converter.strip().lower() == "path":
+                    wildcard_count += 1
+            continue
+
+        if _is_dynamic_path_segment(segment):
+            dynamic_count += 1
+            regex_count += 1
+            continue
+
+        static_count += 1
+
+    return (
+        -static_count,
+        dynamic_count,
+        wildcard_count,
+        regex_count,
+        -len(segments),
+        action_name,
+    )
+
+
+def _iter_sorted_custom_actions(
+    viewset_class: type["ViewSet"],
+    detail_filter: bool | None = None,
+) -> list[tuple[str, Callable]]:
+    """
+    Collect custom actions and return them in deterministic priority order.
+    """
+    items: list[tuple[tuple[Any, ...], str, Callable]] = []
+    custom_sorter = getattr(viewset_class, "custom_action_sort_key", None)
+
+    for name, method in inspect.getmembers(viewset_class, predicate=inspect.isfunction):
+        if not getattr(method, "is_action", False):
+            continue
+
+        detail = method.detail
+        if detail_filter is not None and detail != detail_filter:
+            continue
+
+        url_path = method.url_path
+        if callable(custom_sorter):
+            try:
+                key = custom_sorter(name, url_path, detail)
+            except Exception as exc:
+                logger.warning(
+                    "custom_action_sort_key failed in %s.%s (%s); using default sorter",
+                    viewset_class.__name__,
+                    name,
+                    exc,
+                )
+                key = _default_custom_action_sort_key(name, url_path, detail)
+        else:
+            key = _default_custom_action_sort_key(name, url_path, detail)
+
+        items.append((key, name, method))
+
+    items.sort(key=lambda item: item[0])
+    return [(name, method) for _, name, method in items]
 
 
 def _build_error_responses(
@@ -642,17 +737,20 @@ class Router(APIRouter):
         """
         viewset_input_schema, viewset_output_schema = _resolve_schemas(viewset_class)
 
-        for name, method in inspect.getmembers(viewset_class, predicate=inspect.isfunction):
-            if not getattr(method, "is_action", False):
-                continue
+        registered_signatures: set[tuple[str, str]] = set()
+        conflict_policy = str(getattr(viewset_class, "route_conflict_policy", "warn")).lower()
+        if conflict_policy not in {"warn", "raise", "ignore"}:
+            logger.warning(
+                "Invalid route_conflict_policy=%r in %s; using 'warn'",
+                conflict_policy,
+                viewset_class.__name__,
+            )
+            conflict_policy = "warn"
 
+        for name, method in _iter_sorted_custom_actions(viewset_class, detail_filter):
             action_methods = method.methods
             detail = method.detail
             url_path = method.url_path
-
-            # Filtra por detail se especificado
-            if detail_filter is not None and detail != detail_filter:
-                continue
 
             if detail:
                 path = f"{prefix}/{{{lookup_url_kwarg}}}/{url_path}"
@@ -669,6 +767,20 @@ class Router(APIRouter):
 
             # Cria endpoint para cada método HTTP
             for http_method in action_methods:
+                method_upper = http_method.upper()
+                signature = (path, method_upper)
+                if signature in registered_signatures:
+                    msg = (
+                        f"Duplicate custom action route detected in {viewset_class.__name__}: "
+                        f"{method_upper} {path} (action={name})"
+                    )
+                    if conflict_policy == "raise":
+                        raise ValueError(msg)
+                    if conflict_policy == "warn":
+                        logger.warning(msg)
+                else:
+                    registered_signatures.add(signature)
+
                 route_name = f"{basename}-{name}"
                 
                 # Get action-specific permission_classes
@@ -748,7 +860,7 @@ class Router(APIRouter):
                         method, action_permission_classes,
                         action_input_schema, with_body=method_has_body,
                     ),
-                    methods=[http_method],
+                    methods=[method_upper],
                     tags=tags,
                     name=route_name,
                     summary=f"{name.replace('_', ' ').title()}",

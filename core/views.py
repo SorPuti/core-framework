@@ -311,6 +311,16 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
     # Configurações
     lookup_field: ClassVar[str] = "id"
     lookup_url_kwarg: ClassVar[str | None] = None
+    # Política para colisão entre actions customizadas com mesmo path+method.
+    # - "warn" (default): mantém comportamento atual e emite warning
+    # - "raise": falha no startup para forçar correção explícita
+    # - "ignore": não emite warning
+    route_conflict_policy: ClassVar[str] = "warn"
+    # Hook opcional para customizar ordenação de actions customizadas.
+    # Assinatura esperada:
+    #   (action_name: str, url_path: str, detail: bool) -> tuple
+    # Menor tupla = maior prioridade no registro.
+    custom_action_sort_key: ClassVar[Any | None] = None
     
     # Paginação
     page_size: ClassVar[int] = 20

@@ -130,6 +130,31 @@ class PostViewSet(ModelViewSet):
 )
 ```
 
+### Automatic Route Resolution (No Manual Priority)
+
+Custom actions are now registered with an automatic specificity sorter:
+
+- static paths first (`/posts/list`)
+- dynamic paths later (`/posts/{slug}`)
+- wildcard/regex patterns last (`/posts/{path:path}`)
+
+This avoids common collisions like `list` being captured by a dynamic `{name}` route.
+
+Optional ViewSet knobs:
+
+```python
+class PostViewSet(ModelViewSet):
+    model = Post
+    # warn | raise | ignore
+    route_conflict_policy = "warn"
+
+    # Optional custom sorter:
+    # (action_name, url_path, detail) -> tuple
+    custom_action_sort_key = staticmethod(
+        lambda action_name, url_path, detail: (0, action_name)
+    )
+```
+
 ## Hooks
 
 Override lifecycle methods:

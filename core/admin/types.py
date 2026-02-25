@@ -49,6 +49,7 @@ WidgetType = Literal[
     "fk",
     "m2m_select",
     "file_upload",
+    "conditions_builder",
 ]
 
 
@@ -127,10 +128,13 @@ class ColumnInfo(TypedDict, total=False):
 # Action Types
 # =============================================================================
 
-class ActionInfo(TypedDict):
+class ActionInfo(TypedDict, total=False):
     """Informações de uma action do admin."""
     name: str
     description: str
+    requires_selection: bool
+    confirm: str
+    permission: str
 
 
 # =============================================================================

@@ -28,6 +28,7 @@ from core.admin.types import (
     FieldsetConfig,
     IconType,
     PermissionType,
+    ActionInfo,
 )
 
 if TYPE_CHECKING:
@@ -426,6 +427,32 @@ class ModelAdmin(Generic[ModelT]):
             # Pega o penúltimo segmento (geralmente o nome do app)
             return parts[-2]
         return parts[0]
+
+    def get_actions_metadata(self) -> list[ActionInfo]:
+        """
+        Return registered admin actions metadata for list/detail UIs.
+        """
+        from core.admin.types import ActionInfo
+
+        metadata: list[ActionInfo] = []
+        for action_name in self.actions:
+            if action_name == "delete_selected":
+                continue
+            if action_name in self.exclude_actions:
+                continue
+            method = getattr(self, action_name, None)
+            if method is None or not getattr(method, "_admin_action", False):
+                continue
+            metadata.append(
+                {
+                    "name": action_name,
+                    "description": getattr(method, "short_description", action_name.replace("_", " ").title()),
+                    "requires_selection": bool(getattr(method, "requires_selection", False)),
+                    "confirm": str(getattr(method, "confirm_message", "") or ""),
+                    "permission": str(getattr(method, "required_permission", "change") or "change"),
+                }
+            )
+        return metadata
     
     def _apply_defaults(self, columns: list[str]) -> None:
         """Aplica defaults sensatos quando campos não foram configurados."""
