@@ -50,6 +50,8 @@ WidgetType = Literal[
     "m2m_select",
     "file_upload",
     "conditions_builder",
+    "trading_filters_builder",
+    "strategy_config_builder",
 ]
 
 

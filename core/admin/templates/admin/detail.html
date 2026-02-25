@@ -504,7 +504,7 @@
                                         </template>
                                         
                                         <!-- JSON field -->
-                                        <template x-if="field.widget === 'default' && field.type === 'json'">
+                                        <template x-if="field.widget === 'json' || (field.widget === 'default' && field.type === 'json')">
                                             <textarea 
                                                 :value="JSON.stringify(formData[field.name], null, 2)"
                                                 @input="try { formData[field.name] = JSON.parse($event.target.value); markDirty(); } catch(e) {}"
@@ -515,49 +515,96 @@
 
                                         <!-- Conditions builder (n8n-like lightweight editor) -->
                                         <template x-if="field.widget === 'conditions_builder'">
-                                            <div x-data="conditionsBuilderField(field)" x-init="init()" class="space-y-3">
-                                                <div class="flex items-center justify-between">
-                                                    <div class="text-xs text-gray-500">Construtor visual de condições</div>
-                                                    <button type="button" @click="addCondition()"
-                                                            class="px-2.5 py-1 text-xs rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors">
-                                                        + Condição
-                                                    </button>
-                                                </div>
-
-                                                <div class="grid grid-cols-1 md:grid-cols-5 gap-2 text-[11px] uppercase tracking-wider text-gray-400">
-                                                    <span>Bloco</span><span>Operador</span><span>Campo</span><span>Comparação</span><span>Valor</span>
-                                                </div>
-
-                                                <template x-for="(condition, idx) in conditions" :key="condition._id">
-                                                    <div class="grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
-                                                        <select x-model="condition.block" @change="syncToForm()" class="px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700">
-                                                            <option value="buy">Buy</option>
-                                                            <option value="sell">Sell</option>
-                                                        </select>
-                                                        <select x-model="condition.logic" @change="syncToForm()" class="px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700">
-                                                            <option value="AND">AND</option>
-                                                            <option value="OR">OR</option>
-                                                        </select>
-                                                        <input x-model="condition.left" @input="syncToForm()" type="text" placeholder="short_ma"
-                                                               class="px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700" />
-                                                        <select x-model="condition.operator" @change="syncToForm()" class="px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700">
-                                                            <option value=">">&gt;</option>
-                                                            <option value=">=">&gt;=</option>
-                                                            <option value="<">&lt;</option>
-                                                            <option value="<=">&lt;=</option>
-                                                            <option value="==">==</option>
-                                                            <option value="!=">!=</option>
-                                                        </select>
-                                                        <div class="flex items-center gap-2">
-                                                            <input x-model="condition.right" @input="syncToForm()" type="text" placeholder="long_ma ou 0"
-                                                                   class="flex-1 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700" />
-                                                            <button type="button" @click="removeCondition(idx)"
-                                                                    class="px-2 py-1.5 text-xs rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200">
-                                                                x
-                                                            </button>
-                                                        </div>
+                                            <div x-data="conditionsBuilderField(field)" x-init="init()" class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/40 dark:bg-gray-800/40">
+                                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                                    <div>
+                                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">Builder de Regras</div>
+                                                        <div class="text-[11px] text-gray-500">Ordem de execução + blocos BUY/SELL + validação rápida.</div>
                                                     </div>
-                                                </template>
+                                                    <div class="flex items-center gap-2">
+                                                        <select x-model="globalLogic" @change="syncToForm()"
+                                                                class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            <option value="AND">Lógica global: AND</option>
+                                                            <option value="OR">Lógica global: OR</option>
+                                                        </select>
+                                                        <button type="button" @click="addCondition()"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors">
+                                                            + Condição
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="hidden lg:grid grid-cols-12 gap-2 text-[11px] uppercase tracking-wider text-gray-400 px-2 min-w-[980px]">
+                                                    <span class="col-span-1">#</span>
+                                                    <span class="col-span-2">Bloco</span>
+                                                    <span class="col-span-2">Lógica</span>
+                                                    <span class="col-span-3">Campo</span>
+                                                    <span class="col-span-2">Operador</span>
+                                                    <span class="col-span-2">Valor</span>
+                                                </div>
+
+                                                <div class="overflow-x-auto pb-1">
+                                                    <div class="space-y-2 min-w-[980px]">
+                                                        <template x-for="(condition, idx) in conditions" :key="condition._id">
+                                                            <div class="grid grid-cols-12 gap-2 items-center rounded-lg border border-gray-200 dark:border-gray-700 p-2 bg-white dark:bg-gray-800">
+                                                                <div class="col-span-1 text-xs text-gray-500 font-semibold" x-text="idx + 1"></div>
+                                                                <select x-model="condition.block" @change="syncToForm()" class="col-span-2 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700">
+                                                                    <option value="buy">Buy</option>
+                                                                    <option value="sell">Sell</option>
+                                                                </select>
+                                                                <select x-model="condition.logic" @change="syncToForm()" class="col-span-2 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700">
+                                                                    <option value="AND">AND</option>
+                                                                    <option value="OR">OR</option>
+                                                                </select>
+                                                                <input x-model="condition.left" @input="syncToForm()" type="text" placeholder="short_ma"
+                                                                       class="col-span-2 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700" />
+                                                                <select x-model="condition.operator" @change="syncToForm()" class="col-span-2 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700">
+                                                                    <option value=">">&gt;</option>
+                                                                    <option value=">=">&gt;=</option>
+                                                                    <option value="<">&lt;</option>
+                                                                    <option value="<=">&lt;=</option>
+                                                                    <option value="==">==</option>
+                                                                    <option value="!=">!=</option>
+                                                                </select>
+                                                                <div class="col-span-3 flex items-center gap-2 min-w-0">
+                                                                    <input x-model="condition.right" @input="syncToForm()" type="text" placeholder="long_ma ou 0"
+                                                                           class="flex-1 min-w-0 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700" />
+                                                                    <button type="button" @click="moveCondition(idx, -1)"
+                                                                            class="px-2 py-1.5 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-200 shrink-0"
+                                                                            title="Mover para cima">↑</button>
+                                                                    <button type="button" @click="moveCondition(idx, 1)"
+                                                                            class="px-2 py-1.5 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-200 shrink-0"
+                                                                            title="Mover para baixo">↓</button>
+                                                                    <button type="button" @click="removeCondition(idx)"
+                                                                            class="px-2 py-1.5 text-xs rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 shrink-0">
+                                                                        x
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+
+                                                <div class="text-[11px] text-gray-500 bg-gray-100/70 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-2"
+                                                     x-text="previewFormula()"></div>
+
+                                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                                                    <textarea
+                                                        x-model="sampleContextText"
+                                                        rows="4"
+                                                        class="w-full px-3 py-2 text-xs font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                        placeholder='{"short_ma": 1.23, "long_ma": 1.10, "rsi": 68}'
+                                                    ></textarea>
+                                                    <div class="space-y-2">
+                                                        <button type="button" @click="runSampleTest()"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">
+                                                            Testar condições
+                                                        </button>
+                                                        <div class="text-[11px] rounded-lg border px-2.5 py-2"
+                                                             :class="sampleResult && sampleResult.error ? 'border-red-200 bg-red-50 text-red-700' : 'border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-900/40 text-gray-600 dark:text-gray-300'"
+                                                             x-text="sampleResultText()"></div>
+                                                    </div>
+                                                </div>
 
                                                 <textarea
                                                     :value="JSON.stringify(formData[field.name] || {}, null, 2)"
@@ -565,6 +612,131 @@
                                                     rows="6"
                                                     class="w-full px-3.5 py-2.5 text-sm font-mono border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                                 ></textarea>
+                                            </div>
+                                        </template>
+
+                                        <!-- Trading filters builder -->
+                                        <template x-if="field.widget === 'trading_filters_builder'">
+                                            <div x-data="tradingFiltersBuilderField(field)" x-init="init()" class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/40 dark:bg-gray-800/40">
+                                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                                    <div>
+                                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">Filtros de Trading</div>
+                                                        <div class="text-[11px] text-gray-500">Presets profissionais com ajuste rápido de parâmetros.</div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <select x-model="selectedPresetId"
+                                                                class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            <template x-for="preset in presets" :key="preset.id">
+                                                                <option :value="preset.id" x-text="preset.label"></option>
+                                                            </template>
+                                                        </select>
+                                                        <button type="button" @click="addPreset()"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors">
+                                                            + Filtro
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="space-y-2" x-show="items.length > 0">
+                                                    <template x-for="(item, idx) in items" :key="item._id">
+                                                        <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 bg-white dark:bg-gray-800 space-y-2">
+                                                            <div class="flex flex-wrap items-center gap-2">
+                                                                <span class="px-2 py-0.5 text-[10px] rounded bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300" x-text="item.id"></span>
+                                                                <span class="text-xs font-medium text-gray-700 dark:text-gray-200" x-text="item.name"></span>
+                                                                <span class="ml-auto text-[10px] text-gray-500" x-text="item.type"></span>
+                                                                <label class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                                                                    <input type="checkbox" :checked="item.active" @change="item.active = $event.target.checked; syncToForm()">
+                                                                    Ativo
+                                                                </label>
+                                                                <button type="button" @click="removeItem(idx)"
+                                                                        class="px-2 py-1 text-[11px] rounded bg-red-50 hover:bg-red-100 text-red-600 border border-red-200">Remover</button>
+                                                            </div>
+                                                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                                                                <input :value="item.config.window || ''" @input="updateConfig(item, 'window', $event.target.value)"
+                                                                       type="number" placeholder="window"
+                                                                       class="px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                                <input :value="item.config.period || ''" @input="updateConfig(item, 'period', $event.target.value)"
+                                                                       type="number" placeholder="period"
+                                                                       class="px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                                <input :value="item.config.threshold || ''" @input="updateConfig(item, 'threshold', $event.target.value)"
+                                                                       type="number" step="any" placeholder="threshold"
+                                                                       class="px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                                <input :value="item.config.operator || ''" @input="updateConfig(item, 'operator', $event.target.value)"
+                                                                       type="text" placeholder="operator"
+                                                                       class="px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            </div>
+                                                            <textarea
+                                                                :value="JSON.stringify(item.config || {}, null, 2)"
+                                                                @input="updateConfigJson(item, $event.target.value)"
+                                                                rows="3"
+                                                                class="w-full px-2.5 py-2 text-xs font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                            ></textarea>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                                <div x-show="items.length === 0" class="text-xs text-gray-500 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2">
+                                                    Nenhum filtro adicionado. Use presets para montar o ataque.
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <!-- Strategy config builder -->
+                                        <template x-if="field.widget === 'strategy_config_builder'">
+                                            <div x-data="strategyConfigBuilderField(field)" x-init="init()"
+                                                 class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/40 dark:bg-gray-800/40">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <div>
+                                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-200" x-text="title"></div>
+                                                        <div class="text-[11px] text-gray-500">Modo assistido com validações + opção JSON.</div>
+                                                    </div>
+                                                    <button type="button" @click="showJson = !showJson"
+                                                            class="px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                            x-text="showJson ? 'Modo formulário' : 'Ver JSON'"></button>
+                                                </div>
+
+                                                <div x-show="!showJson" class="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                                                    <template x-for="cfg in definitions" :key="cfg.key">
+                                                        <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 space-y-1">
+                                                            <label class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide" x-text="cfg.label"></label>
+                                                            <template x-if="cfg.type === 'boolean'">
+                                                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                                                                    <input type="checkbox" :checked="toBool(localData[cfg.key])"
+                                                                           @change="setValue(cfg, $event.target.checked)">
+                                                                    <span x-text="toBool(localData[cfg.key]) ? 'Ativo' : 'Inativo'"></span>
+                                                                </label>
+                                                            </template>
+                                                            <template x-if="cfg.type === 'select'">
+                                                                <select :value="localData[cfg.key] ?? cfg.default"
+                                                                        @change="setValue(cfg, $event.target.value)"
+                                                                        class="w-full px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                                    <template x-for="opt in (cfg.options || [])" :key="opt">
+                                                                        <option :value="opt" x-text="opt"></option>
+                                                                    </template>
+                                                                </select>
+                                                            </template>
+                                                            <template x-if="cfg.type === 'number'">
+                                                                <input type="number"
+                                                                       :value="localData[cfg.key] ?? cfg.default ?? ''"
+                                                                       :step="cfg.step || 'any'"
+                                                                       @input="setValue(cfg, $event.target.value)"
+                                                                       class="w-full px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            </template>
+                                                            <template x-if="cfg.type === 'text'">
+                                                                <input type="text"
+                                                                       :value="localData[cfg.key] ?? cfg.default ?? ''"
+                                                                       @input="setValue(cfg, $event.target.value)"
+                                                                       class="w-full px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            </template>
+                                                            <p class="text-[11px] text-red-500" x-show="errors[cfg.key]" x-text="errors[cfg.key]"></p>
+                                                        </div>
+                                                    </template>
+                                                </div>
+
+                                                <textarea x-show="showJson"
+                                                          :value="JSON.stringify(localData, null, 2)"
+                                                          @input="updateFromJson($event.target.value)"
+                                                          rows="8"
+                                                          class="w-full px-3.5 py-2.5 text-sm font-mono border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"></textarea>
                                             </div>
                                         </template>
                                         
@@ -1719,9 +1891,290 @@ function m2mField(field) {
     };
 }
 
+function strategyConfigBuilderField(field) {
+    const FORM_DEFINITIONS = {
+        form_config: [
+            { key: "initialStake", label: "Stake inicial", type: "number", min: 0, step: "any", default: 0.35 },
+            { key: "profitTarget", label: "Meta de lucro", type: "number", min: 0, step: "any", default: 10 },
+            { key: "stopLoss", label: "Stop loss", type: "number", min: 0, step: "any", default: 50 },
+            { key: "riskProfile", label: "Perfil de risco", type: "select", options: ["conservador", "moderado", "agressivo"], default: "moderado" },
+            { key: "market", label: "Mercado", type: "text", default: "R_100" },
+            { key: "duration", label: "Duracao", type: "number", min: 1, step: 1, default: 1 },
+            { key: "durationUnit", label: "Unidade", type: "select", options: ["t", "s", "m"], default: "t" },
+            { key: "tradeType", label: "Trade type", type: "text", default: "" },
+            { key: "expectedPayout", label: "Payout esperado", type: "number", min: 0, step: "any", default: 1.2 },
+            { key: "directionMode", label: "Direcao", type: "select", options: ["both", "up", "down"], default: "both" },
+            { key: "delayWin", label: "Delay WIN", type: "number", min: 0, step: 1, default: 0 },
+            { key: "delayLoss", label: "Delay LOSS", type: "number", min: 0, step: 1, default: 0 },
+        ],
+        recovery_config: [
+            { key: "enabled", label: "Recovery ativo", type: "boolean", default: true },
+            { key: "lossesToActivate", label: "Perdas para ativar", type: "number", min: 1, step: 1, default: 1 },
+            { key: "martingale", label: "Martingale", type: "boolean", default: true },
+            { key: "expectedPayout", label: "Payout recovery", type: "number", min: 0, step: "any", default: 2.26 },
+            { key: "virtualLossTarget", label: "Meta perda virtual", type: "number", min: 0, step: 1, default: 0 },
+            { key: "duration", label: "Duracao", type: "number", min: 1, step: 1, default: 5 },
+            { key: "durationUnit", label: "Unidade", type: "select", options: ["t", "s", "m"], default: "t" },
+            { key: "riskProfile", label: "Perfil risco", type: "select", options: ["conservador", "moderado", "agressivo"], default: "moderado" },
+            { key: "pauseLosses", label: "Pausa perdas", type: "number", min: 0, step: 1, default: 5 },
+            { key: "pauseVolatility", label: "Pausa volatilidade", type: "number", min: 0, step: 1, default: 50 },
+            { key: "pauseTime", label: "Pausa tempo", type: "number", min: 0, step: 1, default: 5 },
+            { key: "maxPreciseLosses", label: "Max losses preciso", type: "number", min: 0, step: 1, default: 3 },
+        ],
+        security_config: [
+            { key: "virtualLoss.enabled", label: "Virtual loss ativa", type: "boolean", default: false },
+            { key: "virtualLoss.target", label: "Meta virtual loss", type: "number", min: 0, step: 1, default: 2 },
+            { key: "virtualLoss.current", label: "Atual virtual loss", type: "number", min: 0, step: 1, default: 0 },
+            { key: "virtualLoss.mode", label: "Modo virtual loss", type: "select", options: ["warmup", "cyclic", "attack", "recovery"], default: "warmup" },
+        ],
+        validator_config: [
+            { key: "aiStarted", label: "AI iniciada", type: "boolean", default: false },
+            { key: "attackFilterCorrect", label: "Filtro ataque ok", type: "boolean", default: false },
+            { key: "baseStakeCorrect", label: "Stake base ok", type: "boolean", default: false },
+            { key: "sorosApplied", label: "Soros aplicado", type: "boolean", default: false },
+            { key: "sorosReset", label: "Soros resetado", type: "boolean", default: false },
+            { key: "recoveryModeEntered", label: "Entrou em recovery", type: "boolean", default: false },
+            { key: "recoveryContractSwitched", label: "Trocou contrato", type: "boolean", default: false },
+            { key: "martingale100", label: "Martingale 100", type: "boolean", default: false },
+        ],
+        strategy_identity: [
+            { key: "icon", label: "Icone", type: "text", default: "bolt" },
+            { key: "name", label: "Nome", type: "text", default: "" },
+            { key: "description", label: "Descricao", type: "text", default: "" },
+            { key: "status", label: "Status", type: "select", options: ["Rascunho", "Ativo", "Arquivado"], default: "Rascunho" },
+            { key: "precision.min", label: "Precisao min", type: "number", min: 0, max: 100, step: 1, default: 60 },
+            { key: "precision.max", label: "Precisao max", type: "number", min: 0, max: 100, step: 1, default: 70 },
+            { key: "return.min", label: "Retorno min", type: "number", step: "any", default: 19 },
+            { key: "return.max", label: "Retorno max", type: "number", step: "any", default: 126 },
+        ],
+    };
+
+    const TITLES = {
+        form_config: "Configuração principal",
+        recovery_config: "Configuração de recovery",
+        security_config: "Configuração de segurança",
+        validator_config: "Validador operacional",
+        strategy_identity: "Identidade da estratégia",
+    };
+
+    return {
+        localData: {},
+        errors: {},
+        showJson: false,
+        definitions: FORM_DEFINITIONS[field.name] || [],
+        title: TITLES[field.name] || "Configuração",
+
+        _root() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) return data;
+                }
+            } catch (e) {}
+            return null;
+        },
+
+        init() {
+            const root = this._root();
+            if (!root) return;
+            this.localData = JSON.parse(JSON.stringify(root.formData[field.name] || {}));
+            this._applyDefaults();
+            this._syncRoot();
+        },
+
+        toBool(value) {
+            return value === true || value === "true" || value === 1;
+        },
+
+        _pathGet(path) {
+            const parts = String(path || "").split(".");
+            let cur = this.localData;
+            for (const part of parts) {
+                if (!cur || typeof cur !== "object") return undefined;
+                cur = cur[part];
+            }
+            return cur;
+        },
+
+        _pathSet(path, value) {
+            const parts = String(path || "").split(".");
+            let cur = this.localData;
+            for (let i = 0; i < parts.length - 1; i += 1) {
+                const part = parts[i];
+                if (!cur[part] || typeof cur[part] !== "object") cur[part] = {};
+                cur = cur[part];
+            }
+            cur[parts[parts.length - 1]] = value;
+        },
+
+        _applyDefaults() {
+            this.definitions.forEach((cfg) => {
+                if (this._pathGet(cfg.key) === undefined) this._pathSet(cfg.key, cfg.default);
+            });
+        },
+
+        _syncRoot() {
+            const root = this._root();
+            if (!root) return;
+            root.formData[field.name] = JSON.parse(JSON.stringify(this.localData || {}));
+            if (root.markDirty) root.markDirty();
+        },
+
+        setValue(cfg, rawValue) {
+            let value = rawValue;
+            if (cfg.type === "number") {
+                value = rawValue === "" ? null : Number(rawValue);
+            } else if (cfg.type === "boolean") {
+                value = !!rawValue;
+            }
+
+            if (cfg.type === "number" && value !== null && Number.isNaN(value)) {
+                this.errors[cfg.key] = "Valor numérico inválido";
+                return;
+            }
+            if (cfg.min !== undefined && value !== null && value < cfg.min) {
+                this.errors[cfg.key] = `Mínimo ${cfg.min}`;
+                return;
+            }
+            if (cfg.max !== undefined && value !== null && value > cfg.max) {
+                this.errors[cfg.key] = `Máximo ${cfg.max}`;
+                return;
+            }
+            this.errors[cfg.key] = "";
+            this._pathSet(cfg.key, value);
+            this._syncRoot();
+        },
+
+        updateFromJson(raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    this.localData = parsed;
+                    this.errors = {};
+                    this._applyDefaults();
+                    this._syncRoot();
+                }
+            } catch (e) {}
+        },
+    };
+}
+
+function tradingFiltersBuilderField(field) {
+    return {
+        selectedPresetId: "digit_density",
+        items: [],
+        presets: [
+            { id: "digit_density", label: "Densidade de Dígitos", type: "digit", config: { window: 20, digits: "8,9", operator: "<", threshold: 5 } },
+            { id: "digit_sequence", label: "Sequência de Dígitos", type: "digit", config: { length: 3, target: "under_4", tradeInFavor: true } },
+            { id: "parity_majority", label: "Maioria de Paridade", type: "digit", config: { window: 24, percentage: 60, maxNoise: 8 } },
+            { id: "price_momentum", label: "Momentum de Preço", type: "price", config: { window: 10, ticksToConfirm: 2, minDelta: 0.1 } },
+            { id: "price_ma", label: "Preço vs Média Móvel", type: "price", config: { period: 14, type: "SMA", operator: ">" } },
+            { id: "rsi_level", label: "RSI por Nível", type: "oscillator", config: { period: 14, level: 30, operator: "<" } },
+        ],
+
+        _nextId() {
+            return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        },
+
+        _root() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) return data;
+                }
+            } catch(e) {}
+            return null;
+        },
+
+        init() {
+            this.loadFromForm();
+        },
+
+        loadFromForm() {
+            const root = this._root();
+            if (!root) return;
+            const raw = root.formData[field.name];
+            const source = Array.isArray(raw) ? raw : ((raw && Array.isArray(raw.filters)) ? raw.filters : []);
+            this.items = source.map((item) => ({
+                _id: this._nextId(),
+                id: item.id || "custom_filter",
+                name: item.name || item.id || "Filtro custom",
+                type: item.type || "custom",
+                active: item.active !== false,
+                config: item.config && typeof item.config === "object" ? { ...item.config } : {},
+            }));
+        },
+
+        addPreset() {
+            const preset = this.presets.find((p) => p.id === this.selectedPresetId);
+            if (!preset) return;
+            this.items.push({
+                _id: this._nextId(),
+                id: preset.id,
+                name: preset.label,
+                type: preset.type,
+                active: true,
+                config: { ...preset.config },
+            });
+            this.syncToForm();
+        },
+
+        removeItem(index) {
+            this.items.splice(index, 1);
+            this.syncToForm();
+        },
+
+        updateConfig(item, key, value) {
+            const trimmed = String(value ?? "").trim();
+            if (!trimmed) {
+                delete item.config[key];
+                this.syncToForm();
+                return;
+            }
+            if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+                item.config[key] = Number(trimmed);
+            } else if (trimmed.toLowerCase() === "true" || trimmed.toLowerCase() === "false") {
+                item.config[key] = trimmed.toLowerCase() === "true";
+            } else {
+                item.config[key] = trimmed;
+            }
+            this.syncToForm();
+        },
+
+        updateConfigJson(item, raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    item.config = parsed;
+                    this.syncToForm();
+                }
+            } catch(e) {}
+        },
+
+        syncToForm() {
+            const root = this._root();
+            if (!root) return;
+            const current = root.formData[field.name];
+            const base = current && typeof current === "object" && !Array.isArray(current) ? { ...current } : {};
+            base.filters = this.items.map((item) => ({
+                id: item.id,
+                name: item.name,
+                type: item.type,
+                active: item.active !== false,
+                config: item.config && typeof item.config === "object" ? { ...item.config } : {},
+            }));
+            root.formData[field.name] = base;
+            if (root.markDirty) root.markDirty();
+        },
+    };
+}
+
 function conditionsBuilderField(field) {
     return {
         conditions: [],
+        globalLogic: "AND",
+        sampleContextText: '{"short_ma": 1.23, "long_ma": 1.1}',
+        sampleResult: null,
         _seq: 0,
 
         _nextId() {
@@ -1739,6 +2192,29 @@ function conditionsBuilderField(field) {
             return null;
         },
 
+        _resolveValue(token, context) {
+            const raw = String(token ?? "").trim();
+            if (!raw.length) return null;
+            if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
+            const lower = raw.toLowerCase();
+            if (lower === "true") return true;
+            if (lower === "false") return false;
+            if (context && Object.prototype.hasOwnProperty.call(context, raw)) return context[raw];
+            return raw;
+        },
+
+        _evaluateCondition(condition, context) {
+            const left = this._resolveValue(condition.left, context);
+            const right = this._resolveValue(condition.right, context);
+            const op = condition.operator || "==";
+            if (op === ">") return left > right;
+            if (op === ">=") return left >= right;
+            if (op === "<") return left < right;
+            if (op === "<=") return left <= right;
+            if (op === "!=") return left !== right;
+            return left === right;
+        },
+
         init() {
             this.reloadFromForm();
         },
@@ -1748,12 +2224,18 @@ function conditionsBuilderField(field) {
             if (!root) return;
             const raw = root.formData[field.name] || {};
             const rows = [];
+            this.globalLogic = String(raw.logic || "AND").toUpperCase();
 
             const parseBlock = (blockName, block) => {
                 const blockData = block || {};
                 const logic = String(blockData.logic || "AND").toUpperCase();
                 const conditions = blockData.conditions || {};
-                Object.entries(conditions).forEach(([key, cfg]) => {
+                const ordered = Object.entries(conditions).sort((a, b) => {
+                    const orderA = Number((a[1] || {}).order || 0);
+                    const orderB = Number((b[1] || {}).order || 0);
+                    return orderA - orderB;
+                });
+                ordered.forEach(([key, cfg]) => {
                     const cfgData = cfg || {};
                     const rightValue = (cfgData.right !== undefined && cfgData.right !== null)
                         ? cfgData.right
@@ -1773,6 +2255,7 @@ function conditionsBuilderField(field) {
             parseBlock("buy", raw && raw.buy ? raw.buy : {});
             parseBlock("sell", raw && raw.sell ? raw.sell : {});
             this.conditions = rows;
+            this.sampleResult = null;
         },
 
         addCondition() {
@@ -1788,9 +2271,40 @@ function conditionsBuilderField(field) {
             this.syncToForm();
         },
 
+        moveCondition(index, direction) {
+            const target = index + direction;
+            if (target < 0 || target >= this.conditions.length) return;
+            const temp = this.conditions[index];
+            this.conditions[index] = this.conditions[target];
+            this.conditions[target] = temp;
+            this.syncToForm();
+        },
+
         removeCondition(index) {
             this.conditions.splice(index, 1);
             this.syncToForm();
+        },
+
+        runSampleTest() {
+            try {
+                const context = JSON.parse(this.sampleContextText || "{}");
+                const checks = this.conditions.map((condition) => this._evaluateCondition(condition, context));
+                const passed = checks.filter(Boolean).length;
+                this.sampleResult = {
+                    total: checks.length,
+                    passed,
+                    failed: checks.length - passed,
+                    error: null,
+                };
+            } catch(e) {
+                this.sampleResult = { error: "JSON de teste inválido." };
+            }
+        },
+
+        sampleResultText() {
+            if (!this.sampleResult) return "Use um JSON de teste para validar rapidamente as condições.";
+            if (this.sampleResult.error) return this.sampleResult.error;
+            return `Resultado: ${this.sampleResult.passed}/${this.sampleResult.total} condições válidas (${this.sampleResult.failed} falhas).`;
         },
 
         syncToForm() {
@@ -1798,7 +2312,7 @@ function conditionsBuilderField(field) {
             if (!root) return;
 
             const output = {
-                logic: "AND",
+                logic: String(this.globalLogic || "AND").toUpperCase(),
                 buy: { logic: "AND", conditions: {} },
                 sell: { logic: "AND", conditions: {} },
             };
@@ -1809,6 +2323,7 @@ function conditionsBuilderField(field) {
                 const conditionKey = (item.key || item.left || `condition_${idx + 1}`).toString().trim().replace(/\s+/g, "_");
                 if (!conditionKey) return;
                 output[block].conditions[conditionKey] = {
+                    order: idx + 1,
                     left: item.left || conditionKey,
                     operator: item.operator || "==",
                     right: item.right,
@@ -1817,6 +2332,20 @@ function conditionsBuilderField(field) {
 
             root.formData[field.name] = output;
             if (root.markDirty) root.markDirty();
+        },
+
+        previewFormula() {
+            if (!Array.isArray(this.conditions) || this.conditions.length === 0) {
+                return "Sem condições definidas. Clique em + Condição para iniciar.";
+            }
+            const chunks = this.conditions.map((c, i) => {
+                const block = (c.block || "buy").toUpperCase();
+                const left = c.left || `campo_${i + 1}`;
+                const op = c.operator || "==";
+                const right = (c.right !== undefined && c.right !== null && String(c.right).length > 0) ? c.right : "?";
+                return `[${i + 1}] ${block}: ${left} ${op} ${right}`;
+            });
+            return `Execução ${String(this.globalLogic || "AND").toUpperCase()}: ${chunks.join(" -> ")}`;
         },
     };
 }
