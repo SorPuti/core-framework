@@ -588,13 +588,31 @@
                                                 <div class="text-[11px] text-gray-500 bg-gray-100/70 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-2"
                                                      x-text="previewFormula()"></div>
 
-                                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                                                <div class="space-y-2 rounded-lg border border-gray-200 dark:border-gray-700 p-2 bg-white/70 dark:bg-gray-900/40">
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <label class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Preset de teste</label>
+                                                        <select x-model="selectedTestPreset" @change="applyTestPreset()"
+                                                                class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            <template x-for="preset in testPresets" :key="preset.id">
+                                                                <option :value="preset.id" x-text="preset.label"></option>
+                                                            </template>
+                                                        </select>
+                                                        <button type="button" @click="showAdvancedTests = !showAdvancedTests"
+                                                                class="px-2 py-1 text-[11px] rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                                            Casos customizados
+                                                        </button>
+                                                    </div>
                                                     <textarea
                                                         x-model="sampleContextText"
-                                                        rows="4"
+                                                        rows="3"
                                                         class="w-full px-3 py-2 text-xs font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                                         placeholder='{"short_ma": 1.23, "long_ma": 1.10, "rsi": 68}'
                                                     ></textarea>
+                                                    <textarea x-show="showAdvancedTests"
+                                                              x-model="customTestCasesText"
+                                                              rows="4"
+                                                              class="w-full px-3 py-2 text-xs font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                              placeholder='[{"name":"Caso 1","context":{"short_ma":1.2,"long_ma":1.0}}]'></textarea>
                                                     <div class="space-y-2">
                                                         <button type="button" @click="runSampleTest()"
                                                                 class="px-2.5 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">
@@ -689,9 +707,23 @@
                                                         <div class="text-sm font-semibold text-gray-700 dark:text-gray-200" x-text="title"></div>
                                                         <div class="text-[11px] text-gray-500">Modo assistido com validações + opção JSON.</div>
                                                     </div>
-                                                    <button type="button" @click="showJson = !showJson"
-                                                            class="px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                                            x-text="showJson ? 'Modo formulário' : 'Ver JSON'"></button>
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <select x-model="selectedProfile"
+                                                                class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            <option value="apollo">Preset Apollo</option>
+                                                            <option value="atlas">Preset Atlas</option>
+                                                            <option value="nexus">Preset Nexus</option>
+                                                            <option value="orion">Preset Orion</option>
+                                                            <option value="titan">Preset Titan</option>
+                                                        </select>
+                                                        <button type="button" @click="applyProfilePreset()"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors">
+                                                            Aplicar preset
+                                                        </button>
+                                                        <button type="button" @click="showJson = !showJson"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                                x-text="showJson ? 'Modo formulário' : 'Ver JSON'"></button>
+                                                    </div>
                                                 </div>
 
                                                 <div x-show="!showJson" class="grid grid-cols-1 lg:grid-cols-2 gap-2">
@@ -699,14 +731,14 @@
                                                         <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 space-y-1">
                                                             <label class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide" x-text="cfg.label"></label>
                                                             <template x-if="cfg.type === 'boolean'">
-                                                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-                                                                    <input type="checkbox" :checked="toBool(localData[cfg.key])"
+                                                                <div class="flex flex-col items-start gap-1 text-sm text-gray-700 dark:text-gray-200">
+                                                                    <input type="checkbox" :checked="toBool(pathValue(cfg.key))"
                                                                            @change="setValue(cfg, $event.target.checked)">
-                                                                    <span x-text="toBool(localData[cfg.key]) ? 'Ativo' : 'Inativo'"></span>
-                                                                </label>
+                                                                    <span x-text="toBool(pathValue(cfg.key)) ? 'Ativo' : 'Inativo'"></span>
+                                                                </div>
                                                             </template>
                                                             <template x-if="cfg.type === 'select'">
-                                                                <select :value="localData[cfg.key] ?? cfg.default"
+                                                                <select :value="pathValue(cfg.key) ?? cfg.default"
                                                                         @change="setValue(cfg, $event.target.value)"
                                                                         class="w-full px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
                                                                     <template x-for="opt in (cfg.options || [])" :key="opt">
@@ -716,14 +748,14 @@
                                                             </template>
                                                             <template x-if="cfg.type === 'number'">
                                                                 <input type="number"
-                                                                       :value="localData[cfg.key] ?? cfg.default ?? ''"
+                                                                       :value="pathValue(cfg.key) ?? cfg.default ?? ''"
                                                                        :step="cfg.step || 'any'"
                                                                        @input="setValue(cfg, $event.target.value)"
                                                                        class="w-full px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
                                                             </template>
                                                             <template x-if="cfg.type === 'text'">
                                                                 <input type="text"
-                                                                       :value="localData[cfg.key] ?? cfg.default ?? ''"
+                                                                       :value="pathValue(cfg.key) ?? cfg.default ?? ''"
                                                                        @input="setValue(cfg, $event.target.value)"
                                                                        class="w-full px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
                                                             </template>
@@ -1045,7 +1077,7 @@ const APP_LABEL = "{{ app_label }}";
 const MODEL_NAME = "{{ model_name }}";
 
 function detailView() {
-    const isNew = {{ 'true' if is_new else 'false' }};
+    const isNew = "{{ 'true' if is_new else 'false' }}" === "true";
     
     return {
         formData: {},
@@ -1947,6 +1979,32 @@ function strategyConfigBuilderField(field) {
             { key: "return.min", label: "Retorno min", type: "number", step: "any", default: 19 },
             { key: "return.max", label: "Retorno max", type: "number", step: "any", default: 126 },
         ],
+        defense: [
+            { key: "mode", label: "Modo defesa", type: "select", options: ["trend", "adaptive", "manual"], default: "trend" },
+            { key: "recovery.enabled", label: "Recovery ativa", type: "boolean", default: true },
+            { key: "recovery.type", label: "Tipo recovery", type: "select", options: ["trend", "adaptive", "momentum"], default: "trend" },
+            { key: "max_consecutive_losses", label: "Max perdas seguidas", type: "number", min: 0, step: 1, default: 3 },
+        ],
+        session: [
+            { key: "profit_target", label: "Meta de lucro", type: "number", min: 0, step: "any", default: 0.5 },
+            { key: "stop_loss_global", label: "Stop loss global", type: "number", min: 0, step: "any", default: 0.5 },
+            { key: "max_trades_per_session", label: "Max trades/sessao", type: "number", min: 1, step: 1, default: 20 },
+            { key: "cooldown_minutes", label: "Cooldown (min)", type: "number", min: 0, step: 1, default: 0 },
+        ],
+        capital_management: [
+            { key: "martingale.enabled", label: "Martingale ativa", type: "boolean", default: false },
+            { key: "martingale.multiplier", label: "Multiplicador martingale", type: "number", min: 1, step: "any", default: 2 },
+            { key: "soros.enabled", label: "Soros ativo", type: "boolean", default: false },
+            { key: "soros.level", label: "Nivel soros", type: "number", min: 0, step: 1, default: 1 },
+            { key: "max_exposure", label: "Exposicao maxima", type: "number", min: 0, step: "any", default: 5 },
+        ],
+        risk_management: [
+            { key: "daily_stop_loss", label: "Stop loss diario", type: "number", min: 0, step: "any", default: 50 },
+            { key: "daily_profit_cap", label: "Limite lucro diario", type: "number", min: 0, step: "any", default: 100 },
+            { key: "max_drawdown", label: "Max drawdown", type: "number", min: 0, step: "any", default: 20 },
+            { key: "block_after_losses", label: "Bloquear apos perdas", type: "number", min: 0, step: 1, default: 5 },
+            { key: "virtual_loss.enabled", label: "Virtual loss ativa", type: "boolean", default: false },
+        ],
     };
 
     const TITLES = {
@@ -1955,12 +2013,62 @@ function strategyConfigBuilderField(field) {
         security_config: "Configuração de segurança",
         validator_config: "Validador operacional",
         strategy_identity: "Identidade da estratégia",
+        defense: "Configuração de defesa",
+        session: "Configuração de sessão",
+        capital_management: "Gestão de capital",
+        risk_management: "Gestão de risco",
+    };
+
+    const PROFILE_PRESETS = {
+        form_config: {
+            apollo: { riskProfile: "conservador", duration: 1, durationUnit: "t", expectedPayout: 1.15, directionMode: "both", delayWin: 1, delayLoss: 1 },
+            atlas: { riskProfile: "moderado", duration: 1, durationUnit: "t", expectedPayout: 1.2, directionMode: "both", delayWin: 0, delayLoss: 1 },
+            nexus: { riskProfile: "agressivo", duration: 1, durationUnit: "t", expectedPayout: 1.25, directionMode: "up", delayWin: 0, delayLoss: 0 },
+            orion: { riskProfile: "moderado", duration: 1, durationUnit: "t", expectedPayout: 1.22, directionMode: "both", delayWin: 0, delayLoss: 1 },
+            titan: { riskProfile: "conservador", duration: 2, durationUnit: "t", expectedPayout: 1.12, directionMode: "both", delayWin: 1, delayLoss: 1 },
+        },
+        recovery_config: {
+            apollo: { enabled: true, lossesToActivate: 2, martingale: false, pauseLosses: 5, maxPreciseLosses: 2, riskProfile: "conservador" },
+            atlas: { enabled: true, lossesToActivate: 2, martingale: true, pauseLosses: 4, maxPreciseLosses: 3, riskProfile: "moderado" },
+            nexus: { enabled: true, lossesToActivate: 1, martingale: true, pauseLosses: 3, maxPreciseLosses: 4, riskProfile: "agressivo" },
+            orion: { enabled: true, lossesToActivate: 1, martingale: true, pauseLosses: 4, maxPreciseLosses: 3, riskProfile: "moderado" },
+            titan: { enabled: true, lossesToActivate: 3, martingale: false, pauseLosses: 6, maxPreciseLosses: 2, riskProfile: "conservador" },
+        },
+        defense: {
+            apollo: { mode: "adaptive", max_consecutive_losses: 2 },
+            atlas: { mode: "trend", max_consecutive_losses: 3 },
+            nexus: { mode: "manual", max_consecutive_losses: 4 },
+            orion: { mode: "trend", max_consecutive_losses: 3 },
+            titan: { mode: "adaptive", max_consecutive_losses: 2 },
+        },
+        session: {
+            apollo: { profit_target: 0.4, stop_loss_global: 0.4, max_trades_per_session: 15, cooldown_minutes: 1 },
+            atlas: { profit_target: 0.5, stop_loss_global: 0.5, max_trades_per_session: 20, cooldown_minutes: 0 },
+            nexus: { profit_target: 0.8, stop_loss_global: 0.8, max_trades_per_session: 30, cooldown_minutes: 0 },
+            orion: { profit_target: 0.6, stop_loss_global: 0.6, max_trades_per_session: 22, cooldown_minutes: 0 },
+            titan: { profit_target: 0.4, stop_loss_global: 0.45, max_trades_per_session: 18, cooldown_minutes: 1 },
+        },
+        capital_management: {
+            apollo: { "martingale.enabled": false, "soros.enabled": true, "soros.level": 1, max_exposure: 3 },
+            atlas: { "martingale.enabled": true, "martingale.multiplier": 2, "soros.enabled": true, "soros.level": 1, max_exposure: 5 },
+            nexus: { "martingale.enabled": true, "martingale.multiplier": 2.2, "soros.enabled": false, max_exposure: 7 },
+            orion: { "martingale.enabled": true, "martingale.multiplier": 2, "soros.enabled": false, max_exposure: 6 },
+            titan: { "martingale.enabled": false, "soros.enabled": true, "soros.level": 2, max_exposure: 4 },
+        },
+        risk_management: {
+            apollo: { daily_stop_loss: 35, daily_profit_cap: 70, max_drawdown: 12, block_after_losses: 4 },
+            atlas: { daily_stop_loss: 50, daily_profit_cap: 100, max_drawdown: 20, block_after_losses: 5 },
+            nexus: { daily_stop_loss: 80, daily_profit_cap: 160, max_drawdown: 30, block_after_losses: 6 },
+            orion: { daily_stop_loss: 55, daily_profit_cap: 110, max_drawdown: 22, block_after_losses: 5 },
+            titan: { daily_stop_loss: 40, daily_profit_cap: 85, max_drawdown: 15, block_after_losses: 4 },
+        },
     };
 
     return {
         localData: {},
         errors: {},
         showJson: false,
+        selectedProfile: "atlas",
         definitions: FORM_DEFINITIONS[field.name] || [],
         title: TITLES[field.name] || "Configuração",
 
@@ -1996,6 +2104,10 @@ function strategyConfigBuilderField(field) {
             return cur;
         },
 
+        pathValue(path) {
+            return this._pathGet(path);
+        },
+
         _pathSet(path, value) {
             const parts = String(path || "").split(".");
             let cur = this.localData;
@@ -2018,6 +2130,16 @@ function strategyConfigBuilderField(field) {
             if (!root) return;
             root.formData[field.name] = JSON.parse(JSON.stringify(this.localData || {}));
             if (root.markDirty) root.markDirty();
+        },
+
+        applyProfilePreset() {
+            const blockPresets = PROFILE_PRESETS[field.name] || {};
+            const preset = blockPresets[this.selectedProfile];
+            if (!preset || typeof preset !== "object") return;
+            Object.entries(preset).forEach(([key, value]) => {
+                this._pathSet(key, value);
+            });
+            this._syncRoot();
         },
 
         setValue(cfg, rawValue) {
@@ -2174,6 +2296,15 @@ function conditionsBuilderField(field) {
         conditions: [],
         globalLogic: "AND",
         sampleContextText: '{"short_ma": 1.23, "long_ma": 1.1}',
+        customTestCasesText: '[{"name":"Padrao","context":{"short_ma":1.23,"long_ma":1.1}}]',
+        showAdvancedTests: false,
+        selectedTestPreset: "ma_cross",
+        testPresets: [
+            { id: "ma_cross", label: "MA Cross", payload: { short_ma: 1.23, long_ma: 1.1, rsi: 52, momentum: 0.4 } },
+            { id: "oversold", label: "RSI Oversold", payload: { rsi: 28, momentum: -0.2, pullback: true } },
+            { id: "breakout", label: "Breakout", payload: { price: 102.5, resistance: 101.0, volume: 3200 } },
+            { id: "custom", label: "Custom", payload: {} },
+        ],
         sampleResult: null,
         _seq: 0,
 
@@ -2217,6 +2348,7 @@ function conditionsBuilderField(field) {
 
         init() {
             this.reloadFromForm();
+            this.applyTestPreset();
         },
 
         reloadFromForm() {
@@ -2285,25 +2417,63 @@ function conditionsBuilderField(field) {
             this.syncToForm();
         },
 
+        applyTestPreset() {
+            const selected = this.testPresets.find((p) => p.id === this.selectedTestPreset);
+            if (!selected || selected.id === "custom") return;
+            this.sampleContextText = JSON.stringify(selected.payload, null, 2);
+        },
+
+        _resolveTestCases() {
+            if (!this.showAdvancedTests) {
+                return [{ name: "Padrao", context: JSON.parse(this.sampleContextText || "{}") }];
+            }
+            const parsed = JSON.parse(this.customTestCasesText || "[]");
+            if (!Array.isArray(parsed) || parsed.length === 0) {
+                return [{ name: "Padrao", context: JSON.parse(this.sampleContextText || "{}") }];
+            }
+            return parsed.map((row, idx) => ({
+                name: row && row.name ? String(row.name) : `Caso ${idx + 1}`,
+                context: row && row.context && typeof row.context === "object" ? row.context : {},
+            }));
+        },
+
         runSampleTest() {
             try {
-                const context = JSON.parse(this.sampleContextText || "{}");
-                const checks = this.conditions.map((condition) => this._evaluateCondition(condition, context));
-                const passed = checks.filter(Boolean).length;
+                const cases = this._resolveTestCases();
+                let totalChecks = 0;
+                let totalPassed = 0;
+                const caseResults = cases.map((testCase) => {
+                    const checks = this.conditions.map((condition) => this._evaluateCondition(condition, testCase.context));
+                    const passed = checks.filter(Boolean).length;
+                    totalChecks += checks.length;
+                    totalPassed += passed;
+                    return {
+                        name: testCase.name,
+                        passed,
+                        total: checks.length,
+                    };
+                });
                 this.sampleResult = {
-                    total: checks.length,
-                    passed,
-                    failed: checks.length - passed,
+                    total: totalChecks,
+                    passed: totalPassed,
+                    failed: totalChecks - totalPassed,
+                    caseResults,
                     error: null,
                 };
             } catch(e) {
-                this.sampleResult = { error: "JSON de teste inválido." };
+                this.sampleResult = { error: "JSON de teste inválido. Revise o contexto/presets/casos customizados." };
             }
         },
 
         sampleResultText() {
             if (!this.sampleResult) return "Use um JSON de teste para validar rapidamente as condições.";
             if (this.sampleResult.error) return this.sampleResult.error;
+            if (Array.isArray(this.sampleResult.caseResults) && this.sampleResult.caseResults.length > 1) {
+                const compact = this.sampleResult.caseResults
+                    .map((r) => `${r.name}: ${r.passed}/${r.total}`)
+                    .join(" | ");
+                return `Resultado agregado: ${this.sampleResult.passed}/${this.sampleResult.total} (${this.sampleResult.failed} falhas). ${compact}`;
+            }
             return `Resultado: ${this.sampleResult.passed}/${this.sampleResult.total} condições válidas (${this.sampleResult.failed} falhas).`;
         },
 
