@@ -1139,6 +1139,10 @@ async def _log_action(
         )
     except Exception as e:
         # Audit log failure should not break the operation
+        try:
+            await db.rollback()
+        except Exception:
+            pass
         logger.warning("Failed to write audit log: %s", e)
 
 

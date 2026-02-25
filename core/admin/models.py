@@ -29,12 +29,13 @@ class AuditLog(Model):
     Sempre visível no admin para superusers.
     """
     __tablename__ = "admin_audit_log"
+    ACTION_MAX_LENGTH = 100
     
     id: Mapped[int] = Field.pk()
     # VARCHAR para aceitar qualquer tipo de PK do User (int, UUID, string)
     user_id: Mapped[str] = Field.string(max_length=255, index=True)
     user_email: Mapped[str] = Field.string(max_length=255)
-    action: Mapped[str] = Field.string(max_length=20)  # create, update, delete, bulk_delete
+    action: Mapped[str] = Field.string(max_length=ACTION_MAX_LENGTH)  # create, update, delete, action:*, bulk_delete
     app_label: Mapped[str] = Field.string(max_length=100)
     model_name: Mapped[str] = Field.string(max_length=100)
     object_id: Mapped[str] = Field.string(max_length=255)
@@ -77,15 +78,22 @@ class AuditLog(Model):
             ip_address: IP do cliente
             user_agent: User-Agent do browser
         """
+        # Keep action DB-safe and preserve full value when truncation is needed.
+        safe_changes = dict(changes or {})
+        safe_action = str(action or "").strip() or "action"
+        if len(safe_action) > cls.ACTION_MAX_LENGTH:
+            safe_changes.setdefault("_audit_action_full", safe_action)
+            safe_action = safe_action[: cls.ACTION_MAX_LENGTH]
+
         log = cls(
             user_id=str(getattr(user, "id", "0")),
             user_email=getattr(user, "email", str(user)),
-            action=action,
+            action=safe_action,
             app_label=app_label,
             model_name=model_name,
             object_id=str(object_id),
             object_repr=object_repr[:500],
-            changes=changes,
+            changes=safe_changes or None,
             ip_address=ip_address,
             user_agent=user_agent[:500] if user_agent else None,
         )
