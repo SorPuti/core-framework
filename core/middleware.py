@@ -80,6 +80,10 @@ class ASGIMiddleware:
             await self.app(scope, receive, send)
             return
         
+        if scope["type"] == "websocket":
+            await self.app(scope, receive, send)
+            return
+        
         # Check path filtering
         path = scope.get("path", "")
         if not self._should_process(path):

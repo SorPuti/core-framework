@@ -152,9 +152,14 @@ class CoreApp:
         self._setup_exception_handlers(exception_handlers)
         
         # ── Step 8: Routers ──
+        self._ws_router = None
+        self._included_routers: list[tuple[Any, str]] = []
         if routers:
             for router in routers:
                 self.include_router(router)
+        
+        # ── Step 8.1: Collect WebSocket routes ──
+        self._build_ws_router()
         
         # ── Step 8.5: Admin Panel ──
         self._admin_site = None
@@ -694,6 +699,41 @@ class CoreApp:
             tags: Tags para OpenAPI
         """
         include_router(self.app, router, prefix=prefix, tags=tags)
+        self._included_routers.append((router, prefix))
+        self._build_ws_router()
+
+    def _build_ws_router(self) -> None:
+        """
+        Collect ``WebSocketRoute`` objects registered via
+        ``Router.register_websocket()`` across all included routers and
+        build a standalone Starlette Router that lives **outside** the
+        middleware stack.
+
+        WebSocket routes are propagated upward via ``Router.include_router``
+        so we only need to check the top-level routers stored in
+        ``self._included_routers``.
+        """
+        from starlette.routing import Router as _StarletteRouter
+
+        ws_routes: list = []
+        seen: set[str] = set()
+        for router, extra_prefix in self._included_routers:
+            actual = getattr(router, "router", router) if hasattr(router, "router") else router
+            router_prefix = getattr(actual, "prefix", "")
+            combined = extra_prefix + router_prefix
+            for r in getattr(actual, "_ws_routes", []):
+                full_path = combined + r.path
+                if full_path not in seen:
+                    from starlette.routing import WebSocketRoute
+                    ws_routes.append(WebSocketRoute(full_path, r.endpoint, name=r.name))
+                    seen.add(full_path)
+
+        if ws_routes:
+            self._ws_router = _StarletteRouter(routes=ws_routes)
+            for r in ws_routes:
+                app_logger.info("WebSocket route: %s", r.path)
+        else:
+            self._ws_router = None
     
     def on_startup(self, func: Callable) -> Callable:
         """
@@ -852,12 +892,17 @@ class CoreApp:
         """
         Torna CoreApp callable como ASGI app.
         
+        WebSocket scopes are routed to a dedicated Starlette Router that
+        lives outside the HTTP middleware stack (which would crash on
+        WebSocket scopes due to ``Request(scope)`` asserting HTTP type).
+        
         Permite usar diretamente com uvicorn:
             uvicorn main:app --reload
-        
-        Onde app é uma instância de CoreApp.
         """
-        await self.app(scope, receive, send)
+        if scope["type"] == "websocket" and self._ws_router is not None:
+            await self._ws_router(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
 
 
 def create_app(

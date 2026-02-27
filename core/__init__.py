@@ -49,6 +49,7 @@ from core.views import (
     action,
 )
 from core.routing import Router, AutoRouter
+from core.realtime import WebSocketView, SSEView, Channel, sse_response
 from core.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
 from core.dependencies import Depends, get_db, get_current_user, set_session_factory
 from core.config import (
@@ -310,7 +311,7 @@ from core.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.17.56"
+__version__ = "0.17.57"
 __all__ = [
     # Models
     "Model",

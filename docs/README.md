@@ -128,6 +128,7 @@ core run
 | [Soft Delete](22-soft-delete.md) | Deleção lógica |
 | [Routing](23-routing.md) | Roteamento de URLs |
 | [Dependencies](24-dependencies.md) | Injeção de dependências |
+| [Real-time](25-realtime.md) | WebSocket, SSE & Channels |
 
 ### Avançado
 

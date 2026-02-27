@@ -367,6 +367,7 @@ class Router(APIRouter):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._viewsets: list[tuple[str, type]] = []
+        self._ws_routes: list = []
         # Rastreia rotas registradas para prevenir duplicação
         self._registered_routes: set[tuple[str, str]] = set()  # (path, method)
     
@@ -409,7 +410,22 @@ class Router(APIRouter):
             return
         
         super().add_api_route(path, endpoint, methods=methods, **kwargs)
-    
+
+    def include_router(self, router: "APIRouter", **kwargs: Any) -> None:
+        """Include another router, propagating WebSocket routes with prefix."""
+        super().include_router(router, **kwargs)
+        extra_prefix = kwargs.get("prefix", "")
+        router_prefix = getattr(router, "prefix", "")
+        combined = extra_prefix + router_prefix
+        child_ws = getattr(router, "_ws_routes", [])
+        if child_ws:
+            from starlette.routing import WebSocketRoute
+            for r in child_ws:
+                full_path = combined + r.path
+                self._ws_routes.append(
+                    WebSocketRoute(full_path, r.endpoint, name=r.name)
+                )
+
     def register_viewset(
         self,
         prefix: str,
@@ -911,6 +927,64 @@ class Router(APIRouter):
             **kwargs,
         )
 
+    def register_websocket(
+        self,
+        path: str,
+        view_class: type,
+    ) -> None:
+        """
+        Register a ``WebSocketView`` subclass on this router.
+
+        The route is stored as a Starlette ``WebSocketRoute`` and collected
+        by ``CoreApp`` at startup so it can be served **outside** the HTTP
+        middleware stack (which would otherwise crash on WebSocket scopes).
+
+        Args:
+            path: URL path (may contain path parameters, e.g. ``/ws/{room}``)
+            view_class: A ``WebSocketView`` subclass
+        """
+        from core.realtime import WebSocketView
+        route = view_class.as_route(path)
+        if not hasattr(self, "_ws_routes"):
+            self._ws_routes: list = []
+        self._ws_routes.append(route)
+
+    def register_sse(
+        self,
+        path: str,
+        view_class: type,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Register an ``SSEView`` subclass as a standard GET route.
+
+        SSE is plain HTTP so it goes through the normal middleware stack.
+
+        Args:
+            path: URL path (may contain path parameters)
+            view_class: An ``SSEView`` subclass
+        """
+        from core.realtime import SSEView
+        from starlette.responses import StreamingResponse as _SR
+        from starlette.requests import Request as _Req
+
+        async def endpoint(request: _Req) -> _SR:
+            view = view_class()
+            params = request.path_params or {}
+            return _SR(
+                view._generate(request, params),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                    **view.headers,
+                },
+            )
+
+        tags = kwargs.pop("tags", [])
+        self.add_api_route(path, endpoint, methods=["GET"], tags=tags, **kwargs)
+
 
 class AutoRouter:
     """
@@ -1006,7 +1080,28 @@ class AutoRouter:
             if resolved:
                 kwargs["tags"] = resolved
         self.router.register_view(path, view_class, **kwargs)
-    
+
+    def register_websocket(
+        self,
+        path: str,
+        view_class: type,
+    ) -> None:
+        """Register a ``WebSocketView`` on the inner router."""
+        self.router.register_websocket(path, view_class)
+
+    def register_sse(
+        self,
+        path: str,
+        view_class: type,
+        **kwargs: Any,
+    ) -> None:
+        """Register an ``SSEView`` on the inner router."""
+        if "tags" not in kwargs:
+            resolved = self._resolve_tags(None, view_class)
+            if resolved:
+                kwargs["tags"] = resolved
+        self.router.register_sse(path, view_class, **kwargs)
+
     def include_router(
         self,
         router: "AutoRouter | Router",
