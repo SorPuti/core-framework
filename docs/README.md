@@ -141,7 +141,7 @@ core run
 | [Exceptions](34-exceptions.md) | Tratamento de erros |
 | [DateTime](35-datetime.md) | Tratamento de timezone |
 | [Security](36-security.md) | Boas práticas de segurança |
-| [Storage](37-storage.md) | Armazenamento de arquivos (local / Google Cloud Storage) e uso no Admin |
+| [Storage](37-storage.md) | Armazenamento de arquivos, Signed URLs para buckets privados |
 
 ### Referência
 
@@ -275,6 +275,52 @@ class AppSettings(Settings):
 # Configura TUDO automaticamente
 settings = configure(settings_class=AppSettings)
 ```
+
+## FileField Nativo (Storage com Signed URLs)
+
+FileField estilo Django para upload e acesso a arquivos com signed URLs:
+
+```python
+# 1. Configure no .env
+# STORAGE_BACKEND=gcs
+# STORAGE_GCS_BUCKET_NAME=meu-bucket
+# STORAGE_GCS_CREDENTIALS_FILE=config/gcp-sa.json
+# STORAGE_GCS_USE_SIGNED_URLS=true
+
+# 2. No model, use AdvancedField.file() - estilo Django
+from core import Model, Field
+from core.fields import AdvancedField
+
+class Course(Model):
+    __tablename__ = "courses"
+    id: Mapped[int] = Field.pk()
+    
+    # Coluna do banco (armazena path)
+    cover_url: Mapped[str | None] = Field.string(500, nullable=True)
+    
+    # FileField nativo
+    cover = AdvancedField.file("cover_url", upload_to="courses/covers/")
+
+# 3. Use como Django FileField
+course.cover.name     # "courses/covers/abc.jpg"
+course.cover.url      # "https://...?X-Goog-Signature=..." (signed URL)
+course.cover.save("foto.jpg", content, "image/jpeg")  # Upload
+course.cover.delete() # Remove do storage
+
+# 4. Em schemas, transforme com get_file_url()
+from core.storage import get_file_url
+
+class CourseResponse(OutputSchema):
+    cover_url: str | None = None
+    
+    @model_validator(mode="after")
+    def transform_urls(self):
+        if self.cover_url:
+            self.cover_url = get_file_url(self.cover_url)
+        return self
+```
+
+**Ver**: [Storage](37-storage.md) para documentação completa.
 
 ## Comandos Rápidos
 

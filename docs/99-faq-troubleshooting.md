@@ -945,6 +945,88 @@ app = CoreApp(...)
 
 ---
 
+## Storage / Google Cloud Storage
+
+### "Failed to generate signed URL"
+
+**Sintomas:**
+- Erro ao gerar signed URL para arquivo em bucket privado
+- URL retornada é pública em vez de signed
+
+**Causas e soluções:**
+
+1. **Service Account sem permissão para criar tokens:**
+   ```bash
+   # A SA precisa da role "Service Account Token Creator"
+   gcloud projects add-iam-policy-binding MEU_PROJETO \
+     --member="serviceAccount:EMAIL@MEU_PROJETO.iam.gserviceaccount.com" \
+     --role="roles/iam.serviceAccountTokenCreator"
+   ```
+
+2. **Credenciais inválidas ou expiradas:**
+   ```bash
+   # Verifique se o JSON está correto
+   cat config/gcp-service-account.json | python -m json.tool
+   
+   # Teste autenticação
+   gcloud auth activate-service-account --key-file=config/gcp-service-account.json
+   ```
+
+3. **google-cloud-storage não instalado:**
+   ```bash
+   pip install google-cloud-storage
+   ```
+
+### "URL assinada expira muito rápido"
+
+**Solução:** Aumente `STORAGE_GCS_EXPIRATION_SECONDS` no `.env`:
+```bash
+# 1 hora (padrão)
+STORAGE_GCS_EXPIRATION_SECONDS=3600
+
+# 24 horas
+STORAGE_GCS_EXPIRATION_SECONDS=86400
+```
+
+### "Arquivo não encontrado no bucket"
+
+**Verificações:**
+1. O path armazenado no model está correto?
+2. O bucket existe e está acessível?
+3. A SA tem permissão `storage.objects.get` no bucket?
+
+```python
+# Teste se arquivo existe
+from core.storage import file_exists
+
+if file_exists("uploads/foto.jpg"):
+    print("Arquivo existe!")
+else:
+    print("Arquivo NÃO encontrado")
+```
+
+### "CORS bloqueando acesso ao arquivo"
+
+Se o frontend não consegue baixar arquivos via signed URL, configure CORS no bucket:
+
+```json
+// cors.json
+[
+  {
+    "origin": ["https://meusite.com", "http://localhost:3000"],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type"],
+    "maxAgeSeconds": 3600
+  }
+]
+```
+
+```bash
+gsutil cors set cors.json gs://meu-bucket
+```
+
+---
+
 ## Checklist de Debug
 
 Quando encontrar um erro:

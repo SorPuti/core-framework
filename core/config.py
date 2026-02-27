@@ -233,10 +233,18 @@ class Settings(BaseSettings):
         ),
     )
     storage_gcs_expiration_seconds: int = PydanticField(
-        default=300,
+        default=3600,
         description=(
             "Tempo de expiração (em segundos) para URLs assinadas geradas pelo backend GCS.\n"
-            "Equivalente a `GS_EXPIRATION` no django-storages (ex: 300 = 5 minutos)."
+            "Equivalente a `GS_EXPIRATION` no django-storages (ex: 3600 = 1 hora)."
+        ),
+    )
+    storage_gcs_use_signed_urls: bool = PydanticField(
+        default=True,
+        description=(
+            "Se True, gera signed URLs para arquivos em buckets privados.\n"
+            "Se False, assume bucket público e retorna URLs diretas.\n"
+            "Use True para buckets privados (mais seguro, padrão)."
         ),
     )
     
@@ -1488,7 +1496,7 @@ def _auto_configure_storage(settings: Settings) -> bool:
         try:
             # Instancia um client apenas para fail-fast em casos de credenciais inválidas.
             if settings.storage_gcs_credentials_file:
-                client = gcs_storage.Client.from_service_account_file(  # type: ignore[attr-defined]
+                client = gcs_storage.Client.from_service_account_json(  # type: ignore[attr-defined]
                     settings.storage_gcs_credentials_file,
                     project=settings.storage_gcs_project or None,
                 )

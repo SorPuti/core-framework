@@ -235,6 +235,56 @@ BigInteger primary key.
 id: Mapped[int] = AdvancedField.bigint_pk()
 ```
 
+### `AdvancedField.file()` — FileField (Django-style)
+
+Campo de arquivo com interface rica para upload, download e URLs assinadas.
+
+```python
+AdvancedField.file(
+    db_column="cover_url",           # Coluna do banco que armazena o path
+    upload_to="courses/covers/",     # Diretório de upload ou função
+    url_expiration=3600,             # Expiração da signed URL (segundos)
+)
+```
+
+**Exemplo completo:**
+
+```python
+from core import Model, Field
+from core.fields import AdvancedField
+
+class Course(Model):
+    __tablename__ = "courses"
+    
+    id: Mapped[int] = Field.pk()
+    name: Mapped[str] = Field.string(255)
+    
+    # Coluna do banco (string que armazena o path)
+    cover_url: Mapped[str | None] = Field.string(500, nullable=True)
+    
+    # FileField - interface rica para arquivos
+    cover = AdvancedField.file("cover_url", upload_to="courses/covers/")
+
+# Uso:
+course.cover.name     # "courses/covers/abc.jpg"
+course.cover.url      # "https://...?X-Goog-Signature=..." (signed URL)
+course.cover.save("foto.jpg", content, "image/jpeg")  # Upload
+course.cover.delete() # Remove do storage
+bool(course.cover)    # True se tem arquivo
+course.cover.exists() # Verifica se existe
+```
+
+**Upload com path dinâmico:**
+
+```python
+def course_path(instance, filename):
+    return f"courses/{instance.id}/{filename}"
+
+cover = AdvancedField.file("cover_url", upload_to=course_path)
+```
+
+**Ver também:** [Storage](37-storage.md) para configuração de GCS e signed URLs.
+
 ## Complete Model Example
 
 ```python

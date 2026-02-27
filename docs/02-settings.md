@@ -284,8 +284,9 @@ Você escolhe o backend via `storage_backend` e configura os detalhes por settin
 | `storage_gcs_bucket_name` | `str \| None` | `None` | Nome do bucket GCS quando `storage_backend="gcs"`. Equivalente a `GS_BUCKET_NAME` no django-storages |
 | `storage_gcs_project` | `str \| None` | `None` | ID do projeto GCP (opcional). Se `None`, usa o projeto das credenciais |
 | `storage_gcs_credentials_file` | `str \| None` | `None` | Caminho para o JSON de Service Account do GCP. Se `None`, usa Application Default Credentials (ADC). Equivalente a `GS_CREDENTIALS` quando configurado via arquivo |
-| `storage_gcs_default_acl` | `str \| None` | `"publicRead"` | ACL padrão dos blobs (`"publicRead"`, `"private"`, etc.). Equivalente a `GS_DEFAULT_ACL` |
-| `storage_gcs_expiration_seconds` | `int` | `300` | Validade (segundos) de URLs assinadas geradas pelo backend GCS. Equivalente a `GS_EXPIRATION` (ex: 300 = 5 minutos) |
+| `storage_gcs_default_acl` | `str \| None` | `"private"` | ACL padrão dos blobs (`"publicRead"`, `"private"`, etc.). Equivalente a `GS_DEFAULT_ACL` |
+| `storage_gcs_use_signed_urls` | `bool` | `true` | Se `true`, gera signed URLs para acesso a arquivos em buckets privados. Se `false`, retorna URLs diretas (bucket deve ser público) |
+| `storage_gcs_expiration_seconds` | `int` | `3600` | Validade (segundos) de signed URLs. Ex: 3600 = 1 hora. Equivalente a `GS_EXPIRATION` |
 
 #### Exemplo: Storage Local (padrão)
 
@@ -311,18 +312,59 @@ STORAGE_LOCAL_MEDIA_ROOT=media
 STORAGE_MEDIA_URL=/media/
 ```
 
-#### Exemplo: Google Cloud Storage (estilo Django)
+#### Exemplo: GCS com Bucket Privado (Signed URLs) — Recomendado
 
-Configuração equivalente ao uso do `GoogleCloudStorage` do `django-storages`:
+Para buckets privados, o framework gera **signed URLs** automaticamente. Isso é mais seguro e funciona como o Django com django-storages:
 
-```python
-# Django (referência)
-DEFAULT_FILE_STORAGE = "storages.backends.gcloud.GoogleCloudStorage"
-GS_BUCKET_NAME = "minha-api-media"
-MEDIA_URL = "https://storage.googleapis.com/minha-api-media/"
+```bash
+# .env - Bucket PRIVADO com Signed URLs (recomendado)
+STORAGE_BACKEND=gcs
+STORAGE_GCS_BUCKET_NAME=minha-api-media
+STORAGE_GCS_CREDENTIALS_FILE=config/gcp-service-account.json
+STORAGE_GCS_DEFAULT_ACL=private
+STORAGE_GCS_USE_SIGNED_URLS=true
+STORAGE_GCS_EXPIRATION_SECONDS=3600
 ```
 
-No Core Framework, o modelo de Settings faz esse papel:
+**Como funciona:**
+
+1. O model armazena apenas o **path relativo** (ex: `uploads/foto.jpg`)
+2. Ao serializar para a API, use `get_file_url()` para obter a **signed URL**
+3. A signed URL é temporária (expira após `STORAGE_GCS_EXPIRATION_SECONDS`)
+
+```python
+# Model armazena apenas o path
+course.cover_image_path  # "uploads/cover.jpg"
+
+# API retorna signed URL
+from core.storage import get_file_url
+url = get_file_url(course.cover_image_path)
+# → "https://storage.googleapis.com/bucket/...?X-Goog-Signature=..."
+```
+
+**Permissões necessárias no GCP:**
+
+```bash
+# A Service Account precisa destas roles:
+roles/storage.objectAdmin           # No bucket
+roles/iam.serviceAccountTokenCreator  # No projeto (para gerar signed URLs)
+```
+
+#### Exemplo: GCS com Bucket Público
+
+Para buckets públicos (mídia acessível por qualquer um), desative signed URLs:
+
+```bash
+# .env - Bucket PÚBLICO (sem signed URLs)
+STORAGE_BACKEND=gcs
+STORAGE_GCS_BUCKET_NAME=minha-api-media-publica
+STORAGE_GCS_CREDENTIALS_FILE=config/gcp-service-account.json
+STORAGE_GCS_DEFAULT_ACL=publicRead
+STORAGE_GCS_USE_SIGNED_URLS=false
+STORAGE_MEDIA_URL=https://storage.googleapis.com/minha-api-media-publica/
+```
+
+#### Exemplo em Python (Settings class)
 
 ```python
 # src/settings.py
@@ -330,52 +372,25 @@ from core.config import Settings, configure
 
 
 class AppSettings(Settings):
-    # Storage: Google Cloud Storage
+    # Storage: Google Cloud Storage (privado com signed URLs)
     storage_backend: str = "gcs"
     storage_gcs_bucket_name: str = "minha-api-media"
-    storage_media_url: str = "https://storage.googleapis.com/minha-api-media/"
-
-    # Opcional: projeto e credenciais explícitas
-    storage_gcs_project: str | None = "meu-projeto-gcp"
     storage_gcs_credentials_file: str | None = "config/gcp-service-account.json"
-    storage_gcs_default_acl: str | None = "publicRead"
-    storage_gcs_expiration_seconds: int = 300  # 5 minutos (URLs assinadas)
+    storage_gcs_default_acl: str = "private"
+    storage_gcs_use_signed_urls: bool = True
+    storage_gcs_expiration_seconds: int = 3600  # 1 hora
 
 
 settings = configure(settings_class=AppSettings)
 ```
 
-```bash
-# .env - Google Cloud Storage
-
-# Seleciona backend GCS (equivalente a DEFAULT_FILE_STORAGE com GoogleCloudStorage)
-STORAGE_BACKEND=gcs
-
-# Bucket (equivalente a GS_BUCKET_NAME)
-STORAGE_GCS_BUCKET_NAME=minha-api-media
-
-# URL base pública (equivalente a MEDIA_URL em Django)
-STORAGE_MEDIA_URL=https://storage.googleapis.com/minha-api-media/
-
-# Projeto (opcional)
-STORAGE_GCS_PROJECT=meu-projeto-gcp
-
-# Caminho do JSON de Service Account (opcional se usar ADC)
-STORAGE_GCS_CREDENTIALS_FILE=config/gcp-service-account.json
-
-# ACL padrão (equivalente a GS_DEFAULT_ACL)
-STORAGE_GCS_DEFAULT_ACL=publicRead
-
-# Expiração de URLs assinadas (equivalente a GS_EXPIRATION)
-STORAGE_GCS_EXPIRATION_SECONDS=300
-```
-
 **Comportamento plug-and-play**:
 
-- **Local**: defina `STORAGE_BACKEND=local` e os arquivos serão gravados no diretório `STORAGE_LOCAL_MEDIA_ROOT`, servidos a partir de `STORAGE_MEDIA_URL` (por exemplo, via Nginx ou um endpoint de arquivos estáticos).
-- **GCS**: troque para `STORAGE_BACKEND=gcs` e configure os campos `STORAGE_GCS_*`. O framework auto-configura o cliente GCS (se `google-cloud-storage` estiver instalado) e valida bucket/projeto, no mesmo espírito do `django-storages`.
+- **Local**: defina `STORAGE_BACKEND=local` e os arquivos serão gravados no diretório `STORAGE_LOCAL_MEDIA_ROOT`, servidos a partir de `STORAGE_MEDIA_URL`.
+- **GCS Privado**: defina `STORAGE_GCS_USE_SIGNED_URLS=true` (padrão). O framework gera signed URLs automaticamente via `get_file_url()`.
+- **GCS Público**: defina `STORAGE_GCS_USE_SIGNED_URLS=false` e `STORAGE_MEDIA_URL` com a URL base do bucket.
 
-**Ver também**: [Storage (37-storage.md)](37-storage.md) — API `core.storage`, uso no Admin e como servir arquivos locais.
+**Ver também**: [Storage (37-storage.md)](37-storage.md) — API `core.storage`, signed URLs, uso em models e schemas.
 
 ### API
 

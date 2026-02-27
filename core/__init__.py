@@ -72,12 +72,14 @@ from core.validation import (
     validate_all_viewsets,
 )
 
-# Advanced Fields (UUID7, JSON, etc.)
+# Advanced Fields (UUID7, JSON, FileField, etc.)
 from core.fields import (
     uuid7,
     uuid7_str,
     AdaptiveJSON,
     AdvancedField,
+    FileField,
+    FieldFile,
 )
 
 # Multi-Tenancy
@@ -267,6 +269,18 @@ from core.choices import (
     Visibility,
 )
 
+# Storage - File storage (local or GCS with signed URLs)
+from core.storage import (
+    save_file,
+    delete_file,
+    get_file_url,
+    file_exists,
+    get_storage_file_fields,
+    collect_file_paths,
+    StorageFile,
+    storage_file_property,
+)
+
 # Exceptions - Centralized exception classes
 from core.exceptions import (
     # Base
@@ -311,7 +325,7 @@ from core.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.17.57"
+__version__ = "0.17.59"
 __all__ = [
     # Models
     "Model",
@@ -387,6 +401,8 @@ __all__ = [
     "uuid7_str",
     "AdaptiveJSON",
     "AdvancedField",
+    "FileField",
+    "FieldFile",
     # Multi-Tenancy
     "set_tenant",
     "get_tenant",
@@ -523,6 +539,15 @@ __all__ = [
     "Month",
     "Gender",
     "Visibility",
+    # Storage
+    "save_file",
+    "delete_file",
+    "get_file_url",
+    "file_exists",
+    "get_storage_file_fields",
+    "collect_file_paths",
+    "StorageFile",
+    "storage_file_property",
     # Exceptions - Base
     "CoreException",
     # Exceptions - Validation
