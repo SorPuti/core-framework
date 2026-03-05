@@ -7,7 +7,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Mapped
 
-from core.models import Model, Field, init_database, create_tables, drop_tables, get_session
+from stride.models import Model, Field, init_database, create_tables, drop_tables, get_session
 
 
 class TestUser(Model):

@@ -1,6 +1,0 @@
-"""Event routes."""
-from core import AutoRouter
-from .views import EventViewSet
-
-router = AutoRouter(prefix="/events", tags=["Events"])
-router.register("", EventViewSet)

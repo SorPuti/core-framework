@@ -55,7 +55,7 @@ flowchart LR
 
 ```python
 # src/settings.py
-from core.config import Settings, configure
+from stride.config import Settings, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════
@@ -131,8 +131,8 @@ settings = configure(settings_class=AppSettings)
 
 ```python
 # src/apps/users/models.py
-from core.auth import AbstractUser, PermissionsMixin
-from core import Field
+from stride.auth import AbstractUser, PermissionsMixin
+from stride import Field
 from sqlalchemy.orm import Mapped
 
 class User(AbstractUser, PermissionsMixin):
@@ -153,7 +153,7 @@ class User(AbstractUser, PermissionsMixin):
 
 ```python
 # src/apps/users/views.py
-from core.auth import AuthViewSet
+from stride.auth import AuthViewSet
 
 class AuthViewSet(AuthViewSet):
     pass  # Usa defaults
@@ -161,7 +161,7 @@ class AuthViewSet(AuthViewSet):
 
 ```python
 # src/apps/users/routes.py
-from core import AutoRouter
+from stride import AutoRouter
 from .views import AuthViewSet
 
 auth_router = AutoRouter(prefix="/auth", tags=["Auth"])
@@ -170,13 +170,13 @@ auth_router.register("", AuthViewSet)
 
 ```python
 # src/main.py
-from core import CoreApp, AutoRouter
+from stride import StrideApp, AutoRouter
 from src.apps.users.routes import auth_router
 
 api = AutoRouter(prefix="/api/v1")
 api.include_router(auth_router)
 
-app = CoreApp(
+app = StrideApp(
     routers=[api],
     middleware=["auth"],  # Habilita middleware de auth
 )
@@ -232,8 +232,8 @@ curl http://localhost:8000/api/v1/posts/ \
 ## Proteger Endpoints
 
 ```python
-from core import ModelViewSet
-from core.permissions import IsAuthenticated, AllowAny
+from stride import ModelViewSet
+from stride.permissions import IsAuthenticated, AllowAny
 
 class PostViewSet(ModelViewSet):
     model = Post
@@ -248,7 +248,7 @@ class PostViewSet(ModelViewSet):
 ## Acessar Usuário Atual
 
 ```python
-from core import ModelViewSet
+from stride import ModelViewSet
 
 class PostViewSet(ModelViewSet):
     model = Post
@@ -262,7 +262,7 @@ Ou em qualquer rota:
 
 ```python
 from fastapi import Depends
-from core.auth import get_current_user
+from stride.auth import get_current_user
 
 @router.get("/me")
 async def me(user = Depends(get_current_user)):
@@ -310,8 +310,8 @@ class AppSettings(Settings):
 ## AuthViewSet Customizado
 
 ```python
-from core.auth import AuthViewSet
-from core import action
+from stride.auth import AuthViewSet
+from stride import action
 
 class CustomAuthViewSet(AuthViewSet):
     

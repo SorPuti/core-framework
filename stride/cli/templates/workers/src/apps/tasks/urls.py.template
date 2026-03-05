@@ -1,0 +1,7 @@
+"""Tasks app URLs."""
+from stride.urls import path
+from .views import TaskViewSet
+
+urlpatterns = [
+    path("tasks", TaskViewSet),
+]

@@ -19,7 +19,7 @@ Rel.foreign_key(
 ```
 
 ```python
-from core.relations import Rel
+from stride.relations import Rel
 
 class Post(Model):
     __tablename__ = "posts"
@@ -147,7 +147,7 @@ Rel.many_to_many(
 
 ```python
 from sqlalchemy import Table, Column, Integer, ForeignKey
-from core import metadata
+from stride import metadata
 
 # Association table
 post_tags = Table(
@@ -247,12 +247,12 @@ class Category(Model):
 ## Complete Example
 
 ```python
-from core import Model, Field
-from core.relations import Rel
-from core.datetime import DateTime
+from stride import Model, Field
+from stride.relations import Rel
+from stride.datetime import DateTime
 from sqlalchemy.orm import Mapped
 from sqlalchemy import Table, Column, Integer, ForeignKey
-from core import metadata
+from stride import metadata
 
 # Association table for many-to-many
 post_tags = Table(

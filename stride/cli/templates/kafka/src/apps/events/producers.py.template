@@ -1,0 +1,20 @@
+"""Kafka producers (user.created, order.placed)."""
+from stride.messaging import publish
+
+
+async def publish_user_created(user_id: int, email: str):
+    """Publish user.created event."""
+    await publish("user.created", {
+        "user_id": user_id,
+        "email": email,
+        "event": "user.created",
+    })
+
+
+async def publish_order_placed(order_id: int, total: float):
+    """Publish order.placed event."""
+    await publish("order.placed", {
+        "order_id": order_id,
+        "total": total,
+        "event": "order.placed",
+    })

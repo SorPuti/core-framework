@@ -1,0 +1,217 @@
+"""
+Sistema de Autenticação e Autorização Plugável.
+
+Arquitetura modular que permite:
+- Usar implementação padrão (JWT + AbstractUser)
+- Substituir por backends customizados
+- Criar validadores e hashers próprios
+- Integrar com sistemas externos (OAuth, LDAP, etc.)
+
+Exemplo de uso padrão:
+    from stride.auth import AbstractUser, PermissionsMixin
+    
+    class User(AbstractUser, PermissionsMixin):
+        __tablename__ = "users"
+
+Exemplo de backend customizado:
+    from stride.auth import AuthBackend, register_backend
+    
+    class MyOAuthBackend(AuthBackend):
+        async def authenticate(self, request, **credentials):
+            # Sua lógica OAuth
+            ...
+    
+    register_backend("oauth", MyOAuthBackend())
+"""
+
+# Base abstractions
+from stride.auth.base import (
+    # Interfaces
+    AuthBackend,
+    PasswordHasher,
+    TokenBackend,
+    PermissionBackend,
+    # Registry
+    get_auth_backend,
+    get_password_hasher,
+    get_token_backend,
+    get_permission_backend,
+    register_auth_backend,
+    register_password_hasher,
+    register_token_backend,
+    register_permission_backend,
+    # Config
+    AuthConfig,
+    AuthConfigurationError,
+    ConfigurationWarning,
+    configure_auth,
+    get_auth_config,
+    # Validation helpers (preventive)
+    validate_auth_configuration,
+    check_middleware_configured,
+    get_auth_setup_checklist,
+    # User ID utilities
+    coerce_user_id,
+)
+
+# Default implementations
+from stride.auth.hashers import (
+    PBKDF2Hasher,
+    Argon2Hasher,
+    BCryptHasher,
+    ScryptHasher,
+)
+
+from stride.auth.tokens import (
+    JWTBackend,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    verify_token,
+)
+
+from stride.auth.backends import (
+    ModelBackend,
+    TokenAuthBackend,
+)
+
+from stride.auth.permissions import (
+    DefaultPermissionBackend,
+    ObjectPermissionBackend,
+)
+
+# Models
+from stride.auth.models import (
+    AbstractUser,
+    AbstractUUIDUser,
+    PermissionsMixin,
+    Group,
+    Permission,
+    get_user_model,
+    clear_association_table_cache,
+)
+
+# Decorators and dependencies
+from stride.auth.decorators import (
+    HasPermission,
+    IsInGroup,
+    require_permission,
+    require_group,
+    require_superuser,
+    require_staff,
+    require_active,
+    login_required,
+)
+
+# Schemas
+from stride.auth.schemas import (
+    BaseRegisterInput,
+    BaseLoginInput,
+    RefreshTokenInput,
+    ChangePasswordInput,
+    TokenResponse,
+    BaseUserOutput,
+    MessageResponse,
+)
+
+# Views
+from stride.auth.views import (
+    AuthViewSet,
+)
+
+# Middleware (Bug #8 Fix)
+from stride.auth.middleware import (
+    AuthenticationMiddleware,
+    OptionalAuthenticationMiddleware,
+    JWTAuthBackend,
+    AuthenticatedUser,
+    ensure_auth_middleware,
+)
+
+# Helper functions for consistent user access
+from stride.auth.helpers import (
+    get_request_user,
+    is_authenticated,
+    set_request_user,
+)
+
+__all__ = [
+    # Base
+    "AuthBackend",
+    "PasswordHasher",
+    "TokenBackend",
+    "PermissionBackend",
+    # Registry
+    "get_auth_backend",
+    "get_password_hasher",
+    "get_token_backend",
+    "get_permission_backend",
+    "register_auth_backend",
+    "register_password_hasher",
+    "register_token_backend",
+    "register_permission_backend",
+    # Config
+    "AuthConfig",
+    "AuthConfigurationError",
+    "ConfigurationWarning",
+    "configure_auth",
+    "get_auth_config",
+    # Validation helpers
+    "validate_auth_configuration",
+    "check_middleware_configured",
+    "get_auth_setup_checklist",
+    # Hashers
+    "PBKDF2Hasher",
+    "Argon2Hasher",
+    "BCryptHasher",
+    "ScryptHasher",
+    # Tokens
+    "JWTBackend",
+    "create_access_token",
+    "create_refresh_token",
+    "decode_token",
+    "verify_token",
+    # Backends
+    "ModelBackend",
+    "TokenAuthBackend",
+    # Permissions
+    "DefaultPermissionBackend",
+    "ObjectPermissionBackend",
+    # Models
+    "AbstractUser",
+    "AbstractUUIDUser",
+    "PermissionsMixin",
+    "Group",
+    "Permission",
+    "get_user_model",
+    "clear_association_table_cache",
+    # Decorators
+    "HasPermission",
+    "IsInGroup",
+    "require_permission",
+    "require_group",
+    "require_superuser",
+    "require_staff",
+    "require_active",
+    "login_required",
+    # Schemas
+    "BaseRegisterInput",
+    "BaseLoginInput",
+    "RefreshTokenInput",
+    "ChangePasswordInput",
+    "TokenResponse",
+    "BaseUserOutput",
+    "MessageResponse",
+    # Views
+    "AuthViewSet",
+    # Middleware
+    "AuthenticationMiddleware",
+    "OptionalAuthenticationMiddleware",
+    "JWTAuthBackend",
+    "AuthenticatedUser",
+    "ensure_auth_middleware",
+    # Helpers
+    "get_request_user",
+    "is_authenticated",
+    "set_request_user",
+]

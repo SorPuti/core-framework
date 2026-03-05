@@ -59,8 +59,8 @@ flowchart LR
 ### Default Permission
 
 ```python
-from core import ModelViewSet
-from core.permissions import IsAuthenticated
+from stride import ModelViewSet
+from stride.permissions import IsAuthenticated
 
 class PostViewSet(ModelViewSet):
     model = Post
@@ -70,7 +70,7 @@ class PostViewSet(ModelViewSet):
 ### Per-Action Permissions
 
 ```python
-from core.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from stride.permissions import AllowAny, IsAuthenticated, IsAdminUser
 
 class PostViewSet(ModelViewSet):
     model = Post
@@ -87,8 +87,8 @@ class PostViewSet(ModelViewSet):
 ### Action Decorator
 
 ```python
-from core import action
-from core.permissions import IsAdminUser
+from stride import action
+from stride.permissions import IsAdminUser
 
 class PostViewSet(ModelViewSet):
     model = Post
@@ -103,7 +103,7 @@ class PostViewSet(ModelViewSet):
 ### Basic Permission
 
 ```python
-from core.permissions import Permission
+from stride.permissions import Permission
 
 class IsOwner(Permission):
     """Only allow owners to access."""
@@ -128,7 +128,7 @@ class PostViewSet(ModelViewSet):
 ### HasRole
 
 ```python
-from core.permissions import HasRole
+from stride.permissions import HasRole
 
 class PostViewSet(ModelViewSet):
     model = Post
@@ -146,7 +146,7 @@ class PostViewSet(ModelViewSet):
 ## Group-Based Permissions
 
 ```python
-from core.permissions import Permission
+from stride.permissions import Permission
 
 class InGroup(Permission):
     def __init__(self, *groups):

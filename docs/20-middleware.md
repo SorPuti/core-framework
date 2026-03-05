@@ -68,10 +68,10 @@ class AppSettings(Settings):
     ]
 ```
 
-Ou via CoreApp:
+Ou via StrideApp:
 
 ```python
-app = CoreApp(
+app = StrideApp(
     middleware=[
         "timing",
         "auth",
@@ -126,7 +126,7 @@ Response
 
 ```python
 # src/middleware.py
-from core.middleware import ASGIMiddleware
+from stride.middleware import ASGIMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Scope
@@ -191,7 +191,7 @@ class AppSettings(Settings):
 Ou programaticamente:
 
 ```python
-from core.middleware import register_middleware
+from stride.middleware import register_middleware
 
 register_middleware(
     "src.middleware.RateLimitMiddleware",
@@ -292,7 +292,7 @@ class ErrorHandlerMiddleware(ASGIMiddleware):
 ## Registry de Middleware
 
 ```python
-from core.middleware import (
+from stride.middleware import (
     register_middleware,
     unregister_middleware,
     get_registered_middlewares,

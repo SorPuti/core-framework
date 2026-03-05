@@ -5,7 +5,7 @@ Custom exception classes and error handling.
 ## Exception Hierarchy
 
 ```
-CoreException
+StrideException
 ├── ValidationException
 │   ├── FieldValidationError
 │   ├── UniqueConstraintError
@@ -47,7 +47,7 @@ HTTPException
 ### Validation Errors
 
 ```python
-from core.exceptions import ValidationException, FieldValidationError
+from stride.exceptions import ValidationException, FieldValidationError
 
 # Single field error
 raise FieldValidationError(
@@ -57,7 +57,7 @@ raise FieldValidationError(
 )
 
 # Multiple errors
-from core.exceptions import MultipleValidationErrors
+from stride.exceptions import MultipleValidationErrors
 
 errors = [
     FieldValidationError("Email required", field="email"),
@@ -66,7 +66,7 @@ errors = [
 raise MultipleValidationErrors(errors)
 
 # Unique constraint
-from core.exceptions import UniqueConstraintError
+from stride.exceptions import UniqueConstraintError
 
 raise UniqueConstraintError(
     message="Email already exists",
@@ -77,7 +77,7 @@ raise UniqueConstraintError(
 ### Database Errors
 
 ```python
-from core.exceptions import DoesNotExist, MultipleObjectsReturned
+from stride.exceptions import DoesNotExist, MultipleObjectsReturned
 
 # Not found
 raise DoesNotExist(
@@ -97,7 +97,7 @@ raise MultipleObjectsReturned(
 ### Auth Errors
 
 ```python
-from core.exceptions import (
+from stride.exceptions import (
     AuthenticationFailed,
     InvalidCredentials,
     InvalidToken,
@@ -119,7 +119,7 @@ raise PermissionDenied(
 ### HTTP Errors
 
 ```python
-from core.exceptions import (
+from stride.exceptions import (
     BadRequest,
     Unauthorized,
     Forbidden,
@@ -157,7 +157,7 @@ raise TooManyRequests(
 ### Business Errors
 
 ```python
-from core.exceptions import (
+from stride.exceptions import (
     ResourceLocked,
     PreconditionFailed,
     OperationNotAllowed,
@@ -219,7 +219,7 @@ All exceptions return consistent JSON:
 
 ## Exception Handlers
 
-CoreApp auto-registers handlers for:
+StrideApp auto-registers handlers for:
 
 - Pydantic `ValidationError` → 422
 - Core `ValidationError` → 422
@@ -233,9 +233,9 @@ CoreApp auto-registers handlers for:
 ## Custom Exception
 
 ```python
-from core.exceptions import CoreException
+from stride.exceptions import StrideException
 
-class PaymentFailedException(CoreException):
+class PaymentFailedException(StrideException):
     """Payment processing failed."""
     
     def __init__(
@@ -259,9 +259,9 @@ class PaymentFailedException(CoreException):
 ```python
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from core import CoreApp
+from stride import StrideApp
 
-app = CoreApp()
+app = StrideApp()
 
 @app.app.exception_handler(PaymentFailedException)
 async def payment_failed_handler(request: Request, exc: PaymentFailedException):
@@ -274,8 +274,8 @@ async def payment_failed_handler(request: Request, exc: PaymentFailedException):
 ## In ViewSets
 
 ```python
-from core import ModelViewSet
-from core.exceptions import NotFound, Forbidden
+from stride import ModelViewSet
+from stride.exceptions import NotFound, Forbidden
 
 class PostViewSet(ModelViewSet):
     model = Post

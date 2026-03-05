@@ -6,9 +6,9 @@ Todos os comandos disponíveis via CLI `core`.
 
 ```bash
 # Criar novo projeto
-core init my-api
-core init my-api --python 3.13
-core init my-api --minimal  # Projeto mínimo
+stride init my-api
+stride init my-api --python 3.13
+stride init my-api --minimal  # Projeto mínimo
 
 # Criar nova app
 core createapp posts
@@ -18,20 +18,20 @@ core createapp posts
 
 ```bash
 # Servidor de desenvolvimento (hot reload)
-core run
+stride run
 
 # Produção
-core run --no-reload --workers 4 --host 0.0.0.0 --port 8000
+stride run --no-reload --workers 4 --host 0.0.0.0 --port 8000
 ```
 
 ## Banco de Dados
 
 ```bash
 # Criar migration
-core makemigrations --name add_posts
+stride makemigrations --name add_posts
 
 # Aplicar migrations
-core migrate
+stride migrate
 
 # Mostrar status das migrations
 core showmigrations
@@ -69,7 +69,7 @@ core routes
 core check
 
 # Shell interativo
-core shell
+stride shell
 ```
 
 ## Deployment
@@ -117,7 +117,7 @@ core kafka worker MyWorker --concurrency 8
 
 ```bash
 # Iniciar worker de background
-core runworker
+stride runworker
 
 # Listar workers
 core workers_list
@@ -131,13 +131,13 @@ core scheduler stop
 
 ```bash
 # Executar testes
-core test
+stride test
 
 # Com coverage
-core test --cov
+stride test --cov
 
 # Arquivo específico
-core test tests/test_posts.py
+stride test tests/test_posts.py
 ```
 
 ## Versão

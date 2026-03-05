@@ -5,7 +5,7 @@ SQLAlchemy models with Django-style conveniences.
 ## Basic Model
 
 ```python
-from core import Model, Field
+from stride import Model, Field
 from sqlalchemy.orm import Mapped
 
 class Post(Model):
@@ -60,7 +60,7 @@ class Post(Model):
 ## Relationships
 
 ```python
-from core.relations import Rel
+from stride.relations import Rel
 
 class Post(Model):
     __tablename__ = "posts"
@@ -96,8 +96,8 @@ tags: Mapped[list["Tag"]] = Rel.many_to_many("Tag", secondary="post_tags")
 Extend `AbstractUser` for authentication:
 
 ```python
-from core.auth import AbstractUser, PermissionsMixin
-from core import Field
+from stride.auth import AbstractUser, PermissionsMixin
+from stride import Field
 from sqlalchemy.orm import Mapped
 
 class User(AbstractUser, PermissionsMixin):

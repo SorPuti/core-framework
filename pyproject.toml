@@ -1,12 +1,12 @@
 [project]
-name = "core-framework"
-version = "0.17.59"
-description = "Core Framework - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
+name = "stride-framework"
+version = "0.17.60"
+description = "Stride - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.10,<4.0"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
-    { name = "Core Framework Team" }
+    { name = "Stride Team" }
 ]
 keywords = ["fastapi", "django", "framework", "api", "rest", "async", "cli"]
 classifiers = [
@@ -36,10 +36,10 @@ dependencies = [
 ]
 
 [project.scripts]
-core = "core.cli:main"
+stride = "stride.cli:main"
 
 [project.entry-points."pytest11"]
-core = "core.testing.plugin"
+stride = "stride.testing.plugin"
 
 [project.optional-dependencies]
 dev = [
@@ -93,16 +93,16 @@ storage = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/SorPuti/core-framework"
-Documentation = "https://github.com/SorPuti/core-framework#readme"
-Repository = "https://github.com/SorPuti/core-framework"
+Homepage = "https://github.com/SorPuti/stride"
+Documentation = "https://github.com/SorPuti/stride#readme"
+Repository = "https://github.com/SorPuti/stride"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["core", "example"]
+packages = ["stride", "example"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -133,7 +133,7 @@ ignore = [
 ]
 
 [tool.ruff.isort]
-known-first-party = ["core", "example"]
+known-first-party = ["stride", "example"]
 
 [dependency-groups]
 dev = [

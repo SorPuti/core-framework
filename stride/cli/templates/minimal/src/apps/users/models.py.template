@@ -1,0 +1,10 @@
+"""User model (AbstractUser)."""
+from stride import Model
+from stride.auth import AbstractUser
+
+
+class User(AbstractUser, Model):
+    """User with email auth."""
+
+    __tablename__ = "users"
+    __abstract__ = False

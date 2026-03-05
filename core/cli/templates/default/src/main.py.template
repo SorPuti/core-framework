@@ -1,9 +1,0 @@
-"""App entry point; middleware from settings."""
-from core import CoreApp, AutoRouter
-from src.apps.users.routes import users_router, auth_router
-
-api = AutoRouter(prefix="/api/v1")
-api.include_router(users_router)
-api.include_router(auth_router)
-
-app = CoreApp(routers=[api])

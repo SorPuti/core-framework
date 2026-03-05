@@ -443,127 +443,6 @@ wheels = [
 ]
 
 [[package]]
-name = "core-framework"
-version = "0.17.47"
-source = { editable = "." }
-dependencies = [
-    { name = "aiosqlite" },
-    { name = "fastapi" },
-    { name = "jinja2" },
-    { name = "pydantic", extra = ["email"] },
-    { name = "pydantic-settings" },
-    { name = "pyjwt" },
-    { name = "python-multipart" },
-    { name = "sqlalchemy" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "httpx" },
-    { name = "ipython", version = "8.38.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "ipython", version = "9.10.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-enterprise = [
-    { name = "aio-pika" },
-    { name = "aiokafka" },
-    { name = "asyncpg" },
-    { name = "croniter" },
-    { name = "redis" },
-]
-gcs = [
-    { name = "google-cloud-storage" },
-]
-kafka = [
-    { name = "aiokafka" },
-]
-messaging = [
-    { name = "aio-pika" },
-    { name = "aiokafka" },
-    { name = "croniter" },
-    { name = "redis" },
-]
-mysql = [
-    { name = "aiomysql" },
-]
-postgres = [
-    { name = "asyncpg" },
-    { name = "psycopg", extra = ["binary"] },
-]
-rabbitmq = [
-    { name = "aio-pika" },
-]
-redis = [
-    { name = "redis" },
-]
-storage = [
-    { name = "google-cloud-storage" },
-]
-testing = [
-    { name = "faker" },
-    { name = "httpx" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "build" },
-    { name = "twine" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aio-pika", marker = "extra == 'enterprise'", specifier = ">=9.0.0" },
-    { name = "aio-pika", marker = "extra == 'messaging'", specifier = ">=9.0.0" },
-    { name = "aio-pika", marker = "extra == 'rabbitmq'", specifier = ">=9.0.0" },
-    { name = "aiokafka", marker = "extra == 'enterprise'", specifier = ">=0.10.0" },
-    { name = "aiokafka", marker = "extra == 'kafka'", specifier = ">=0.10.0" },
-    { name = "aiokafka", marker = "extra == 'messaging'", specifier = ">=0.10.0" },
-    { name = "aiomysql", marker = "extra == 'mysql'", specifier = ">=0.2.0" },
-    { name = "aiosqlite", specifier = ">=0.19.0" },
-    { name = "asyncpg", marker = "extra == 'enterprise'", specifier = ">=0.29.0" },
-    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.29.0" },
-    { name = "croniter", marker = "extra == 'enterprise'", specifier = ">=2.0.0" },
-    { name = "croniter", marker = "extra == 'messaging'", specifier = ">=2.0.0" },
-    { name = "faker", marker = "extra == 'testing'", specifier = ">=20.0.0" },
-    { name = "fastapi", specifier = ">=0.109.0" },
-    { name = "google-cloud-storage", marker = "extra == 'gcs'", specifier = ">=2.0.0" },
-    { name = "google-cloud-storage", marker = "extra == 'storage'", specifier = ">=2.0.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
-    { name = "httpx", marker = "extra == 'testing'", specifier = ">=0.26.0" },
-    { name = "ipython", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
-    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.1.0" },
-    { name = "pydantic", extras = ["email"], specifier = ">=2.5.0" },
-    { name = "pydantic-settings", specifier = ">=2.1.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
-    { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.4.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-    { name = "pytest-asyncio", marker = "extra == 'testing'", specifier = ">=0.23.0" },
-    { name = "python-multipart", specifier = ">=0.0.6" },
-    { name = "redis", marker = "extra == 'enterprise'", specifier = ">=5.0.0" },
-    { name = "redis", marker = "extra == 'messaging'", specifier = ">=5.0.0" },
-    { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "sqlalchemy", specifier = ">=2.0.25" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
-]
-provides-extras = ["dev", "postgres", "mysql", "kafka", "redis", "rabbitmq", "messaging", "enterprise", "testing", "gcs", "storage"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "build", specifier = ">=1.4.0" },
-    { name = "twine", specifier = ">=6.2.0" },
-]
-
-[[package]]
 name = "croniter"
 version = "6.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2481,6 +2360,127 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c4/68/79977123bb7be889ad680d79a40f339082c1978b5cfcf62c2d8d196873ac/starlette-0.52.1.tar.gz", hash = "sha256:834edd1b0a23167694292e94f597773bc3f89f362be6effee198165a35d62933", size = 2653702, upload-time = "2026-01-18T13:34:11.062Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/0d/13d1d239a25cbfb19e740db83143e95c772a1fe10202dda4b76792b114dd/starlette-0.52.1-py3-none-any.whl", hash = "sha256:0029d43eb3d273bc4f83a08720b4912ea4b071087a3b48db01b7c839f7954d74", size = 74272, upload-time = "2026-01-18T13:34:09.188Z" },
+]
+
+[[package]]
+name = "stride"
+version = "0.17.59"
+source = { editable = "." }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "fastapi" },
+    { name = "jinja2" },
+    { name = "pydantic", extra = ["email"] },
+    { name = "pydantic-settings" },
+    { name = "pyjwt" },
+    { name = "python-multipart" },
+    { name = "sqlalchemy" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "ipython", version = "8.38.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "ipython", version = "9.10.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+enterprise = [
+    { name = "aio-pika" },
+    { name = "aiokafka" },
+    { name = "asyncpg" },
+    { name = "croniter" },
+    { name = "redis" },
+]
+gcs = [
+    { name = "google-cloud-storage" },
+]
+kafka = [
+    { name = "aiokafka" },
+]
+messaging = [
+    { name = "aio-pika" },
+    { name = "aiokafka" },
+    { name = "croniter" },
+    { name = "redis" },
+]
+mysql = [
+    { name = "aiomysql" },
+]
+postgres = [
+    { name = "asyncpg" },
+    { name = "psycopg", extra = ["binary"] },
+]
+rabbitmq = [
+    { name = "aio-pika" },
+]
+redis = [
+    { name = "redis" },
+]
+storage = [
+    { name = "google-cloud-storage" },
+]
+testing = [
+    { name = "faker" },
+    { name = "httpx" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "build" },
+    { name = "twine" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aio-pika", marker = "extra == 'enterprise'", specifier = ">=9.0.0" },
+    { name = "aio-pika", marker = "extra == 'messaging'", specifier = ">=9.0.0" },
+    { name = "aio-pika", marker = "extra == 'rabbitmq'", specifier = ">=9.0.0" },
+    { name = "aiokafka", marker = "extra == 'enterprise'", specifier = ">=0.10.0" },
+    { name = "aiokafka", marker = "extra == 'kafka'", specifier = ">=0.10.0" },
+    { name = "aiokafka", marker = "extra == 'messaging'", specifier = ">=0.10.0" },
+    { name = "aiomysql", marker = "extra == 'mysql'", specifier = ">=0.2.0" },
+    { name = "aiosqlite", specifier = ">=0.19.0" },
+    { name = "asyncpg", marker = "extra == 'enterprise'", specifier = ">=0.29.0" },
+    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.29.0" },
+    { name = "croniter", marker = "extra == 'enterprise'", specifier = ">=2.0.0" },
+    { name = "croniter", marker = "extra == 'messaging'", specifier = ">=2.0.0" },
+    { name = "faker", marker = "extra == 'testing'", specifier = ">=20.0.0" },
+    { name = "fastapi", specifier = ">=0.109.0" },
+    { name = "google-cloud-storage", marker = "extra == 'gcs'", specifier = ">=2.0.0" },
+    { name = "google-cloud-storage", marker = "extra == 'storage'", specifier = ">=2.0.0" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
+    { name = "httpx", marker = "extra == 'testing'", specifier = ">=0.26.0" },
+    { name = "ipython", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "jinja2", specifier = ">=3.1.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.1.0" },
+    { name = "pydantic", extras = ["email"], specifier = ">=2.5.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pyjwt", specifier = ">=2.8.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
+    { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.4.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "pytest-asyncio", marker = "extra == 'testing'", specifier = ">=0.23.0" },
+    { name = "python-multipart", specifier = ">=0.0.6" },
+    { name = "redis", marker = "extra == 'enterprise'", specifier = ">=5.0.0" },
+    { name = "redis", marker = "extra == 'messaging'", specifier = ">=5.0.0" },
+    { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "sqlalchemy", specifier = ">=2.0.25" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
+]
+provides-extras = ["dev", "postgres", "mysql", "kafka", "redis", "rabbitmq", "messaging", "enterprise", "testing", "gcs", "storage"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "build", specifier = ">=1.4.0" },
+    { name = "twine", specifier = ">=6.2.0" },
 ]
 
 [[package]]

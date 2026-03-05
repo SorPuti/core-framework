@@ -46,7 +46,7 @@ class AppSettings(Settings):
 
 ```python
 # Verificar se Kafka foi configurado
-from core.config import is_kafka_configured
+from stride.config import is_kafka_configured
 
 if is_kafka_configured():
     print("Kafka pronto!")
@@ -98,7 +98,7 @@ class AppSettings(Settings):
 ### Uso Básico
 
 ```python
-from core.messaging import get_producer
+from stride.messaging import get_producer
 
 producer = get_producer("kafka")
 
@@ -128,7 +128,7 @@ await producer.send_batch(
 ### Função publish
 
 ```python
-from core.messaging import publish
+from stride.messaging import publish
 
 async def publish_user_event(user_id: int, action: str):
     """Publica evento de usuário."""
@@ -146,7 +146,7 @@ await publish("user-events", {"user_id": 1, "action": "login"})
 ### Decorator
 
 ```python
-from core.messaging import consumer
+from stride.messaging import consumer
 
 @consumer(
     topic="user-events",
@@ -169,7 +169,7 @@ core kafka consume user-events --group my-service
 ### Definir Topics
 
 ```python
-from core.messaging import Topic, EventTopic, CommandTopic, StateTopic
+from stride.messaging import Topic, EventTopic, CommandTopic, StateTopic
 from pydantic import BaseModel
 
 class UserEventSchema(BaseModel):
@@ -198,7 +198,7 @@ class UserEvents(EventTopic):
 ### Decorator
 
 ```python
-from core.messaging import worker
+from stride.messaging import worker
 
 @worker(
     topic="tasks",
@@ -216,7 +216,7 @@ async def process_task(message: dict) -> dict:
 ### Worker Baseado em Classe
 
 ```python
-from core.messaging import Worker
+from stride.messaging import Worker
 
 class TaskWorker(Worker):
     input_topic = "tasks"
@@ -279,7 +279,7 @@ class AppSettings(Settings):
 ### Definir Schema
 
 ```python
-from core.messaging import AvroModel
+from stride.messaging import AvroModel
 
 class UserEvent(AvroModel):
     # Namespace herdado de avro_default_namespace
@@ -297,7 +297,7 @@ schema = UserEvent.__avro_schema__()
 ### Decorator para Schema
 
 ```python
-from core.messaging import avro_schema
+from stride.messaging import avro_schema
 
 @avro_schema  # Usa avro_default_namespace do Settings
 class OrderEvent(AvroModel):
@@ -313,7 +313,7 @@ class OrderCreated(AvroModel):
 ### Enviar com Avro
 
 ```python
-from core.messaging.confluent import ConfluentProducer
+from stride.messaging.confluent import ConfluentProducer
 
 producer = ConfluentProducer()
 
@@ -338,7 +338,7 @@ class AppSettings(Settings):
 ### Producer
 
 ```python
-from core.messaging.redis import RedisProducer
+from stride.messaging.redis import RedisProducer
 
 producer = RedisProducer()
 await producer.send(
@@ -350,7 +350,7 @@ await producer.send(
 ### Consumer
 
 ```python
-from core.messaging.redis import RedisConsumer
+from stride.messaging.redis import RedisConsumer
 
 consumer = RedisConsumer(
     topics=["events"],
@@ -371,7 +371,7 @@ async for message in consumer:
 | `kafka_enabled` | `bool` | `False` | **Habilita Kafka** |
 | `kafka_backend` | `Literal` | `"aiokafka"` | Backend: aiokafka ou confluent |
 | `kafka_bootstrap_servers` | `str` | `"localhost:9092"` | Servidores Kafka |
-| `kafka_client_id` | `str` | `"core-framework"` | Client ID |
+| `kafka_client_id` | `str` | `"stride"` | Client ID |
 | `kafka_fire_and_forget` | `bool` | `False` | Não aguardar ACK |
 
 ### Segurança
@@ -465,7 +465,7 @@ class AppSettings(Settings):
     kafka_max_batch_size: int = 32768
 
 # src/events.py
-from core.messaging import AvroModel, avro_schema
+from stride.messaging import AvroModel, avro_schema
 
 @avro_schema
 class UserCreated(AvroModel):
@@ -474,7 +474,7 @@ class UserCreated(AvroModel):
     created_at: str
 
 # src/handlers.py
-from core.messaging import publish, consumer
+from stride.messaging import publish, consumer
 from datetime import datetime
 
 async def publish_user_created(user_id: int, email: str):

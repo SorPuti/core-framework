@@ -17,7 +17,7 @@ Input/Output schemas for request/response handling.
 For request bodies.
 
 ```python
-from core.serializers import InputSchema
+from stride.serializers import InputSchema
 
 class ItemCreateInput(InputSchema):
     name: str
@@ -35,7 +35,7 @@ Features:
 For responses.
 
 ```python
-from core.serializers import OutputSchema
+from stride.serializers import OutputSchema
 from datetime import datetime
 
 class ItemOutput(OutputSchema):
@@ -60,7 +60,7 @@ items_data = ItemOutput.from_orm_list(items)
 ## Usage in ViewSets
 
 ```python
-from core import ModelViewSet
+from stride import ModelViewSet
 from .models import Item
 from .schemas import ItemCreateInput, ItemOutput
 
@@ -73,7 +73,7 @@ class ItemViewSet(ModelViewSet):
 ## Field Validators
 
 ```python
-from core.serializers import InputSchema
+from stride.serializers import InputSchema
 from pydantic import field_validator
 
 class UserCreateInput(InputSchema):
@@ -101,7 +101,7 @@ class UserCreateInput(InputSchema):
 Cross-field validation.
 
 ```python
-from core.serializers import InputSchema
+from stride.serializers import InputSchema
 from pydantic import model_validator
 
 class PasswordChangeInput(InputSchema):
@@ -118,7 +118,7 @@ class PasswordChangeInput(InputSchema):
 ## Computed Fields
 
 ```python
-from core.serializers import OutputSchema
+from stride.serializers import OutputSchema
 from pydantic import computed_field
 
 class PostOutput(OutputSchema):
@@ -167,7 +167,7 @@ class OrderOutput(OutputSchema):
 For complex serialization logic.
 
 ```python
-from core.serializers import Serializer
+from stride.serializers import Serializer
 
 class ItemSerializer(Serializer[Item, ItemCreateInput, ItemOutput]):
     input_schema = ItemCreateInput
@@ -185,7 +185,7 @@ class ItemSerializer(Serializer[Item, ItemCreateInput, ItemOutput]):
 With create/update methods.
 
 ```python
-from core.serializers import ModelSerializer
+from stride.serializers import ModelSerializer
 
 class ItemSerializer(ModelSerializer[Item, ItemCreateInput, ItemOutput]):
     model = Item

@@ -1,0 +1,2794 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{% if is_new %}New {{ admin.display_name }}{% else %}Edit {{ admin.display_name }}{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="flex items-center gap-1.5 text-sm">
+    <a href="{{ admin_prefix }}/" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </a>
+    <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    <span class="text-gray-400 dark:text-gray-500">{{ app_label }}</span>
+    <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">{{ admin.display_name_plural }}</a>
+    <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    <span class="font-semibold text-gray-900 dark:text-gray-100">{% if is_new %}New{% else %}#{{ pk }}{% endif %}</span>
+</div>
+{% endblock %}
+
+{% block page_actions %}
+<a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/"
+   class="inline-flex items-center px-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all">
+    <svg class="w-4 h-4 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to list
+</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Fix dark mode input contrast — explicit text color on all form elements */
+    input[type="text"],
+    input[type="number"],
+    input[type="email"],
+    input[type="password"],
+    input[type="url"],
+    input[type="datetime-local"],
+    input[type="date"],
+    input[type="time"],
+    textarea,
+    select {
+        color: #111827; /* gray-900 */
+    }
+    .dark input[type="text"],
+    .dark input[type="number"],
+    .dark input[type="email"],
+    .dark input[type="password"],
+    .dark input[type="url"],
+    .dark input[type="datetime-local"],
+    .dark input[type="date"],
+    .dark input[type="time"],
+    .dark textarea,
+    .dark select {
+        color: #f3f4f6; /* gray-100 */
+    }
+    /* Readonly inputs — dimmed */
+    .dark input:read-only,
+    .dark textarea:read-only {
+        color: #9ca3af; /* gray-400 */
+    }
+    input:read-only,
+    textarea:read-only {
+        color: #6b7280; /* gray-500 */
+    }
+    /* Placeholder contrast fix */
+    .dark input::placeholder,
+    .dark textarea::placeholder {
+        color: #6b7280; /* gray-500 */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="detailView()" x-init="loadData()"
+     @beforeunload.window="handleBeforeUnload($event)">
+    
+    <!-- Loading -->
+    <div x-show="loading" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-12 text-center">
+        <div class="inline-block w-7 h-7 border-2 border-gray-200 dark:border-gray-600 border-t-primary-600 rounded-full animate-spin"></div>
+        <p class="mt-3 text-sm text-gray-400">Loading...</p>
+    </div>
+    
+    <!-- Error -->
+    <div x-show="error && !loading" x-cloak class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-8 text-center">
+        <svg class="w-10 h-10 text-red-300 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <p class="mt-3 text-sm text-red-600 font-medium" x-text="error"></p>
+    </div>
+    
+    <!-- Form -->
+    <div x-show="!loading && !error" x-cloak>
+        <form @submit.prevent="save()">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Main Form Area (2/3 width) -->
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- Unsaved Changes Indicator -->
+                    <div x-show="hasUnsavedChanges" x-cloak x-transition
+                         class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 flex items-center">
+                        <svg class="w-4 h-4 text-amber-500 mr-2 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        <span class="text-sm text-amber-700 dark:text-amber-300">You have unsaved changes</span>
+                    </div>
+                    
+                    <!-- Editable Fields Card -->
+                    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                {% if is_new %}Create {{ admin.display_name }}{% else %}Edit Details{% endif %}
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-1">
+                                Fields marked with <span class="text-red-400">*</span> are required.
+                                <span class="text-gray-300 dark:text-gray-600">Optional fields can be left empty.</span>
+                            </p>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                                <template x-for="field in editableFields" :key="field.name">
+                                    <div :class="{ 'md:col-span-2': field.type === 'text' || field.type === 'json' }">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                            <span x-text="getFieldLabel(field)"></span>
+                                            <!-- Required indicator — respects create/edit context for virtual_password -->
+                                            <template x-if="isFieldRequired(field)">
+                                                <span class="text-red-400 ml-0.5">*</span>
+                                            </template>
+                                            <template x-if="!isFieldRequired(field) && !['password', 'password_hash', 'virtual_password'].includes(field.widget)">
+                                                <span class="text-gray-400 dark:text-gray-500 text-xs font-normal ml-1">(optional)</span>
+                                            </template>
+                                            <!-- Lock icon for password/secret fields -->
+                                            <template x-if="['password', 'password_hash', 'virtual_password'].includes(field.widget)">
+                                                <span class="text-gray-400 dark:text-gray-500 text-xs font-normal ml-1">
+                                                    <svg class="w-3 h-3 inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                                    <span x-show="!isNewItem" class="text-[11px]">optional</span>
+                                                </span>
+                                            </template>
+                                            <!-- Enum badge -->
+                                            <template x-if="field.widget === 'choices'">
+                                                <span class="text-indigo-400 dark:text-indigo-500 text-[10px] font-normal ml-1 uppercase tracking-wider">enum</span>
+                                            </template>
+                                        </label>
+                                        
+                                        <!-- Help text -->
+                                        <template x-if="field.help_text">
+                                            <p class="text-xs text-gray-400 dark:text-gray-500 mb-1.5" x-text="field.help_text"></p>
+                                        </template>
+                                        
+                                        <!-- ═══ SMART WIDGETS ═══ -->
+                                        
+                                        <!-- Password / Password Hash — input type=password, never shows stored value -->
+                                        <template x-if="field.widget === 'password' || field.widget === 'password_hash'">
+                                            <div>
+                                                <div class="relative">
+                                                    <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                                    </div>
+                                                    <input 
+                                                        type="password"
+                                                        x-model="formData[field.name]"
+                                                        @input="markDirty()"
+                                                        @focus="if(formData[field.name] === '••••••••') formData[field.name] = ''"
+                                                        :required="field.required"
+                                                        :placeholder="isNewItem ? 'Enter password' : 'Leave empty to keep current'"
+                                                        autocomplete="new-password"
+                                                        class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                    >
+                                                </div>
+                                                <p class="text-xs text-gray-400 mt-1" x-text="isNewItem ? 'Password will be hashed automatically' : 'Enter new password to change, or leave empty'"></p>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Virtual Password — campo virtual para models com set_password() -->
+                                        <template x-if="field.widget === 'virtual_password'">
+                                            <div>
+                                                <div class="relative">
+                                                    <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                                    </div>
+                                                    <input 
+                                                        type="password"
+                                                        x-model="formData[field.name]"
+                                                        @input="markDirty()"
+                                                        :required="isNewItem && field.required_on_create"
+                                                        :placeholder="isNewItem ? 'Enter password (required)' : 'New password (leave empty to keep current)'"
+                                                        autocomplete="new-password"
+                                                        class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                    >
+                                                </div>
+                                                <div class="flex items-center gap-1.5 mt-1">
+                                                    <svg class="w-3 h-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                                    <p class="text-xs text-gray-400" x-text="isNewItem 
+                                                        ? 'Password will be hashed via set_password()' 
+                                                        : 'Leave empty to keep current password. Only fill to change.'"></p>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Secret / Token — masked, set-only -->
+                                        <template x-if="field.widget === 'secret'">
+                                            <div>
+                                                <input 
+                                                    type="password"
+                                                    x-model="formData[field.name]"
+                                                    @input="markDirty()"
+                                                    @focus="if(formData[field.name] === '••••••••') formData[field.name] = ''"
+                                                    :placeholder="isNewItem ? 'Enter value' : 'Leave empty to keep current'"
+                                                    autocomplete="off"
+                                                    class="w-full px-3.5 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                >
+                                                <p class="text-xs text-gray-400 mt-1">Sensitive value — stored securely</p>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Slug — auto-generates from source field -->
+                                        <template x-if="field.widget === 'slug'">
+                                            <div>
+                                                <div class="flex gap-2">
+                                                    <input 
+                                                        type="text"
+                                                        x-model="formData[field.name]"
+                                                        @input="markDirty()"
+                                                        :required="field.required"
+                                                        placeholder="auto-generated-slug"
+                                                        class="flex-1 px-3.5 py-2.5 text-sm font-mono border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                    >
+                                                    <template x-if="field.slug_source">
+                                                        <button type="button" 
+                                                                @click="formData[field.name] = slugify(formData[field.slug_source] || ''); markDirty()"
+                                                                class="px-3 py-2.5 text-xs font-medium border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap"
+                                                                title="Generate from source field">
+                                                            Generate
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                                <template x-if="field.slug_source">
+                                                    <p class="text-xs text-gray-400 mt-1">
+                                                        Auto-generates from <span class="font-mono" x-text="field.slug_source"></span>
+                                                    </p>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Email — input type=email with icon -->
+                                        <template x-if="field.widget === 'email'">
+                                            <div class="relative">
+                                                <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                                    <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 13.5,12.5 2,7"/></svg>
+                                                </div>
+                                                <input 
+                                                    type="email"
+                                                    x-model="formData[field.name]"
+                                                    @input="markDirty()"
+                                                    :required="field.required"
+                                                    :placeholder="field.required ? 'user@example.com' : 'Optional email'"
+                                                    class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                >
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- URL — input type=url with icon + preview -->
+                                        <template x-if="field.widget === 'url'">
+                                            <div>
+                                                <div class="relative">
+                                                    <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                                    </div>
+                                                    <input 
+                                                        type="url"
+                                                        x-model="formData[field.name]"
+                                                        @input="markDirty()"
+                                                        :required="field.required"
+                                                        placeholder="https://example.com"
+                                                        class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                    >
+                                                </div>
+                                                <template x-if="formData[field.name] && formData[field.name].startsWith('http')">
+                                                    <a :href="formData[field.name]" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs text-primary-500 hover:text-primary-700 mt-1">
+                                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                                        Open link
+                                                    </a>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- File upload — drag-and-drop, preview, link to current file (storage-aware) -->
+                                        <template x-if="field.widget === 'file_upload'">
+                                            <div x-data="fileUploadField(field)" class="space-y-2">
+                                                <!-- Current file: preview (image) or link -->
+                                                <template x-if="formData[field.name]">
+                                                    <div class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                                                        <template x-if="field.accept === 'image/*' && isImageUrl(formData[field.name])">
+                                                            <img :src="previewUrl(formData[field.name])" alt="Preview" class="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-600">
+                                                        </template>
+                                                        <template x-if="!field.accept || field.accept !== 'image/*' || !isImageUrl(formData[field.name])">
+                                                            <div class="w-16 h-16 rounded-lg bg-gray-200 dark:bg-gray-600 flex items-center justify-center flex-shrink-0">
+                                                                <svg class="w-8 h-8 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                                            </div>
+                                                        </template>
+                                                        <div class="min-w-0 flex-1">
+                                                            <a :href="previewUrl(formData[field.name])" target="_blank" rel="noopener" class="text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline truncate block" x-text="fileName(formData[field.name])"></a>
+                                                            <p class="text-xs text-gray-500 mt-0.5">Current file</p>
+                                                        </div>
+                                                        <button type="button" @click="clearFile()" class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Remove file">
+                                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                                <!-- Drop zone + file input -->
+                                                <div class="relative border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 text-center transition-colors"
+                                                     :class="{ 'border-primary-500 bg-primary-50/50 dark:bg-primary-900/10': isDragging, 'hover:border-gray-400 dark:hover:border-gray-500': !uploading }"
+                                                     @dragover.prevent="isDragging = true"
+                                                     @dragleave.prevent="isDragging = false"
+                                                     @drop.prevent="onDrop($event)">
+                                                    <input type="file" x-ref="fileInput" class="hidden" :accept="field.accept || undefined" @change="onFileSelect($event)">
+                                                    <template x-if="uploading">
+                                                        <div class="flex flex-col items-center gap-2">
+                                                            <div class="w-8 h-8 border-2 border-gray-200 dark:border-gray-600 border-t-primary-500 rounded-full animate-spin"></div>
+                                                            <span class="text-sm text-gray-500">Uploading...</span>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!uploading">
+                                                        <div @click="$refs.fileInput.click()" class="cursor-pointer">
+                                                            <svg class="w-10 h-10 mx-auto text-gray-400 dark:text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Drop file here or <span class="text-primary-600 dark:text-primary-400 font-medium">browse</span></p>
+                                                            <p class="text-xs text-gray-400 mt-0.5" x-text="field.accept === 'image/*' ? 'Images only' : 'Any file'"></p>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Color — color picker -->
+                                        <template x-if="field.widget === 'color'">
+                                            <div class="flex items-center gap-3">
+                                                <input 
+                                                    type="color"
+                                                    :value="formData[field.name] || '#3B82F6'"
+                                                    @input="formData[field.name] = $event.target.value; markDirty()"
+                                                    class="w-10 h-10 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer p-0.5"
+                                                >
+                                                <input 
+                                                    type="text"
+                                                    x-model="formData[field.name]"
+                                                    @input="markDirty()"
+                                                    placeholder="#3B82F6"
+                                                    pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
+                                                    class="flex-1 px-3.5 py-2.5 text-sm font-mono border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                >
+                                                <div class="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-600" 
+                                                     :style="'background-color:' + (formData[field.name] || '#ccc')"></div>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- FK / Foreign Key — searchable dropdown -->
+                                        <template x-if="field.widget === 'fk'">
+                                            <div x-data="fkField(field)" class="relative"
+                                                 @focusout="handleFocusOut($event)"
+                                                 @mousedown="handleMouseDown($event)">
+                                                <!-- Selected value display + clear -->
+                                                <div class="relative">
+                                                    <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        x-ref="fkInput"
+                                                        x-model="searchQuery"
+                                                        @focus="openDropdown()"
+                                                        @mousedown="openDropdown()"
+                                                        @input="onSearchInput()"
+                                                        @keydown.escape="closeDropdown()"
+                                                        @keydown.tab="closeDropdown()"
+                                                        @keydown.arrow-down.prevent="highlightNext()"
+                                                        @keydown.arrow-up.prevent="highlightPrev()"
+                                                        @keydown.enter.prevent="selectHighlighted()"
+                                                        :placeholder="selectedLabel || (field.required ? 'Search...' : 'Optional — search...')"
+                                                        :class="selectedLabel ? 'pl-10 pr-10' : 'pl-10 pr-4'"
+                                                        class="w-full py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                                    >
+                                                    <!-- Clear button -->
+                                                    <template x-if="selectedLabel">
+                                                        <button type="button" @click="clearSelection()" 
+                                                                class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                                
+                                                <!-- Selected value chip -->
+                                                <template x-if="selectedLabel && !isOpen">
+                                                    <div class="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg border border-primary-200 dark:border-primary-800">
+                                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                                        <span x-text="selectedLabel"></span>
+                                                    </div>
+                                                </template>
+                                                
+                                                <!-- Dropdown -->
+                                                <div x-show="isOpen" x-cloak
+                                                     x-transition:enter="transition ease-out duration-150"
+                                                     x-transition:enter-start="opacity-0 -translate-y-1"
+                                                     x-transition:enter-end="opacity-100 translate-y-0"
+                                                     x-transition:leave="transition ease-in duration-100"
+                                                     x-transition:leave-start="opacity-100"
+                                                     x-transition:leave-end="opacity-0"
+                                                     class="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                                    
+                                                    <!-- Loading -->
+                                                    <div x-show="loading" class="px-4 py-3 text-center">
+                                                        <div class="inline-block w-4 h-4 border-2 border-gray-200 dark:border-gray-600 border-t-primary-500 rounded-full animate-spin"></div>
+                                                        <span class="ml-2 text-xs text-gray-400">Searching...</span>
+                                                    </div>
+                                                    
+                                                    <!-- Results -->
+                                                    <template x-if="!loading && options.length > 0">
+                                                        <div class="py-1">
+                                                            <template x-for="(opt, idx) in options" :key="opt.pk">
+                                                                <button type="button"
+                                                                        @mousedown.prevent
+                                                                        @click="selectOption(opt)"
+                                                                        @mouseenter="highlightedIdx = idx"
+                                                                        class="w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2"
+                                                                        :class="idx === highlightedIdx 
+                                                                            ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
+                                                                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'">
+                                                                    <span class="flex-1 truncate" x-text="opt.display"></span>
+                                                                    <span class="text-[10px] font-mono text-gray-400 flex-shrink-0" x-text="'#' + opt.pk"></span>
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                    
+                                                    <!-- Empty -->
+                                                    <div x-show="!loading && options.length === 0 && searchQuery.length > 0" class="px-4 py-3 text-center">
+                                                        <p class="text-xs text-gray-400">No results found</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- FK info -->
+                                                <template x-if="field.fk_app_label">
+                                                    <p class="text-xs text-gray-400 mt-1">
+                                                        Related to <span class="font-mono" x-text="field.fk_app_label + '.' + field.fk_model_name"></span>
+                                                    </p>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Choices / Enum — select dropdown with predefined values -->
+                                        <template x-if="field.widget === 'choices' && field.choices">
+                                            <div>
+                                                <div class="relative">
+                                                    <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+                                                    </div>
+                                                    <select 
+                                                        x-model="formData[field.name]"
+                                                        @change="markDirty()"
+                                                        :required="field.required"
+                                                        class="w-full pl-10 pr-10 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all appearance-none cursor-pointer"
+                                                    >
+                                                        <template x-if="!field.required || !formData[field.name]">
+                                                            <option value="">— Select —</option>
+                                                        </template>
+                                                        <template x-for="choice in field.choices" :key="choice.value">
+                                                            <option :value="choice.value" x-text="choice.label" :selected="formData[field.name] == choice.value"></option>
+                                                        </template>
+                                                    </select>
+                                                    <!-- Custom dropdown arrow -->
+                                                    <div class="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none">
+                                                        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                                    </div>
+                                                </div>
+                                                <!-- Current value chip — Label legível + valor do enum para referência -->
+                                                <template x-if="formData[field.name]">
+                                                    <div class="mt-1.5 inline-flex items-center gap-2 px-2.5 py-1 text-xs font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                                                        <svg class="w-3 h-3 flex-shrink-0 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                        <span x-text="(field.choices.find(c => c.value == formData[field.name]) || {}).label || formData[field.name]"></span>
+                                                        <span class="text-[10px] font-mono opacity-50 border-l border-indigo-300 dark:border-indigo-600 pl-2" x-text="formData[field.name]"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- ═══ STANDARD WIDGETS ═══ -->
+                                        
+                                        <!-- Boolean field (toggle switch) -->
+                                        <template x-if="field.widget === 'default' && field.type === 'boolean'">
+                                            <label class="relative inline-flex items-center cursor-pointer mt-1">
+                                                <input type="checkbox" 
+                                                       :checked="formData[field.name]"
+                                                       @change="formData[field.name] = $event.target.checked; markDirty()"
+                                                       class="sr-only peer">
+                                                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-500/20 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600"></div>
+                                                <span class="ml-2 text-sm text-gray-600 dark:text-gray-400" x-text="formData[field.name] ? 'Yes' : 'No'"></span>
+                                            </label>
+                                        </template>
+                                        
+                                        <!-- Text/textarea field -->
+                                        <template x-if="field.widget === 'default' && field.type === 'text'">
+                                            <textarea 
+                                                x-model="formData[field.name]"
+                                                @input="markDirty()"
+                                                rows="4"
+                                                :required="field.required"
+                                                :placeholder="field.required ? 'Required' : 'Optional'"
+                                                class="w-full px-3.5 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all resize-y"
+                                            ></textarea>
+                                        </template>
+                                        
+                                        <!-- JSON field -->
+                                        <template x-if="field.widget === 'json' || (field.widget === 'default' && field.type === 'json')">
+                                            <textarea
+                                                :value="JSON.stringify(formData[field.name], null, 2)"
+                                                @input="try { formData[field.name] = JSON.parse($event.target.value); markDirty(); } catch(e) {}"
+                                                rows="6"
+                                                class="w-full px-3.5 py-2.5 text-sm font-mono border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all resize-y"
+                                            ></textarea>
+                                        </template>
+
+                                        <!-- Struct Editor — Dynamic form based on StructSchema definition -->
+                                        <template x-if="field.widget === 'struct_editor' && field.struct_schema">
+                                            <div x-data="structEditorField(field)" x-init="init()" class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/40 dark:bg-gray-800/40">
+                                                <!-- Header -->
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-200" x-text="field.struct_schema.name"></div>
+                                                        <span class="text-[10px] px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full">schema</span>
+                                                    </div>
+                                                    <!-- JSON toggle -->
+                                                    <button @click="showJson = !showJson" class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 flex items-center gap-1">
+                                                        <svg x-show="!showJson" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+                                                        <svg x-show="showJson" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12h6"/><path d="M12 9v6"/></svg>
+                                                        <span x-text="showJson ? 'Hide JSON' : 'Show JSON'"></span>
+                                                    </button>
+                                                </div>
+
+                                                <!-- JSON Raw Editor (toggleable) -->
+                                                <template x-if="showJson">
+                                                    <textarea
+                                                        x-model="jsonText"
+                                                        @change="parseJson()"
+                                                        rows="4"
+                                                        class="w-full px-3 py-2 text-xs font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-y"
+                                                        placeholder="{ ... }"
+                                                    ></textarea>
+                                                </template>
+
+                                                <!-- Structured Form -->
+                                                <div class="space-y-2">
+                                                    <template x-for="(fieldDef, fieldName) in field.struct_schema.fields" :key="fieldName">
+                                                        <div class="flex flex-col gap-1">
+                                                            <!-- Field Label -->
+                                                            <label class="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                                                <span x-text="fieldName"></span>
+                                                                <template x-if="fieldDef.default !== undefined && fieldDef.default !== null && fieldDef.default !== ''">
+                                                                    <span class="text-[10px] text-gray-400 dark:text-gray-500">(default: <span x-text="JSON.stringify(fieldDef.default)"></span>)</span>
+                                                                </template>
+                                                            </label>
+
+                                                            <!-- String Field -->
+                                                            <template x-if="fieldDef.type === 'StringField'">
+                                                                <div class="relative">
+                                                                    <input
+                                                                        :type="fieldDef.choices ? 'select' : 'text'"
+                                                                        x-model="formValues[fieldName]"
+                                                                        @change="updateFormData()"
+                                                                        class="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-primary-500/20 focus:border-primary-500"
+                                                                        :placeholder="fieldDef.default || ''"
+                                                                    />
+                                                                    <!-- Choices dropdown -->
+                                                                    <template x-if="fieldDef.choices && fieldDef.choices.length > 0">
+                                                                        <select
+                                                                            x-model="formValues[fieldName]"
+                                                                            @change="updateFormData()"
+                                                                            class="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-primary-500/20 focus:border-primary-500"
+                                                                        >
+                                                                            <option value="">-- Select --</option>
+                                                                            <template x-for="choice in fieldDef.choices" :key="choice">
+                                                                                <option :value="choice" x-text="choice"></option>
+                                                                            </template>
+                                                                        </select>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+
+                                                            <!-- Integer/Float Field -->
+                                                            <template x-if="fieldDef.type === 'IntegerField' || fieldDef.type === 'FloatField'">
+                                                                <input
+                                                                    type="number"
+                                                                    :step="fieldDef.type === 'FloatField' ? '0.01' : '1'"
+                                                                    x-model.number="formValues[fieldName]"
+                                                                    @change="updateFormData()"
+                                                                    class="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-primary-500/20 focus:border-primary-500"
+                                                                    :placeholder="fieldDef.default"
+                                                                />
+                                                            </template>
+
+                                                            <!-- Boolean Field -->
+                                                            <template x-if="fieldDef.type === 'BooleanField'">
+                                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        :checked="formValues[fieldName]"
+                                                                        @change="formValues[fieldName] = $event.target.checked; updateFormData()"
+                                                                        class="sr-only peer"
+                                                                    />
+                                                                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600"></div>
+                                                                    <span class="ml-2 text-xs text-gray-600 dark:text-gray-400" x-text="formValues[fieldName] ? 'Yes' : 'No'"></span>
+                                                                </label>
+                                                            </template>
+
+                                                            <!-- Nested Field (recursive for simple cases) -->
+                                                            <template x-if="fieldDef.type === 'NestedField'">
+                                                                <div class="pl-3 border-l-2 border-gray-200 dark:border-gray-600 space-y-2">
+                                                                    <template x-if="fieldDef.fields">
+                                                                        <template x-for="(nestedDef, nestedName) in fieldDef.fields" :key="nestedName">
+                                                                            <div class="flex flex-col gap-0.5">
+                                                                                <label class="text-[11px] text-gray-500 dark:text-gray-500" x-text="nestedName"></label>
+                                                                                <input
+                                                                                    :type="nestedDef.type === 'BooleanField' ? 'checkbox' : (nestedDef.type === 'IntegerField' || nestedDef.type === 'FloatField' ? 'number' : 'text')"
+                                                                                    x-model="formValues[fieldName][nestedName]"
+                                                                                    @change="updateFormData()"
+                                                                                    class="w-full px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                                                />
+                                                                            </div>
+                                                                        </template>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+
+                                                            <!-- List Field -->
+                                                            <template x-if="fieldDef.type === 'ListField'">
+                                                                <div class="space-y-1">
+                                                                    <template x-for="(item, idx) in (formValues[fieldName] || [])" :key="idx">
+                                                                        <div class="flex items-center gap-2">
+                                                                            <input
+                                                                                type="text"
+                                                                                x-model="formValues[fieldName][idx]"
+                                                                                @change="updateFormData()"
+                                                                                class="flex-1 px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                                            />
+                                                                            <button @click="removeListItem(fieldName, idx)" class="text-red-400 hover:text-red-600">
+                                                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                                                            </button>
+                                                                        </div>
+                                                                    </template>
+                                                                    <button @click="addListItem(fieldName)" class="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                                                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                                                                        Add item
+                                                                    </button>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                </div>
+
+                                                <!-- Validation errors -->
+                                                <template x-if="errors.length > 0">
+                                                    <div class="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                                                        <template x-for="error in errors" :key="error">
+                                                            <div x-text="error"></div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+
+                                        <!-- Conditions builder (n8n-like lightweight editor) -->
+                                        <template x-if="field.widget === 'conditions_builder'">
+                                            <div x-data="conditionsBuilderField(field)" x-init="init()" class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/40 dark:bg-gray-800/40">
+                                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                                    <div>
+                                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">Builder de Regras</div>
+                                                        <div class="text-[11px] text-gray-500">Ordem de execução + blocos BUY/SELL + validação rápida.</div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <select x-model="globalLogic" @change="syncToForm()"
+                                                                class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            <option value="AND">Lógica global: AND</option>
+                                                            <option value="OR">Lógica global: OR</option>
+                                                        </select>
+                                                        <button type="button" @click="addCondition()"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors">
+                                                            + Condição
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="hidden lg:grid grid-cols-12 gap-2 text-[11px] uppercase tracking-wider text-gray-400 px-2 min-w-[980px]">
+                                                    <span class="col-span-1">#</span>
+                                                    <span class="col-span-2">Bloco</span>
+                                                    <span class="col-span-2">Lógica</span>
+                                                    <span class="col-span-3">Campo</span>
+                                                    <span class="col-span-2">Operador</span>
+                                                    <span class="col-span-2">Valor</span>
+                                                </div>
+
+                                                <div class="overflow-x-auto pb-1">
+                                                    <div class="space-y-2 min-w-[980px]">
+                                                        <template x-for="(condition, idx) in conditions" :key="condition._id">
+                                                            <div class="grid grid-cols-12 gap-2 items-center rounded-lg border border-gray-200 dark:border-gray-700 p-2 bg-white dark:bg-gray-800">
+                                                                <div class="col-span-1 text-xs text-gray-500 font-semibold" x-text="idx + 1"></div>
+                                                                <select x-model="condition.block" @change="syncToForm()" class="col-span-2 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700">
+                                                                    <option value="buy">Buy</option>
+                                                                    <option value="sell">Sell</option>
+                                                                </select>
+                                                                <select x-model="condition.logic" @change="syncToForm()" class="col-span-2 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700">
+                                                                    <option value="AND">AND</option>
+                                                                    <option value="OR">OR</option>
+                                                                </select>
+                                                                <input x-model="condition.left" @input="syncToForm()" type="text" placeholder="short_ma"
+                                                                       class="col-span-2 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700" />
+                                                                <select x-model="condition.operator" @change="syncToForm()" class="col-span-2 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700">
+                                                                    <option value=">">&gt;</option>
+                                                                    <option value=">=">&gt;=</option>
+                                                                    <option value="<">&lt;</option>
+                                                                    <option value="<=">&lt;=</option>
+                                                                    <option value="==">==</option>
+                                                                    <option value="!=">!=</option>
+                                                                </select>
+                                                                <div class="col-span-3 flex items-center gap-2 min-w-0">
+                                                                    <input x-model="condition.right" @input="syncToForm()" type="text" placeholder="long_ma ou 0"
+                                                                           class="flex-1 min-w-0 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700" />
+                                                                    <button type="button" @click="moveCondition(idx, -1)"
+                                                                            class="px-2 py-1.5 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-200 shrink-0"
+                                                                            title="Mover para cima">↑</button>
+                                                                    <button type="button" @click="moveCondition(idx, 1)"
+                                                                            class="px-2 py-1.5 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-200 shrink-0"
+                                                                            title="Mover para baixo">↓</button>
+                                                                    <button type="button" @click="removeCondition(idx)"
+                                                                            class="px-2 py-1.5 text-xs rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 shrink-0">
+                                                                        x
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+
+                                                <div class="text-[11px] text-gray-500 bg-gray-100/70 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-2"
+                                                     x-text="previewFormula()"></div>
+
+                                                <div class="space-y-2 rounded-lg border border-gray-200 dark:border-gray-700 p-2 bg-white/70 dark:bg-gray-900/40">
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <label class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Preset de teste</label>
+                                                        <select x-model="selectedTestPreset" @change="applyTestPreset()"
+                                                                class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            <template x-for="preset in testPresets" :key="preset.id">
+                                                                <option :value="preset.id" x-text="preset.label"></option>
+                                                            </template>
+                                                        </select>
+                                                        <button type="button" @click="showAdvancedTests = !showAdvancedTests"
+                                                                class="px-2 py-1 text-[11px] rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                                            Casos customizados
+                                                        </button>
+                                                    </div>
+                                                    <textarea
+                                                        x-model="sampleContextText"
+                                                        rows="3"
+                                                        class="w-full px-3 py-2 text-xs font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                        placeholder='{"short_ma": 1.23, "long_ma": 1.10, "rsi": 68}'
+                                                    ></textarea>
+                                                    <textarea x-show="showAdvancedTests"
+                                                              x-model="customTestCasesText"
+                                                              rows="4"
+                                                              class="w-full px-3 py-2 text-xs font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                              placeholder='[{"name":"Caso 1","context":{"short_ma":1.2,"long_ma":1.0}}]'></textarea>
+                                                    <div class="space-y-2">
+                                                        <button type="button" @click="runSampleTest()"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">
+                                                            Testar condições
+                                                        </button>
+                                                        <div class="text-[11px] rounded-lg border px-2.5 py-2"
+                                                             :class="sampleResult && sampleResult.error ? 'border-red-200 bg-red-50 text-red-700' : 'border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-900/40 text-gray-600 dark:text-gray-300'"
+                                                             x-text="sampleResultText()"></div>
+                                                    </div>
+                                                </div>
+
+                                                <textarea
+                                                    :value="JSON.stringify(formData[field.name] || {}, null, 2)"
+                                                    @input="try { formData[field.name] = JSON.parse($event.target.value); reloadFromForm(); markDirty(); } catch(e) {}"
+                                                    rows="6"
+                                                    class="w-full px-3.5 py-2.5 text-sm font-mono border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                ></textarea>
+                                            </div>
+                                        </template>
+
+                                        <!-- Trading filters builder -->
+                                        <template x-if="field.widget === 'trading_filters_builder'">
+                                            <div x-data="tradingFiltersBuilderField(field)" x-init="init()" class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/40 dark:bg-gray-800/40">
+                                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                                    <div>
+                                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">Filtros de Trading</div>
+                                                        <div class="text-[11px] text-gray-500">Presets profissionais com ajuste rápido de parâmetros.</div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <select x-model="selectedPresetId"
+                                                                class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            <template x-for="preset in presets" :key="preset.id">
+                                                                <option :value="preset.id" x-text="preset.label"></option>
+                                                            </template>
+                                                        </select>
+                                                        <button type="button" @click="addPreset()"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors">
+                                                            + Filtro
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="space-y-2" x-show="items.length > 0">
+                                                    <template x-for="(item, idx) in items" :key="item._id">
+                                                        <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 bg-white dark:bg-gray-800 space-y-2">
+                                                            <div class="flex flex-wrap items-center gap-2">
+                                                                <span class="px-2 py-0.5 text-[10px] rounded bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300" x-text="item.id"></span>
+                                                                <span class="text-xs font-medium text-gray-700 dark:text-gray-200" x-text="item.name"></span>
+                                                                <span class="ml-auto text-[10px] text-gray-500" x-text="item.type"></span>
+                                                                <label class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                                                                    <input type="checkbox" :checked="item.active" @change="item.active = $event.target.checked; syncToForm()">
+                                                                    Ativo
+                                                                </label>
+                                                                <button type="button" @click="removeItem(idx)"
+                                                                        class="px-2 py-1 text-[11px] rounded bg-red-50 hover:bg-red-100 text-red-600 border border-red-200">Remover</button>
+                                                            </div>
+                                                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                                                                <input :value="item.config.window || ''" @input="updateConfig(item, 'window', $event.target.value)"
+                                                                       type="number" placeholder="window"
+                                                                       class="px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                                <input :value="item.config.period || ''" @input="updateConfig(item, 'period', $event.target.value)"
+                                                                       type="number" placeholder="period"
+                                                                       class="px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                                <input :value="item.config.threshold || ''" @input="updateConfig(item, 'threshold', $event.target.value)"
+                                                                       type="number" step="any" placeholder="threshold"
+                                                                       class="px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                                <input :value="item.config.operator || ''" @input="updateConfig(item, 'operator', $event.target.value)"
+                                                                       type="text" placeholder="operator"
+                                                                       class="px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            </div>
+                                                            <textarea
+                                                                :value="JSON.stringify(item.config || {}, null, 2)"
+                                                                @input="updateConfigJson(item, $event.target.value)"
+                                                                rows="3"
+                                                                class="w-full px-2.5 py-2 text-xs font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                            ></textarea>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                                <div x-show="items.length === 0" class="text-xs text-gray-500 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2">
+                                                    Nenhum filtro adicionado. Use presets para montar o ataque.
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <!-- Strategy config builder -->
+                                        <template x-if="field.widget === 'strategy_config_builder'">
+                                            <div x-data="strategyConfigBuilderField(field)" x-init="init()"
+                                                 class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/40 dark:bg-gray-800/40">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <div>
+                                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-200" x-text="title"></div>
+                                                        <div class="text-[11px] text-gray-500">Modo assistido com validações + opção JSON.</div>
+                                                    </div>
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <select x-model="selectedProfile"
+                                                                class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            <option value="apollo">Preset Apollo</option>
+                                                            <option value="atlas">Preset Atlas</option>
+                                                            <option value="nexus">Preset Nexus</option>
+                                                            <option value="orion">Preset Orion</option>
+                                                            <option value="titan">Preset Titan</option>
+                                                        </select>
+                                                        <button type="button" @click="applyProfilePreset()"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors">
+                                                            Aplicar preset
+                                                        </button>
+                                                        <button type="button" @click="showJson = !showJson"
+                                                                class="px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                                x-text="showJson ? 'Modo formulário' : 'Ver JSON'"></button>
+                                                    </div>
+                                                </div>
+
+                                                <div x-show="!showJson" class="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                                                    <template x-for="cfg in definitions" :key="cfg.key">
+                                                        <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 space-y-1">
+                                                            <label class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide" x-text="cfg.label"></label>
+                                                            <template x-if="cfg.type === 'boolean'">
+                                                                <div class="flex flex-col items-start gap-1 text-sm text-gray-700 dark:text-gray-200">
+                                                                    <input type="checkbox" :checked="toBool(pathValue(cfg.key))"
+                                                                           @change="setValue(cfg, $event.target.checked)">
+                                                                    <span x-text="toBool(pathValue(cfg.key)) ? 'Ativo' : 'Inativo'"></span>
+                                                                </div>
+                                                            </template>
+                                                            <template x-if="cfg.type === 'select'">
+                                                                <select :value="pathValue(cfg.key) ?? cfg.default"
+                                                                        @change="setValue(cfg, $event.target.value)"
+                                                                        class="w-full px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                                    <template x-for="opt in (cfg.options || [])" :key="opt">
+                                                                        <option :value="opt" x-text="opt"></option>
+                                                                    </template>
+                                                                </select>
+                                                            </template>
+                                                            <template x-if="cfg.type === 'number'">
+                                                                <input type="number"
+                                                                       :value="pathValue(cfg.key) ?? cfg.default ?? ''"
+                                                                       :step="cfg.step || 'any'"
+                                                                       @input="setValue(cfg, $event.target.value)"
+                                                                       class="w-full px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            </template>
+                                                            <template x-if="cfg.type === 'text'">
+                                                                <input type="text"
+                                                                       :value="pathValue(cfg.key) ?? cfg.default ?? ''"
+                                                                       @input="setValue(cfg, $event.target.value)"
+                                                                       class="w-full px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                                                            </template>
+                                                            <p class="text-[11px] text-red-500" x-show="errors[cfg.key]" x-text="errors[cfg.key]"></p>
+                                                        </div>
+                                                    </template>
+                                                </div>
+
+                                                <textarea x-show="showJson"
+                                                          :value="JSON.stringify(localData, null, 2)"
+                                                          @input="updateFromJson($event.target.value)"
+                                                          rows="8"
+                                                          class="w-full px-3.5 py-2.5 text-sm font-mono border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"></textarea>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Datetime field -->
+                                        <template x-if="field.widget === 'default' && field.type === 'datetime'">
+                                            <input 
+                                                type="datetime-local"
+                                                :value="formatDatetimeLocal(formData[field.name])"
+                                                @input="formData[field.name] = $event.target.value; markDirty()"
+                                                :required="field.required"
+                                                step="1"
+                                                class="w-full px-3.5 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                            >
+                                        </template>
+                                        
+                                        <!-- M2M Multi-Select (Issue #21, #24) — Enhanced UX with chips + grouped options -->
+                                        <template x-if="field.widget === 'm2m_select'">
+                                            <div x-data="m2mField(field)" x-init="loadOptions()" class="space-y-2">
+                                                <!-- Selected Items (Chips) -->
+                                                <div x-show="selectedItems.length > 0" class="flex flex-wrap gap-1.5 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-600">
+                                                    <template x-for="item in selectedItems" :key="item.id">
+                                                        <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg">
+                                                            <span x-text="item.shortLabel || item.label" class="max-w-[150px] truncate"></span>
+                                                            <button type="button" @click="toggleOption(item.id)" class="hover:text-primary-900 dark:hover:text-primary-100 transition-colors">
+                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                            </button>
+                                                        </span>
+                                                    </template>
+                                                    <button type="button" x-show="selectedItems.length > 3" @click="clearAll()" class="text-[10px] text-gray-400 hover:text-red-500 transition-colors ml-auto self-center">
+                                                        Clear all
+                                                    </button>
+                                                </div>
+                                                
+                                                <!-- Dropdown Trigger -->
+                                                <div class="relative" @click.outside="isOpen = false">
+                                                    <button type="button"
+                                                            @click="isOpen = !isOpen"
+                                                            class="w-full flex items-center justify-between px-3.5 py-2.5 text-left text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-gray-300 dark:hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
+                                                        <span x-text="selectedCount === 0 ? 'Select...' : selectedCount + ' selected'"></span>
+                                                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform" :class="{ 'rotate-180': isOpen }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                                    </button>
+                                                    
+                                                    <!-- Dropdown Panel -->
+                                                    <div x-show="isOpen" x-cloak x-transition
+                                                         class="absolute z-50 mt-1 w-full min-w-[280px] border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 shadow-lg overflow-hidden">
+                                                        <!-- Search -->
+                                                        <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-600">
+                                                            <div class="flex items-center gap-2">
+                                                                <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                                                <input type="text" x-model="search" placeholder="Search options..."
+                                                                       @click.stop
+                                                                       class="w-full text-sm bg-transparent border-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400">
+                                                                <button x-show="search" type="button" @click="search = ''" class="text-gray-400 hover:text-gray-600">
+                                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <!-- Quick Actions -->
+                                                        <div x-show="!search && options.length > 5" class="px-3 py-1.5 border-b border-gray-100 dark:border-gray-600 flex items-center gap-2 text-[10px]">
+                                                            <button type="button" @click="expandAll()" class="text-gray-400 hover:text-primary-500 transition-colors">Expand all</button>
+                                                            <span class="text-gray-300">|</span>
+                                                            <button type="button" @click="collapseAll()" class="text-gray-400 hover:text-primary-500 transition-colors">Collapse all</button>
+                                                            <span class="text-gray-300">|</span>
+                                                            <button type="button" @click="selectAllVisible()" class="text-gray-400 hover:text-primary-500 transition-colors">Select all</button>
+                                                        </div>
+                                                        
+                                                        <!-- Grouped Options -->
+                                                        <div class="max-h-64 overflow-y-auto">
+                                                            <!-- When searching: flat list -->
+                                                            <template x-if="search">
+                                                                <div class="p-2 space-y-0.5">
+                                                                    <template x-for="opt in filteredOptions" :key="opt.id">
+                                                                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600/50 cursor-pointer text-sm">
+                                                                            <input type="checkbox"
+                                                                                   :value="opt.id"
+                                                                                   :checked="isSelected(opt.id)"
+                                                                                   @change="toggleOption(opt.id)"
+                                                                                   @click.stop
+                                                                                   class="rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0">
+                                                                            <span class="text-gray-900 dark:text-gray-100 truncate" x-text="opt.label"></span>
+                                                                            <template x-if="opt.description">
+                                                                                <span class="text-[10px] text-gray-400 truncate ml-auto" x-text="opt.description"></span>
+                                                                            </template>
+                                                                        </label>
+                                                                    </template>
+                                                                    <div x-show="filteredOptions.length === 0" class="text-center py-3 text-gray-400 text-xs">No matches found</div>
+                                                                </div>
+                                                            </template>
+                                                            
+                                                            <!-- When not searching: grouped view -->
+                                                            <template x-if="!search">
+                                                                <div class="p-2 space-y-1">
+                                                                    <template x-for="(group, groupName) in groupedOptions" :key="groupName">
+                                                                        <div class="rounded-lg overflow-hidden">
+                                                                            <!-- Group Header -->
+                                                                            <div class="flex items-center gap-1.5">
+                                                                                <!-- Group checkbox (select/deselect all in group) -->
+                                                                                <input type="checkbox"
+                                                                                       :checked="isGroupFullySelected(groupName)"
+                                                                                       x-effect="$el.indeterminate = isGroupPartiallySelected(groupName)"
+                                                                                       @change="toggleAllGroup(groupName)"
+                                                                                       @click.stop
+                                                                                       class="ml-2 w-4 h-4 rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer">
+                                                                                <button type="button" 
+                                                                                        @click="toggleGroup(groupName)"
+                                                                                        class="flex-1 flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
+                                                                                    <svg class="w-3.5 h-3.5 transition-transform" :class="{ 'rotate-90': expandedGroups[groupName] }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                                                                                    <span class="uppercase tracking-wide" x-text="groupName"></span>
+                                                                                    <span class="ml-auto text-[10px] font-normal">
+                                                                                        <span x-text="getGroupSelectedCount(groupName)" class="text-primary-500"></span>/<span x-text="group.length"></span>
+                                                                                    </span>
+                                                                                </button>
+                                                                            </div>
+                                                                            
+                                                                            <!-- Group Items -->
+                                                                            <div x-show="expandedGroups[groupName]" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="ml-4 space-y-0.5 mt-0.5">
+                                                                                <template x-for="opt in group" :key="opt.id">
+                                                                                    <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600/50 cursor-pointer text-sm">
+                                                                                        <input type="checkbox"
+                                                                                               :value="opt.id"
+                                                                                               :checked="isSelected(opt.id)"
+                                                                                               @change="toggleOption(opt.id)"
+                                                                                               @click.stop
+                                                                                               class="rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500 focus:ring-offset-0">
+                                                                                        <span class="text-gray-900 dark:text-gray-100 truncate" x-text="opt.shortLabel || opt.label"></span>
+                                                                                        <template x-if="opt.description">
+                                                                                            <span class="text-[10px] text-gray-400 truncate ml-auto max-w-[120px]" x-text="opt.description"></span>
+                                                                                        </template>
+                                                                                    </label>
+                                                                                </template>
+                                                                            </div>
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+                                                            
+                                                            <div x-show="loading" class="text-center py-4 text-gray-400 text-xs">Loading options...</div>
+                                                            <div x-show="!loading && options.length === 0" class="text-center py-4 text-gray-400 text-xs">No options available</div>
+                                                        </div>
+                                                        
+                                                        <!-- Footer -->
+                                                        <div class="px-3 py-1.5 border-t border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between">
+                                                            <span class="text-[10px] text-gray-400" x-text="selectedCount + ' of ' + options.length + ' selected'"></span>
+                                                            <button type="button" @click="isOpen = false" class="text-[10px] text-primary-500 hover:text-primary-600 font-medium">Done</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Default input (string, integer, float, uuid, ip) — excludes special widgets -->
+                                        <template x-if="field.widget === 'default' && !['boolean', 'text', 'json', 'datetime'].includes(field.type)">
+                                            <input 
+                                                :type="field.type === 'integer' || field.type === 'float' ? 'number' : 'text'"
+                                                :step="field.type === 'float' ? 'any' : undefined"
+                                                x-model="formData[field.name]"
+                                                @input="markDirty()"
+                                                :required="field.required"
+                                                :placeholder="field.type === 'uuid' ? '550e8400-e29b-41d4-a716-446655440000' : (field.required ? 'Required' : 'Optional')"
+                                                class="w-full px-3.5 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                                            >
+                                        </template>
+                                        
+                                        <!-- Validation hint -->
+                                        <template x-if="isFieldRequired(field) && !['password', 'password_hash', 'secret'].includes(field.widget) && (!formData[field.name] && formData[field.name] !== false && formData[field.name] !== 0)">
+                                            <p class="text-xs text-amber-500 mt-1">This field is required</p>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                            
+                            <!-- Empty editable fields -->
+                            <div x-show="editableFields.length === 0" class="text-center py-6 text-gray-400 text-sm">
+                                No editable fields for this model.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sidebar: Actions + Read-only Fields (1/3 width) -->
+                <div class="space-y-6">
+                    
+                    <!-- Actions Card -->
+                    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Actions</h3>
+                        </div>
+                        <div class="p-5 space-y-3">
+                            {% if (is_new and user_perms.add) or (not is_new and user_perms.change) %}
+                            <button type="submit" :disabled="saving"
+                                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-primary-600/20 disabled:opacity-60 disabled:cursor-not-allowed">
+                                <template x-if="!saving">
+                                    <span class="inline-flex items-center gap-1.5">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                        {% if is_new %}Create {{ admin.display_name }}{% else %}Save Changes{% endif %}
+                                    </span>
+                                </template>
+                                <template x-if="saving">
+                                    <span class="inline-flex items-center gap-2">
+                                        <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                        Saving...
+                                    </span>
+                                </template>
+                            </button>
+                            {% endif %}
+                            
+                            <a href="{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/"
+                               class="w-full inline-flex items-center justify-center px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                Cancel
+                            </a>
+                            
+                            {% if not is_new and user_perms.delete and 'delete' not in admin.exclude_actions %}
+                            <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
+                                <button type="button" @click="deleteItem()"
+                                        class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    Delete {{ admin.display_name }}
+                                </button>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Read-only Metadata Card -->
+                    <div x-show="readonlyFields.length > 0" x-cloak
+                         class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                Metadata
+                            </h3>
+                        </div>
+                        <div class="p-5 space-y-3.5">
+                            <template x-for="field in readonlyFields" :key="field.name">
+                                <div>
+                                    <dt class="text-[11px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider" 
+                                        x-text="getFieldLabel(field).toLowerCase()"></dt>
+                                    <template x-if="['password', 'password_hash', 'secret', 'virtual_password'].includes(field.widget)">
+                                        <dd class="mt-0.5 text-sm text-gray-400 dark:text-gray-500 italic">
+                                            <span class="inline-flex items-center gap-1">
+                                                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                                Hidden
+                                            </span>
+                                        </dd>
+                                    </template>
+                                    <template x-if="field.widget === 'file_upload' && formData[field.name]">
+                                        <dd class="mt-0.5">
+                                            <a :href="formData[field.name].startsWith('http') ? formData[field.name] : ('{{ admin_prefix }}/media/' + formData[field.name])" target="_blank" rel="noopener" class="text-sm text-primary-600 dark:text-primary-400 hover:underline break-all" x-text="formData[field.name].split(/[/?#]/).pop() || formData[field.name]"></a>
+                                        </dd>
+                                    </template>
+                                    <template x-if="!['password', 'password_hash', 'secret', 'virtual_password', 'file_upload'].includes(field.widget) || (field.widget === 'file_upload' && !formData[field.name])">
+                                        <dd class="mt-0.5 text-sm text-gray-900 dark:text-gray-100 font-mono break-all"
+                                            x-text="formatDisplayValue(formData[field.name], field)"></dd>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+        
+        <!-- Delete confirmation modal (with option to delete physical files) -->
+        <div x-show="showDeleteModal" x-cloak x-transition
+             class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+             @keydown.escape.window="closeDeleteModal()">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700"
+                 @click.stop>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Delete {{ admin.display_name }}?</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">This action cannot be undone.</p>
+                    </div>
+                </div>
+                <template x-if="storageFileFieldsWithValueCount() > 0">
+                    <label class="flex items-start gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-4 cursor-pointer">
+                        <input type="checkbox" x-model="deletePhysicalFiles" class="mt-1 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500">
+                        <span class="text-sm text-amber-800 dark:text-amber-200">
+                            Also delete <span x-text="storageFileFieldsWithValueCount()"></span> file(s) from storage
+                        </span>
+                    </label>
+                </template>
+                <div class="flex gap-3 justify-end">
+                    <button type="button" @click="closeDeleteModal()"
+                            class="px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
+                        Cancel
+                    </button>
+                    <button type="button" @click="confirmDeleteItem()"
+                            class="px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+const ADMIN_PREFIX = "{{ admin_prefix }}";
+const APP_LABEL = "{{ app_label }}";
+const MODEL_NAME = "{{ model_name }}";
+
+function detailView() {
+    const isNew = "{{ 'true' if is_new else 'false' }}" === "true";
+    
+    return {
+        formData: {},
+        fields: [],
+        editableFields: [],
+        readonlyFields: [],
+        loading: !isNew,
+        saving: false,
+        error: null,
+        hasUnsavedChanges: false,
+        _originalData: null,
+        isNewItem: isNew,
+        showDeleteModal: false,
+        deletePhysicalFiles: false,
+        
+        /** Determina se campo é obrigatório no contexto atual (create vs edit) */
+        isFieldRequired(field) {
+            const widget = field.widget || 'default';
+            // Virtual password: required on create, optional on edit
+            if (widget === 'virtual_password') {
+                return this.isNewItem && (field.required_on_create !== false);
+            }
+            // Regular password/hash: never visually required (optional placeholder handles it)
+            if (widget === 'password' || widget === 'password_hash') {
+                return false;
+            }
+            // Widget override: required_on_create / required_on_edit
+            if ('required_on_create' in field || 'required_on_edit' in field) {
+                return this.isNewItem 
+                    ? (field.required_on_create !== false)
+                    : (field.required_on_edit === true);
+            }
+            return field.required;
+        },
+        
+        /** Retorna label amigável para campo — suporta override via metadata */
+        getFieldLabel(field) {
+            // Explicit label override from widgets config
+            if (field.label) return field.label;
+            
+            const name = field.name;
+            const widget = field.widget || 'default';
+            
+            // Password fields: show friendly label
+            if (widget === 'password_hash' || widget === 'password' || widget === 'virtual_password') {
+                return 'Password';
+            }
+            // Default: humanize field name
+            return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        },
+        
+        /** Gera slug a partir de uma string — remove acentos, lowercase, hifens */
+        slugify(text) {
+            if (!text) return '';
+            return text
+                .toString()
+                .normalize('NFD')                   // Remove acentos
+                .replace(/[\u0300-\u036f]/g, '')    // Remove diacritics
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9\s-]/g, '')      // Remove caracteres especiais
+                .replace(/[\s_]+/g, '-')            // Espaços → hífens
+                .replace(/-+/g, '-')                // Múltiplos hifens → um
+                .replace(/^-+|-+$/g, '');           // Remove hífens no início/fim
+        },
+        
+        markDirty() {
+            if (this._originalData) {
+                this.hasUnsavedChanges = JSON.stringify(this.formData) !== JSON.stringify(this._originalData);
+            } else {
+                this.hasUnsavedChanges = true;
+            }
+        },
+        
+        handleBeforeUnload(event) {
+            if (this.hasUnsavedChanges) {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+        },
+        
+        formatDisplayValue(val, field) {
+            if (val === null || val === undefined) return '—';
+            if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+            if (val === '••••••••') return '••••••••';
+            // M2M: show count of items
+            if (field && field.widget === 'm2m_select' && Array.isArray(val)) {
+                return val.length > 0 ? `${val.length} item(s)` : '—';
+            }
+            // Enum: mostra "Label (value)" para referência completa
+            if (field && field.widget === 'choices' && field.choices) {
+                const match = field.choices.find(c => c.value == val);
+                if (match) {
+                    // Se label e value são iguais (string enums simples), mostra só um
+                    if (match.label === match.value) return match.label;
+                    return match.label + ' → ' + match.value;
+                }
+            }
+            return String(val);
+        },
+        
+        /**
+         * Converte ISO datetime ou datetime-local value para o formato
+         * esperado por <input type="datetime-local"> (YYYY-MM-DDTHH:MM:SS)
+         */
+        formatDatetimeLocal(val) {
+            if (!val) return '';
+            try {
+                // Se já está no formato datetime-local, retorna direto
+                if (typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)) {
+                    // Remove timezone suffix se existir
+                    return val.replace(/[Z+].*$/, '').substring(0, 19);
+                }
+                const d = new Date(val);
+                if (isNaN(d.getTime())) return val;
+                // Format: YYYY-MM-DDTHH:MM:SS
+                return d.getFullYear() + '-' +
+                    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(d.getDate()).padStart(2, '0') + 'T' +
+                    String(d.getHours()).padStart(2, '0') + ':' +
+                    String(d.getMinutes()).padStart(2, '0') + ':' +
+                    String(d.getSeconds()).padStart(2, '0');
+            } catch (e) {
+                return val || '';
+            }
+        },
+        
+        categorizeFields(allFields, editableNames) {
+            const editableSet = new Set(editableNames);
+            this.editableFields = allFields.filter(f => editableSet.has(f.name) && !f.primary_key && !f.readonly);
+            this.readonlyFields = allFields.filter(f => f.readonly || f.primary_key || !editableSet.has(f.name));
+        },
+        
+        async loadData() {
+            if (isNew) {
+                const allFields = JSON.parse('{{ fields_json | safe }}');
+                const editableNames = JSON.parse('{{ editable_fields_json | safe }}');
+                
+                this.fields = allFields;
+                this.categorizeFields(allFields, editableNames);
+                
+                const defaults = {};
+                for (const f of this.editableFields) {
+                    if (f.widget === 'm2m_select') defaults[f.name] = [];
+                    else if (f.type === 'boolean') defaults[f.name] = false;
+                    else if (f.widget === 'password' || f.widget === 'password_hash' || f.widget === 'secret' || f.widget === 'virtual_password') defaults[f.name] = '';
+                    else if (f.widget === 'choices' && f.choices && f.choices.length > 0 && f.required) defaults[f.name] = f.choices[0].value;
+                    else defaults[f.name] = '';
+                }
+                this.formData = defaults;
+                this._originalData = JSON.parse(JSON.stringify(defaults));
+                this._setupSlugWatchers();
+                this.loading = false;
+                return;
+            }
+            
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/{{ app_label }}/{{ model_name }}/{{ pk }}');
+                if (!resp.ok) {
+                    this.error = 'Failed to load item';
+                    return;
+                }
+                const data = await resp.json();
+                this.formData = data.item;
+                this.fields = data.fields;
+                
+                const editableNames = data.fields.filter(f => !f.readonly).map(f => f.name);
+                this.categorizeFields(data.fields, editableNames);
+                
+                this._originalData = JSON.parse(JSON.stringify(data.item));
+            } catch (e) {
+                this.error = 'Network error: ' + e.message;
+            } finally {
+                this.loading = false;
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                    // Notify FK fields that formData is ready
+                    window.dispatchEvent(new CustomEvent('formdata-loaded'));
+                });
+            }
+        },
+        
+        _setupSlugWatchers() {
+            // Para cada campo slug com slug_source, observa mudanças no source
+            for (const f of this.editableFields) {
+                if (f.widget === 'slug' && f.slug_source) {
+                    const slugField = f.name;
+                    const sourceField = f.slug_source;
+                    this.$watch(`formData.${sourceField}`, (val) => {
+                        // Só auto-gera se slug está vazio ou se é novo item
+                        if (this.isNewItem && (!this.formData[slugField] || this.formData[slugField] === this.slugify(this._lastSlugSource || ''))) {
+                            this.formData[slugField] = this.slugify(val || '');
+                            this._lastSlugSource = val;
+                        }
+                    });
+                }
+            }
+        },
+        
+        async save() {
+            this.saving = true;
+            this.error = null;
+            
+            const url = isNew 
+                ? '{{ admin_prefix }}/api/{{ app_label }}/{{ model_name }}'
+                : '{{ admin_prefix }}/api/{{ app_label }}/{{ model_name }}/{{ pk }}';
+            
+            const method = isNew ? 'POST' : 'PUT';
+            
+            // Build payload: only send editable fields
+            // Skip empty optional fields — backend will apply defaults/NULL
+            // Smart handling for passwords, secrets, and sensitive fields
+            const payload = {};
+            for (const f of this.editableFields) {
+                const val = this.formData[f.name];
+                const widget = f.widget || 'default';
+                
+                // M2M fields: always include (Issue #21)
+                if (widget === 'm2m_select') {
+                    payload[f.name] = Array.isArray(val) ? val : [];
+                    continue;
+                }
+                
+                // Password/secret fields: skip if placeholder or empty (keep current)
+                if (widget === 'password' || widget === 'password_hash' || widget === 'secret' || widget === 'virtual_password') {
+                    if (!val || val === '••••••••' || val === '') continue;
+                    payload[f.name] = val;
+                    continue;
+                }
+                
+                // Always include required fields
+                if (f.required) {
+                    payload[f.name] = val;
+                    continue;
+                }
+                
+                // Skip empty optional fields (let backend handle defaults)
+                if (val === '' || val === null || val === undefined) {
+                    continue;
+                }
+                
+                payload[f.name] = val;
+            }
+            
+            try {
+                const resp = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                
+                const data = await resp.json();
+                
+                if (resp.ok) {
+                    this.hasUnsavedChanges = false;
+                    if (isNew && data.pk) {
+                        window.showToast('success', 'Created', '{{ admin.display_name }} created successfully');
+                        setTimeout(() => {
+                            window.location.href = '{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/' + data.pk + '/';
+                        }, 500);
+                    } else {
+                        window.showToast('success', 'Saved', 'Changes saved successfully');
+                        if (data.item) {
+                            this.formData = data.item;
+                            this._originalData = JSON.parse(JSON.stringify(data.item));
+                        }
+                    }
+                } else {
+                    const errorMsg = typeof data.detail === 'object' 
+                        ? (data.detail.message || data.detail.detail || data.detail.title || 'Validation error') 
+                        : (data.detail || 'Failed to save');
+                    window.showToast('error', 'Error', errorMsg);
+                    this.error = errorMsg;
+                }
+            } catch (e) {
+                window.showToast('error', 'Network Error', e.message);
+                this.error = 'Network error: ' + e.message;
+            } finally {
+                this.saving = false;
+            }
+        },
+        
+        /** Número de campos file_upload que têm valor (para opção "deletar arquivos físicos") */
+        storageFileFieldsWithValueCount() {
+            return this.editableFields.filter(f => f.widget === 'file_upload' && this.formData[f.name]).length;
+        },
+        openDeleteModal() {
+            this.deletePhysicalFiles = this.storageFileFieldsWithValueCount() > 0;
+            this.showDeleteModal = true;
+        },
+        closeDeleteModal() {
+            this.showDeleteModal = false;
+        },
+        async confirmDeleteItem() {
+            this.closeDeleteModal();
+            const deletePhysical = this.deletePhysicalFiles;
+            try {
+                const url = '{{ admin_prefix }}/api/{{ app_label }}/{{ model_name }}/{{ pk }}' + (deletePhysical ? '?delete_physical_files=true' : '');
+                const resp = await fetch(url, { method: 'DELETE' });
+                if (resp.ok) {
+                    this.hasUnsavedChanges = false;
+                    window.showToast('success', 'Deleted', '{{ admin.display_name }} deleted successfully');
+                    setTimeout(() => {
+                        window.location.href = '{{ admin_prefix }}/{{ app_label }}/{{ model_name }}/';
+                    }, 500);
+                } else {
+                    const data = await resp.json();
+                    window.showToast('error', 'Error', data.detail || 'Failed to delete');
+                }
+            } catch (e) {
+                window.showToast('error', 'Network Error', e.message);
+            }
+        },
+        async deleteItem() {
+            this.openDeleteModal();
+        }
+    };
+}
+
+/**
+ * File upload field — drag-and-drop, preview, upload to storage (local/GCS).
+ * Usa POST /api/{app}/{model}/upload-file e atualiza formData[field.name] com path/URL.
+ */
+function fileUploadField(field) {
+    return {
+        isDragging: false,
+        uploading: false,
+        getFormData() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData && field.name in data.formData) return data.formData;
+                }
+            } catch (e) {}
+            return null;
+        },
+        markDirty() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.markDirty) { data.markDirty(); break; }
+                }
+            } catch (e) {}
+        },
+        previewUrl(val) {
+            if (!val) return '';
+            if (val.startsWith('http')) return val;
+            return ADMIN_PREFIX + '/media/' + val;
+        },
+        fileName(val) {
+            if (!val) return '';
+            const seg = val.split(/[/?#]/).pop() || val;
+            return seg;
+        },
+        isImageUrl(val) {
+            if (!val) return false;
+            return /\.(jpe?g|png|gif|webp|svg)$/i.test(val) || /^https?:\/\/.+\.(jpe?g|png|gif|webp|svg)/i.test(val);
+        },
+        clearFile() {
+            const fd = this.getFormData();
+            if (fd) { fd[field.name] = ''; this.markDirty(); }
+        },
+        onDrop(e) {
+            this.isDragging = false;
+            const file = e.dataTransfer && e.dataTransfer.files[0];
+            if (file) this.uploadFile(file);
+        },
+        onFileSelect(e) {
+            const file = e.target && e.target.files[0];
+            if (file) this.uploadFile(file);
+            e.target.value = '';
+        },
+        async uploadFile(file) {
+            this.uploading = true;
+            try {
+                const form = new FormData();
+                form.append('field', field.name);
+                form.append('file', file);
+                const resp = await fetch(ADMIN_PREFIX + '/api/' + APP_LABEL + '/' + MODEL_NAME + '/upload-file', {
+                    method: 'POST',
+                    body: form,
+                });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    window.showToast('error', 'Upload failed', err.detail || resp.statusText);
+                    return;
+                }
+                const data = await resp.json();
+                const fd = this.getFormData();
+                if (fd) {
+                    fd[field.name] = data.path || data.url || '';
+                    this.markDirty();
+                }
+                window.showToast('success', 'Uploaded', 'File saved');
+            } catch (e) {
+                window.showToast('error', 'Upload error', e.message);
+            } finally {
+                this.uploading = false;
+            }
+        },
+    };
+}
+
+/**
+ * FK Field — Searchable dropdown Alpine component.
+ * 
+ * Busca items do model relacionado via /api/{app}/{model}/autocomplete
+ * com debounce e keyboard navigation.
+ */
+function fkField(field) {
+    const adminPrefix = '{{ admin_prefix }}';
+    let debounceTimer = null;
+    
+    return {
+        searchQuery: '',
+        selectedLabel: '',
+        options: [],
+        loading: false,
+        isOpen: false,
+        highlightedIdx: -1,
+        _initialized: false,
+        _resolvedPk: null,
+        
+        init() {
+            // Try resolving immediately (covers case where formData is already loaded)
+            this.$nextTick(() => {
+                this._tryResolve();
+            });
+            
+            // Listen for 'formdata-loaded' event dispatched by loadData()
+            // This covers the common case where fkField inits before the API returns
+            window.addEventListener('formdata-loaded', () => {
+                this.$nextTick(() => {
+                    this._tryResolve();
+                });
+            });
+        },
+        
+        _tryResolve() {
+            const currentVal = this.getFormValue();
+            if (currentVal && currentVal !== '' && currentVal !== null && currentVal !== undefined) {
+                // Only resolve once per unique PK value
+                if (this._resolvedPk === currentVal) return;
+                this._resolvedPk = currentVal;
+                this.resolveCurrentLabel(currentVal);
+            }
+        },
+        
+        getFormValue() {
+            // Access parent Alpine scope formData
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData && field.name in data.formData) {
+                        return data.formData[field.name];
+                    }
+                }
+            } catch(e) {}
+            return null;
+        },
+        
+        setFormValue(val) {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        data.formData[field.name] = val;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        async resolveCurrentLabel(pkVal) {
+            if (!field.fk_app_label || !field.fk_model_name) {
+                this.selectedLabel = String(pkVal);
+                return;
+            }
+            try {
+                const resp = await fetch(
+                    `${adminPrefix}/api/${field.fk_app_label}/${field.fk_model_name}/${pkVal}`
+                );
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.item) {
+                        const display = data.item[field.fk_display] || data.item.name || data.item.email || data.item.title || pkVal;
+                        this.selectedLabel = `${display} — #${pkVal}`;
+                    } else {
+                        this.selectedLabel = `#${pkVal}`;
+                    }
+                } else {
+                    this.selectedLabel = `#${pkVal}`;
+                }
+            } catch(e) {
+                this.selectedLabel = `#${pkVal}`;
+            }
+        },
+        
+        // Tracks if a mousedown happened inside the component
+        // (prevents focusout from closing dropdown when clicking options)
+        _mouseInsideComponent: false,
+        
+        handleMouseDown(event) {
+            // Flag that the click is inside the component
+            this._mouseInsideComponent = true;
+            setTimeout(() => { this._mouseInsideComponent = false; }, 200);
+        },
+        
+        handleFocusOut(event) {
+            // Only close if focus left the entire component
+            // Use setTimeout to let the new focus target settle
+            setTimeout(() => {
+                if (this._mouseInsideComponent) return;
+                // Check if the new active element is still inside this component
+                const container = this.$el;
+                if (!container.contains(document.activeElement)) {
+                    this.closeDropdown();
+                }
+            }, 150);
+        },
+        
+        openDropdown() {
+            // Always open, never toggle
+            this.isOpen = true;
+            this.highlightedIdx = -1;
+            if (this.options.length === 0) {
+                this.fetchOptions('');
+            }
+        },
+        
+        closeDropdown() {
+            this.isOpen = false;
+            if (this.selectedLabel) {
+                this.searchQuery = '';
+            }
+        },
+        
+        onSearchInput() {
+            this.isOpen = true;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                this.fetchOptions(this.searchQuery);
+            }, 250);
+        },
+        
+        async fetchOptions(query) {
+            if (!field.fk_app_label || !field.fk_model_name) return;
+            
+            this.loading = true;
+            try {
+                const url = `${adminPrefix}/api/${field.fk_app_label}/${field.fk_model_name}/autocomplete?q=${encodeURIComponent(query)}&limit=20`;
+                const resp = await fetch(url);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.options = data.items || [];
+                } else {
+                    this.options = [];
+                }
+            } catch(e) {
+                this.options = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        selectOption(opt) {
+            this.setFormValue(opt.pk);
+            this.selectedLabel = opt.label;
+            this.searchQuery = '';
+            this.isOpen = false;
+        },
+        
+        clearSelection() {
+            this.setFormValue(field.nullable ? null : '');
+            this.selectedLabel = '';
+            this.searchQuery = '';
+            this.options = [];
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.markDirty) { data.markDirty(); break; }
+                }
+            } catch(e) {}
+        },
+        
+        highlightNext() {
+            if (this.highlightedIdx < this.options.length - 1) {
+                this.highlightedIdx++;
+            }
+        },
+        
+        highlightPrev() {
+            if (this.highlightedIdx > 0) {
+                this.highlightedIdx--;
+            }
+        },
+        
+        selectHighlighted() {
+            if (this.highlightedIdx >= 0 && this.highlightedIdx < this.options.length) {
+                this.selectOption(this.options[this.highlightedIdx]);
+            }
+        }
+    };
+}
+
+function m2mField(field) {
+    const adminPrefix = '{{ admin_prefix }}';
+    return {
+        search: '',
+        options: [],
+        loading: false,
+        isOpen: false,
+        expandedGroups: {},
+        
+        get selectedIds() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData && field.name in data.formData) {
+                        const val = data.formData[field.name];
+                        return Array.isArray(val) ? val : [];
+                    }
+                }
+            } catch(e) {}
+            return [];
+        },
+        
+        get selectedItems() {
+            return this.options.filter(o => this.isSelected(o.id));
+        },
+        
+        get filteredOptions() {
+            if (!this.search) return this.options;
+            const q = this.search.toLowerCase();
+            return this.options.filter(o => 
+                o.label.toLowerCase().includes(q) || 
+                (o.description && o.description.toLowerCase().includes(q))
+            );
+        },
+        
+        get groupedOptions() {
+            const groups = {};
+            for (const opt of this.options) {
+                // Detect group from label pattern: "prefix.action" or "prefix_action"
+                let groupName = 'other';
+                const label = opt.label || '';
+                
+                // Try dot notation first (e.g., "admin.view_user")
+                if (label.includes('.')) {
+                    groupName = label.split('.')[0];
+                    opt.shortLabel = label.split('.').slice(1).join('.');
+                }
+                // Try underscore pattern (e.g., "view_user")
+                else if (label.includes('_')) {
+                    const parts = label.split('_');
+                    // Common action prefixes
+                    const actions = ['view', 'add', 'change', 'delete', 'create', 'edit', 'remove', 'manage'];
+                    if (actions.includes(parts[0])) {
+                        groupName = parts.slice(1).join('_');
+                        opt.shortLabel = parts[0];
+                    } else {
+                        groupName = parts[0];
+                        opt.shortLabel = parts.slice(1).join('_');
+                    }
+                }
+                
+                if (!groups[groupName]) groups[groupName] = [];
+                groups[groupName].push(opt);
+            }
+            
+            // Sort groups alphabetically
+            const sorted = {};
+            Object.keys(groups).sort().forEach(k => sorted[k] = groups[k]);
+            return sorted;
+        },
+        
+        get selectedCount() {
+            return this.selectedIds.length;
+        },
+        
+        isSelected(id) {
+            return this.selectedIds.some(v => String(v) === String(id));
+        },
+        
+        getGroupSelectedCount(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            return group.filter(o => this.isSelected(o.id)).length;
+        },
+        
+        toggleGroup(groupName) {
+            this.expandedGroups[groupName] = !this.expandedGroups[groupName];
+        },
+        
+        expandAll() {
+            for (const groupName of Object.keys(this.groupedOptions)) {
+                this.expandedGroups[groupName] = true;
+            }
+        },
+        
+        collapseAll() {
+            for (const groupName of Object.keys(this.groupedOptions)) {
+                this.expandedGroups[groupName] = false;
+            }
+        },
+        
+        selectAllVisible() {
+            const toSelect = this.search ? this.filteredOptions : this.options;
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        let current = Array.isArray(data.formData[field.name]) ? [...data.formData[field.name]] : [];
+                        for (const opt of toSelect) {
+                            if (!current.some(v => String(v) === String(opt.id))) {
+                                current.push(opt.id);
+                            }
+                        }
+                        data.formData[field.name] = current;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        selectAllGroup(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        let current = Array.isArray(data.formData[field.name]) ? [...data.formData[field.name]] : [];
+                        for (const opt of group) {
+                            if (!current.some(v => String(v) === String(opt.id))) {
+                                current.push(opt.id);
+                            }
+                        }
+                        data.formData[field.name] = current;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        deselectAllGroup(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            const groupIds = group.map(o => String(o.id));
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        let current = Array.isArray(data.formData[field.name]) ? [...data.formData[field.name]] : [];
+                        current = current.filter(v => !groupIds.includes(String(v)));
+                        data.formData[field.name] = current;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        toggleAllGroup(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            const selectedCount = this.getGroupSelectedCount(groupName);
+            if (selectedCount === group.length) {
+                this.deselectAllGroup(groupName);
+            } else {
+                this.selectAllGroup(groupName);
+            }
+        },
+        
+        isGroupFullySelected(groupName) {
+            const group = this.groupedOptions[groupName] || [];
+            if (group.length === 0) return false;
+            return this.getGroupSelectedCount(groupName) === group.length;
+        },
+        
+        isGroupPartiallySelected(groupName) {
+            const count = this.getGroupSelectedCount(groupName);
+            const group = this.groupedOptions[groupName] || [];
+            return count > 0 && count < group.length;
+        },
+        
+        clearAll() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        data.formData[field.name] = [];
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        toggleOption(id) {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) {
+                        let current = Array.isArray(data.formData[field.name]) ? [...data.formData[field.name]] : [];
+                        const idx = current.findIndex(v => String(v) === String(id));
+                        if (idx >= 0) {
+                            current.splice(idx, 1);
+                        } else {
+                            current.push(id);
+                        }
+                        data.formData[field.name] = current;
+                        if (data.markDirty) data.markDirty();
+                        break;
+                    }
+                }
+            } catch(e) {}
+        },
+        
+        async loadOptions() {
+            this.loading = true;
+            try {
+                const resp = await fetch(
+                    `${adminPrefix}/api/{{ app_label }}/{{ model_name }}/m2m-options?field=${encodeURIComponent(field.name)}`
+                );
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.options = data.items || [];
+                    // Auto-expand first group if few groups
+                    const groups = Object.keys(this.groupedOptions);
+                    if (groups.length <= 3) {
+                        groups.forEach(g => this.expandedGroups[g] = true);
+                    } else if (groups.length > 0) {
+                        // Expand first group only
+                        this.expandedGroups[groups[0]] = true;
+                    }
+                }
+            } catch(e) {
+                console.error('M2M options load error:', e);
+            } finally {
+                this.loading = false;
+            }
+        }
+    };
+}
+
+function strategyConfigBuilderField(field) {
+    const FORM_DEFINITIONS = {
+        form_config: [
+            { key: "initialStake", label: "Stake inicial", type: "number", min: 0, step: "any", default: 0.35 },
+            { key: "profitTarget", label: "Meta de lucro", type: "number", min: 0, step: "any", default: 10 },
+            { key: "stopLoss", label: "Stop loss", type: "number", min: 0, step: "any", default: 50 },
+            { key: "riskProfile", label: "Perfil de risco", type: "select", options: ["conservador", "moderado", "agressivo"], default: "moderado" },
+            { key: "market", label: "Mercado", type: "text", default: "R_100" },
+            { key: "duration", label: "Duracao", type: "number", min: 1, step: 1, default: 1 },
+            { key: "durationUnit", label: "Unidade", type: "select", options: ["t", "s", "m"], default: "t" },
+            { key: "tradeType", label: "Trade type", type: "text", default: "" },
+            { key: "expectedPayout", label: "Payout esperado", type: "number", min: 0, step: "any", default: 1.2 },
+            { key: "directionMode", label: "Direcao", type: "select", options: ["both", "up", "down"], default: "both" },
+            { key: "delayWin", label: "Delay WIN", type: "number", min: 0, step: 1, default: 0 },
+            { key: "delayLoss", label: "Delay LOSS", type: "number", min: 0, step: 1, default: 0 },
+        ],
+        recovery_config: [
+            { key: "enabled", label: "Recovery ativo", type: "boolean", default: true },
+            { key: "lossesToActivate", label: "Perdas para ativar", type: "number", min: 1, step: 1, default: 1 },
+            { key: "martingale", label: "Martingale", type: "boolean", default: true },
+            { key: "expectedPayout", label: "Payout recovery", type: "number", min: 0, step: "any", default: 2.26 },
+            { key: "virtualLossTarget", label: "Meta perda virtual", type: "number", min: 0, step: 1, default: 0 },
+            { key: "duration", label: "Duracao", type: "number", min: 1, step: 1, default: 5 },
+            { key: "durationUnit", label: "Unidade", type: "select", options: ["t", "s", "m"], default: "t" },
+            { key: "riskProfile", label: "Perfil risco", type: "select", options: ["conservador", "moderado", "agressivo"], default: "moderado" },
+            { key: "pauseLosses", label: "Pausa perdas", type: "number", min: 0, step: 1, default: 5 },
+            { key: "pauseVolatility", label: "Pausa volatilidade", type: "number", min: 0, step: 1, default: 50 },
+            { key: "pauseTime", label: "Pausa tempo", type: "number", min: 0, step: 1, default: 5 },
+            { key: "maxPreciseLosses", label: "Max losses preciso", type: "number", min: 0, step: 1, default: 3 },
+        ],
+        security_config: [
+            { key: "virtualLoss.enabled", label: "Virtual loss ativa", type: "boolean", default: false },
+            { key: "virtualLoss.target", label: "Meta virtual loss", type: "number", min: 0, step: 1, default: 2 },
+            { key: "virtualLoss.current", label: "Atual virtual loss", type: "number", min: 0, step: 1, default: 0 },
+            { key: "virtualLoss.mode", label: "Modo virtual loss", type: "select", options: ["warmup", "cyclic", "attack", "recovery"], default: "warmup" },
+        ],
+        validator_config: [
+            { key: "aiStarted", label: "AI iniciada", type: "boolean", default: false },
+            { key: "attackFilterCorrect", label: "Filtro ataque ok", type: "boolean", default: false },
+            { key: "baseStakeCorrect", label: "Stake base ok", type: "boolean", default: false },
+            { key: "sorosApplied", label: "Soros aplicado", type: "boolean", default: false },
+            { key: "sorosReset", label: "Soros resetado", type: "boolean", default: false },
+            { key: "recoveryModeEntered", label: "Entrou em recovery", type: "boolean", default: false },
+            { key: "recoveryContractSwitched", label: "Trocou contrato", type: "boolean", default: false },
+            { key: "martingale100", label: "Martingale 100", type: "boolean", default: false },
+        ],
+        strategy_identity: [
+            { key: "icon", label: "Icone", type: "text", default: "bolt" },
+            { key: "name", label: "Nome", type: "text", default: "" },
+            { key: "description", label: "Descricao", type: "text", default: "" },
+            { key: "status", label: "Status", type: "select", options: ["Rascunho", "Ativo", "Arquivado"], default: "Rascunho" },
+            { key: "precision.min", label: "Precisao min", type: "number", min: 0, max: 100, step: 1, default: 60 },
+            { key: "precision.max", label: "Precisao max", type: "number", min: 0, max: 100, step: 1, default: 70 },
+            { key: "return.min", label: "Retorno min", type: "number", step: "any", default: 19 },
+            { key: "return.max", label: "Retorno max", type: "number", step: "any", default: 126 },
+        ],
+        defense: [
+            { key: "mode", label: "Modo defesa", type: "select", options: ["trend", "adaptive", "manual"], default: "trend" },
+            { key: "recovery.enabled", label: "Recovery ativa", type: "boolean", default: true },
+            { key: "recovery.type", label: "Tipo recovery", type: "select", options: ["trend", "adaptive", "momentum"], default: "trend" },
+            { key: "max_consecutive_losses", label: "Max perdas seguidas", type: "number", min: 0, step: 1, default: 3 },
+        ],
+        session: [
+            { key: "profit_target", label: "Meta de lucro", type: "number", min: 0, step: "any", default: 0.5 },
+            { key: "stop_loss_global", label: "Stop loss global", type: "number", min: 0, step: "any", default: 0.5 },
+            { key: "max_trades_per_session", label: "Max trades/sessao", type: "number", min: 1, step: 1, default: 20 },
+            { key: "cooldown_minutes", label: "Cooldown (min)", type: "number", min: 0, step: 1, default: 0 },
+        ],
+        capital_management: [
+            { key: "martingale.enabled", label: "Martingale ativa", type: "boolean", default: false },
+            { key: "martingale.multiplier", label: "Multiplicador martingale", type: "number", min: 1, step: "any", default: 2 },
+            { key: "soros.enabled", label: "Soros ativo", type: "boolean", default: false },
+            { key: "soros.level", label: "Nivel soros", type: "number", min: 0, step: 1, default: 1 },
+            { key: "max_exposure", label: "Exposicao maxima", type: "number", min: 0, step: "any", default: 5 },
+        ],
+        risk_management: [
+            { key: "daily_stop_loss", label: "Stop loss diario", type: "number", min: 0, step: "any", default: 50 },
+            { key: "daily_profit_cap", label: "Limite lucro diario", type: "number", min: 0, step: "any", default: 100 },
+            { key: "max_drawdown", label: "Max drawdown", type: "number", min: 0, step: "any", default: 20 },
+            { key: "block_after_losses", label: "Bloquear apos perdas", type: "number", min: 0, step: 1, default: 5 },
+            { key: "virtual_loss.enabled", label: "Virtual loss ativa", type: "boolean", default: false },
+        ],
+    };
+
+    const TITLES = {
+        form_config: "Configuração principal",
+        recovery_config: "Configuração de recovery",
+        security_config: "Configuração de segurança",
+        validator_config: "Validador operacional",
+        strategy_identity: "Identidade da estratégia",
+        defense: "Configuração de defesa",
+        session: "Configuração de sessão",
+        capital_management: "Gestão de capital",
+        risk_management: "Gestão de risco",
+    };
+
+    const PROFILE_PRESETS = {
+        form_config: {
+            apollo: { riskProfile: "conservador", duration: 1, durationUnit: "t", expectedPayout: 1.15, directionMode: "both", delayWin: 1, delayLoss: 1 },
+            atlas: { riskProfile: "moderado", duration: 1, durationUnit: "t", expectedPayout: 1.2, directionMode: "both", delayWin: 0, delayLoss: 1 },
+            nexus: { riskProfile: "agressivo", duration: 1, durationUnit: "t", expectedPayout: 1.25, directionMode: "up", delayWin: 0, delayLoss: 0 },
+            orion: { riskProfile: "moderado", duration: 1, durationUnit: "t", expectedPayout: 1.22, directionMode: "both", delayWin: 0, delayLoss: 1 },
+            titan: { riskProfile: "conservador", duration: 2, durationUnit: "t", expectedPayout: 1.12, directionMode: "both", delayWin: 1, delayLoss: 1 },
+        },
+        recovery_config: {
+            apollo: { enabled: true, lossesToActivate: 2, martingale: false, pauseLosses: 5, maxPreciseLosses: 2, riskProfile: "conservador" },
+            atlas: { enabled: true, lossesToActivate: 2, martingale: true, pauseLosses: 4, maxPreciseLosses: 3, riskProfile: "moderado" },
+            nexus: { enabled: true, lossesToActivate: 1, martingale: true, pauseLosses: 3, maxPreciseLosses: 4, riskProfile: "agressivo" },
+            orion: { enabled: true, lossesToActivate: 1, martingale: true, pauseLosses: 4, maxPreciseLosses: 3, riskProfile: "moderado" },
+            titan: { enabled: true, lossesToActivate: 3, martingale: false, pauseLosses: 6, maxPreciseLosses: 2, riskProfile: "conservador" },
+        },
+        defense: {
+            apollo: { mode: "adaptive", max_consecutive_losses: 2 },
+            atlas: { mode: "trend", max_consecutive_losses: 3 },
+            nexus: { mode: "manual", max_consecutive_losses: 4 },
+            orion: { mode: "trend", max_consecutive_losses: 3 },
+            titan: { mode: "adaptive", max_consecutive_losses: 2 },
+        },
+        session: {
+            apollo: { profit_target: 0.4, stop_loss_global: 0.4, max_trades_per_session: 15, cooldown_minutes: 1 },
+            atlas: { profit_target: 0.5, stop_loss_global: 0.5, max_trades_per_session: 20, cooldown_minutes: 0 },
+            nexus: { profit_target: 0.8, stop_loss_global: 0.8, max_trades_per_session: 30, cooldown_minutes: 0 },
+            orion: { profit_target: 0.6, stop_loss_global: 0.6, max_trades_per_session: 22, cooldown_minutes: 0 },
+            titan: { profit_target: 0.4, stop_loss_global: 0.45, max_trades_per_session: 18, cooldown_minutes: 1 },
+        },
+        capital_management: {
+            apollo: { "martingale.enabled": false, "soros.enabled": true, "soros.level": 1, max_exposure: 3 },
+            atlas: { "martingale.enabled": true, "martingale.multiplier": 2, "soros.enabled": true, "soros.level": 1, max_exposure: 5 },
+            nexus: { "martingale.enabled": true, "martingale.multiplier": 2.2, "soros.enabled": false, max_exposure: 7 },
+            orion: { "martingale.enabled": true, "martingale.multiplier": 2, "soros.enabled": false, max_exposure: 6 },
+            titan: { "martingale.enabled": false, "soros.enabled": true, "soros.level": 2, max_exposure: 4 },
+        },
+        risk_management: {
+            apollo: { daily_stop_loss: 35, daily_profit_cap: 70, max_drawdown: 12, block_after_losses: 4 },
+            atlas: { daily_stop_loss: 50, daily_profit_cap: 100, max_drawdown: 20, block_after_losses: 5 },
+            nexus: { daily_stop_loss: 80, daily_profit_cap: 160, max_drawdown: 30, block_after_losses: 6 },
+            orion: { daily_stop_loss: 55, daily_profit_cap: 110, max_drawdown: 22, block_after_losses: 5 },
+            titan: { daily_stop_loss: 40, daily_profit_cap: 85, max_drawdown: 15, block_after_losses: 4 },
+        },
+    };
+
+    return {
+        localData: {},
+        errors: {},
+        showJson: false,
+        selectedProfile: "atlas",
+        definitions: FORM_DEFINITIONS[field.name] || [],
+        title: TITLES[field.name] || "Configuração",
+
+        _root() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) return data;
+                }
+            } catch (e) {}
+            return null;
+        },
+
+        init() {
+            const root = this._root();
+            if (!root) return;
+            this.localData = JSON.parse(JSON.stringify(root.formData[field.name] || {}));
+            this._applyDefaults();
+            this._syncRoot();
+        },
+
+        toBool(value) {
+            return value === true || value === "true" || value === 1;
+        },
+
+        _pathGet(path) {
+            const parts = String(path || "").split(".");
+            let cur = this.localData;
+            for (const part of parts) {
+                if (!cur || typeof cur !== "object") return undefined;
+                cur = cur[part];
+            }
+            return cur;
+        },
+
+        pathValue(path) {
+            return this._pathGet(path);
+        },
+
+        _pathSet(path, value) {
+            const parts = String(path || "").split(".");
+            let cur = this.localData;
+            for (let i = 0; i < parts.length - 1; i += 1) {
+                const part = parts[i];
+                if (!cur[part] || typeof cur[part] !== "object") cur[part] = {};
+                cur = cur[part];
+            }
+            cur[parts[parts.length - 1]] = value;
+        },
+
+        _applyDefaults() {
+            this.definitions.forEach((cfg) => {
+                if (this._pathGet(cfg.key) === undefined) this._pathSet(cfg.key, cfg.default);
+            });
+        },
+
+        _syncRoot() {
+            const root = this._root();
+            if (!root) return;
+            root.formData[field.name] = JSON.parse(JSON.stringify(this.localData || {}));
+            if (root.markDirty) root.markDirty();
+        },
+
+        applyProfilePreset() {
+            const blockPresets = PROFILE_PRESETS[field.name] || {};
+            const preset = blockPresets[this.selectedProfile];
+            if (!preset || typeof preset !== "object") return;
+            Object.entries(preset).forEach(([key, value]) => {
+                this._pathSet(key, value);
+            });
+            this._syncRoot();
+        },
+
+        setValue(cfg, rawValue) {
+            let value = rawValue;
+            if (cfg.type === "number") {
+                value = rawValue === "" ? null : Number(rawValue);
+            } else if (cfg.type === "boolean") {
+                value = !!rawValue;
+            }
+
+            if (cfg.type === "number" && value !== null && Number.isNaN(value)) {
+                this.errors[cfg.key] = "Valor numérico inválido";
+                return;
+            }
+            if (cfg.min !== undefined && value !== null && value < cfg.min) {
+                this.errors[cfg.key] = `Mínimo ${cfg.min}`;
+                return;
+            }
+            if (cfg.max !== undefined && value !== null && value > cfg.max) {
+                this.errors[cfg.key] = `Máximo ${cfg.max}`;
+                return;
+            }
+            this.errors[cfg.key] = "";
+            this._pathSet(cfg.key, value);
+            this._syncRoot();
+        },
+
+        updateFromJson(raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    this.localData = parsed;
+                    this.errors = {};
+                    this._applyDefaults();
+                    this._syncRoot();
+                }
+            } catch (e) {}
+        },
+    };
+}
+
+function tradingFiltersBuilderField(field) {
+    return {
+        selectedPresetId: "digit_density",
+        items: [],
+        presets: [
+            { id: "digit_density", label: "Densidade de Dígitos", type: "digit", config: { window: 20, digits: "8,9", operator: "<", threshold: 5 } },
+            { id: "digit_sequence", label: "Sequência de Dígitos", type: "digit", config: { length: 3, target: "under_4", tradeInFavor: true } },
+            { id: "parity_majority", label: "Maioria de Paridade", type: "digit", config: { window: 24, percentage: 60, maxNoise: 8 } },
+            { id: "price_momentum", label: "Momentum de Preço", type: "price", config: { window: 10, ticksToConfirm: 2, minDelta: 0.1 } },
+            { id: "price_ma", label: "Preço vs Média Móvel", type: "price", config: { period: 14, type: "SMA", operator: ">" } },
+            { id: "rsi_level", label: "RSI por Nível", type: "oscillator", config: { period: 14, level: 30, operator: "<" } },
+        ],
+
+        _nextId() {
+            return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        },
+
+        _root() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) return data;
+                }
+            } catch(e) {}
+            return null;
+        },
+
+        init() {
+            this.loadFromForm();
+        },
+
+        loadFromForm() {
+            const root = this._root();
+            if (!root) return;
+            const raw = root.formData[field.name];
+            const source = Array.isArray(raw) ? raw : ((raw && Array.isArray(raw.filters)) ? raw.filters : []);
+            this.items = source.map((item) => ({
+                _id: this._nextId(),
+                id: item.id || "custom_filter",
+                name: item.name || item.id || "Filtro custom",
+                type: item.type || "custom",
+                active: item.active !== false,
+                config: item.config && typeof item.config === "object" ? { ...item.config } : {},
+            }));
+        },
+
+        addPreset() {
+            const preset = this.presets.find((p) => p.id === this.selectedPresetId);
+            if (!preset) return;
+            this.items.push({
+                _id: this._nextId(),
+                id: preset.id,
+                name: preset.label,
+                type: preset.type,
+                active: true,
+                config: { ...preset.config },
+            });
+            this.syncToForm();
+        },
+
+        removeItem(index) {
+            this.items.splice(index, 1);
+            this.syncToForm();
+        },
+
+        updateConfig(item, key, value) {
+            const trimmed = String(value ?? "").trim();
+            if (!trimmed) {
+                delete item.config[key];
+                this.syncToForm();
+                return;
+            }
+            if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+                item.config[key] = Number(trimmed);
+            } else if (trimmed.toLowerCase() === "true" || trimmed.toLowerCase() === "false") {
+                item.config[key] = trimmed.toLowerCase() === "true";
+            } else {
+                item.config[key] = trimmed;
+            }
+            this.syncToForm();
+        },
+
+        updateConfigJson(item, raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    item.config = parsed;
+                    this.syncToForm();
+                }
+            } catch(e) {}
+        },
+
+        syncToForm() {
+            const root = this._root();
+            if (!root) return;
+            const current = root.formData[field.name];
+            const base = current && typeof current === "object" && !Array.isArray(current) ? { ...current } : {};
+            base.filters = this.items.map((item) => ({
+                id: item.id,
+                name: item.name,
+                type: item.type,
+                active: item.active !== false,
+                config: item.config && typeof item.config === "object" ? { ...item.config } : {},
+            }));
+            root.formData[field.name] = base;
+            if (root.markDirty) root.markDirty();
+        },
+    };
+}
+
+function conditionsBuilderField(field) {
+    return {
+        conditions: [],
+        globalLogic: "AND",
+        sampleContextText: '{"short_ma": 1.23, "long_ma": 1.1}',
+        customTestCasesText: '[{"name":"Padrao","context":{"short_ma":1.23,"long_ma":1.1}}]',
+        showAdvancedTests: false,
+        selectedTestPreset: "ma_cross",
+        testPresets: [
+            { id: "ma_cross", label: "MA Cross", payload: { short_ma: 1.23, long_ma: 1.1, rsi: 52, momentum: 0.4 } },
+            { id: "oversold", label: "RSI Oversold", payload: { rsi: 28, momentum: -0.2, pullback: true } },
+            { id: "breakout", label: "Breakout", payload: { price: 102.5, resistance: 101.0, volume: 3200 } },
+            { id: "custom", label: "Custom", payload: {} },
+        ],
+        sampleResult: null,
+        _seq: 0,
+
+        _nextId() {
+            this._seq += 1;
+            return `${Date.now()}-${this._seq}`;
+        },
+
+        _getRootScope() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) return data;
+                }
+            } catch(e) {}
+            return null;
+        },
+
+        _resolveValue(token, context) {
+            const raw = String(token ?? "").trim();
+            if (!raw.length) return null;
+            if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
+            const lower = raw.toLowerCase();
+            if (lower === "true") return true;
+            if (lower === "false") return false;
+            if (context && Object.prototype.hasOwnProperty.call(context, raw)) return context[raw];
+            return raw;
+        },
+
+        _evaluateCondition(condition, context) {
+            const left = this._resolveValue(condition.left, context);
+            const right = this._resolveValue(condition.right, context);
+            const op = condition.operator || "==";
+            if (op === ">") return left > right;
+            if (op === ">=") return left >= right;
+            if (op === "<") return left < right;
+            if (op === "<=") return left <= right;
+            if (op === "!=") return left !== right;
+            return left === right;
+        },
+
+        init() {
+            this.reloadFromForm();
+            this.applyTestPreset();
+        },
+
+        reloadFromForm() {
+            const root = this._getRootScope();
+            if (!root) return;
+            const raw = root.formData[field.name] || {};
+            const rows = [];
+            this.globalLogic = String(raw.logic || "AND").toUpperCase();
+
+            const parseBlock = (blockName, block) => {
+                const blockData = block || {};
+                const logic = String(blockData.logic || "AND").toUpperCase();
+                const conditions = blockData.conditions || {};
+                const ordered = Object.entries(conditions).sort((a, b) => {
+                    const orderA = Number((a[1] || {}).order || 0);
+                    const orderB = Number((b[1] || {}).order || 0);
+                    return orderA - orderB;
+                });
+                ordered.forEach(([key, cfg]) => {
+                    const cfgData = cfg || {};
+                    const rightValue = (cfgData.right !== undefined && cfgData.right !== null)
+                        ? cfgData.right
+                        : ((cfgData.value !== undefined && cfgData.value !== null) ? cfgData.value : "");
+                    rows.push({
+                        _id: this._nextId(),
+                        block: blockName,
+                        logic,
+                        key: key || "",
+                        left: cfgData.left || key || "",
+                        operator: cfgData.operator || "==",
+                        right: rightValue,
+                    });
+                });
+            };
+
+            parseBlock("buy", raw && raw.buy ? raw.buy : {});
+            parseBlock("sell", raw && raw.sell ? raw.sell : {});
+            this.conditions = rows;
+            this.sampleResult = null;
+        },
+
+        addCondition() {
+            this.conditions.push({
+                _id: this._nextId(),
+                block: "buy",
+                logic: "AND",
+                key: "",
+                left: "",
+                operator: "==",
+                right: "",
+            });
+            this.syncToForm();
+        },
+
+        moveCondition(index, direction) {
+            const target = index + direction;
+            if (target < 0 || target >= this.conditions.length) return;
+            const temp = this.conditions[index];
+            this.conditions[index] = this.conditions[target];
+            this.conditions[target] = temp;
+            this.syncToForm();
+        },
+
+        removeCondition(index) {
+            this.conditions.splice(index, 1);
+            this.syncToForm();
+        },
+
+        applyTestPreset() {
+            const selected = this.testPresets.find((p) => p.id === this.selectedTestPreset);
+            if (!selected || selected.id === "custom") return;
+            this.sampleContextText = JSON.stringify(selected.payload, null, 2);
+        },
+
+        _resolveTestCases() {
+            if (!this.showAdvancedTests) {
+                return [{ name: "Padrao", context: JSON.parse(this.sampleContextText || "{}") }];
+            }
+            const parsed = JSON.parse(this.customTestCasesText || "[]");
+            if (!Array.isArray(parsed) || parsed.length === 0) {
+                return [{ name: "Padrao", context: JSON.parse(this.sampleContextText || "{}") }];
+            }
+            return parsed.map((row, idx) => ({
+                name: row && row.name ? String(row.name) : `Caso ${idx + 1}`,
+                context: row && row.context && typeof row.context === "object" ? row.context : {},
+            }));
+        },
+
+        runSampleTest() {
+            try {
+                const cases = this._resolveTestCases();
+                let totalChecks = 0;
+                let totalPassed = 0;
+                const caseResults = cases.map((testCase) => {
+                    const checks = this.conditions.map((condition) => this._evaluateCondition(condition, testCase.context));
+                    const passed = checks.filter(Boolean).length;
+                    totalChecks += checks.length;
+                    totalPassed += passed;
+                    return {
+                        name: testCase.name,
+                        passed,
+                        total: checks.length,
+                    };
+                });
+                this.sampleResult = {
+                    total: totalChecks,
+                    passed: totalPassed,
+                    failed: totalChecks - totalPassed,
+                    caseResults,
+                    error: null,
+                };
+            } catch(e) {
+                this.sampleResult = { error: "JSON de teste inválido. Revise o contexto/presets/casos customizados." };
+            }
+        },
+
+        sampleResultText() {
+            if (!this.sampleResult) return "Use um JSON de teste para validar rapidamente as condições.";
+            if (this.sampleResult.error) return this.sampleResult.error;
+            if (Array.isArray(this.sampleResult.caseResults) && this.sampleResult.caseResults.length > 1) {
+                const compact = this.sampleResult.caseResults
+                    .map((r) => `${r.name}: ${r.passed}/${r.total}`)
+                    .join(" | ");
+                return `Resultado agregado: ${this.sampleResult.passed}/${this.sampleResult.total} (${this.sampleResult.failed} falhas). ${compact}`;
+            }
+            return `Resultado: ${this.sampleResult.passed}/${this.sampleResult.total} condições válidas (${this.sampleResult.failed} falhas).`;
+        },
+
+        syncToForm() {
+            const root = this._getRootScope();
+            if (!root) return;
+
+            const output = {
+                logic: String(this.globalLogic || "AND").toUpperCase(),
+                buy: { logic: "AND", conditions: {} },
+                sell: { logic: "AND", conditions: {} },
+            };
+
+            this.conditions.forEach((item, idx) => {
+                const block = item.block === "sell" ? "sell" : "buy";
+                output[block].logic = String(item.logic || "AND").toUpperCase();
+                const conditionKey = (item.key || item.left || `condition_${idx + 1}`).toString().trim().replace(/\s+/g, "_");
+                if (!conditionKey) return;
+                output[block].conditions[conditionKey] = {
+                    order: idx + 1,
+                    left: item.left || conditionKey,
+                    operator: item.operator || "==",
+                    right: item.right,
+                };
+            });
+
+            root.formData[field.name] = output;
+            if (root.markDirty) root.markDirty();
+        },
+
+        previewFormula() {
+            if (!Array.isArray(this.conditions) || this.conditions.length === 0) {
+                return "Sem condições definidas. Clique em + Condição para iniciar.";
+            }
+            const chunks = this.conditions.map((c, i) => {
+                const block = (c.block || "buy").toUpperCase();
+                const left = c.left || `campo_${i + 1}`;
+                const op = c.operator || "==";
+                const right = (c.right !== undefined && c.right !== null && String(c.right).length > 0) ? c.right : "?";
+                return `[${i + 1}] ${block}: ${left} ${op} ${right}`;
+            });
+            return `Execução ${String(this.globalLogic || "AND").toUpperCase()}: ${chunks.join(" -> ")}`;
+        },
+    };
+}
+
+/**
+ * Struct Editor Field Component
+ * Renders a dynamic form based on StructSchema definition
+ */
+function structEditorField(field) {
+    return {
+        formValues: {},
+        jsonText: "",
+        showJson: false,
+        errors: [],
+
+        _getRootScope() {
+            try {
+                const scope = Alpine.closestDataStack(this.$el);
+                for (const data of scope) {
+                    if (data.formData) return data;
+                }
+            } catch(e) {}
+            return null;
+        },
+
+        init() {
+            this.reloadFromForm();
+        },
+
+        reloadFromForm() {
+            const root = this._getRootScope();
+            if (!root) return;
+
+            const raw = root.formData[field.name] || {};
+            this.formValues = this._deepCopy(raw);
+            this.jsonText = JSON.stringify(raw, null, 2);
+            this.errors = [];
+        },
+
+        updateFormData() {
+            const root = this._getRootScope();
+            if (!root) return;
+
+            // Validate before updating
+            this.errors = this._validate();
+
+            root.formData[field.name] = this._deepCopy(this.formValues);
+            if (root.markDirty) root.markDirty();
+
+            // Update JSON text
+            this.jsonText = JSON.stringify(this.formValues, null, 2);
+        },
+
+        parseJson() {
+            try {
+                const parsed = JSON.parse(this.jsonText);
+                this.formValues = this._deepCopy(parsed);
+                this.updateFormData();
+                this.errors = [];
+            } catch (e) {
+                this.errors = [`Invalid JSON: ${e.message}`];
+            }
+        },
+
+        addListItem(fieldName) {
+            if (!Array.isArray(this.formValues[fieldName])) {
+                this.formValues[fieldName] = [];
+            }
+            this.formValues[fieldName].push("");
+            this.updateFormData();
+        },
+
+        removeListItem(fieldName, idx) {
+            if (Array.isArray(this.formValues[fieldName])) {
+                this.formValues[fieldName].splice(idx, 1);
+                this.updateFormData();
+            }
+        },
+
+        _deepCopy(obj) {
+            if (obj === null || typeof obj !== "object") return obj;
+            if (Array.isArray(obj)) return obj.map(item => this._deepCopy(item));
+            const copy = {};
+            for (const key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                    copy[key] = this._deepCopy(obj[key]);
+                }
+            }
+            return copy;
+        },
+
+        _validate() {
+            const errors = [];
+            if (!field.struct_schema || !field.struct_schema.fields) return errors;
+
+            for (const [fieldName, fieldDef] of Object.entries(field.struct_schema.fields)) {
+                const value = this.formValues[fieldName];
+
+                // Required check
+                if (!fieldDef.nullable && (value === undefined || value === null || value === "")) {
+                    if (fieldDef.default === undefined || fieldDef.default === null) {
+                        errors.push(`${fieldName} is required`);
+                    }
+                }
+
+                // Type validation
+                if (value !== undefined && value !== null) {
+                    if (fieldDef.type === "IntegerField" && !Number.isInteger(Number(value))) {
+                        errors.push(`${fieldName} must be an integer`);
+                    }
+                    if (fieldDef.type === "FloatField" && isNaN(Number(value))) {
+                        errors.push(`${fieldName} must be a number`);
+                    }
+                    if (fieldDef.type === "StringField" && fieldDef.choices) {
+                        if (!fieldDef.choices.includes(value)) {
+                            errors.push(`${fieldName} must be one of: ${fieldDef.choices.join(", ")}`);
+                        }
+                    }
+                }
+            }
+
+            return errors;
+        },
+    };
+}
+</script>
+{% endblock %}
+{% endblock %}

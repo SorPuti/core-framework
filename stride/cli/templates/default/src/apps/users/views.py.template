@@ -1,0 +1,13 @@
+"""User CRUD ViewSet."""
+from stride import ModelViewSet
+from stride.permissions import IsAuthenticated
+from .models import User
+
+
+class UserViewSet(ModelViewSet):
+    """User list/create/retrieve/update/delete."""
+
+    model = User
+    permission_classes = [IsAuthenticated]
+    unique_fields = ["email"]
+    tags = ["Users"]

@@ -1,10 +1,10 @@
-# Core Framework
+# Stride
 
 Framework Python para APIs REST de alta performance. Combina a produtividade do Django REST Framework com a velocidade do FastAPI.
 
 ## Por que mais um framework?
 
-FastAPI e excelente para performance, mas exige muito codigo repetitivo para CRUD. Django REST Framework e produtivo, mas lento e sem async nativo. Core Framework resolve esse trade-off.
+FastAPI e excelente para performance, mas exige muito codigo repetitivo para CRUD. Django REST Framework e produtivo, mas lento e sem async nativo. Stride resolve esse trade-off.
 
 ```python
 # 30 linhas para uma API completa com CRUD, validacao, permissoes e documentacao
@@ -17,7 +17,7 @@ class UserViewSet(ModelViewSet):
 
 router = AutoRouter(prefix="/api/v1")
 router.register("/users", UserViewSet)
-app = CoreApp(routers=[router])
+app = StrideApp(routers=[router])
 
 # Resultado: 6 endpoints REST, OpenAPI docs, validacao Pydantic, permissoes por acao
 ```
@@ -30,12 +30,12 @@ Testes realizados com wrk, 10 threads, 100 conexoes, 30 segundos. Endpoint GET /
 Framework              Requests/sec    Latency (avg)    Latency (p99)
 ---------------------------------------------------------------------------
 FastAPI puro           15,200          6.5ms            18ms
-Core Framework         14,100          7.1ms            21ms
+Stride         14,100          7.1ms            21ms
 Django + DRF           2,100           47ms             180ms
 Flask + SQLAlchemy     3,400           29ms             95ms
 ```
 
-Core Framework mantem 93% da performance do FastAPI puro. A diferenca de 7% vem da camada de ViewSet e permissoes - overhead aceitavel considerando a reducao de boilerplate.
+Stride mantem 93% da performance do FastAPI puro. A diferenca de 7% vem da camada de ViewSet e permissoes - overhead aceitavel considerando a reducao de boilerplate.
 
 **Por que Django e tao mais lento?**
 - WSGI sincrono bloqueia threads
@@ -44,7 +44,7 @@ Core Framework mantem 93% da performance do FastAPI puro. A diferenca de 7% vem 
 
 ## Comparativo Tecnico
 
-| Aspecto | Django + DRF | FastAPI Puro | Core Framework |
+| Aspecto | Django + DRF | FastAPI Puro | Stride |
 |---------|--------------|--------------|----------------|
 | Async nativo | Parcial (sync_to_async) | Total | Total |
 | Tipagem | Runtime | Compilacao | Compilacao |
@@ -66,7 +66,7 @@ Django ORM nao foi projetado para async. O `sync_to_async` e um wrapper que exec
 # Django: sync_to_async adiciona ~2ms por query
 users = await sync_to_async(list)(User.objects.filter(is_active=True))
 
-# Core Framework: async nativo, sem overhead
+# Stride: async nativo, sem overhead
 users = await User.objects.using(db).filter(is_active=True).all()
 ```
 
@@ -82,7 +82,7 @@ class UserSerializer(serializers.Serializer):
     email = serializers.EmailField()
     name = serializers.CharField(max_length=100)
 
-# Core Framework: ~5us por validacao
+# Stride: ~5us por validacao
 class UserInput(InputSchema):
     email: str
     name: str
@@ -90,7 +90,7 @@ class UserInput(InputSchema):
 
 ### ViewSets simplificados
 
-DRF ViewSets tem dispatch complexo com multiplas camadas de mixins. Core Framework usa heranca simples e metodos async diretos.
+DRF ViewSets tem dispatch complexo com multiplas camadas de mixins. Stride usa heranca simples e metodos async diretos.
 
 ```python
 # Hierarquia DRF: GenericAPIView -> mixins -> GenericViewSet -> ModelViewSet
@@ -136,13 +136,13 @@ O framework usa apenas bibliotecas estaveis e bem mantidas:
 
 ```bash
 # Recomendado: pipx instala em ambiente isolado
-pipx install core-framework
+pipx install stride
 
 # Alternativa: pip global (requer --break-system-packages no Debian/Ubuntu)
-pip install core-framework --break-system-packages
+pip install stride --break-system-packages
 
 # Alternativa: pip no diretorio do usuario
-pip install core-framework --user
+pip install stride --user
 ```
 
 Apos instalacao global, o comando `core` fica disponivel:
@@ -161,11 +161,11 @@ source .venv/bin/activate  # Linux/Mac
 # .venv\Scripts\activate   # Windows
 
 # Instalar no projeto
-pip install core-framework
+pip install stride
 
 # Com extras opcionais
-pip install "core-framework[postgres,kafka]"
-pip install "core-framework[enterprise]"  # Todas as features
+pip install "stride[postgres,kafka]"
+pip install "stride[enterprise]"  # Todas as features
 ```
 
 ### Extras disponiveis
@@ -184,13 +184,13 @@ pip install "core-framework[enterprise]"  # Todas as features
 
 ```bash
 # Criar projeto
-core init my-api
+stride init my-api
 cd my-api
 
 # Configurar banco e rodar
-core makemigrations --name initial
-core migrate
-core run
+stride makemigrations --name initial
+stride migrate
+stride run
 ```
 
 Acesse http://localhost:8000/docs para documentacao interativa.
@@ -293,7 +293,7 @@ Interface administrativa auto-gerada a partir dos models. Inspirada no Django Ad
 
 ```python
 # Planejado
-from core.admin import AdminSite, ModelAdmin
+from stride.admin import AdminSite, ModelAdmin
 
 class UserAdmin(ModelAdmin):
     list_display = ["id", "email", "is_active", "created_at"]
@@ -310,10 +310,10 @@ CLI ja disponivel para operacoes comuns:
 
 ```bash
 # Ja disponivel
-core init my-api              # Criar projeto
-core makemigrations --name x  # Gerar migracao
-core migrate                  # Aplicar migracoes
-core run                      # Rodar servidor
+stride init my-api              # Criar projeto
+stride makemigrations --name x  # Gerar migracao
+stride migrate                  # Aplicar migracoes
+stride run                      # Rodar servidor
 core worker                   # Rodar worker de tasks
 core consumer                 # Rodar consumer de mensagens
 core docker generate          # Gerar docker-compose.yml
@@ -328,8 +328,8 @@ core generate viewset Post    # Gerar ViewSet a partir de model
 
 ```bash
 # Clonar e instalar
-git clone https://github.com/user/core-framework.git
-cd core-framework
+git clone https://github.com/user/stride.git
+cd stride
 pip install -e ".[dev]"
 
 # Rodar testes

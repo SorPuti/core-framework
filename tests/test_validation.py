@@ -1,5 +1,5 @@
 """
-Tests for core.validation module.
+Tests for stride.validation module.
 
 Tests the schema/model validation system.
 """
@@ -14,18 +14,18 @@ class TestSchemaModelValidator:
     
     def test_import_validator(self):
         """Can import SchemaModelValidator."""
-        from core.validation import SchemaModelValidator
+        from stride.validation import SchemaModelValidator
         assert SchemaModelValidator is not None
     
     def test_import_exceptions(self):
         """Can import validation exceptions."""
-        from core.validation import SchemaModelMismatchError, ValidationWarning
+        from stride.validation import SchemaModelMismatchError, ValidationWarning
         assert SchemaModelMismatchError is not None
         assert ValidationWarning is not None
     
     def test_validate_returns_empty_list_for_matching(self):
         """Validate returns empty list when schema and model match."""
-        from core.validation import SchemaModelValidator
+        from stride.validation import SchemaModelValidator
         from pydantic import BaseModel
         
         class MockSchema(BaseModel):
@@ -52,7 +52,7 @@ class TestSchemaModelValidator:
     
     def test_validate_detects_nullable_mismatch(self):
         """Validate detects when NOT NULL field is optional in schema."""
-        from core.validation import SchemaModelValidator, ColumnInfo, SchemaModelMismatchError
+        from stride.validation import SchemaModelValidator, ColumnInfo, SchemaModelMismatchError
         from pydantic import BaseModel
         from typing import Optional
         
@@ -90,7 +90,7 @@ class TestSchemaModelValidator:
     
     def test_validate_allows_optional_for_nullable(self):
         """Validate allows optional field when model column is nullable."""
-        from core.validation import SchemaModelValidator, ColumnInfo
+        from stride.validation import SchemaModelValidator, ColumnInfo
         from pydantic import BaseModel
         from typing import Optional
         
@@ -129,7 +129,7 @@ class TestSchemaModelValidator:
     
     def test_validate_skips_primary_key(self):
         """Validate skips primary key fields in nullable check."""
-        from core.validation import SchemaModelValidator, ColumnInfo
+        from stride.validation import SchemaModelValidator, ColumnInfo
         from pydantic import BaseModel
         from typing import Optional
         
@@ -166,7 +166,7 @@ class TestSchemaModelValidator:
     
     def test_validate_detects_max_length_mismatch(self):
         """Validate warns when schema allows longer values than model."""
-        from core.validation import SchemaModelValidator, ColumnInfo
+        from stride.validation import SchemaModelValidator, ColumnInfo
         from pydantic import BaseModel
         
         class LongNameSchema(BaseModel):
@@ -207,7 +207,7 @@ class TestValidateSchema:
     
     def test_decorator_validates_on_import(self):
         """validate_schema decorator validates at decoration time."""
-        from core.validation import validate_schema, SchemaModelValidator
+        from stride.validation import validate_schema, SchemaModelValidator
         from pydantic import BaseModel
         
         class TestSchema(BaseModel):
@@ -232,7 +232,7 @@ class TestColumnInfo:
     
     def test_column_info_creation(self):
         """Can create ColumnInfo with all fields."""
-        from core.validation import ColumnInfo
+        from stride.validation import ColumnInfo
         
         col = ColumnInfo(
             name="test",
@@ -257,14 +257,14 @@ class TestValidateAllViewsets:
     
     def test_validate_empty_list(self):
         """validate_all_viewsets handles empty list."""
-        from core.validation import validate_all_viewsets
+        from stride.validation import validate_all_viewsets
         
         issues = validate_all_viewsets([], strict=False)
         assert issues == []
     
     def test_validate_viewsets_list(self):
         """validate_all_viewsets processes viewset list."""
-        from core.validation import validate_all_viewsets, SchemaModelValidator
+        from stride.validation import validate_all_viewsets, SchemaModelValidator
         
         mock_viewset = MagicMock()
         mock_viewset.__name__ = "TestViewSet"
@@ -279,7 +279,7 @@ class TestViewSetValidation:
     
     def test_viewset_has_validation_attributes(self):
         """ViewSet has validation-related attributes."""
-        from core.views import ViewSet
+        from stride.views import ViewSet
         
         assert hasattr(ViewSet, "strict_validation")
         assert hasattr(ViewSet, "_schema_validated")
@@ -287,7 +287,7 @@ class TestViewSetValidation:
     
     def test_viewset_subclass_registered(self):
         """ViewSet subclass is registered for validation."""
-        from core.views import ViewSet, _pending_viewsets
+        from stride.views import ViewSet, _pending_viewsets
         
         # Clear pending
         _pending_viewsets.clear()
@@ -300,7 +300,7 @@ class TestViewSetValidation:
     
     def test_validate_pending_viewsets_function(self):
         """validate_pending_viewsets function exists and works."""
-        from core.views import validate_pending_viewsets
+        from stride.views import validate_pending_viewsets
         
         # Should not raise
         issues = validate_pending_viewsets(strict=False)

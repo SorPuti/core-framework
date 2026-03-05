@@ -53,7 +53,7 @@ flowchart LR
 
 ```python
 # src/settings.py
-from core.config import Settings, PydanticField, configure
+from stride.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════
@@ -217,7 +217,7 @@ REDIS_MAX_CONNECTIONS=50
 ## Verificar Status dos Subsistemas
 
 ```python
-from core.config import get_configured_subsystems
+from stride.config import get_configured_subsystems
 
 status = get_configured_subsystems()
 # {
@@ -238,7 +238,7 @@ status = get_configured_subsystems()
 
 | Setting | Tipo | Default | Descrição |
 |---------|------|---------|-----------|
-| `app_name` | `str` | `"Core Framework App"` | Nome da aplicação exibido na documentação |
+| `app_name` | `str` | `"Stride App"` | Nome da aplicação exibido na documentação |
 | `app_version` | `str` | `"0.1.0"` | Versão da aplicação |
 | `environment` | `Literal` | `"development"` | Ambiente: `development`, `staging`, `production`, `testing` |
 | `debug` | `bool` | `False` | Modo debug. **NUNCA use em produção** |
@@ -292,7 +292,7 @@ Você escolhe o backend via `storage_backend` e configura os detalhes por settin
 
 ```python
 # src/settings.py
-from core.config import Settings, configure
+from stride.config import Settings, configure
 
 
 class AppSettings(Settings):
@@ -337,7 +337,7 @@ STORAGE_GCS_EXPIRATION_SECONDS=3600
 course.cover_image_path  # "uploads/cover.jpg"
 
 # API retorna signed URL
-from core.storage import get_file_url
+from stride.storage import get_file_url
 url = get_file_url(course.cover_image_path)
 # → "https://storage.googleapis.com/bucket/...?X-Goog-Signature=..."
 ```
@@ -368,7 +368,7 @@ STORAGE_MEDIA_URL=https://storage.googleapis.com/minha-api-media-publica/
 
 ```python
 # src/settings.py
-from core.config import Settings, configure
+from stride.config import Settings, configure
 
 
 class AppSettings(Settings):
@@ -557,7 +557,7 @@ middleware: list[str] = [
 | `kafka_enabled` | `bool` | `False` | **Habilita Kafka** (auto-configura quando True) |
 | `kafka_backend` | `Literal` | `"aiokafka"` | Backend: aiokafka (async) ou confluent (performance) |
 | `kafka_bootstrap_servers` | `str` | `"localhost:9092"` | Servidores Kafka |
-| `kafka_client_id` | `str` | `"core-framework"` | Client ID |
+| `kafka_client_id` | `str` | `"stride"` | Client ID |
 | `kafka_fire_and_forget` | `bool` | `False` | Não aguardar confirmação do broker |
 
 #### Segurança
@@ -656,7 +656,7 @@ middleware: list[str] = [
 | `admin_enabled` | `bool` | `True` | Habilita admin panel |
 | `admin_url_prefix` | `str` | `"/admin"` | Prefixo da URL |
 | `admin_site_title` | `str` | `"Admin"` | Título na aba do browser |
-| `admin_site_header` | `str` | `"Core Admin"` | Header no sidebar |
+| `admin_site_header` | `str` | `"Stride Admin"` | Header no sidebar |
 | `admin_theme` | `str` | `"default"` | Tema: default ou dark |
 | `admin_logo_url` | `str \| None` | `None` | URL do logo custom |
 | `admin_primary_color` | `str` | `"#3B82F6"` | Cor primária (hex) |
@@ -682,7 +682,7 @@ middleware: list[str] = [
 ## Acessando Settings
 
 ```python
-from core.config import get_settings
+from stride.config import get_settings
 
 # Sem tipo - retorna Settings base
 settings = get_settings()
@@ -723,7 +723,7 @@ ALLOWED_IPS='["10.0.0.1", "10.0.0.2"]'
 
 ```python
 # src/settings.py
-from core.config import Settings, PydanticField, configure
+from stride.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════

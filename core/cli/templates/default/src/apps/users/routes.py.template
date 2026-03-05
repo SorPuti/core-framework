@@ -1,9 +1,0 @@
-"""User and auth routes."""
-from core import AutoRouter
-from core.auth import AuthViewSet
-from .views import UserViewSet
-
-users_router = AutoRouter(prefix="/users", tags=["Users"])
-users_router.register("", UserViewSet)
-auth_router = AutoRouter(prefix="/auth", tags=["Auth"])
-auth_router.register("", AuthViewSet)

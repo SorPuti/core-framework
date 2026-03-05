@@ -7,23 +7,23 @@ Database schema management.
 ```bash
 # 1. Edit models
 # 2. Generate migration
-core makemigrations --name add_posts
+stride makemigrations --name add_posts
 
 # 3. Review migration file
 cat migrations/0001_add_posts.py
 
 # 4. Apply migration
-core migrate
+stride migrate
 ```
 
 ## Commands
 
 ```bash
 # Create migration from model changes
-core makemigrations --name description
+stride makemigrations --name description
 
 # Apply all pending migrations
-core migrate
+stride migrate
 
 # Show migration status
 core showmigrations
@@ -35,7 +35,7 @@ core rollback
 core rollback 0002
 
 # Preview without applying
-core migrate --dry-run
+stride migrate --dry-run
 ```
 
 ## Migration File
@@ -44,7 +44,7 @@ Generated in `migrations/`:
 
 ```python
 # migrations/0001_add_posts.py
-from core.migrations import Migration, CreateTable, ColumnDef
+from stride.migrations import Migration, CreateTable, ColumnDef
 
 class Migration(Migration):
     dependencies = []
@@ -79,7 +79,7 @@ class Migration(Migration):
 
 ```python
 # migrations/0002_custom.py
-from core.migrations import Migration, AddColumn, ColumnDef
+from stride.migrations import Migration, AddColumn, ColumnDef
 
 class Migration(Migration):
     dependencies = ["0001_add_posts"]
@@ -101,12 +101,12 @@ class Migration(Migration):
 For custom SQL:
 
 ```bash
-core makemigrations --name custom_sql --empty
+stride makemigrations --name custom_sql --empty
 ```
 
 ```python
 # migrations/0003_custom_sql.py
-from core.migrations import Migration, RunSQL
+from stride.migrations import Migration, RunSQL
 
 class Migration(Migration):
     dependencies = ["0002_custom"]
@@ -141,7 +141,7 @@ from src.apps.posts.models import Post  # noqa
 
 ```bash
 # Skip problematic migration
-core migrate --fake 0001
+stride migrate --fake 0001
 ```
 
 ### Reset migrations (dev only)
@@ -154,8 +154,8 @@ rm -rf migrations/*.py
 core reset_db --yes
 
 # Start fresh
-core makemigrations --name initial
-core migrate
+stride makemigrations --name initial
+stride migrate
 ```
 
 ## Next

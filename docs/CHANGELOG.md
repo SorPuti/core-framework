@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Core Framework.
+All notable changes to Stride.
 
 ## [0..17.6] - Latest
 

@@ -5,7 +5,7 @@ Testes para o sistema de Serializers.
 import pytest
 from pydantic import ValidationError, field_validator
 
-from core.serializers import InputSchema, OutputSchema
+from stride.serializers import InputSchema, OutputSchema
 
 
 class UserInput(InputSchema):

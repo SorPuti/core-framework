@@ -36,7 +36,7 @@ class TestAllowAny:
     @pytest.mark.asyncio
     async def test_allows_anonymous(self):
         """Test allows anonymous users."""
-        from core.permissions import AllowAny
+        from stride.permissions import AllowAny
         
         perm = AllowAny()
         request = create_mock_request()
@@ -47,7 +47,7 @@ class TestAllowAny:
     @pytest.mark.asyncio
     async def test_allows_authenticated(self):
         """Test allows authenticated users."""
-        from core.permissions import AllowAny
+        from stride.permissions import AllowAny
         
         perm = AllowAny()
         user = MagicMock()
@@ -63,7 +63,7 @@ class TestDenyAll:
     @pytest.mark.asyncio
     async def test_denies_anonymous(self):
         """Test denies anonymous users."""
-        from core.permissions import DenyAll
+        from stride.permissions import DenyAll
         
         perm = DenyAll()
         request = create_mock_request()
@@ -74,7 +74,7 @@ class TestDenyAll:
     @pytest.mark.asyncio
     async def test_denies_authenticated(self):
         """Test denies authenticated users."""
-        from core.permissions import DenyAll
+        from stride.permissions import DenyAll
         
         perm = DenyAll()
         user = MagicMock()
@@ -90,7 +90,7 @@ class TestIsAuthenticated:
     @pytest.mark.asyncio
     async def test_denies_anonymous(self):
         """Test denies anonymous users."""
-        from core.permissions import IsAuthenticated
+        from stride.permissions import IsAuthenticated
         
         perm = IsAuthenticated()
         request = create_mock_request()
@@ -101,7 +101,7 @@ class TestIsAuthenticated:
     @pytest.mark.asyncio
     async def test_allows_authenticated_starlette(self):
         """Test allows Starlette authenticated users."""
-        from core.permissions import IsAuthenticated
+        from stride.permissions import IsAuthenticated
         
         perm = IsAuthenticated()
         user = MagicMock()
@@ -113,7 +113,7 @@ class TestIsAuthenticated:
     @pytest.mark.asyncio
     async def test_allows_authenticated_legacy(self):
         """Test allows legacy authenticated users."""
-        from core.permissions import IsAuthenticated
+        from stride.permissions import IsAuthenticated
         
         perm = IsAuthenticated()
         user = MagicMock()
@@ -135,7 +135,7 @@ class TestIsAuthenticatedOrReadOnly:
     @pytest.mark.asyncio
     async def test_allows_anonymous_read(self):
         """Test allows anonymous users for GET requests."""
-        from core.permissions import IsAuthenticatedOrReadOnly
+        from stride.permissions import IsAuthenticatedOrReadOnly
         
         perm = IsAuthenticatedOrReadOnly()
         request = create_mock_request(method="GET")
@@ -146,7 +146,7 @@ class TestIsAuthenticatedOrReadOnly:
     @pytest.mark.asyncio
     async def test_denies_anonymous_write(self):
         """Test denies anonymous users for POST requests."""
-        from core.permissions import IsAuthenticatedOrReadOnly
+        from stride.permissions import IsAuthenticatedOrReadOnly
         
         perm = IsAuthenticatedOrReadOnly()
         request = create_mock_request(method="POST")
@@ -157,7 +157,7 @@ class TestIsAuthenticatedOrReadOnly:
     @pytest.mark.asyncio
     async def test_allows_authenticated_write(self):
         """Test allows authenticated users for POST requests."""
-        from core.permissions import IsAuthenticatedOrReadOnly
+        from stride.permissions import IsAuthenticatedOrReadOnly
         
         perm = IsAuthenticatedOrReadOnly()
         user = MagicMock()
@@ -173,7 +173,7 @@ class TestIsAdmin:
     @pytest.mark.asyncio
     async def test_denies_anonymous(self):
         """Test denies anonymous users."""
-        from core.permissions import IsAdmin
+        from stride.permissions import IsAdmin
         
         perm = IsAdmin()
         request = create_mock_request()
@@ -184,7 +184,7 @@ class TestIsAdmin:
     @pytest.mark.asyncio
     async def test_denies_non_admin(self):
         """Test denies non-admin users."""
-        from core.permissions import IsAdmin
+        from stride.permissions import IsAdmin
         
         perm = IsAdmin()
         user = MagicMock()
@@ -198,7 +198,7 @@ class TestIsAdmin:
     @pytest.mark.asyncio
     async def test_allows_admin(self):
         """Test allows admin users."""
-        from core.permissions import IsAdmin
+        from stride.permissions import IsAdmin
         
         perm = IsAdmin()
         user = MagicMock()
@@ -211,7 +211,7 @@ class TestIsAdmin:
     @pytest.mark.asyncio
     async def test_allows_superuser(self):
         """Test allows superuser."""
-        from core.permissions import IsAdmin
+        from stride.permissions import IsAdmin
         
         perm = IsAdmin()
         user = MagicMock()
@@ -229,7 +229,7 @@ class TestIsOwner:
     @pytest.mark.asyncio
     async def test_general_permission_always_true(self):
         """Test has_permission always returns True."""
-        from core.permissions import IsOwner
+        from stride.permissions import IsOwner
         
         perm = IsOwner()
         request = create_mock_request()
@@ -240,7 +240,7 @@ class TestIsOwner:
     @pytest.mark.asyncio
     async def test_allows_owner(self):
         """Test allows object owner."""
-        from core.permissions import IsOwner
+        from stride.permissions import IsOwner
         
         perm = IsOwner()
         user = MagicMock()
@@ -257,7 +257,7 @@ class TestIsOwner:
     @pytest.mark.asyncio
     async def test_denies_non_owner(self):
         """Test denies non-owner."""
-        from core.permissions import IsOwner
+        from stride.permissions import IsOwner
         
         perm = IsOwner()
         user = MagicMock()
@@ -278,7 +278,7 @@ class TestHasRole:
     @pytest.mark.asyncio
     async def test_denies_anonymous(self):
         """Test denies anonymous users."""
-        from core.permissions import HasRole
+        from stride.permissions import HasRole
         
         perm = HasRole("admin")
         request = create_mock_request()
@@ -289,7 +289,7 @@ class TestHasRole:
     @pytest.mark.asyncio
     async def test_allows_user_with_role(self):
         """Test allows user with required role."""
-        from core.permissions import HasRole
+        from stride.permissions import HasRole
         
         perm = HasRole("admin")
         user = MagicMock()
@@ -302,7 +302,7 @@ class TestHasRole:
     @pytest.mark.asyncio
     async def test_denies_user_without_role(self):
         """Test denies user without required role."""
-        from core.permissions import HasRole
+        from stride.permissions import HasRole
         
         perm = HasRole("admin")
         user = MagicMock()
@@ -319,7 +319,7 @@ class TestPermissionCombination:
     @pytest.mark.asyncio
     async def test_and_permission(self):
         """Test AND combination."""
-        from core.permissions import IsAuthenticated, IsAdmin
+        from stride.permissions import IsAuthenticated, IsAdmin
         
         perm = IsAuthenticated() & IsAdmin()
         
@@ -342,7 +342,7 @@ class TestPermissionCombination:
     @pytest.mark.asyncio
     async def test_or_permission(self):
         """Test OR combination."""
-        from core.permissions import IsAuthenticated, AllowAny
+        from stride.permissions import IsAuthenticated, AllowAny
         
         perm = IsAuthenticated() | AllowAny()
         
@@ -355,7 +355,7 @@ class TestPermissionCombination:
     @pytest.mark.asyncio
     async def test_not_permission(self):
         """Test NOT combination."""
-        from core.permissions import IsAuthenticated
+        from stride.permissions import IsAuthenticated
         
         perm = ~IsAuthenticated()
         

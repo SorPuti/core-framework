@@ -1,0 +1,2 @@
+"""Barrel: import all models here for migrations."""
+from src.apps.items.models import Item  # noqa

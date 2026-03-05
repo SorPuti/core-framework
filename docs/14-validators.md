@@ -14,7 +14,7 @@ Data validation system.
 ### UniqueValidator
 
 ```python
-from core.validators import UniqueValidator
+from stride.validators import UniqueValidator
 
 validator = UniqueValidator(
     model=User,
@@ -30,7 +30,7 @@ await validator(value, session)
 ### UniqueTogetherValidator
 
 ```python
-from core.validators import UniqueTogetherValidator
+from stride.validators import UniqueTogetherValidator
 
 validator = UniqueTogetherValidator(
     model=Post,
@@ -45,7 +45,7 @@ await validator({"slug": "test", "workspace_id": 1}, session)
 ### ExistsValidator
 
 ```python
-from core.validators import ExistsValidator
+from stride.validators import ExistsValidator
 
 validator = ExistsValidator(
     model=Category,
@@ -62,7 +62,7 @@ await validator(category_id, session)
 ### RegexValidator
 
 ```python
-from core.validators import RegexValidator
+from stride.validators import RegexValidator
 
 validator = RegexValidator(
     pattern=r"^[A-Z]{3}-\d{4}$",
@@ -76,7 +76,7 @@ validator("abc-1234")  # Raises ValidationError
 ### EmailValidator
 
 ```python
-from core.validators import EmailValidator
+from stride.validators import EmailValidator
 
 validator = EmailValidator()
 validator("user@example.com")  # OK
@@ -85,7 +85,7 @@ validator("user@example.com")  # OK
 ### URLValidator
 
 ```python
-from core.validators import URLValidator
+from stride.validators import URLValidator
 
 validator = URLValidator(schemes=["http", "https"])
 validator("https://example.com")  # OK
@@ -94,7 +94,7 @@ validator("https://example.com")  # OK
 ### SlugValidator
 
 ```python
-from core.validators import SlugValidator
+from stride.validators import SlugValidator
 
 validator = SlugValidator(allow_unicode=False)
 validator("my-slug-123")  # OK
@@ -105,7 +105,7 @@ validator("my-slug-123")  # OK
 ### PhoneValidator
 
 ```python
-from core.validators import PhoneValidator
+from stride.validators import PhoneValidator
 
 validator = PhoneValidator()
 validator("11999998888")  # OK (10 or 11 digits)
@@ -114,7 +114,7 @@ validator("11999998888")  # OK (10 or 11 digits)
 ### CPFValidator
 
 ```python
-from core.validators import CPFValidator
+from stride.validators import CPFValidator
 
 validator = CPFValidator()
 validator("12345678909")  # Validates check digits
@@ -123,7 +123,7 @@ validator("12345678909")  # Validates check digits
 ### CNPJValidator
 
 ```python
-from core.validators import CNPJValidator
+from stride.validators import CNPJValidator
 
 validator = CNPJValidator()
 validator("11222333000181")  # Validates check digits
@@ -134,7 +134,7 @@ validator("11222333000181")  # Validates check digits
 ### MinLengthValidator / MaxLengthValidator
 
 ```python
-from core.validators import MinLengthValidator, MaxLengthValidator
+from stride.validators import MinLengthValidator, MaxLengthValidator
 
 min_validator = MinLengthValidator(min_length=3)
 max_validator = MaxLengthValidator(max_length=100)
@@ -146,7 +146,7 @@ max_validator("x" * 101)  # Raises: max 100 characters
 ### MinValueValidator / MaxValueValidator
 
 ```python
-from core.validators import MinValueValidator, MaxValueValidator
+from stride.validators import MinValueValidator, MaxValueValidator
 
 min_validator = MinValueValidator(min_value=0)
 max_validator = MaxValueValidator(max_value=100)
@@ -158,7 +158,7 @@ max_validator(101)  # Raises: max value is 100
 ### RangeValidator
 
 ```python
-from core.validators import RangeValidator
+from stride.validators import RangeValidator
 
 validator = RangeValidator(min_value=1, max_value=10)
 validator(5)  # OK
@@ -168,7 +168,7 @@ validator(11)  # Raises: must be between 1 and 10
 ### DecimalPlacesValidator
 
 ```python
-from core.validators import DecimalPlacesValidator
+from stride.validators import DecimalPlacesValidator
 
 validator = DecimalPlacesValidator(max_digits=10, decimal_places=2)
 validator(123.45)  # OK
@@ -180,7 +180,7 @@ validator(123.456)  # Raises: max 2 decimal places
 ### ChoiceValidator
 
 ```python
-from core.validators import ChoiceValidator
+from stride.validators import ChoiceValidator
 
 validator = ChoiceValidator(choices=["draft", "published", "archived"])
 validator("draft")  # OK
@@ -190,7 +190,7 @@ validator("invalid")  # Raises: not a valid choice
 ### ProhibitedValidator
 
 ```python
-from core.validators import ProhibitedValidator
+from stride.validators import ProhibitedValidator
 
 validator = ProhibitedValidator(prohibited=["admin", "root", "system"])
 validator("user")  # OK
@@ -202,7 +202,7 @@ validator("admin")  # Raises: prohibited value
 ### FileExtensionValidator
 
 ```python
-from core.validators import FileExtensionValidator
+from stride.validators import FileExtensionValidator
 
 validator = FileExtensionValidator(allowed_extensions=["jpg", "png", "gif"])
 validator("image.jpg")  # OK
@@ -212,7 +212,7 @@ validator("file.exe")  # Raises: extension not allowed
 ### FileSizeValidator
 
 ```python
-from core.validators import FileSizeValidator
+from stride.validators import FileSizeValidator
 
 validator = FileSizeValidator(max_size=5 * 1024 * 1024)  # 5MB
 validator(file_size_bytes)
@@ -221,7 +221,7 @@ validator(file_size_bytes)
 ## Password Validator
 
 ```python
-from core.validators import PasswordValidator
+from stride.validators import PasswordValidator
 
 validator = PasswordValidator(
     min_length=8,
@@ -241,7 +241,7 @@ validator("weak")  # Raises: doesn't meet requirements
 ### ComposeValidators (Sync)
 
 ```python
-from core.validators import ComposeValidators, MinLengthValidator, MaxLengthValidator
+from stride.validators import ComposeValidators, MinLengthValidator, MaxLengthValidator
 
 validator = ComposeValidators([
     MinLengthValidator(3),
@@ -255,7 +255,7 @@ validator("my-slug")  # Runs all validators
 ### ComposeAsyncValidators (Async)
 
 ```python
-from core.validators import ComposeAsyncValidators, UniqueValidator, ExistsValidator
+from stride.validators import ComposeAsyncValidators, UniqueValidator, ExistsValidator
 
 validator = ComposeAsyncValidators([
     UniqueValidator(User, "email"),
@@ -324,7 +324,7 @@ class OrderViewSet(ModelViewSet):
 ### validate_all (Sync)
 
 ```python
-from core.validators import validate_all, MinLengthValidator, MaxLengthValidator
+from stride.validators import validate_all, MinLengthValidator, MaxLengthValidator
 
 errors = validate_all(
     value="ab",
@@ -336,7 +336,7 @@ errors = validate_all(
 ### validate_all_async (Async)
 
 ```python
-from core.validators import validate_all_async
+from stride.validators import validate_all_async
 
 errors = await validate_all_async(
     value=email,
@@ -350,7 +350,7 @@ errors = await validate_all_async(
 ### Sync Validator
 
 ```python
-from core.validators import Validator, ValidationError
+from stride.validators import Validator, ValidationError
 
 class NoSpacesValidator(Validator):
     message = "Value cannot contain spaces."
@@ -365,7 +365,7 @@ class NoSpacesValidator(Validator):
 ### Async Validator
 
 ```python
-from core.validators import AsyncValidator, ValidationError
+from stride.validators import AsyncValidator, ValidationError
 
 class UniqueSlugValidator(AsyncValidator):
     message = "Slug already exists."

@@ -20,7 +20,7 @@ class AppSettings(Settings):
 
 ```python
 # src/apps/posts/admin.py
-from core.admin import admin, ModelAdmin
+from stride.admin import admin, ModelAdmin
 from .models import Post
 
 @admin.register(Post)
@@ -40,7 +40,7 @@ class PostAdmin(ModelAdmin[Post]):  # Tipagem genérica para autocomplete
 Use `ModelAdmin[Model]` para autocomplete no PyCharm:
 
 ```python
-from core.admin import ModelAdmin, WidgetConfig, IconType
+from stride.admin import ModelAdmin, WidgetConfig, IconType
 
 @admin.register(Domain)
 class DomainAdmin(ModelAdmin[Domain]):
@@ -425,7 +425,7 @@ src/apps/
 ## Tipos para Autocomplete
 
 ```python
-from core.admin import (
+from stride.admin import (
     ModelAdmin,
     WidgetConfig,      # TypedDict para widgets
     FieldsetConfig,    # Tipo para fieldsets

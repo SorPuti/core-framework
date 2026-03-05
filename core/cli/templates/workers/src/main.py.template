@@ -1,8 +1,0 @@
-"""App entry point; workers via core runworker."""
-from core import CoreApp, AutoRouter
-from src.apps.tasks.routes import router as tasks_router
-
-api = AutoRouter(prefix="/api/v1")
-api.include_router(tasks_router)
-
-app = CoreApp(routers=[api])

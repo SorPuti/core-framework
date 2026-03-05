@@ -1,0 +1,7 @@
+"""Tenants app URLs."""
+from stride.urls import path
+from .views import TenantViewSet
+
+urlpatterns = [
+    path("tenants", TenantViewSet),
+]

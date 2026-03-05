@@ -164,7 +164,7 @@ class AppSettings(Settings):
 ### Password Requirements
 
 ```python
-from core.validators import PasswordValidator
+from stride.validators import PasswordValidator
 
 validator = PasswordValidator(
     min_length=8,
@@ -222,7 +222,7 @@ result = await db.execute(
 ### Use InputSchema
 
 ```python
-from core.serializers import InputSchema
+from stride.serializers import InputSchema
 
 class UserInput(InputSchema):
     email: str
@@ -234,7 +234,7 @@ class UserInput(InputSchema):
 ### Validate All Input
 
 ```python
-from core.validators import (
+from stride.validators import (
     EmailValidator,
     MinLengthValidator,
     MaxLengthValidator,
@@ -254,8 +254,8 @@ class UserViewSet(ModelViewSet):
 **Not built-in.** Implement with middleware:
 
 ```python
-from core.middleware import ASGIMiddleware
-from core.exceptions import TooManyRequests
+from stride.middleware import ASGIMiddleware
+from stride.exceptions import TooManyRequests
 
 class RateLimitMiddleware(ASGIMiddleware):
     name = "RateLimitMiddleware"
@@ -314,7 +314,7 @@ credentials.json
 ### Validate in Production
 
 ```python
-from core.auth import validate_auth_configuration
+from stride.auth import validate_auth_configuration
 
 issues = validate_auth_configuration()
 if issues:

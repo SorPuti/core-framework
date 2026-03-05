@@ -1,8 +1,0 @@
-"""App entry point; Kafka from settings."""
-from core import CoreApp, AutoRouter
-from src.apps.events.routes import router as events_router
-
-api = AutoRouter(prefix="/api/v1")
-api.include_router(events_router)
-
-app = CoreApp(routers=[api])

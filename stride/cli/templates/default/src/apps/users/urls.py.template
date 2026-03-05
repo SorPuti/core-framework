@@ -1,0 +1,9 @@
+"""Users app URLs."""
+from stride.urls import path
+from stride.auth import AuthViewSet
+from .views import UserViewSet
+
+urlpatterns = [
+    path("users", UserViewSet),
+    path("auth", AuthViewSet),
+]

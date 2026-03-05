@@ -1,0 +1,923 @@
+"""
+Engine de migrações.
+
+Responsável por:
+- Rastrear migrações aplicadas
+- Aplicar/reverter migrações
+- Detectar mudanças nos models
+- Gerar arquivos de migração
+"""
+
+from __future__ import annotations
+
+import importlib
+import importlib.util
+import os
+import re
+from datetime import datetime as stdlib_datetime, timezone as stdlib_timezone
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from stride import timezone
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
+
+from stride.migrations.dialects import get_compiler, detect_dialect
+from stride.migrations.migration import Migration
+from stride.migrations.operations import (
+    Operation,
+    CreateTable,
+    DropTable,
+    AddColumn,
+    DropColumn,
+    AlterColumn,
+    ColumnDef,
+    ForeignKeyDef, fingerprint,
+)
+from stride.migrations.state import (
+    SchemaState,
+    SchemaDiff,
+    TableState,
+    ColumnState,
+    models_to_schema_state,
+    get_database_schema_state,
+    INTERNAL_TABLES,
+    PROTECTED_TABLES,
+)
+
+if TYPE_CHECKING:
+    from stride.models import Model
+    from stride.migrations.dialects.base import DialectCompiler
+
+
+# Tabela para rastrear migrações aplicadas
+MIGRATIONS_TABLE = "_core_migrations"
+
+
+class MigrationEngine:
+    """
+    Engine principal de migrações.
+    
+    Uso:
+        engine = MigrationEngine(
+            database_url="sqlite+aiosqlite:///./app.db",
+            migrations_dir="./migrations",
+        )
+        
+        # Detectar mudanças e gerar migração
+        await engine.makemigrations(models=[User, Post], app_label="main")
+        
+        # Aplicar migrações
+        await engine.migrate()
+        
+        # Ver status
+        await engine.showmigrations()
+        
+        # Reverter última migração
+        await engine.rollback()
+    """
+    
+    def __init__(
+        self,
+        database_url: str,
+        migrations_dir: str | Path = "./migrations",
+        app_label: str = "main",
+    ) -> None:
+        self.database_url = database_url
+        self.migrations_dir = Path(migrations_dir)
+        self.app_label = app_label
+        self._engine = create_async_engine(database_url, echo=False)
+        self._dialect = detect_dialect(database_url)
+        self._compiler = get_compiler(self._dialect)
+    
+    @property
+    def dialect(self) -> str:
+        """Retorna o dialeto do banco de dados."""
+        return self._dialect
+    
+    @property
+    def compiler(self) -> "DialectCompiler":
+        """Retorna o compiler do dialeto atual."""
+        return self._compiler
+    
+    def _print_driver_info(self) -> None:
+        """Exibe informações sobre o driver de banco de dados ativo."""
+        driver = self.database_url.split("://")[0] if "://" in self.database_url else "unknown"
+        print(f"  Database: {self._compiler.display_name} (driver: {driver})")
+    
+    async def _ensure_migrations_table(self, conn: AsyncConnection) -> None:
+        """Garante que a tabela de migrações existe."""
+        sql = self._compiler.migrations_table_sql(MIGRATIONS_TABLE)
+        await conn.execute(text(sql))
+        await conn.commit()
+    
+    async def _get_applied_migrations(self, conn: AsyncConnection) -> list[tuple[str, str]]:
+        """Retorna lista de migrações já aplicadas."""
+        await self._ensure_migrations_table(conn)
+        
+        result = await conn.execute(
+            text(f'SELECT app, name FROM "{MIGRATIONS_TABLE}" ORDER BY id')
+        )
+        return [(row[0], row[1]) for row in result.fetchall()]
+    
+    async def _mark_migration_applied(
+        self,
+        conn: AsyncConnection,
+        app: str,
+        name: str,
+    ) -> None:
+        """Marca uma migração como aplicada."""
+        await conn.execute(
+            text(f'INSERT INTO "{MIGRATIONS_TABLE}" (app, name, applied_at) VALUES (:app, :name, :applied_at)'),
+            {"app": app, "name": name, "applied_at": stdlib_datetime.now(stdlib_timezone.utc).replace(tzinfo=None)},
+        )
+    
+    async def _unmark_migration_applied(
+        self,
+        conn: AsyncConnection,
+        app: str,
+        name: str,
+    ) -> None:
+        """Remove marcação de migração aplicada."""
+        await conn.execute(
+            text(f'DELETE FROM "{MIGRATIONS_TABLE}" WHERE app = :app AND name = :name'),
+            {"app": app, "name": name},
+        )
+    
+    def _get_migration_files(self) -> list[Path]:
+        """Lista arquivos de migração ordenados."""
+        if not self.migrations_dir.exists():
+            return []
+        
+        files = []
+        for f in self.migrations_dir.glob("*.py"):
+            if f.name.startswith("_"):
+                continue
+            # Verifica se segue o padrão NNNN_name.py
+            if re.match(r"^\d{4}_", f.name):
+                files.append(f)
+        
+        return sorted(files, key=lambda f: f.name)
+    
+    def _load_migration(self, path: Path) -> Migration:
+        """Carrega uma migração de um arquivo."""
+        spec = importlib.util.spec_from_file_location(
+            f"migrations.{path.stem}",
+            path,
+        )
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load migration from {path}")
+        
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        
+        # Procura classe Migration no módulo
+        migration_class = getattr(module, "migration", None)
+        if migration_class is None:
+            # Tenta encontrar instância de Migration
+            for name in dir(module):
+                obj = getattr(module, name)
+                if isinstance(obj, Migration):
+                    migration_class = obj
+                    break
+        
+        if migration_class is None:
+            raise ValueError(f"No Migration found in {path}")
+        
+        if isinstance(migration_class, type):
+            migration = migration_class()
+        else:
+            migration = migration_class
+        
+        migration.name = path.stem
+        migration.app_label = self.app_label
+        
+        return migration
+    
+    def _get_next_migration_number(self) -> str:
+        """Retorna o próximo número de migração."""
+        files = self._get_migration_files()
+        if not files:
+            return "0001"
+        
+        last_file = files[-1]
+        match = re.match(r"^(\d{4})_", last_file.name)
+        if match:
+            last_num = int(match.group(1))
+            return f"{last_num + 1:04d}"
+        
+        return f"{len(files) + 1:04d}"
+    
+    def _column_state_to_def(self, col: ColumnState) -> ColumnDef:
+        """Converte ColumnState para ColumnDef."""
+        return ColumnDef(
+            name=col.name,
+            type=col.type,
+            nullable=col.nullable,
+            default=col.default,
+            primary_key=col.primary_key,
+            autoincrement=col.autoincrement,
+            unique=col.unique,
+            index=col.index,
+        )
+    
+    def _topological_sort_tables(self, tables: list[TableState]) -> list[TableState]:
+        """Ordena tabelas por dependências de FK (Kahn's algorithm)."""
+        if not tables:
+            return []
+        
+        table_map = {t.name: t for t in tables}
+        table_names = set(table_map.keys())
+        
+        # Mapa de FK: table -> [(column, ref_table)]
+        fk_map = {}
+        for t in tables:
+            fk_map[t.name] = [(fk.column, fk.references_table) for fk in t.foreign_keys if fk.references_table in table_names]
+        
+        deps = {name: {ref for _, ref in fks} for name, fks in fk_map.items()}
+        
+        # Detecta ciclo via DFS
+        def find_cycle():
+            visited, rec_stack = set(), set()
+            
+            def dfs(node, path):
+                visited.add(node)
+                rec_stack.add(node)
+                for neighbor in deps.get(node, []):
+                    if neighbor not in visited:
+                        cycle = dfs(neighbor, path + [node])
+                        if cycle:
+                            return cycle
+                    elif neighbor in rec_stack:
+                        idx = path.index(neighbor) if neighbor in path else len(path)
+                        return path[idx:] + [node, neighbor]
+                rec_stack.remove(node)
+                return None
+            
+            for node in table_names:
+                if node not in visited:
+                    cycle = dfs(node, [])
+                    if cycle:
+                        return cycle
+            return None
+        
+        cycle = find_cycle()
+        if cycle:
+            # Formata mensagem de erro detalhada
+            lines = [
+                "",
+                "=" * 60,
+                "CIRCULAR FOREIGN KEY DEPENDENCY DETECTED",
+                "=" * 60,
+                "",
+                "The following tables have circular FK references:",
+                "",
+            ]
+            
+            # Mostra o ciclo
+            for i in range(len(cycle) - 1):
+                from_table, to_table = cycle[i], cycle[i + 1]
+                # Encontra o campo que causa a FK
+                fk_cols = [col for col, ref in fk_map.get(from_table, []) if ref == to_table]
+                col_name = fk_cols[0] if fk_cols else "?"
+                lines.append(f"  {from_table}.{col_name} -> {to_table}")
+            
+            lines.extend([
+                "",
+                "To fix this, you need to break the cycle by:",
+                "  1. Remove one of the ForeignKey relationships, OR",
+                "  2. Make one FK nullable and set it after creation, OR",
+                "  3. Use a regular field (e.g., AdvancedField.uuid()) instead of FK",
+                "",
+                "Example fix:",
+                f"  # In {cycle[0]} model, change:",
+                f"  #   {fk_map.get(cycle[0], [('field', '')])[0][0]} = ForeignKey('{cycle[1]}.id')",
+                f"  # To:",
+                f"  #   {fk_map.get(cycle[0], [('field', '')])[0][0]} = AdvancedField.uuid(nullable=True)",
+                "",
+                "=" * 60,
+            ])
+            
+            raise RuntimeError("\n".join(lines))
+        
+        # Kahn's algorithm
+        in_degree = {name: len(d) for name, d in deps.items()}
+        queue = [name for name, deg in in_degree.items() if deg == 0]
+        result = []
+        
+        while queue:
+            name = queue.pop(0)
+            result.append(table_map[name])
+            for other, other_deps in deps.items():
+                if name in other_deps:
+                    other_deps.discard(name)
+                    in_degree[other] -= 1
+                    if in_degree[other] == 0:
+                        queue.append(other)
+        
+        return result
+
+    def _load_last_migration_fingerprint(self) -> str | None:
+        files = self._get_migration_files()
+        if not files:
+            return None
+
+        last_file = files[-1]
+        content = last_file.read_text()
+
+        for line in content.splitlines():
+            if line.startswith("FINGERPRINT"):
+                _, value = line.split(":", 1)
+                return value.strip().strip('"').strip("'")
+
+        return None
+
+    def _diff_to_operations(self, diff: SchemaDiff) -> list[Operation]:
+        """Converte SchemaDiff em lista de operações."""
+        from stride.migrations.operations import CreateEnum, DropEnum, AlterEnum
+        
+        operations: list[Operation] = []
+        
+        # 1. Criar enums PRIMEIRO (antes das tabelas que os usam)
+        for enum_state in diff.enums_to_create:
+            operations.append(CreateEnum(
+                enum_name=enum_state.name,
+                values=enum_state.values,
+            ))
+        
+        # 2. Alterar enums existentes
+        for old_enum, new_enum in diff.enums_to_alter:
+            old_values = set(old_enum.values)
+            new_values = set(new_enum.values)
+            
+            add_values = list(new_values - old_values)
+            remove_values = list(old_values - new_values)
+            
+            operations.append(AlterEnum(
+                enum_name=new_enum.name,
+                add_values=add_values,
+                remove_values=remove_values,
+                old_values=old_enum.values,
+                new_values=new_enum.values,
+            ))
+        
+        # Ordenar tabelas por dependências de FK
+        sorted_tables = self._topological_sort_tables(diff.tables_to_create)
+        for table in sorted_tables:
+            columns = [self._column_state_to_def(col) for col in table.columns.values()]
+            foreign_keys = [
+                ForeignKeyDef(
+                    column=fk.column,
+                    references_table=fk.references_table,
+                    references_column=fk.references_column,
+                    on_delete=fk.on_delete,
+                )
+                for fk in table.foreign_keys
+            ]
+            operations.append(CreateTable(
+                table_name=table.name,
+                columns=columns,
+                foreign_keys=foreign_keys,
+            ))
+        
+        # 4. Adicionar colunas
+        for table_name, columns in diff.columns_to_add.items():
+            for col in columns:
+                operations.append(AddColumn(
+                    table_name=table_name,
+                    column=self._column_state_to_def(col),
+                ))
+        
+        # 5. Remover colunas
+        for table_name, col_names in diff.columns_to_drop.items():
+            for col_name in col_names:
+                operations.append(DropColumn(
+                    table_name=table_name,
+                    column_name=col_name,
+                ))
+        
+        # 6. Alterar colunas
+        for table_name, alterations in diff.columns_to_alter.items():
+            for old_col, new_col in alterations:
+                if old_col.primary_key or new_col.primary_key:
+                    continue
+                
+                col_diff = old_col.diff(new_col)
+                if col_diff:
+                    operations.append(AlterColumn(
+                        table_name=table_name,
+                        column_name=old_col.name,
+                        new_type=col_diff.get("type", (None, None))[1],
+                        new_nullable=col_diff.get("nullable", (None, None))[1],
+                        new_default=col_diff.get("default", (None, None))[1],
+                        old_type=col_diff.get("type", (None, None))[0],
+                        old_nullable=col_diff.get("nullable", (None, None))[0],
+                        old_default=col_diff.get("default", (None, None))[0],
+                    ))
+        
+        for table_name in diff.tables_to_drop:
+            if table_name in PROTECTED_TABLES:
+                continue
+            if table_name in INTERNAL_TABLES:
+                continue
+            operations.append(DropTable(table_name=table_name))
+
+        for enum_name in diff.enums_to_drop:
+            operations.append(DropEnum(enum_name=enum_name))
+
+        return operations
+
+    def _generate_migration_code(
+            self,
+            name: str,
+            operations: list[Operation],
+            dependencies: list[tuple[str, str]] | None = None,
+            fp_new: str | None = None,
+    ) -> str:
+        """Gera código Python para uma migração."""
+        deps = dependencies or []
+        deps_str = repr(deps)
+        
+        ops_code = []
+        for op in operations:
+            if hasattr(op, "to_code"):
+                ops_code.append(f"    {op.to_code()}")
+            else:
+                ops_code.append(f"    # {op.describe()}")
+        
+        ops_str = ",\n".join(ops_code) if ops_code else "    # No operations"
+        
+        from stride.migrations.operations import get_serialization_imports
+        extra_imports = get_serialization_imports()
+        extra_imports_str = "\n".join(extra_imports) + "\n" if extra_imports else ""
+        
+        return f'''"""
+Migration: {name}
+Generated at: {timezone.now().isoformat()}
+FINGERPRINT: {fp_new or "NO_FINGERPRINT"}
+"""
+
+from stride.migrations import (
+    Migration,
+    CreateTable,
+    DropTable,
+    AddColumn,
+    DropColumn,
+    AlterColumn,
+    RenameColumn,
+    CreateIndex,
+    DropIndex,
+    RunSQL,
+    RunPython,
+)
+from stride.migrations.operations import (
+    ColumnDef,
+    ForeignKeyDef,
+    CreateEnum,
+    DropEnum,
+    AlterEnum,
+)
+{extra_imports_str}
+
+migration = Migration(
+    name="{name}",
+    dependencies={deps_str},
+    operations=[
+{ops_str}
+    ],
+)
+'''
+    
+    async def detect_changes(
+        self,
+        models: list[type["Model"]],
+    ) -> SchemaDiff:
+        """Detecta mudanças entre models e banco de dados."""
+        models_state = models_to_schema_state(models)
+        
+        async with self._engine.connect() as conn:
+            db_state = await get_database_schema_state(conn)
+        
+        return db_state.diff(models_state)
+    
+    async def makemigrations(
+        self,
+        models: list[type["Model"]],
+        name: str | None = None,
+        empty: bool = False,
+        dry_run: bool = False,
+    ) -> str | None:
+        """
+        Detecta mudanças e gera arquivo de migração.
+        
+        Args:
+            models: Lista de classes Model
+            name: Nome descritivo da migração (opcional)
+            empty: Se True, cria migração vazia
+            dry_run: Se True, apenas mostra o que seria gerado
+            
+        Returns:
+            Caminho do arquivo gerado ou None se não houver mudanças
+        """
+        self._print_driver_info()
+        
+        if empty:
+            operations = []
+            new_fp = fingerprint(operations)
+        else:
+            diff = await self.detect_changes(models)
+            
+            if not diff.has_changes:
+                print("No changes detected.")
+                return None
+            
+            operations = self._diff_to_operations(diff)
+
+            if not operations:
+                print("No changes detected.")
+                return None
+
+            new_fp = fingerprint(operations)
+            last_fp = self._load_last_migration_fingerprint()
+
+            if new_fp == last_fp:
+                print("No new changes since last migration.")
+                return None
+
+        if not name and operations:
+            verbs = {op.__class__.__name__.lower() for op in operations}
+            name = "auto_" + "_".join(sorted(verbs))
+
+        number = self._get_next_migration_number()
+        migration_name = f"{number}_{name or 'auto'}"
+        
+        files = self._get_migration_files()
+        dependencies = []
+        if files:
+            last_migration = files[-1].stem
+            dependencies = [(self.app_label, last_migration)]
+        
+        code = self._generate_migration_code(migration_name, operations, dependencies, new_fp)
+        
+        if dry_run:
+            print(f"Would create migration: {migration_name}")
+            print("-" * 50)
+            print(code)
+            return None
+        
+        self.migrations_dir.mkdir(parents=True, exist_ok=True)
+        
+        init_file = self.migrations_dir / "__init__.py"
+        if not init_file.exists():
+            init_file.write_text('"""Migrations package."""\n')
+        
+        file_path = self.migrations_dir / f"{migration_name}.py"
+        file_path.write_text(code)
+        
+        print(f"Created migration: {file_path}")
+        
+        for op in operations:
+            print(f"  - {op.describe()}")
+        
+        return str(file_path)
+    
+    async def migrate(
+        self,
+        target: str | None = None,
+        fake: bool = False,
+        dry_run: bool = False,
+        check: bool = True,
+        interactive: bool = True,
+    ) -> list[str]:
+        """
+        Aplica migrações pendentes.
+        
+        Args:
+            target: Nome da migração alvo (aplica até ela)
+            fake: Se True, marca como aplicada sem executar
+            dry_run: Se True, apenas mostra o que seria executado
+            check: Se True, analisa migrações antes de aplicar
+            interactive: Se True, pergunta antes de prosseguir com problemas
+            
+        Returns:
+            Lista de migrações aplicadas
+        """
+        from stride.migrations.analyzer import (
+            MigrationAnalyzer,
+            format_analysis_report,
+            Severity,
+        )
+        
+        applied = []
+        
+        self._print_driver_info()
+        
+        async with self._engine.connect() as conn:
+            await self._ensure_migrations_table(conn)
+            
+            applied_migrations = await self._get_applied_migrations(conn)
+            applied_set = {(app, name) for app, name in applied_migrations}
+            
+            migration_files = self._get_migration_files()
+            
+            pending_migrations = []
+            for file_path in migration_files:
+                migration_name = file_path.stem
+                
+                if (self.app_label, migration_name) in applied_set:
+                    continue
+                
+                if target and migration_name > target:
+                    break
+                
+                pending_migrations.append((file_path, migration_name))
+            
+            if not pending_migrations:
+                print("No migrations to apply.")
+                return applied
+            
+            if check and not fake:
+                analyzer = MigrationAnalyzer(dialect=self.dialect)
+                all_issues = []
+                all_results = []
+                
+                print("\nChecking migrations...")
+                
+                for file_path, migration_name in pending_migrations:
+                    migration = self._load_migration(file_path)
+                    result = await analyzer.analyze(
+                        migration.operations,
+                        conn,
+                        migration_name,
+                    )
+                    all_results.append(result)
+                    all_issues.extend(result.issues)
+                
+                has_errors = any(
+                    i.severity in (Severity.ERROR, Severity.CRITICAL)
+                    for i in all_issues
+                )
+                has_warnings = any(
+                    i.severity == Severity.WARNING
+                    for i in all_issues
+                )
+                
+                for result in all_results:
+                    print(format_analysis_report(result))
+                
+                if has_errors:
+                    print("\nBlocked: Fix the errors above before migrating.")
+                    print("Options:")
+                    print("  1. Edit the migration file to fix the issues")
+                    print("  2. Use --no-check to skip (not recommended)")
+                    print("  3. Use --fake to mark as applied without executing")
+                    return []
+                
+                if has_warnings and interactive:
+                    try:
+                        response = input("\nProceed with warnings? [y/N]: ").strip().lower()
+                        if response not in ("y", "yes"):
+                            print("Cancelled.")
+                            return []
+                    except (EOFError, KeyboardInterrupt):
+                        print("\nCancelled.")
+                        return []
+                
+                if all_issues and not has_errors:
+                    print()
+            
+            print("\nApplying migrations...")
+            for file_path, migration_name in pending_migrations:
+                migration = self._load_migration(file_path)
+                
+                if dry_run:
+                    print(f"  {migration_name} (dry-run)")
+                    for op in migration.operations:
+                        print(f"    - {op.describe()}")
+                    applied.append(migration_name)
+                    continue
+                
+                print(f"  {migration_name}...", end=" ", flush=True)
+                
+                if not fake:
+                    for op in migration.operations:
+                        await op.forward(conn, self.dialect)
+                
+                await self._mark_migration_applied(conn, self.app_label, migration_name)
+                await conn.commit()
+                
+                applied.append(migration_name)
+                print("OK")
+        
+        if applied:
+            print(f"\nDone. Applied {len(applied)} migration(s).")
+        
+        return applied
+    
+    async def rollback(
+        self,
+        target: str | None = None,
+        fake: bool = False,
+        dry_run: bool = False,
+    ) -> list[str]:
+        """
+        Reverte migrações.
+        
+        Args:
+            target: Nome da migração alvo (reverte até ela, exclusive)
+            fake: Se True, desmarca sem executar
+            dry_run: Se True, apenas mostra o que seria executado
+            
+        Returns:
+            Lista de migrações revertidas
+        """
+        reverted = []
+        
+        self._print_driver_info()
+        
+        async with self._engine.connect() as conn:
+            applied_migrations = await self._get_applied_migrations(conn)
+            
+            # Reverte na ordem inversa
+            for app, name in reversed(applied_migrations):
+                if app != self.app_label:
+                    continue
+                
+                if target and name <= target:
+                    break
+                
+                file_path = self.migrations_dir / f"{name}.py"
+                if not file_path.exists():
+                    print(f"Warning: Migration file not found: {file_path}")
+                    continue
+                
+                migration = self._load_migration(file_path)
+                
+                if not migration.is_reversible:
+                    raise RuntimeError(
+                        f"Migration {name} is not reversible. "
+                        "Cannot rollback."
+                    )
+                
+                if dry_run:
+                    print(f"Would rollback: {name}")
+                    for op in reversed(migration.operations):
+                        print(f"  - Reverse: {op.describe()}")
+                    reverted.append(name)
+                    continue
+                
+                print(f"Rolling back {name}...")
+                
+                if not fake:
+                    for op in reversed(migration.operations):
+                        print(f"  - Reverse: {op.describe()}")
+                        await op.backward(conn, self.dialect)
+                
+                await self._unmark_migration_applied(conn, self.app_label, name)
+                await conn.commit()
+                
+                reverted.append(name)
+                print(f"  OK")
+                
+                # Se não especificou target, reverte apenas uma
+                if target is None:
+                    break
+        
+        if not reverted:
+            print("No migrations to rollback.")
+        
+        return reverted
+    
+    async def showmigrations(self) -> dict[str, list[tuple[str, bool]]]:
+        """
+        Mostra status das migrações.
+        
+        Returns:
+            Dict com app_label -> lista de (nome, aplicada)
+        """
+        result: dict[str, list[tuple[str, bool]]] = {self.app_label: []}
+        
+        self._print_driver_info()
+        
+        async with self._engine.connect() as conn:
+            await self._ensure_migrations_table(conn)
+            applied_migrations = await self._get_applied_migrations(conn)
+            applied_set = {(app, name) for app, name in applied_migrations}
+        
+        migration_files = self._get_migration_files()
+        
+        print(f"\n{self.app_label}:")
+        for file_path in migration_files:
+            name = file_path.stem
+            is_applied = (self.app_label, name) in applied_set
+            status = "[X]" if is_applied else "[ ]"
+            print(f"  {status} {name}")
+            result[self.app_label].append((name, is_applied))
+        
+        if not migration_files:
+            print("  (no migrations)")
+        
+        return result
+    
+    async def squash(
+        self,
+        start: str,
+        end: str,
+        name: str | None = None,
+    ) -> str | None:
+        """
+        Combina múltiplas migrações em uma só.
+        
+        Args:
+            start: Nome da primeira migração
+            end: Nome da última migração
+            name: Nome da migração combinada
+            
+        Returns:
+            Caminho do arquivo gerado
+        """
+        migration_files = self._get_migration_files()
+        
+        # Encontra migrações no range
+        migrations_to_squash = []
+        in_range = False
+        
+        for file_path in migration_files:
+            migration_name = file_path.stem
+            
+            if migration_name == start:
+                in_range = True
+            
+            if in_range:
+                migration = self._load_migration(file_path)
+                migrations_to_squash.append(migration)
+            
+            if migration_name == end:
+                break
+        
+        if not migrations_to_squash:
+            print(f"No migrations found between {start} and {end}")
+            return None
+        
+        # Combina operações
+        all_operations = []
+        for migration in migrations_to_squash:
+            all_operations.extend(migration.operations)
+        
+        # Otimiza operações (remove redundâncias)
+        optimized = self._optimize_operations(all_operations)
+
+        new_fp = fingerprint(optimized)
+        
+        # Gera nova migração
+        number = self._get_next_migration_number()
+        squash_name = f"{number}_{name or 'squashed'}"
+        
+        code = self._generate_migration_code(squash_name, optimized, [], new_fp)
+        
+        file_path = self.migrations_dir / f"{squash_name}.py"
+        file_path.write_text(code)
+        
+        print(f"Created squashed migration: {file_path}")
+        print(f"  Squashed {len(migrations_to_squash)} migrations into 1")
+        print(f"  Operations: {len(all_operations)} -> {len(optimized)}")
+        
+        return str(file_path)
+    
+    def _optimize_operations(self, operations: list[Operation]) -> list[Operation]:
+        """Otimiza lista de operações removendo redundâncias."""
+        # Implementação básica - pode ser expandida
+        optimized = []
+        
+        created_tables: set[str] = set()
+        dropped_tables: set[str] = set()
+        
+        for op in operations:
+            if isinstance(op, CreateTable):
+                if op.table_name in dropped_tables:
+                    dropped_tables.remove(op.table_name)
+                    created_tables.add(op.table_name)
+                optimized.append(op)
+            elif isinstance(op, DropTable):
+                if op.table_name in PROTECTED_TABLES:
+                    raise RuntimeError(
+                        f"Cannot drop protected table '{op.table_name}'. "
+                        f"Protected tables are managed by Stride. "
+                        f"Use 'core reset_db' to completely reset the database."
+                    )
+                
+                if op.table_name in created_tables:
+                    # Tabela foi criada e dropada - remove ambas
+                    created_tables.remove(op.table_name)
+                    optimized = [
+                        o for o in optimized
+                        if not (isinstance(o, CreateTable) and o.table_name == op.table_name)
+                    ]
+                else:
+                    dropped_tables.add(op.table_name)
+                    optimized.append(op)
+            
+            else:
+                optimized.append(op)
+        
+        return optimized

@@ -95,7 +95,7 @@ Quando `database_read_url` está configurado:
 Retorna `DatabaseSession` com propriedades `.read` e `.write`.
 
 ```python
-from core.database import get_db_replicas, DatabaseSession
+from stride.database import get_db_replicas, DatabaseSession
 from fastapi import Depends
 
 async def my_view(db: DatabaseSession = Depends(get_db_replicas)):
@@ -112,7 +112,7 @@ async def my_view(db: DatabaseSession = Depends(get_db_replicas)):
 Sessão somente escrita.
 
 ```python
-from core.database import get_write_db
+from stride.database import get_write_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 async def create_user(db: AsyncSession = Depends(get_write_db)):
@@ -125,7 +125,7 @@ async def create_user(db: AsyncSession = Depends(get_write_db)):
 Sessão somente leitura.
 
 ```python
-from core.database import get_read_db
+from stride.database import get_read_db
 
 async def list_users(db: AsyncSession = Depends(get_read_db)):
     return await User.objects.using(db).all()
@@ -134,7 +134,7 @@ async def list_users(db: AsyncSession = Depends(get_read_db)):
 ## Type Aliases
 
 ```python
-from core.database import DBSession, WriteSession, ReadSession
+from stride.database import DBSession, WriteSession, ReadSession
 
 async def my_view(
     db: DBSession,           # DatabaseSession com .read/.write
@@ -173,7 +173,7 @@ class AppSettings(Settings):
 ## Verificar Status da Replica
 
 ```python
-from core.database import is_replica_configured
+from stride.database import is_replica_configured
 
 if is_replica_configured():
     print("Usando replica de leitura separada")
@@ -233,7 +233,7 @@ Se `database_read_url` não está definido ou é igual a `database_url`:
 ViewSets usam `get_db` por padrão (sessão única). Para replicas:
 
 ```python
-from core.database import get_db_replicas
+from stride.database import get_db_replicas
 
 class UserViewSet(ModelViewSet):
     model = User
@@ -247,21 +247,21 @@ class UserViewSet(ModelViewSet):
 Ou configure globalmente:
 
 ```python
-# No setup do CoreApp
-from core.dependencies import set_session_factory
-from core.database import get_db_replicas
+# No setup do StrideApp
+from stride.dependencies import set_session_factory
+from stride.database import get_db_replicas
 
 set_session_factory(get_db_replicas)
 ```
 
 ## Inicialização
 
-Replicas são auto-inicializadas pelo CoreApp quando `database_read_url` está definido.
+Replicas são auto-inicializadas pelo StrideApp quando `database_read_url` está definido.
 
 Inicialização manual:
 
 ```python
-from core.database import init_replicas
+from stride.database import init_replicas
 
 await init_replicas(
     write_url="postgresql+asyncpg://...",

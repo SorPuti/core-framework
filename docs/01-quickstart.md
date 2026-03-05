@@ -10,7 +10,7 @@ flowchart TB
         REQ[HTTP Request]
     end
     
-    subgraph "Core Framework"
+    subgraph "Stride"
         MW[Middleware Stack]
         RT[AutoRouter]
         VS[ViewSet]
@@ -38,16 +38,16 @@ flowchart TB
 
 ```bash
 # Instalação global (recomendado)
-pipx install core-framework
+pipx install stride
 
 # Ou por projeto
-pip install core-framework
+pip install stride
 ```
 
 ## Criar Projeto
 
 ```bash
-core init my-api
+stride init my-api
 cd my-api
 ```
 
@@ -71,7 +71,7 @@ my-api/
 Edite `src/settings.py`:
 
 ```python
-from core.config import Settings, configure
+from stride.config import Settings, configure
 
 class AppSettings(Settings):
     app_name: str = "Minha API"
@@ -95,7 +95,7 @@ DEBUG=true
 
 ```python
 # src/apps/posts/models.py
-from core import Model, Field
+from stride import Model, Field
 from sqlalchemy.orm import Mapped
 
 class Post(Model):
@@ -118,8 +118,8 @@ from src.apps.posts.models import Post  # noqa
 
 ```python
 # src/apps/posts/views.py
-from core import ModelViewSet
-from core.permissions import AllowAny
+from stride import ModelViewSet
+from stride.permissions import AllowAny
 from .models import Post
 
 class PostViewSet(ModelViewSet):
@@ -127,44 +127,45 @@ class PostViewSet(ModelViewSet):
     permission_classes = [AllowAny]  # Acesso público
 ```
 
-## Criar Rotas
+## Criar URLs
 
 ```python
-# src/apps/posts/routes.py
-from core import AutoRouter
+# src/apps/posts/urls.py
+from stride import path
 from .views import PostViewSet
 
-router = AutoRouter(prefix="/posts", tags=["Posts"])
-router.register("", PostViewSet)
+urlpatterns = [
+    path("posts", PostViewSet),
+]
 ```
 
-## Registrar Rotas
+## Entry Point
 
 ```python
 # src/main.py
-from core import CoreApp, AutoRouter
-from core.config import get_settings
-from src.apps.posts.routes import router as posts_router
+from stride import StrideApp
 
-settings = get_settings()
-
-api = AutoRouter(prefix="/api/v1")
-api.include_router(posts_router)
-
-app = CoreApp(routers=[api])
+app = StrideApp()  # Auto-discovery carrega tudo automaticamente
 ```
+
+O framework automaticamente:
+- Carrega settings do `.env`
+- Descobre todas as apps em `installed_apps`
+- Carrega URLs de cada `urls.py`
+- Aplica middlewares configurados
+- Cria tabelas (se `auto_create_tables=True`)
 
 ## Executar
 
 ```bash
 # Criar migration
-core makemigrations --name add_posts
+stride makemigrations --name add_posts
 
 # Aplicar migration
-core migrate
+stride migrate
 
 # Iniciar servidor
-core run
+stride run
 ```
 
 ## Testar
@@ -186,7 +187,7 @@ Endpoints gerados:
 
 ```python
 # src/settings.py
-from core.config import Settings, PydanticField, configure
+from stride.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════

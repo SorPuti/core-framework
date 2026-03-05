@@ -1,0 +1,934 @@
+"""
+StrideApp - Application wrapper. Docs: https://github.com/your-org/core-framework/docs/01-quickstart.md
+
+Usage:
+    from stride import StrideApp
+    
+    # Auto-discovery carrega automaticamente todas as rotas de src/apps/*/urls.py
+    app = StrideApp()
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+from collections.abc import Callable, Sequence
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from stride.config import Settings, get_settings
+from stride.models import create_tables, close_database
+from stride.routing import Router, AutoRouter, include_router
+from stride.urls import autodiscover
+
+app_logger = logging.getLogger("stride.app")
+
+
+class StrideApp:
+    """
+    Aplicação principal do framework.
+    
+    Encapsula FastAPI com configurações e lifecycle management.
+    
+    O StrideApp usa auto-discovery automático - apenas instancie e tudo é
+    carregado automaticamente: settings (.env), middlewares, models e URLs.
+    
+    Exemplo plug-and-play:
+        from stride import StrideApp
+        
+        app = StrideApp()  # Carrega tudo automaticamente
+    
+    Exemplo com middlewares adicionais:
+        app = StrideApp(
+            middleware=[
+                "stride.middleware.TimingMiddleware",
+                "stride.auth.AuthenticationMiddleware",
+                ("stride.middleware.LoggingMiddleware", {"log_headers": True}),
+            ],
+        )
+    
+    Auto-discovery de URLs:
+        O framework automaticamente descobre e carrega urls.py de cada app
+        listada em settings.installed_apps. Cada app pode definir urlpatterns
+        similar ao Django.
+    
+    Shortcuts disponíveis:
+        - "auth": AuthenticationMiddleware
+        - "timing": TimingMiddleware
+        - "request_id": RequestIDMiddleware
+        - "logging": LoggingMiddleware
+        - "security_headers": SecurityHeadersMiddleware
+    """
+    
+    def __init__(
+        self,
+        title: str | None = None,
+        description: str = "",
+        version: str = "1.0.0",
+        settings: Settings | None = None,
+        on_startup: list[Callable] | None = None,
+        on_shutdown: list[Callable] | None = None,
+        middlewares: list[tuple[type, dict[str, Any]]] | None = None,
+        middleware: list[str | type | tuple] | None = None,
+        exception_handlers: dict[type, Callable] | None = None,
+        auto_create_tables: bool | None = None,
+        **fastapi_kwargs: Any,
+    ) -> None:
+        """
+        Inicializa a aplicação.
+        
+        O StrideApp usa auto-discovery automático de URLs. Não é necessário
+        configurar routers manualmente - eles são descobertos automaticamente
+        a partir dos arquivos urls.py em cada app listada em installed_apps.
+        
+        Args:
+            title: Título da API
+            description: Descrição da API
+            version: Versão da API
+            settings: Configurações (usa padrão se não fornecido)
+            on_startup: Callbacks de startup
+            on_shutdown: Callbacks de shutdown
+            middlewares: Lista de middlewares formato antigo (classe, kwargs)
+            middleware: Lista de middlewares formato Django-style (strings/classes)
+            exception_handlers: Handlers de exceção customizados
+            auto_create_tables: Se True, cria tabelas no startup (default: Settings.auto_create_tables)
+            **fastapi_kwargs: Argumentos extras para FastAPI
+        
+        Middleware format (novo, Django-style):
+            middleware=[
+                "stride.auth.AuthenticationMiddleware",  # String path
+                "auth",  # Shortcut
+                MyMiddleware,  # Classe direta
+                ("logging", {"log_body": True}),  # Com kwargs
+            ]
+        """
+        # ── Step 1: Settings (loaded, validated) ──
+        self.settings = settings or get_settings()
+        self._on_startup = on_startup or []
+        self._on_shutdown = on_shutdown or []
+        
+        # auto_create_tables: parâmetro explícito > settings > default (False)
+        if auto_create_tables is not None:
+            self._auto_create_tables = auto_create_tables
+        else:
+            self._auto_create_tables = getattr(self.settings, "auto_create_tables", False)
+        
+        # Store settings on app.state for dependency injection
+        # Evita chamadas get_settings() em hot paths
+        
+        # ── Step 2: Create FastAPI app ──
+        self.app = FastAPI(
+            title=title or self.settings.app_name,
+            description=description,
+            version=version,
+            docs_url=self.settings.docs_url,
+            redoc_url=self.settings.redoc_url,
+            openapi_url=self.settings.openapi_url,
+            lifespan=self._lifespan,
+            **fastapi_kwargs,
+        )
+        
+        # Store settings on app.state for request-level access
+        self.app.state.settings = self.settings
+        
+        # ── Step 3: CORS ──
+        self._setup_cors()
+        
+        # ── Step 4: Tenancy middleware ──
+        if self.settings.tenancy_enabled:
+            self._setup_tenancy_middleware()
+        
+        # ── Step 5: Django-style middleware ──
+        middleware_list = middleware or getattr(self.settings, "middleware", None)
+        if middleware_list:
+            self._setup_django_style_middleware(middleware_list)
+        
+        # ── Step 6: Legacy middleware format ──
+        if middlewares:
+            for middleware_class, middleware_kwargs in middlewares:
+                self.app.add_middleware(middleware_class, **middleware_kwargs)
+        
+        # ── Step 7: Exception handlers ──
+        self._setup_exception_handlers(exception_handlers)
+
+        # ── Step 8: URL Auto-discovery ──
+        # Descobre e carrega automaticamente todos os urls.py das apps
+        self._ws_router = None
+        self._included_routers: list[tuple[Any, str]] = []
+        self._discovered_router = autodiscover(self.settings)
+        self.include_router(self._discovered_router)
+
+        # ── Step 8.1: Collect WebSocket routes ──
+        self._build_ws_router()
+
+        # ── Step 8.5: Admin Panel ──
+        self._admin_site = None
+        if getattr(self.settings, "admin_enabled", True):
+            self._setup_admin()
+        
+        # ── Step 9: Health checks ──
+        if getattr(self.settings, "health_check_enabled", True):
+            self._setup_health_checks()
+    
+    @asynccontextmanager
+    async def _lifespan(self, app: FastAPI):
+        """Gerencia o ciclo de vida da aplicação."""
+        # Startup
+        await self._startup()
+        
+        yield
+        
+        # Shutdown
+        await self._shutdown()
+    
+    async def _startup(self) -> None:
+        """
+        Executa tarefas de startup na ordem garantida.
+        
+        Boot sequence:
+        0. Auto-configure auth (if user_model is set in Settings)
+        1. Schema validation (fail-fast)
+        1.5. Load models via registry (lazy, apenas se necessário)
+        2. Database initialization
+        3. Table creation (if configured)
+        4. Tenancy setup
+        5. Auto-collect permissions (if configured)
+        6. User startup callbacks
+        """
+        app_logger.info(
+            "Starting %s (environment=%s, debug=%s)",
+            self.settings.app_name,
+            self.settings.environment,
+            self.settings.debug,
+        )
+        
+        # ── Step 0: Auto-configure auth from Settings (plug-and-play) ──
+        # This allows user_model to be configured in Settings without
+        # needing to call configure_auth() manually in main.py
+        from stride.config import auto_configure_auth, is_auth_configured
+        
+        if not is_auth_configured() and getattr(self.settings, "user_model", None):
+            if auto_configure_auth(self.settings):
+                app_logger.debug("Auth auto-configured from Settings")
+        
+        # ── Step 1: Schema/Model validation (before DB for fail-fast) ──
+        if getattr(self.settings, "strict_validation", self.settings.debug):
+            await self._validate_schemas()
+        
+        # ── Step 1.5: Load models (apenas se necessário) ──
+        # Carrega modelos apenas se necessário para table creation ou permissions
+        if self._auto_create_tables or getattr(self.settings, "auto_collect_permissions", False):
+            from importlib import import_module
+            
+            models_module = self.settings.models_module
+            
+            # Importa módulo de modelos explicitamente
+            try:
+                import_module(models_module)
+                app_logger.debug("Loaded models from %s", models_module)
+            except ModuleNotFoundError:
+                app_logger.warning("Models module '%s' not found", models_module)
+        
+        # ── Step 2: Database initialization (single entry point) ──
+        from stride.database import init_db
+        await init_db(self.settings)
+        
+        # ── Step 3: Table creation ──
+        if self._auto_create_tables:
+            await create_tables()
+        
+        # ── Step 4: Tenancy ──
+        if self.settings.tenancy_enabled:
+            from stride.tenancy import set_tenant_field
+            set_tenant_field(self.settings.tenancy_field)
+        
+        # ── Step 5: Auto-collect permissions ──
+        if getattr(self.settings, "auto_collect_permissions", False):
+            await self._auto_collect_permissions()
+        
+        # ── Step 6: User callbacks ──
+        for callback in self._on_startup:
+            result = callback()
+            if hasattr(result, "__await__"):
+                await result
+        
+        app_logger.info("Application started successfully")
+    
+    async def _auto_collect_permissions(self) -> None:
+        """
+        Auto-generate CRUD permissions for all registered models on startup.
+        
+        Discovers all concrete Model subclasses (same as admin registry) and
+        creates view/add/change/delete permissions for each. Idempotent.
+        """
+        try:
+            from stride.models import Model, get_session
+            from stride.auth.models import Permission
+            from sqlalchemy import select
+            
+            # Collect all concrete models from the admin registry (if available)
+            models: list[type] = []
+            if self._admin_site:
+                for model_cls in self._admin_site._registry:
+                    if hasattr(model_cls, "__table__") and not getattr(model_cls, "__abstract__", False):
+                        models.append(model_cls)
+            
+            # Fallback: scan Base subclasses
+            if not models:
+                for cls in Model.__subclasses__():
+                    if hasattr(cls, "__table__") and not getattr(cls, "__abstract__", False):
+                        if cls not in models:
+                            models.append(cls)
+            
+            if not models:
+                return
+            
+            ACTIONS = ("view", "add", "change", "delete")
+            ACTION_LABELS = {"view": "Can view", "add": "Can add", "change": "Can change", "delete": "Can delete"}
+            
+            def resolve_app_label(m: type) -> str:
+                parts = m.__module__.split(".")
+                return parts[-2] if len(parts) >= 2 else parts[0]
+            
+            permissions_to_create: list[tuple[str, str]] = []
+            for m in models:
+                app_label = resolve_app_label(m)
+                model_name = m.__name__.lower()
+                for action in ACTIONS:
+                    codename = f"{app_label}.{action}_{model_name}"
+                    display_name = f"{ACTION_LABELS[action]} {m.__name__}"
+                    permissions_to_create.append((codename, display_name))
+            
+            session = await get_session()
+            async with session:
+                # Fetch existing
+                stmt = select(Permission.codename)
+                result = await session.execute(stmt)
+                existing = {row[0] for row in result}
+                
+                created = 0
+                for codename, display_name in permissions_to_create:
+                    if codename not in existing:
+                        session.add(Permission(codename=codename, name=display_name))
+                        created += 1
+                
+                if created:
+                    await session.commit()
+                    app_logger.info("Auto-collected %d permission(s) for %d model(s)", created, len(models))
+                    
+        except Exception as e:
+            app_logger.debug("Auto-collect permissions skipped: %s", e)
+    
+    async def _validate_schemas(self) -> None:
+        """
+        Validate all ViewSet schemas against their models.
+        
+        Called during startup if strict_validation is enabled.
+        In DEBUG mode, raises SchemaModelMismatchError on critical issues.
+        In production, logs errors but continues.
+        """
+        import logging
+        logger = logging.getLogger("stride.app")
+        
+        try:
+            from stride.views import validate_pending_viewsets
+            from stride.validation import SchemaModelMismatchError
+            
+            logger.info("Running schema/model validations...")
+            
+            # In debug mode, fail fast on critical issues
+            strict = self.settings.debug
+            
+            try:
+                issues = validate_pending_viewsets(strict=strict)
+                
+                if issues:
+                    logger.warning(
+                        f"Schema validation completed with {len(issues)} issues"
+                    )
+                else:
+                    logger.info("Schema validation passed")
+                    
+            except SchemaModelMismatchError as e:
+                if self.settings.debug:
+                    logger.error(f"Schema validation failed: {e}")
+                    raise RuntimeError(
+                        f"Schema validation errors (set DEBUG=False to skip):\n{e}"
+                    ) from e
+                else:
+                    logger.error(f"Schema validation errors (ignored): {e}")
+                    
+        except ImportError:
+            logger.debug("Validation module not available, skipping")
+        except Exception as e:
+            logger.warning(f"Could not validate schemas: {e}")
+    
+    async def _shutdown(self) -> None:
+        """Executa tarefas de shutdown."""
+        # Executa callbacks customizados
+        for callback in self._on_shutdown:
+            result = callback()
+            if hasattr(result, "__await__"):
+                await result
+        
+        # Flush and close messaging producers
+        try:
+            from stride.messaging.registry import stop_all_producers
+            await stop_all_producers()
+        except Exception:
+            pass  # Messaging may not be configured
+        
+        # Fecha conexões
+        if self.settings.has_read_replica:
+            from stride.database import close_replicas
+            await close_replicas()
+        else:
+            await close_database()
+    
+    def _setup_cors(self) -> None:
+        """Configura CORS."""
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=self.settings.cors_origins,
+            allow_credentials=self.settings.cors_allow_credentials,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    
+    def _setup_tenancy_middleware(self) -> None:
+        """Configura middleware de multi-tenancy."""
+        from stride.tenancy import TenantMiddleware
+        
+        self.app.add_middleware(
+            TenantMiddleware,
+            user_tenant_attr=self.settings.tenancy_user_attribute,
+            tenant_field=self.settings.tenancy_field,
+            require_tenant=self.settings.tenancy_require,
+        )
+    
+    def _setup_django_style_middleware(
+        self,
+        middleware_list: list[str | type | tuple],
+    ) -> None:
+        """
+        Configura middlewares no estilo Django.
+        
+        Args:
+            middleware_list: Lista de middlewares
+                - String: path do middleware (ex: "stride.auth.AuthenticationMiddleware")
+                - String shortcut: nome curto (ex: "auth", "timing")
+                - Classe: classe do middleware diretamente
+                - Tuple: (middleware, kwargs) para passar configurações
+        
+        Example:
+            middleware_list = [
+                "stride.middleware.TimingMiddleware",
+                "auth",  # shortcut para AuthenticationMiddleware
+                MyCustomMiddleware,
+                ("logging", {"log_body": True}),
+            ]
+        """
+        from stride.middleware import configure_middleware, apply_middlewares
+        
+        # Configura no registry global
+        configure_middleware(middleware_list, clear_existing=True)
+        
+        # Aplica ao app
+        apply_middlewares(self.app)
+    
+    def _setup_exception_handlers(
+        self,
+        custom_handlers: dict[type, Callable] | None = None,
+    ) -> None:
+        """Configura handlers de exceção."""
+        from pydantic import ValidationError
+        from sqlalchemy.exc import IntegrityError, DataError, OperationalError
+        from stride.validators import (
+            ValidationError as CoreValidationError,
+            MultipleValidationErrors,
+            UniqueValidationError,
+        )
+        
+        # Handler para erros de validação Pydantic
+        @self.app.exception_handler(ValidationError)
+        async def pydantic_validation_handler(
+            request: Request,
+            exc: ValidationError,
+        ) -> JSONResponse:
+            # Converte erros para formato JSON serializável
+            errors = []
+            for error in exc.errors():
+                err = {
+                    "loc": list(error.get("loc", [])),
+                    "msg": str(error.get("msg", "")),
+                    "type": error.get("type", ""),
+                }
+                # Inclui input apenas se for serializável
+                if "input" in error:
+                    try:
+                        import json
+                        json.dumps(error["input"])
+                        err["input"] = error["input"]
+                    except (TypeError, ValueError):
+                        err["input"] = str(error["input"])
+                errors.append(err)
+            
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": "Validation error",
+                    "code": "validation_error",
+                    "errors": errors,
+                },
+            )
+        
+        # Handler para erros de validação do Core
+        @self.app.exception_handler(CoreValidationError)
+        async def core_validation_handler(
+            request: Request,
+            exc: CoreValidationError,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": exc.message,
+                    "code": exc.code,
+                    "field": exc.field,
+                    "errors": [exc.to_dict()],
+                },
+            )
+        
+        # Handler para múltiplos erros de validação
+        @self.app.exception_handler(MultipleValidationErrors)
+        async def multiple_validation_handler(
+            request: Request,
+            exc: MultipleValidationErrors,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=422,
+                content=exc.to_dict(),
+            )
+        
+        # Handler para erros de unicidade
+        @self.app.exception_handler(UniqueValidationError)
+        async def unique_validation_handler(
+            request: Request,
+            exc: UniqueValidationError,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=409,  # Conflict
+                content={
+                    "detail": exc.message,
+                    "code": "unique_constraint",
+                    "field": exc.field,
+                    "value": exc.value,
+                },
+            )
+        
+        # Handler para IntegrityError do SQLAlchemy (UNIQUE, FK, etc.)
+        @self.app.exception_handler(IntegrityError)
+        async def integrity_error_handler(
+            request: Request,
+            exc: IntegrityError,
+        ) -> JSONResponse:
+            error_msg = str(exc.orig) if exc.orig else str(exc)
+            
+            # Detecta tipo de erro
+            if "UNIQUE constraint failed" in error_msg:
+                # Extrai nome do campo
+                field_match = error_msg.split("UNIQUE constraint failed:")[-1].strip()
+                field_name = field_match.split(".")[-1] if "." in field_match else field_match
+                
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "detail": f"A record with this {field_name} already exists.",
+                        "code": "unique_constraint",
+                        "field": field_name,
+                    },
+                )
+            
+            elif "FOREIGN KEY constraint failed" in error_msg:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "detail": "Referenced record does not exist.",
+                        "code": "foreign_key_constraint",
+                    },
+                )
+            
+            elif "NOT NULL constraint failed" in error_msg:
+                field_match = error_msg.split("NOT NULL constraint failed:")[-1].strip()
+                field_name = field_match.split(".")[-1] if "." in field_match else field_match
+                
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "detail": f"Field '{field_name}' is required.",
+                        "code": "required_field",
+                        "field": field_name,
+                    },
+                )
+            
+            elif "duplicate key" in error_msg.lower():
+                # PostgreSQL
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "detail": "A record with this value already exists.",
+                        "code": "unique_constraint",
+                    },
+                )
+            
+            # Erro genérico de integridade
+            if self.settings.debug:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "detail": "Database integrity error.",
+                        "code": "integrity_error",
+                        "debug_info": error_msg,
+                    },
+                )
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": "Database integrity error. Please check your data.",
+                    "code": "integrity_error",
+                },
+            )
+        
+        # Handler para DataError (dados inválidos para o tipo da coluna)
+        @self.app.exception_handler(DataError)
+        async def data_error_handler(
+            request: Request,
+            exc: DataError,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": "Invalid data format for database field.",
+                    "code": "data_error",
+                },
+            )
+        
+        # Handler para OperationalError (conexão, timeout, etc.)
+        @self.app.exception_handler(OperationalError)
+        async def operational_error_handler(
+            request: Request,
+            exc: OperationalError,
+        ) -> JSONResponse:
+            if self.settings.debug:
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "detail": "Database operation failed.",
+                        "code": "database_error",
+                        "debug_info": str(exc),
+                    },
+                )
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": "Service temporarily unavailable. Please try again.",
+                    "code": "service_unavailable",
+                },
+            )
+        
+        # Handler padrão para exceções não tratadas
+        @self.app.exception_handler(Exception)
+        async def generic_exception_handler(
+            request: Request,
+            exc: Exception,
+        ) -> JSONResponse:
+            # NUNCA expor traceback em produção, mesmo se debug=True acidental
+            if self.settings.debug and not self.settings.is_production:
+                import traceback
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "detail": str(exc),
+                        "code": "internal_error",
+                        "type": type(exc).__name__,
+                        "traceback": traceback.format_exc(),
+                    },
+                )
+            # Log the error server-side, return generic message to client
+            app_logger.exception("Unhandled exception: %s", exc)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "detail": "Internal server error",
+                    "code": "internal_error",
+                },
+            )
+        
+        # Handlers customizados
+        if custom_handlers:
+            for exc_class, handler in custom_handlers.items():
+                self.app.add_exception_handler(exc_class, handler)
+    
+    def include_router(
+        self,
+        router: Router | AutoRouter,
+        prefix: str = "",
+        tags: list[str] | None = None,
+    ) -> None:
+        """
+        Inclui um router na aplicação.
+        
+        Args:
+            router: Router ou AutoRouter
+            prefix: Prefixo adicional
+            tags: Tags para OpenAPI
+        """
+        include_router(self.app, router, prefix=prefix, tags=tags)
+        self._included_routers.append((router, prefix))
+        self._build_ws_router()
+
+    def _build_ws_router(self) -> None:
+        """
+        Collect ``WebSocketRoute`` objects registered via
+        ``Router.register_websocket()`` across all included routers and
+        build a standalone Starlette Router that lives **outside** the
+        middleware stack.
+
+        WebSocket routes are propagated upward via ``Router.include_router``
+        so we only need to check the top-level routers stored in
+        ``self._included_routers``.
+        """
+        from starlette.routing import Router as _StarletteRouter
+
+        ws_routes: list = []
+        seen: set[str] = set()
+        for router, extra_prefix in self._included_routers:
+            actual = getattr(router, "router", router) if hasattr(router, "router") else router
+            router_prefix = getattr(actual, "prefix", "")
+            combined = extra_prefix + router_prefix
+            for r in getattr(actual, "_ws_routes", []):
+                full_path = combined + r.path
+                if full_path not in seen:
+                    from starlette.routing import WebSocketRoute
+                    ws_routes.append(WebSocketRoute(full_path, r.endpoint, name=r.name))
+                    seen.add(full_path)
+
+        if ws_routes:
+            self._ws_router = _StarletteRouter(routes=ws_routes)
+            for r in ws_routes:
+                app_logger.info("WebSocket route: %s", r.path)
+        else:
+            self._ws_router = None
+    
+    def on_startup(self, func: Callable) -> Callable:
+        """
+        Decorator para registrar callback de startup.
+        
+        Exemplo:
+            @app.on_startup
+            async def setup_cache():
+                await cache.connect()
+        """
+        self._on_startup.append(func)
+        return func
+    
+    def on_shutdown(self, func: Callable) -> Callable:
+        """
+        Decorator para registrar callback de shutdown.
+        
+        Exemplo:
+            @app.on_shutdown
+            async def cleanup():
+                await cache.disconnect()
+        """
+        self._on_shutdown.append(func)
+        return func
+    
+    def get(self, path: str, **kwargs: Any) -> Callable:
+        """Decorator para rota GET."""
+        return self.app.get(path, **kwargs)
+    
+    def post(self, path: str, **kwargs: Any) -> Callable:
+        """Decorator para rota POST."""
+        return self.app.post(path, **kwargs)
+    
+    def put(self, path: str, **kwargs: Any) -> Callable:
+        """Decorator para rota PUT."""
+        return self.app.put(path, **kwargs)
+    
+    def patch(self, path: str, **kwargs: Any) -> Callable:
+        """Decorator para rota PATCH."""
+        return self.app.patch(path, **kwargs)
+    
+    def delete(self, path: str, **kwargs: Any) -> Callable:
+        """Decorator para rota DELETE."""
+        return self.app.delete(path, **kwargs)
+    
+    def add_api_route(
+        self,
+        path: str,
+        endpoint: Callable,
+        methods: list[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Add an API route directly.
+        
+        Useful for adding routes from APIView classes.
+        
+        Example:
+            app.add_api_route("/health", HealthView.as_route("/health")[1], methods=["GET"])
+        """
+        self.app.add_api_route(path, endpoint, methods=methods, **kwargs)
+    
+    def _setup_admin(self) -> None:
+        """
+        Configura o Admin Panel.
+        
+        Boot sequence do admin:
+        1. Instancia AdminSite com settings
+        2. Executa autodiscover (registra core models + scan admin.py)
+        3. Monta router sob settings.admin_url_prefix
+        4. Em debug, serve static files diretamente
+        
+        Erros de configuração são logados profissionalmente:
+        - AdminConfigurationError: fatal, impede mount
+        - AdminRegistrationError: por model, não bloqueia outros
+        """
+        try:
+            from stride.admin import default_site
+            
+            self._admin_site = default_site
+            self._admin_site.autodiscover()
+            self._admin_site.mount(self.app, self.settings)
+            
+            prefix = getattr(self.settings, "admin_url_prefix", "/admin")
+            app_logger.info("Admin panel enabled at %s", prefix)
+            
+        except Exception as e:
+            app_logger.error(
+                "Failed to setup admin panel: %s: %s. "
+                "Admin will be unavailable. Fix the error and restart.",
+                type(e).__name__, e,
+            )
+            self._admin_site = None
+    
+    def _setup_health_checks(self) -> None:
+        """
+        Registra endpoints de health check padronizados.
+        
+        Endpoints registrados:
+        - /healthz: Liveness probe (app está rodando?) - padrão Kubernetes
+        - /health: Alias para /healthz (compatibilidade)
+        - /readyz: Readiness probe (app está pronta para receber requests?)
+        
+        Todos retornam 200 se OK, 503 se não pronto.
+        """
+        # Liveness probe (app está rodando?)
+        @self.app.get("/healthz", tags=["health"], include_in_schema=False)
+        async def healthz():
+            """Liveness probe — returns 200 if the app is running."""
+            return {"status": "alive"}
+        
+        # Alias /health para compatibilidade (alguns load balancers esperam /health)
+        @self.app.get("/health", tags=["health"], include_in_schema=False)
+        async def health():
+            """Health check alias — same as /healthz."""
+            return {"status": "alive"}
+        
+        # Readiness probe (app está pronta para receber requests?)
+        @self.app.get("/readyz", tags=["health"], include_in_schema=False)
+        async def readyz():
+            """Readiness probe — checks database and messaging connectivity."""
+            checks: dict[str, str] = {}
+            all_ok = True
+            
+            # Database check
+            try:
+                from stride.models import get_session
+                session = await get_session()
+                try:
+                    from sqlalchemy import text
+                    await session.execute(text("SELECT 1"))
+                    checks["database"] = "ok"
+                finally:
+                    await session.close()
+            except Exception as e:
+                checks["database"] = f"error: {type(e).__name__}"
+                all_ok = False
+            
+            # Kafka check (only if enabled)
+            if getattr(self.settings, "kafka_enabled", False):
+                try:
+                    from stride.messaging.registry import get_broker
+                    broker = get_broker()
+                    checks["kafka"] = "configured"
+                except Exception as e:
+                    checks["kafka"] = f"error: {type(e).__name__}"
+                    all_ok = False
+            
+            status_code = 200 if all_ok else 503
+            return JSONResponse(
+                status_code=status_code,
+                content={"status": "ready" if all_ok else "not_ready", "checks": checks},
+            )
+    
+    async def __call__(self, scope, receive, send):
+        """
+        Torna StrideApp callable como ASGI app.
+        
+        WebSocket scopes are routed to a dedicated Starlette Router that
+        lives outside the HTTP middleware stack (which would crash on
+        WebSocket scopes due to ``Request(scope)`` asserting HTTP type).
+        
+        Permite usar diretamente com uvicorn:
+            uvicorn main:app --reload
+        """
+        if scope["type"] == "websocket" and self._ws_router is not None:
+            await self._ws_router(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
+
+
+def create_app(
+    title: str = "Stride API",
+    settings: Settings | None = None,
+    **kwargs: Any,
+) -> StrideApp:
+    """
+    Factory function para criar aplicação.
+    
+    Exemplo:
+        app = create_app(
+            title="My API",
+            description="API description",
+        )
+    """
+    return StrideApp(title=title, settings=settings, **kwargs)
+
+
+def get_application(
+    settings_class: type[Settings] | None = None,
+    **kwargs: Any,
+):
+    """
+    Django-style single entry point: returns the ASGI/FastAPI app.
+
+    Loads Settings (from .env + settings_class if provided), applies config,
+    builds the app, and returns the FastAPI instance. Use in main.py:
+
+        from stride import get_application
+        app = get_application()
+
+    Then run with: uvicorn main:app
+
+    Optional kwargs are passed to StrideApp (e.g. routers=[...], title="My API").
+    """
+    from stride.config import configure, get_settings, is_configured
+    if not is_configured():
+        configure(settings_class=settings_class)
+    settings = get_settings()
+    stride_app = StrideApp(settings=settings, **kwargs)
+    return stride_app.app

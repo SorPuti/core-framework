@@ -1,6 +1,0 @@
-"""Tenant routes."""
-from core import AutoRouter
-from .views import TenantViewSet
-
-router = AutoRouter(prefix="/tenants", tags=["Tenants"])
-router.register("", TenantViewSet)

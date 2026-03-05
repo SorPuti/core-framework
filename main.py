@@ -1,5 +1,5 @@
 """
-Core Framework - Ponto de entrada principal.
+Stride - Ponto de entrada principal.
 
 Execute com:
     python main.py

@@ -7,8 +7,8 @@ from datetime import datetime
 
 from sqlalchemy.orm import Mapped
 
-from core.models import Model, Field, init_database, create_tables, drop_tables, get_session
-from core.querysets import DoesNotExist, MultipleObjectsReturned
+from stride.models import Model, Field, init_database, create_tables, drop_tables, get_session
+from stride.querysets import DoesNotExist, MultipleObjectsReturned
 
 
 class TestProduct(Model):
@@ -362,7 +362,9 @@ async def test_chained_filters(sample_products):
             .filter(price__lt=500)\
             .all()
         
-        assert len(products) == 2  # Mouse, Laptop (Keyboard is not available)
+        # Só Mouse: electronics, available, price < 500 (Laptop=1000, Keyboard=unavailable)
+        assert len(products) == 1
+        assert products[0].name == "Mouse"
     finally:
         await session.close()
 

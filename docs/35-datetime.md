@@ -18,7 +18,7 @@ class AppSettings(Settings):
 
 ```python
 # Verificar se DateTime foi configurado
-from core.config import is_datetime_configured
+from stride.config import is_datetime_configured
 
 if is_datetime_configured():
     print("DateTime pronto!")
@@ -39,7 +39,7 @@ if is_datetime_configured():
 ### Tempo Atual
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 # Datetime atual em UTC
 now = timezone.now()
@@ -57,7 +57,7 @@ today = timezone.today()
 ### Conversão de Timezone
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 dt = timezone.now()
 
@@ -71,7 +71,7 @@ utc = timezone.make_aware(naive_dt, "UTC")
 ### Gerenciamento de Timezone
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 # Definir timezone padrão (thread-local)
 timezone.activate("America/Sao_Paulo")
@@ -86,7 +86,7 @@ tz = timezone.get_current_timezone()
 ### Verificar Aware/Naive
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 timezone.is_aware(dt)   # True se tem timezone
 timezone.is_naive(dt)   # True se não tem timezone
@@ -101,7 +101,7 @@ naive_dt = timezone.make_naive(aware_dt)
 ### Comparações
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 timezone.is_past(dt)       # True se antes de agora
 timezone.is_future(dt)     # True se depois de agora
@@ -113,7 +113,7 @@ timezone.is_tomorrow(dt)   # True se amanhã
 ### Formatação
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 # Formatar datetime
 formatted = timezone.format(dt, "%Y-%m-%d %H:%M:%S")
@@ -125,7 +125,7 @@ dt = timezone.parse("2024-01-15 10:30:00", "%Y-%m-%d %H:%M:%S")
 ### Cálculos
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 # Adicionar tempo
 future = timezone.add(dt, days=7, hours=3)
@@ -143,7 +143,7 @@ days = timezone.diff(dt1, dt2, unit="days")
 ### Helpers de Range
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 # Início/fim do dia
 start = timezone.start_of_day(dt)
@@ -161,7 +161,7 @@ end = timezone.end_of_year(dt)
 ### Criar DateTime
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 # Criar datetime
 dt = timezone.datetime(2024, 1, 15, 10, 30, 0, tz="UTC")
@@ -178,7 +178,7 @@ dt = timezone.from_iso("2024-01-15T10:30:00Z")
 Subclasse customizada de datetime.
 
 ```python
-from core.datetime import DateTime
+from stride.datetime import DateTime
 
 # Criar
 dt = DateTime.now()
@@ -197,8 +197,8 @@ dt.to_timestamp()
 ### Auto Timestamps
 
 ```python
-from core import Model, Field
-from core.datetime import DateTime
+from stride import Model, Field
+from stride.datetime import DateTime
 from sqlalchemy.orm import Mapped
 
 class Post(Model):
@@ -227,7 +227,7 @@ Todos os datetimes são armazenados em UTC:
 ## Queries
 
 ```python
-from core.datetime import timezone
+from stride.datetime import timezone
 
 # Filtrar por data
 posts = await Post.objects.using(db).filter(
@@ -246,7 +246,7 @@ posts = await Post.objects.using(db).filter(
 ## Funções Standalone
 
 ```python
-from core.datetime import (
+from stride.datetime import (
     now,
     utcnow,
     today,

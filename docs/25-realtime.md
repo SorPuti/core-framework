@@ -11,7 +11,7 @@ flowchart LR
         SSE_C[EventSource Client]
     end
 
-    subgraph "CoreApp"
+    subgraph "StrideApp"
         direction TB
         MW[Middleware Stack<br/>HTTP only]
         WS_R[WS Router<br/>bypass middleware]
@@ -37,15 +37,15 @@ flowchart LR
     style MW fill:#fff3e0
 ```
 
-> **WebSocket** connections bypass o middleware stack HTTP automaticamente (o `CoreApp.__call__` roteia `scope["type"] == "websocket"` para um Router Starlette dedicado).  **SSE** é HTTP normal e passa pelo middleware stack completo.
+> **WebSocket** connections bypass o middleware stack HTTP automaticamente (o `StrideApp.__call__` roteia `scope["type"] == "websocket"` para um Router Starlette dedicado).  **SSE** é HTTP normal e passa pelo middleware stack completo.
 
 ---
 
 ## Imports
 
 ```python
-from core import WebSocketView, SSEView, Channel, sse_response
-from core import IsAuthenticated, AllowAny, HasRole  # permissões
+from stride import WebSocketView, SSEView, Channel, sse_response
+from stride import IsAuthenticated, AllowAny, HasRole  # permissões
 ```
 
 ---
@@ -57,7 +57,7 @@ Classe base para endpoints WebSocket.  Cada conexão cria uma nova instância (s
 ### Exemplo público (sem auth)
 
 ```python
-from core import WebSocketView, Router
+from stride import WebSocketView, Router
 
 class EchoWS(WebSocketView):
     encoding = "json"
@@ -79,7 +79,7 @@ router.register_websocket("/ws/{room}", EchoWS)
 ### Exemplo protegido (com auth)
 
 ```python
-from core import WebSocketView, IsAuthenticated
+from stride import WebSocketView, IsAuthenticated
 
 class PrivateStream(WebSocketView):
     permission_classes = [IsAuthenticated]
@@ -206,7 +206,7 @@ Classe base para endpoints Server-Sent Events (HTTP streaming).
 ### Exemplo público
 
 ```python
-from core import SSEView, Router
+from stride import SSEView, Router
 
 class SystemEvents(SSEView):
     ping_interval = 15
@@ -223,7 +223,7 @@ router.register_sse("/system", SystemEvents)
 ### Exemplo protegido
 
 ```python
-from core import SSEView, IsAuthenticated
+from stride import SSEView, IsAuthenticated
 
 class UserNotifications(SSEView):
     permission_classes = [IsAuthenticated]
@@ -293,7 +293,7 @@ Pub/sub in-process para fan-out de mensagens.  Cada subscriber recebe uma cópia
 ### Uso básico
 
 ```python
-from core import Channel
+from stride import Channel
 
 # Criar canal global
 notifications = Channel(maxlen=500)
@@ -336,7 +336,7 @@ Quando a queue de um subscriber está cheia (`maxlen`), a mensagem mais antiga �
 Para endpoints que não precisam de uma classe completa:
 
 ```python
-from core import sse_response
+from stride import sse_response
 
 @router.get("/events")
 async def events(request: Request):
@@ -353,7 +353,7 @@ async def events(request: Request):
 ### Router
 
 ```python
-from core import Router
+from stride import Router
 
 router = Router(prefix="/api/v1", tags=["Realtime"])
 
@@ -367,7 +367,7 @@ router.register_sse("/events/{userId}", TradeEventsSSE)
 ### AutoRouter
 
 ```python
-from core import AutoRouter
+from stride import AutoRouter
 
 api = AutoRouter(prefix="/api")
 api.register_websocket("/ws/chat/{room}", ChatWS)
@@ -383,13 +383,13 @@ flowchart TB
         RS[register_sse] --> HTTP[add_api_route GET]
     end
 
-    subgraph "CoreApp.__init__"
+    subgraph "StrideApp.__init__"
         IR[include_router] --> PROP[Propaga _ws_routes<br/>com prefixos]
         PROP --> BUILD[_build_ws_router]
         BUILD --> STAR[Starlette Router<br/>dedicado para WS]
     end
 
-    subgraph "CoreApp.__call__"
+    subgraph "StrideApp.__call__"
         REQ{scope type?}
         REQ -->|websocket| STAR
         REQ -->|http| FAST[FastAPI + Middleware]
@@ -413,7 +413,7 @@ Todas as permissões do sistema de auth funcionam em WebSocket e SSE:
 ### Permissão customizada
 
 ```python
-from core.permissions import Permission
+from stride.permissions import Permission
 
 class IsSubscriber(Permission):
     message = "Subscription required"
@@ -470,7 +470,7 @@ location /api/ws/ {
 
 ```python
 # routes.py
-from core import Router, WebSocketView, SSEView, IsAuthenticated, Channel
+from stride import Router, WebSocketView, SSEView, IsAuthenticated, Channel
 from starlette.websockets import WebSocket, WebSocketState
 
 # Canal global de ticks
@@ -510,12 +510,12 @@ router.register_sse("/events/{userId}", TradeEventsSSE)
 
 ```python
 # main.py
-from core import CoreApp, AutoRouter
+from stride import StrideApp, AutoRouter
 
 api = AutoRouter(prefix="/api")
 api.include_router(router)
 
-app = CoreApp(routers=[api])
+app = StrideApp(routers=[api])
 # WebSocket: /api/trading/ws/ticks/{symbol}
 # SSE:       /api/trading/events/{userId}
 ```

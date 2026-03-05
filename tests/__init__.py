@@ -1,1 +1,1 @@
-"""Testes do Core Framework."""
+"""Testes do Stride."""

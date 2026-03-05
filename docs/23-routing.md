@@ -2,33 +2,121 @@
 
 URL routing and ViewSet registration.
 
-## AutoRouter
+## Auto-Discovery (Plug-and-Play)
 
-Main router for registering ViewSets.
+The framework automatically discovers and loads URLs from `urls.py` files in each app listed in `settings.installed_apps`.
+
+### Simple Usage
 
 ```python
-from core import AutoRouter
+# src/main.py
+from stride import StrideApp
+
+app = StrideApp()  # Everything loaded automatically
+```
+
+### Defining URLs
+
+Create a `urls.py` file in each app:
+
+```python
+# src/apps/users/urls.py
+from stride import path
+from .views import UserViewSet, AuthViewSet
+
+urlpatterns = [
+    path("users", UserViewSet),
+    path("auth", AuthViewSet),
+]
+```
+
+### URL Configuration
+
+Configure the prefix in `settings.py`:
+
+```python
+# src/settings.py
+from stride import Settings
+
+class AppSettings(Settings):
+    url_prefix: str = "/api/v1"  # Default
+    installed_apps: list[str] = [
+        "src.apps.users",
+        "src.apps.items",
+    ]
+```
+
+## path()
+
+Define URL patterns similar to Django.
+
+```python
+from stride import path
+
+urlpatterns = [
+    path("users", UserViewSet),                    # ViewSet
+    path("profile", ProfileView),                  # APIView
+    path("health", health_check),                # Function
+]
+```
+
+### URLPattern Options
+
+```python
+path(
+    route="users",
+    view=UserViewSet,
+    name="user-list",              # Optional route name
+    basename="user",               # Optional base name
+    tags=["Users"],                # OpenAPI tags
+)
+```
+
+## include()
+
+Include URLs from other modules.
+
+```python
+from stride import path, include
+
+urlpatterns = [
+    path("api/v1/", include("src.apps.users.urls")),
+    path("api/v1/", include("src.apps.items.urls")),
+]
+```
+
+### Nested Includes
+
+```python
+# src/apps/api/urls.py
+from stride import path, include
+
+urlpatterns = [
+    path("v1/", include("src.apps.users.urls")),
+    path("v1/", include("src.apps.posts.urls")),
+    path("v2/", include("src.apps.v2.urls")),
+]
+```
+
+## AutoRouter
+
+Main router for registering ViewSets (used internally by auto-discovery).
+
+```python
+from stride import AutoRouter
 
 api = AutoRouter(prefix="/api/v1", tags=["API"])
 ```
 
-### Register ViewSet
+### Register ViewSet Manually
 
 ```python
-from core import AutoRouter
+from stride import AutoRouter
 from .views import UserViewSet, PostViewSet
 
 api = AutoRouter(prefix="/api/v1")
 api.register("/users", UserViewSet, basename="user")
 api.register("/posts", PostViewSet, basename="post", tags=["Posts"])
-```
-
-### Include in App
-
-```python
-from core import CoreApp
-
-app = CoreApp(routers=[api])
 ```
 
 ## Generated Routes
@@ -47,16 +135,16 @@ For a `ModelViewSet`:
 ## Custom Actions
 
 ```python
-from core import ModelViewSet, action
+from stride import ModelViewSet, action
 
 class UserViewSet(ModelViewSet):
     model = User
-    
+
     @action(detail=False, methods=["GET"])
     async def me(self, request, db):
         """GET /users/me"""
         return await self.serialize(request.user)
-    
+
     @action(detail=True, methods=["POST"])
     async def activate(self, request, db, id: int):
         """POST /users/{id}/activate"""
@@ -71,7 +159,7 @@ class UserViewSet(ModelViewSet):
 Lower-level router (extends FastAPI's `APIRouter`).
 
 ```python
-from core.routing import Router
+from stride.routing import Router
 
 router = Router(prefix="/api/v1")
 router.register_viewset("/users", UserViewSet, basename="user")
@@ -80,7 +168,7 @@ router.register_viewset("/users", UserViewSet, basename="user")
 ### Register View
 
 ```python
-from core import APIView
+from stride import APIView
 
 class HealthView(APIView):
     async def get(self, request):
@@ -89,153 +177,64 @@ class HealthView(APIView):
 router.register_view("/health", HealthView)
 ```
 
-## Include Routers
+## Project Structure
+
+Recommended structure with auto-discovery:
+
+```
+src/
+├── main.py              # Just: app = StrideApp()
+├── settings.py          # Settings with installed_apps
+├── urls.py              # (Optional) Global URL config
+└── apps/
+    ├── users/
+    │   ├── __init__.py
+    │   ├── models.py
+    │   ├── views.py
+    │   └── urls.py      # urlpatterns = [...]
+    └── items/
+        ├── __init__.py
+        ├── models.py
+        ├── views.py
+        └── urls.py      # urlpatterns = [...]
+```
+
+### main.py
 
 ```python
-# users/routes.py
-from core import AutoRouter
-from .views import UserViewSet
+"""Application entry point."""
+from stride import StrideApp
 
-router = AutoRouter()
+app = StrideApp()
+```
+
+### settings.py
+
+```python
+"""Application settings."""
+from stride import Settings
+
+class AppSettings(Settings):
+    app_name: str = "My API"
+    url_prefix: str = "/api/v1"
+    installed_apps: list[str] = [
+        "src.apps.users",
+        "src.apps.items",
+    ]
+```
+
+## Legacy Mode
+
+While auto-discovery is the recommended approach, you can still manually register routers if needed (not recommended for new projects):
+
+```python
+from stride import StrideApp, AutoRouter
+from src.apps.users.views import UserViewSet
+
+# Manual router (legacy)
+router = AutoRouter(prefix="/api/v1")
 router.register("/users", UserViewSet)
 
-# main.py
-from core import AutoRouter
-from users.routes import router as users_router
-from posts.routes import router as posts_router
-
-api = AutoRouter(prefix="/api/v1")
-api.include_router(users_router)
-api.include_router(posts_router, prefix="/blog", tags=["Blog"])
+# Note: This is kept for compatibility only
+# Auto-discovery is always active and preferred
 ```
-
-## Lookup Field
-
-Default: `id`
-
-```python
-class UserViewSet(ModelViewSet):
-    model = User
-    lookup_field = "id"  # Default
-    lookup_url_kwarg = "user_id"  # Custom URL param name
-```
-
-Routes become:
-- `GET /users/{user_id}`
-- `PUT /users/{user_id}`
-- etc.
-
-## Tags
-
-For OpenAPI grouping:
-
-```python
-# On AutoRouter
-api = AutoRouter(prefix="/api/v1", tags=["API"])
-
-# On registration
-api.register("/users", UserViewSet, tags=["Users"])
-
-# On ViewSet
-class UserViewSet(ModelViewSet):
-    tags = ["Users", "Auth"]
-```
-
-Priority: registration > AutoRouter default > ViewSet.tags > [basename]
-
-## Exclude CRUD
-
-For ViewSets without model CRUD:
-
-```python
-class AuthViewSet(ViewSet):
-    _exclude_crud = True
-    
-    @action(detail=False, methods=["POST"])
-    async def login(self, request, db, data: LoginInput):
-        ...
-```
-
-## API Root
-
-List all registered URLs:
-
-```python
-api = AutoRouter(prefix="/api/v1")
-api.register("/users", UserViewSet)
-api.register("/posts", PostViewSet)
-
-# GET /api/v1/ returns list of all URLs
-root_view = api.get_api_root_view()
-```
-
-## URL Patterns
-
-```python
-# List all URLs
-for url in api.urls:
-    print(f"{url['path']} - {url['name']} - {url['methods']}")
-```
-
-## FastAPI Integration
-
-AutoRouter wraps FastAPI's APIRouter:
-
-```python
-# Access underlying FastAPI router
-fastapi_router = api.router
-
-# Add raw FastAPI routes
-@api.router.get("/custom")
-async def custom_route():
-    return {"custom": True}
-```
-
-## Route Naming
-
-| Action | Name Pattern |
-|--------|--------------|
-| list | `{basename}-list` |
-| create | `{basename}-create` |
-| retrieve | `{basename}-detail` |
-| update | `{basename}-update` |
-| partial_update | `{basename}-partial-update` |
-| destroy | `{basename}-delete` |
-| custom action | `{basename}-{action_name}` |
-
-## Duplicate Prevention
-
-Router prevents duplicate route registration:
-
-```python
-router.register_viewset("/users", UserViewSet)
-router.register_viewset("/users", UserViewSet)  # Ignored, no error
-```
-
-## Complete Example
-
-```python
-# src/apps/users/routes.py
-from core import AutoRouter
-from .views import UserViewSet, ProfileViewSet
-
-router = AutoRouter()
-router.register("/users", UserViewSet, basename="user")
-router.register("/profiles", ProfileViewSet, basename="profile")
-
-# src/main.py
-from core import CoreApp, AutoRouter
-from src.apps.users.routes import router as users_router
-from src.apps.posts.routes import router as posts_router
-
-api = AutoRouter(prefix="/api/v1", tags=["API"])
-api.include_router(users_router, tags=["Users"])
-api.include_router(posts_router, tags=["Posts"])
-
-app = CoreApp(routers=[api])
-```
-
-## Next
-
-- [ViewSets](04-viewsets.md) — CRUD endpoints
-- [Dependencies](24-dependencies.md) — Dependency injection

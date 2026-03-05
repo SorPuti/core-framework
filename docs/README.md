@@ -1,4 +1,4 @@
-# Core Framework
+# Stride
 
 Framework estilo Django para FastAPI. Models, ViewSets, Auth, Admin — baterias incluídas.
 
@@ -11,7 +11,7 @@ flowchart TB
         CLI[CLI Tools]
     end
     
-    subgraph "Core Framework"
+    subgraph "Stride"
         subgraph "API Layer"
             RT[AutoRouter]
             VS[ViewSets]
@@ -83,9 +83,9 @@ class AppSettings(Settings):
 ## Instalação
 
 ```bash
-pipx install core-framework
-core init my-api && cd my-api
-core run
+pipx install stride
+stride init my-api && cd my-api
+stride run
 # → http://localhost:8000/docs
 ```
 
@@ -172,7 +172,7 @@ my-api/
 
 ```python
 # src/settings.py
-from core.config import Settings, configure
+from stride.config import Settings, configure
 
 class AppSettings(Settings):
     app_name: str = "Minha API"
@@ -182,7 +182,7 @@ settings = configure(settings_class=AppSettings)
 
 ```python
 # src/apps/items/models.py
-from core import Model, Field
+from stride import Model, Field
 from sqlalchemy.orm import Mapped
 
 class Item(Model):
@@ -193,7 +193,7 @@ class Item(Model):
 
 ```python
 # src/apps/items/views.py
-from core import ModelViewSet
+from stride import ModelViewSet
 from .models import Item
 
 class ItemViewSet(ModelViewSet):
@@ -202,20 +202,20 @@ class ItemViewSet(ModelViewSet):
 
 ```python
 # src/main.py
-from core import CoreApp, AutoRouter
+from stride import StrideApp, AutoRouter
 from src.apps.items.routes import router as items_router
 
 api = AutoRouter(prefix="/api/v1")
 api.include_router(items_router)
 
-app = CoreApp(routers=[api])
+app = StrideApp(routers=[api])
 ```
 
 ## Exemplo Completo com Auto-Configuração
 
 ```python
 # src/settings.py
-from core.config import Settings, PydanticField, configure
+from stride.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════
@@ -288,8 +288,8 @@ FileField estilo Django para upload e acesso a arquivos com signed URLs:
 # STORAGE_GCS_USE_SIGNED_URLS=true
 
 # 2. No model, use AdvancedField.file() - estilo Django
-from core import Model, Field
-from core.fields import AdvancedField
+from stride import Model, Field
+from stride.fields import AdvancedField
 
 class Course(Model):
     __tablename__ = "courses"
@@ -308,7 +308,7 @@ course.cover.save("foto.jpg", content, "image/jpeg")  # Upload
 course.cover.delete() # Remove do storage
 
 # 4. Em schemas, transforme com get_file_url()
-from core.storage import get_file_url
+from stride.storage import get_file_url
 
 class CourseResponse(OutputSchema):
     cover_url: str | None = None
@@ -325,17 +325,17 @@ class CourseResponse(OutputSchema):
 ## Comandos Rápidos
 
 ```bash
-core init my-api          # Criar projeto
-core init my-api --minimal # Projeto mínimo
-core makemigrations       # Gerar migrations
-core migrate              # Aplicar migrations
-core run                  # Iniciar servidor
+stride init my-api          # Criar projeto
+stride init my-api --minimal # Projeto mínimo
+stride makemigrations       # Gerar migrations
+stride migrate              # Aplicar migrations
+stride run                  # Iniciar servidor
 core createsuperuser      # Criar usuário admin
 core kafka worker --all   # Executar workers
 ```
 
 ## Links
 
-- [GitHub](https://github.com/your-org/core-framework)
-- [PyPI](https://pypi.org/project/core-framework/)
+- [GitHub](https://github.com/your-org/stride)
+- [PyPI](https://pypi.org/project/stride/)
 - [Changelog](CHANGELOG.md)
