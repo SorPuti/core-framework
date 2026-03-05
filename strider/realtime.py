@@ -7,7 +7,7 @@ HTTP-only middleware stack for WebSocket connections.
 
 Quick start — WebSocket (public)::
 
-    from stride import WebSocketView
+    from strider import WebSocketView
 
     class TickStream(WebSocketView):
         async def on_connect(self, ws, **params):
@@ -18,7 +18,7 @@ Quick start — WebSocket (public)::
 
 Quick start — WebSocket (protected)::
 
-    from stride import WebSocketView, IsAuthenticated
+    from strider import WebSocketView, IsAuthenticated
 
     class PrivateStream(WebSocketView):
         permission_classes = [IsAuthenticated]
@@ -29,7 +29,7 @@ Quick start — WebSocket (protected)::
 
 Quick start — SSE (protected)::
 
-    from stride import SSEView, IsAuthenticated
+    from strider import SSEView, IsAuthenticated
 
     class TradeEvents(SSEView):
         permission_classes = [IsAuthenticated]
@@ -39,7 +39,7 @@ Quick start — SSE (protected)::
 
 Quick start — Channel (pub/sub fan-out)::
 
-    from stride import Channel
+    from strider import Channel
 
     ticks = Channel(maxlen=500)
     await ticks.publish({"price": 1.23})

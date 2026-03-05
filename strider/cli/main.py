@@ -331,7 +331,7 @@ def _scan_for_models(root_dir: Path) -> list[str]:
         try:
             content = py_file.read_text()
             # Quick heuristic: file likely contains models
-            if "from strider.models import" in content or "from stride import Model" in content:
+            if "from strider.models import" in content or "from strider import Model" in content:
                 if "(Model)" in content or "(Model," in content:
                     # Convert path to module
                     rel_path = py_file.relative_to(root_dir)
@@ -397,7 +397,7 @@ def _import_core_module(module_path: str):
     # Tentativa 2: localizar o arquivo no pacote core real
     # Resolve o path do core já importado e busca o submodule
     try:
-        import stride as core_pkg
+        import strider as core_pkg
         core_dir = Path(core_pkg.__file__).parent
         
         # "strider.admin.models" → "admin/models.py"
@@ -579,7 +579,7 @@ def load_app(app_module: str):
 
 def cmd_version(args: argparse.Namespace) -> int:
     """Mostra versão do framework."""
-    from stride import __version__
+    from strider import __version__
     print(f"Stride {bold(__version__)}")
     return 0
 
@@ -2014,7 +2014,7 @@ def cmd_routes(args: argparse.Namespace) -> int:
         return 1
     
     # Obtém FastAPI app
-    from stride import CoreApp
+    from strider import CoreApp
     if isinstance(app, CoreApp):
         fastapi_app = app.app
     else:
@@ -2126,8 +2126,8 @@ Defina seus models SQLAlchemy aqui.
 
 from sqlalchemy.orm import Mapped
 
-from stride import Model, Field
-from stride import timezone, DateTime
+from strider import Model, Field
+from strider import timezone, DateTime
 
 
 # Exemplo de model
@@ -2147,8 +2147,8 @@ Defina seus schemas de entrada/saída aqui.
 
 from pydantic import EmailStr
 
-from stride import InputSchema, OutputSchema
-from stride import timezone, DateTime
+from strider import InputSchema, OutputSchema
+from strider import timezone, DateTime
 
 
 # Exemplo de schemas
@@ -2171,7 +2171,7 @@ Views/ViewSets do app {app_name}.
 Defina seus ViewSets e endpoints aqui.
 """
 
-from stride import ModelViewSet
+from strider import ModelViewSet
 from strider.dependencies import DatabaseSession
 
 # from {import_path}.models import ...
@@ -2215,7 +2215,7 @@ Rotas do app {app_name}.
 Configure as rotas e registre os ViewSets aqui.
 """
 
-from stride import AutoRouter
+from strider import AutoRouter
 
 # from {import_path}.views import ...
 
@@ -2901,7 +2901,7 @@ def cmd_createsuperuser(args: argparse.Namespace) -> int:
             print(info("To use authentication, create a User model:"))
             print()
             print("  # src/apps/users/models.py")
-            print("  from stride import Model, Field")
+            print("  from strider import Model, Field")
             print("  from strider.auth import AbstractUser")
             print()
             print("  class User(AbstractUser, Model):")

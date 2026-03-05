@@ -2,7 +2,7 @@
 ViewSet system. Docs: https://github.com/your-org/core-framework/docs/04-viewsets.md
 
 Usage:
-    from stride import ModelViewSet
+    from strider import ModelViewSet
     from .models import Item
     
     class ItemViewSet(ModelViewSet):

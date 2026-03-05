@@ -2,7 +2,7 @@
 StrideApp - Application wrapper. Docs: https://github.com/your-org/core-framework/docs/01-quickstart.md
 
 Usage:
-    from stride import StrideApp
+    from strider import StrideApp
     
     # Auto-discovery carrega automaticamente todas as rotas de src/apps/*/urls.py
     app = StrideApp()
@@ -37,7 +37,7 @@ class StrideApp:
     carregado automaticamente: settings (.env), middlewares, models e URLs.
     
     Exemplo plug-and-play:
-        from stride import StrideApp
+        from strider import StrideApp
         
         app = StrideApp()  # Carrega tudo automaticamente
     
@@ -919,7 +919,7 @@ def get_application(
     Loads Settings (from .env + settings_class if provided), applies config,
     builds the app, and returns the FastAPI instance. Use in main.py:
 
-        from stride import get_application
+        from strider import get_application
         app = get_application()
 
     Then run with: uvicorn main:app

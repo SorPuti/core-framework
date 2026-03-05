@@ -886,7 +886,7 @@ class PermissionsMixin:
     
     Example com UUID:
         import uuid
-        from stride import Field
+        from strider import Field
         
         class User(AbstractUser, PermissionsMixin):
             __tablename__ = "users"

@@ -2,7 +2,7 @@
 Model system. Docs: https://github.com/your-org/core-framework/docs/03-models.md
 
 Usage:
-    from stride import Model, Field
+    from strider import Model, Field
     from sqlalchemy.orm import Mapped
     
     class Item(Model):

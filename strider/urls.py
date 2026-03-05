@@ -17,7 +17,7 @@ Usage:
     ]
     
     # src/main.py
-    from stride import StrideApp
+    from strider import StrideApp
     app = StrideApp()  # Auto-discovery carrega tudo
 """
 

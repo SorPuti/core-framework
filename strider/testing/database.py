@@ -247,7 +247,7 @@ async def setup_test_db(
     
     # Also register with core.database for dependencies
     try:
-        from stride import database
+        from strider import database
         database._write_session_factory = _test_session_factory
         database._read_session_factory = _test_session_factory
     except (ImportError, AttributeError):

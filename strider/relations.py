@@ -6,7 +6,7 @@ Handles common patterns like ForeignKey, OneToMany, ManyToOne, ManyToMany,
 and OneToOne with sensible defaults and validation.
 
 Example:
-    from stride import Model, Field
+    from strider import Model, Field
     from strider.relations import Rel
     
     class Author(Model):

@@ -126,7 +126,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
     
     def _base_context(request: Request, **extra: Any) -> dict:
         """Contexto base para todos os templates."""
-        from stride import __version__ as core_version
+        from strider import __version__ as core_version
         
         # Resolve current page for active sidebar indicator
         current_path = str(request.url.path).rstrip("/")

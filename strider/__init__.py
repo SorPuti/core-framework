@@ -4,12 +4,12 @@ Stride - Django-style framework for FastAPI.
 Docs: https://github.com/SorPuti/stride
 
 Quick start (Plug-and-Play):
-    from stride import StrideApp
+    from strider import StrideApp
     
     app = StrideApp()  # Auto-discovery carrega tudo automaticamente
 
 With explicit model and view:
-    from stride import StrideApp, Model, ModelViewSet, Field, path
+    from strider import StrideApp, Model, ModelViewSet, Field, path
     
     class Item(Model):
         __tablename__ = "items"
@@ -332,7 +332,7 @@ from strider.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.17.62"
+__version__ = "0.17.63"
 __all__ = [
     # Models
     "Model",

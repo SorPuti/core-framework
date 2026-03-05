@@ -14,7 +14,7 @@ class TestCoreImports:
     def test_import_core(self):
         """Test importing the main stride module."""
         import strider
-        assert hasattr(stride, "__version__")
+        assert hasattr(strider, "__version__")
     
     def test_import_core_models(self):
         """Test importing stride.models."""

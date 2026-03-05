@@ -206,7 +206,7 @@ class InfraDetector:
 
         # Framework version
         try:
-            from stride import __version__
+            from strider import __version__
             info["framework_version"] = __version__
         except ImportError:
             info["framework_version"] = "unknown"

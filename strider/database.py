@@ -224,7 +224,7 @@ async def init_replicas(
         _read_session_factory = _write_session_factory
 
     try:
-        import stride.models as _cm
+        import strider.models as _cm
         if _cm._engine is None:
             _cm._engine = _write_engine
             _cm._session_factory = _write_session_factory

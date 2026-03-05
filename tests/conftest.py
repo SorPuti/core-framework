@@ -4,11 +4,8 @@ Configurações de teste compartilhadas.
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from strider.models import init_database, create_tables, drop_tables, get_session
-from example.app import app
 
 
 @pytest.fixture(scope="session")
@@ -30,11 +27,3 @@ async def db_session():
     finally:
         await session.close()
         await drop_tables()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def client():
-    """Fornece um cliente HTTP para testes de API."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac

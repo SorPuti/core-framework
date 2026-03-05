@@ -108,7 +108,7 @@ def _init_test_settings():
                 env_prefix = ""
         
         # Override get_settings to return test settings
-        import stride.config as config_module
+        import strider.config as config_module
         
         _test_settings = None
         
@@ -132,7 +132,7 @@ def _init_test_database():
     """Initialize database module with test factories."""
     try:
         from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-        import stride.database as db_module
+        import strider.database as db_module
         
         # Create in-memory SQLite engine
         test_engine = create_async_engine(
@@ -198,7 +198,7 @@ def _init_test_middleware():
 async def _create_test_tables():
     """Create all database tables for testing."""
     try:
-        import stride.database as db_module
+        import strider.database as db_module
         from strider.models import Model
         
         engine = getattr(db_module, '_test_engine', None)
@@ -213,7 +213,7 @@ async def _create_test_tables():
 async def _drop_test_tables():
     """Drop all database tables after testing."""
     try:
-        import stride.database as db_module
+        import strider.database as db_module
         from strider.models import Model
         
         engine = getattr(db_module, '_test_engine', None)
@@ -325,7 +325,7 @@ async def test_engine():
     await _create_test_tables()
     
     try:
-        import stride.database as db_module
+        import strider.database as db_module
         yield getattr(db_module, '_test_engine', None)
     except ImportError:
         yield None
@@ -349,7 +349,7 @@ async def db(test_engine) -> "AsyncSession":
             assert user.id is not None
     """
     try:
-        import stride.database as db_module
+        import strider.database as db_module
         
         factory = db_module._write_session_factory
         if factory is None:
@@ -377,7 +377,7 @@ async def clean_db(db) -> "AsyncSession":
     """
     try:
         from strider.models import Model
-        import stride.database as db_module
+        import strider.database as db_module
         
         engine = getattr(db_module, '_test_engine', None)
         if engine:

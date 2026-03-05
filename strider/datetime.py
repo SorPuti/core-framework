@@ -10,7 +10,7 @@ Este módulo garante:
 - Compatibilidade com diferentes fusos
 
 Uso simplificado (recomendado):
-    from stride import timezone
+    from strider import timezone
     
     # Sempre retorna UTC
     current = timezone.now()
@@ -864,7 +864,7 @@ class timezone:
     Todos os métodos retornam datetime em UTC por padrão.
     
     Uso:
-        from stride import timezone
+        from strider import timezone
         
         # Obter data/hora atual (UTC)
         now = timezone.now()
