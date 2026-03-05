@@ -13,9 +13,9 @@ class AppSettings(Settings):
     models_module: str = "src.models"
     app_module: str = "src.main"
     
-    # Apps for auto-discovery
+    # Apps for auto-discovery (nomes curtos são auto-resolvidos para src.apps.{name})
     installed_apps: list[str] = [
-        "src.apps.events",
+        "events",  # Resolvido automaticamente para src.apps.events
     ]
     
     # URL Configuration (None for auto-discovery, or "src.urls" for manual)

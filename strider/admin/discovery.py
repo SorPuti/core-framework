@@ -82,11 +82,54 @@ def discover_admin_modules(site: "AdminSite") -> list[str]:
     return imported
 
 
+def _resolve_app_path(app_name: str) -> str:
+    """
+    Resolve o caminho completo de um app a partir de um nome curto ou completo.
+    
+    Tenta encontrar o app em locais padrão:
+    1. Se já tem ponto, assume caminho completo
+    2. Tenta em src.apps.{app_name}
+    3. Tenta em apps.{app_name}
+    4. Tenta em src.{app_name}
+    
+    Args:
+        app_name: Nome curto (ex: 'users') ou caminho completo (ex: 'src.apps.users')
+    
+    Returns:
+        Caminho completo do app
+    """
+    import importlib.util
+    
+    # Se já tem ponto, assume caminho completo
+    if "." in app_name:
+        return app_name
+    
+    # Tenta locais padrão
+    search_paths = [
+        f"src.apps.{app_name}",
+        f"apps.{app_name}",
+        f"src.{app_name}",
+    ]
+    
+    for path in search_paths:
+        try:
+            module_path = path.replace(".", "/")
+            if importlib.util.find_spec(module_path):
+                return path
+        except (ImportError, ModuleNotFoundError, ValueError):
+            continue
+    
+    # Fallback: retorna como estava
+    return app_name
+
+
 def _get_explicit_admin_modules() -> list[str] | None:
     """
     Obtém lista explícita de módulos admin a partir de Settings (.env / settings.py).
     Usa admin_modules se definido; senão, se installed_apps estiver definido, usa {app}.admin para cada app.
     Se ambos vazios, retorna None (só scan).
+    
+    Aceita app names curtos (ex: 'users') que são resolvidos para 'src.apps.users.admin'.
     """
     try:
         from strider.config import get_settings
@@ -94,10 +137,10 @@ def _get_explicit_admin_modules() -> list[str] | None:
         modules = getattr(settings, "admin_modules", None)
         if modules and isinstance(modules, list) and len(modules) > 0:
             return list(modules)
-        # Fallback: installed_apps -> {app}.admin
+        # Fallback: installed_apps -> {app}.admin (com auto-resolução)
         apps = getattr(settings, "installed_apps", None)
         if apps and isinstance(apps, list) and len(apps) > 0:
-            return [f"{app}.admin" for app in apps]
+            return [f"{_resolve_app_path(app)}.admin" for app in apps]
     except Exception:
         pass
     return None
@@ -108,9 +151,42 @@ def _scan_for_admin_files(root: Path) -> list[Path]:
     Scan recursivo por arquivos admin.py.
     
     Ignora diretórios em _IGNORE_DIRS e arquivos dentro de stride/admin/.
+    
+    Se installed_apps estiver configurado, só faz scan dentro desses diretórios.
+    Isso evita tentar importar módulos de caminhos que não são pacotes Python válidos.
+    
+    Aceita app names curtos (ex: 'users') que são resolvidos para 'src.apps.users'.
     """
     admin_files: list[Path] = []
     
+    # Se installed_apps configurado, só scanear nesses diretórios
+    try:
+        from strider.config import get_settings
+        settings = get_settings()
+        installed_apps = getattr(settings, "installed_apps", None)
+    except Exception:
+        installed_apps = None
+    
+    if installed_apps and isinstance(installed_apps, list) and len(installed_apps) > 0:
+        # Scan apenas nos diretórios dos apps configurados
+        for app_name in installed_apps:
+            # Resolve o caminho completo (aceita nomes curtos ou completos)
+            resolved_path = _resolve_app_path(app_name)
+            app_dir = root / resolved_path.replace(".", os.sep)
+            if app_dir.exists() and app_dir.is_dir():
+                for dirpath, dirnames, filenames in os.walk(app_dir):
+                    # Remove diretórios ignorados
+                    dirnames[:] = [
+                        d for d in dirnames
+                        if d not in _IGNORE_DIRS and not d.startswith(".")
+                    ]
+                    
+                    if "admin.py" in filenames:
+                        admin_file = Path(dirpath) / "admin.py"
+                        admin_files.append(admin_file)
+        return sorted(admin_files)
+    
+    # Scan completo (quando não há installed_apps configurado)
     for dirpath, dirnames, filenames in os.walk(root):
         # Remove diretórios ignorados do scan
         dirnames[:] = [

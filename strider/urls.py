@@ -168,6 +168,52 @@ def _load_url_module(module_path: str) -> list[URLPattern] | None:
     return patterns
 
 
+def _resolve_app_module(app_name: str, sub_module: str = "urls") -> str | None:
+    """
+    Resolve o caminho completo de um módulo de app.
+    
+    Aceita nomes curtos (ex: 'users') e tenta encontrar em locais padrão:
+    1. Tenta como caminho absoluto primeiro (ex: 'src.apps.users')
+    2. Tenta em src.apps.{app_name}
+    3. Tenta em apps.{app_name}
+    
+    Args:
+        app_name: Nome curto ou caminho completo do app
+        sub_module: Submódulo a carregar (ex: 'urls', 'models', 'admin')
+    
+    Returns:
+        Caminho completo do módulo ou None se não encontrado
+    """
+    import importlib
+    
+    # Se já tem ponto, tenta como caminho absoluto primeiro
+    if "." in app_name:
+        full_path = f"{app_name}.{sub_module}"
+        try:
+            if importlib.util.find_spec(full_path.replace(".", "/").rsplit("/", 1)[0]):
+                return full_path
+        except (ImportError, ModuleNotFoundError):
+            pass
+    
+    # Tenta locais padrão
+    search_paths = [
+        f"src.apps.{app_name}.{sub_module}",
+        f"apps.{app_name}.{sub_module}",
+        f"src.{app_name}.{sub_module}",
+    ]
+    
+    for path in search_paths:
+        try:
+            # Tenta importar para verificar se existe
+            if importlib.util.find_spec(path.replace(".", "/").rsplit("/", 1)[0]):
+                return path
+        except (ImportError, ModuleNotFoundError, ValueError):
+            continue
+    
+    # Fallback: retorna como estava se não conseguiu resolver
+    return f"{app_name}.{sub_module}" if "." not in app_name else f"{app_name}.{sub_module}"
+
+
 def autodiscover(settings: Any) -> "AutoRouter":
     """
     Descobre e carrega automaticamente todos os urls.py das apps.
@@ -177,6 +223,8 @@ def autodiscover(settings: Any) -> "AutoRouter":
     Se settings.root_urlconf estiver definido, carrega URLs deste módulo
     (similar ao Django ROOT_URLCONF). Caso contrário, faz auto-discovery
     de todas as apps em installed_apps.
+    
+    Aceita app names curtos (ex: 'users') ou caminhos completos (ex: 'src.apps.users').
     
     Args:
         settings: Instância de Settings com installed_apps ou root_urlconf
@@ -190,6 +238,11 @@ def autodiscover(settings: Any) -> "AutoRouter":
         
         settings = get_settings()
         router = autodiscover(settings)
+        
+        # Configuração simples:
+        # installed_apps = ["users", "items"]  # Auto-resolvido para src.apps.{name}
+        # ou
+        # installed_apps = ["src.apps.users", "myapp.custom"]  # Caminhos completos
     """
     from strider.routing import AutoRouter
     
@@ -230,16 +283,21 @@ def autodiscover(settings: Any) -> "AutoRouter":
     
     discovered_count = 0
     
-    for app_path in installed_apps:
-        # Tenta carregar {app}.urls
-        url_module = f"{app_path}.urls"
+    for app_name in installed_apps:
+        # Resolve o caminho completo do app (aceita nomes curtos ou completos)
+        url_module = _resolve_app_module(app_name, "urls")
+        
+        if url_module is None:
+            logger.debug(f"Could not resolve app: {app_name}")
+            continue
+        
         patterns = _load_url_module(url_module)
         
         if patterns is None:
-            logger.debug(f"No urls.py found for app: {app_path}")
+            logger.debug(f"No urls.py found for app: {app_name} (tried: {url_module})")
             continue
         
-        logger.info(f"Discovered {len(patterns)} URL patterns from {app_path}")
+        logger.info(f"Discovered {len(patterns)} URL patterns from {app_name}")
         
         # Registra cada padrão no router
         for pattern in patterns:
@@ -247,7 +305,7 @@ def autodiscover(settings: Any) -> "AutoRouter":
                 logger.warning(f"Invalid pattern in {url_module}: {pattern}")
                 continue
             
-            _register_pattern(router, pattern, app_path)
+            _register_pattern(router, pattern, app_name)
             discovered_count += 1
     
     logger.info(f"URL autodiscovery complete: {discovered_count} patterns registered")

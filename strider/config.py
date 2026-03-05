@@ -841,8 +841,10 @@ class Settings(BaseSettings):
     installed_apps: list[str] = PydanticField(
         default=[],
         description=(
-            "Lista de apps (módulos) para discovery de models e admin. "
-            "Ex: ['myapp', 'auth']. Models: importa {app}.models; admin: {app}.admin. "
+            "Lista de apps para discovery de models, admin e URLs. "
+            "Aceita nomes curtos (ex: ['users', 'items']) ou caminhos completos (ex: ['src.apps.users']). "
+            "Nomes curtos são auto-resolvidos para src.apps.{name}. "
+            "Models: importa {app}.models; admin: {app}.admin; URLs: {app}.urls. "
             "Se vazio, usa models_module e scan de */admin.py."
         ),
     )

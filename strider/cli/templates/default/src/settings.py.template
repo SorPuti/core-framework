@@ -20,9 +20,9 @@ class AppSettings(Settings):
     # Example: root_urlconf: str = "src.urls"
     root_urlconf: str | None = None
 
-    # Apps for auto-discovery
+    # Apps for auto-discovery (nomes curtos são auto-resolvidos para src.apps.{name})
     installed_apps: list[str] = [
-        "src.apps.users",
+        "users",  # Resolvido automaticamente para src.apps.users
     ]
     
     user_model: str = "src.apps.users.models.User"
