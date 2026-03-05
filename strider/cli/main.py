@@ -2084,8 +2084,8 @@ def cmd_routes(args: argparse.Namespace) -> int:
         return 1
     
     # Obtém FastAPI app
-    from strider import CoreApp
-    if isinstance(app, CoreApp):
+    from strider import StrideApp
+    if isinstance(app, StrideApp):
         fastapi_app = app.app
         admin_prefix = getattr(app.settings, "admin_url_prefix", "/admin")
     else:
@@ -2338,7 +2338,7 @@ from httpx import AsyncClient
     print(f"  4. Register the router in your main app:")
     print()
     print(f"     from {import_path} import router as {app_name}_router")
-    print(f"     app = CoreApp(routers=[{app_name}_router])")
+    print(f"     app = StrideApp()  # Auto-discovery carrega automaticamente")
     print()
     
     return 0

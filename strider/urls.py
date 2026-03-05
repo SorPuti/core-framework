@@ -151,8 +151,9 @@ def _load_url_module(module_path: str) -> list[URLPattern] | None:
     """
     try:
         module = importlib.import_module(module_path)
-    except ImportError:
-        # Módulo não existe - silenciosamente ignora
+    except ImportError as e:
+        # Loga o erro real para debug, mas retorna None
+        logger.debug(f"Could not import {module_path}: {e}")
         return None
     
     # Busca urlpatterns no módulo
@@ -184,13 +185,14 @@ def _resolve_app_module(app_name: str, sub_module: str = "urls") -> str | None:
     Returns:
         Caminho completo do módulo ou None se não encontrado
     """
-    import importlib
+    import importlib.util
     
     # Se já tem ponto, tenta como caminho absoluto primeiro
     if "." in app_name:
         full_path = f"{app_name}.{sub_module}"
         try:
-            if importlib.util.find_spec(full_path.replace(".", "/").rsplit("/", 1)[0]):
+            parent_module = full_path.rsplit(".", 1)[0]  # Remove .{sub_module}
+            if importlib.util.find_spec(parent_module):
                 return full_path
         except (ImportError, ModuleNotFoundError):
             pass
@@ -200,18 +202,20 @@ def _resolve_app_module(app_name: str, sub_module: str = "urls") -> str | None:
         f"src.apps.{app_name}.{sub_module}",
         f"apps.{app_name}.{sub_module}",
         f"src.{app_name}.{sub_module}",
+        f"{app_name}.{sub_module}",
     ]
     
     for path in search_paths:
         try:
-            # Tenta importar para verificar se existe
-            if importlib.util.find_spec(path.replace(".", "/").rsplit("/", 1)[0]):
+            # Verifica se o módulo pai existe
+            parent_module = path.rsplit(".", 1)[0]  # Remove .{sub_module}
+            if importlib.util.find_spec(parent_module):
                 return path
         except (ImportError, ModuleNotFoundError, ValueError):
             continue
     
     # Fallback: retorna como estava se não conseguiu resolver
-    return f"{app_name}.{sub_module}" if "." not in app_name else f"{app_name}.{sub_module}"
+    return f"{app_name}.{sub_module}"
 
 
 def autodiscover(settings: Any) -> "AutoRouter":
