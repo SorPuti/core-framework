@@ -332,7 +332,7 @@ from strider.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.17.82"
+__version__ = "0.17.83"
 __all__ = [
     # Models
     "Model",
