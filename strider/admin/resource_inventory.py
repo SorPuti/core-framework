@@ -48,7 +48,7 @@ def _collect_tasks() -> list[dict[str, Any]]:
                 "retry": t.retry,
                 "retry_delay": t.retry_delay,
                 "timeout": t.timeout,
-                "module": t.__module__,
+                "module": getattr(t, "__module__", "unknown"),
                 "actions": ["retry", "cancel", "view_result"],
             }
             for name, t in tasks.items()

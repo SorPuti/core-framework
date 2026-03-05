@@ -419,14 +419,20 @@ class ModelAdmin(Generic[ModelT]):
     
     def _resolve_app_label(self, model: type) -> str:
         """Resolve app_label a partir do módulo do model."""
-        module = model.__module__
+        # Obtém o módulo do model, com fallback para o nome da classe
+        module = getattr(model, "__module__", None)
+        if module is None:
+            # Fallback: usa o nome da classe como app_label
+            return model.__name__.lower()
+        
         # Ex: apps.users.models -> users
         # Ex: core.auth.models -> auth
+        # Ex: src.apps.core.models -> core
         parts = module.split(".")
         if len(parts) >= 2:
             # Pega o penúltimo segmento (geralmente o nome do app)
             return parts[-2]
-        return parts[0]
+        return parts[0] if parts else model.__name__.lower()
 
     def get_actions_metadata(self) -> list[ActionInfo]:
         """

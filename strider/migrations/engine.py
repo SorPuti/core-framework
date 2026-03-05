@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import logging
 import os
 import re
 from datetime import datetime as stdlib_datetime, timezone as stdlib_timezone
@@ -21,6 +22,8 @@ from typing import TYPE_CHECKING, Any
 from strider import timezone
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
+
+logger = logging.getLogger("strider.migrations.engine")
 
 from strider.migrations.dialects import get_compiler, detect_dialect
 from strider.migrations.migration import Migration
@@ -427,6 +430,107 @@ class MigrationEngine:
 
         return operations
 
+    def _sort_operations_by_dependencies(
+        self,
+        operations: list["Operation"],
+    ) -> list["Operation"]:
+        """
+        Ordena operações para garantir que tabelas com foreign keys
+        sejam criadas após as tabelas referenciadas.
+        
+        Algoritmo:
+        1. Separa CreateTable de outras operações
+        2. Ordena CreateTable por dependências (topological sort)
+        3. Mantém outras operações na ordem original
+        
+        Returns:
+            Lista de operações ordenada
+        """
+        from strider.migrations.operations import CreateTable, AddColumn
+
+        # Separa operações
+        create_tables: list[CreateTable] = []
+        add_columns: list[AddColumn] = []
+        other_ops: list["Operation"] = []
+
+        for op in operations:
+            if isinstance(op, CreateTable):
+                create_tables.append(op)
+            elif isinstance(op, AddColumn):
+                add_columns.append(op)
+            else:
+                other_ops.append(op)
+
+        # Coleta todas as FKs e suas dependências
+        # table -> set de tabelas que devem existir antes
+        dependencies: dict[str, set[str]] = {}
+        table_ops: dict[str, CreateTable] = {}
+
+        for op in create_tables:
+            table_ops[op.table_name] = op
+            deps = set()
+            for fk in getattr(op, "foreign_keys", []) or []:
+                if fk.references_table != op.table_name:  # Ignora auto-referência
+                    deps.add(fk.references_table)
+            dependencies[op.table_name] = deps
+
+        # Adiciona FKs de AddColumn também
+        for op in add_columns:
+            if hasattr(op, "column") and hasattr(op.column, "foreign_key"):
+                fk = op.column.foreign_key
+                if fk and fk.references_table != op.table_name:
+                    # Adiciona como dependência se a tabela estiver sendo criada
+                    if op.table_name in dependencies:
+                        dependencies[op.table_name].add(fk.references_table)
+
+        # Topological sort
+        sorted_tables: list[str] = []
+        visited: set[str] = set()
+        temp_marks: set[str] = set()
+
+        def visit(table: str) -> None:
+            if table in temp_marks:
+                # Ciclo detectado - ignora para evitar deadlock
+                logger.warning(f"Cyclic dependency detected for table: {table}")
+                return
+            if table in visited:
+                return
+            if table not in dependencies:
+                # Tabela não está sendo criada nesta migração
+                return
+
+            temp_marks.add(table)
+            for dep in dependencies[table]:
+                if dep in table_ops:  # Só visita se a tabela está sendo criada
+                    visit(dep)
+            temp_marks.discard(table)
+            visited.add(table)
+            sorted_tables.append(table)
+
+        # Visita cada tabela
+        for table in list(dependencies.keys()):
+            if table not in visited:
+                visit(table)
+
+        # Reconstrói lista de operações ordenadas
+        sorted_create_ops = [table_ops[t] for t in sorted_tables if t in table_ops]
+
+        # Adiciona tabelas que não estavam no grafo (sem FKs) no início
+        tables_with_deps = set(dependencies.keys())
+        tables_without_deps = [
+            op for op in create_tables
+            if op.table_name not in tables_with_deps
+        ]
+
+        # Ordem final: tabelas sem FKs -> tabelas com FKs ordenadas -> AddColumn -> outras
+        final_ops: list["Operation"] = []
+        final_ops.extend(tables_without_deps)
+        final_ops.extend(sorted_create_ops)
+        final_ops.extend(add_columns)
+        final_ops.extend(other_ops)
+
+        return final_ops
+
     def _generate_migration_code(
             self,
             name: str,
@@ -536,6 +640,9 @@ migration = Migration(
             if not operations:
                 print("No changes detected.")
                 return None
+
+            # Ordena operações para garantir que tabelas com FKs sejam criadas após as referenciadas
+            operations = self._sort_operations_by_dependencies(operations)
 
             new_fp = fingerprint(operations)
             last_fp = self._load_last_migration_fingerprint()

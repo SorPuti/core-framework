@@ -534,6 +534,26 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
         # Skip se já foi carregado como core module
         if module_path in core_loaded:
             continue
+        
+        # Verifica se o módulo existe antes de tentar importar
+        # models.py é opcional - apps podem não ter models
+        try:
+            parent_module = ".".join(module_path.split(".")[:-1])  # Remove .models
+            if parent_module:
+                spec = importlib.util.find_spec(parent_module)
+                if spec is None:
+                    # App não existe - silenciosamente ignora
+                    continue
+            
+            # Tenta encontrar o spec do models.py específico
+            spec = importlib.util.find_spec(module_path)
+            if spec is None:
+                # App existe mas não tem models.py - silenciosamente ignora
+                continue
+        except (ImportError, ModuleNotFoundError, ValueError):
+            # Erro ao verificar - tenta importar mesmo assim
+            pass
+        
         try:
             module = importlib.import_module(module_path)
             for name in dir(module):
@@ -549,6 +569,7 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
                     if obj not in models:
                         models.append(obj)
         except ImportError as e:
+            # Só mostra warning se o módulo existe mas deu erro de importação
             print(warning(f"Cannot import '{module_path}': {e}"))
             continue
     
@@ -2003,7 +2024,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
 
 
 def cmd_routes(args: argparse.Namespace) -> int:
-    """Lista rotas registradas."""
+    """Lista rotas registradas (excluindo rotas do Admin Panel)."""
     config = load_config()
     
     # Adiciona diretório atual ao path
@@ -2017,20 +2038,28 @@ def cmd_routes(args: argparse.Namespace) -> int:
     from strider import CoreApp
     if isinstance(app, CoreApp):
         fastapi_app = app.app
+        admin_prefix = getattr(app.settings, "admin_url_prefix", "/admin")
     else:
         fastapi_app = app
+        admin_prefix = "/admin"
     
     print(bold("\nRegistered Routes:\n"))
     print(f"{'Method':<10} {'Path':<40} {'Name':<30}")
     print("-" * 80)
     
+    route_count = 0
     for route in fastapi_app.routes:
         if hasattr(route, "methods"):
+            # Skip admin panel routes
+            if route.path.startswith(admin_prefix):
+                continue
             methods = ", ".join(route.methods)
             name = route.name or ""
             print(f"{methods:<10} {route.path:<40} {name:<30}")
+            route_count += 1
     
     print()
+    print(info(f"Total: {route_count} routes (admin routes hidden)"))
     return 0
 
 
@@ -3280,11 +3309,13 @@ def cmd_collectpermissions(args: argparse.Namespace) -> int:
 
     def resolve_app_label(model: type) -> str:
         """Resolve app_label from model's module (same logic as ModelAdmin)."""
-        module = model.__module__
+        module = getattr(model, "__module__", None)
+        if module is None:
+            return model.__name__.lower()
         parts = module.split(".")
         if len(parts) >= 2:
             return parts[-2]
-        return parts[0]
+        return parts[0] if parts else model.__name__.lower()
 
     permissions_to_create: list[tuple[str, str]] = []  # (codename, name)
 

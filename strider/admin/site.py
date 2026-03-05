@@ -264,7 +264,8 @@ class AdminSite:
         from strider.admin.router import create_admin_router
         router = create_admin_router(self, settings)
         
-        app.include_router(router, prefix=prefix)
+        # Admin routes are hidden from API documentation (/docs, /redoc)
+        app.include_router(router, prefix=prefix, include_in_schema=False)
         
         # Serve static files em debug mode
         debug = getattr(settings, "debug", False)
