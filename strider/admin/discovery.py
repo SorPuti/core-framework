@@ -130,17 +130,43 @@ def _get_explicit_admin_modules() -> list[str] | None:
     Se ambos vazios, retorna None (só scan).
     
     Aceita app names curtos (ex: 'users') que são resolvidos para 'src.apps.users.admin'.
+    Só retorna módulos que realmente existem (admin.py é opcional).
     """
+    import os
+    
     try:
         from strider.config import get_settings
         settings = get_settings()
+        cwd = Path(os.getcwd())
+        
         modules = getattr(settings, "admin_modules", None)
         if modules and isinstance(modules, list) and len(modules) > 0:
-            return list(modules)
+            # Verifica quais módulos realmente existem
+            existing = []
+            for mod in modules:
+                # Converte módulo para caminho de arquivo
+                file_path = cwd / mod.replace(".", os.sep) / "admin.py"
+                if file_path.exists():
+                    existing.append(mod)
+                else:
+                    logger.debug(f"Admin module not found (optional): {mod}")
+            return existing if existing else None
+            
         # Fallback: installed_apps -> {app}.admin (com auto-resolução)
         apps = getattr(settings, "installed_apps", None)
         if apps and isinstance(apps, list) and len(apps) > 0:
-            return [f"{_resolve_app_path(app)}.admin" for app in apps]
+            existing = []
+            for app in apps:
+                resolved = _resolve_app_path(app)
+                admin_module = f"{resolved}.admin"
+                # Verifica se o arquivo admin.py existe
+                file_path = cwd / resolved.replace(".", os.sep) / "admin.py"
+                if file_path.exists():
+                    existing.append(admin_module)
+                else:
+                    logger.debug(f"Admin module not found (optional): {admin_module}")
+            return existing if existing else None
+            
     except Exception:
         pass
     return None
@@ -224,8 +250,8 @@ def _import_admin_module(site: "AdminSite", module_path: str) -> bool:
     """
     Importa um módulo admin.py.
     
-    Erros de import são registrados no site.errors,
-    NÃO são engolidos silenciosamente.
+    Admin é opcional - apps podem ou não ter admin.py.
+    Erros são logados em DEBUG, não WARNING, pois é comportamento esperado.
     
     Returns:
         True se importou com sucesso
@@ -235,9 +261,9 @@ def _import_admin_module(site: "AdminSite", module_path: str) -> bool:
         logger.debug("Imported admin module: %s", module_path)
         return True
     except Exception as e:
-        logger.warning(
-            "Failed to import admin module '%s': %s: %s",
+        # Admin é opcional - não loga warning, apenas debug
+        logger.debug(
+            "Admin module not found (optional) '%s': %s: %s",
             module_path, type(e).__name__, e,
         )
-        site.errors.add_discovery_error(module_path, e)
         return False
