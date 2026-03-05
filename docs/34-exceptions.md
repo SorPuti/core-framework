@@ -47,7 +47,7 @@ HTTPException
 ### Validation Errors
 
 ```python
-from stride.exceptions import ValidationException, FieldValidationError
+from strider.exceptions import ValidationException, FieldValidationError
 
 # Single field error
 raise FieldValidationError(
@@ -57,7 +57,7 @@ raise FieldValidationError(
 )
 
 # Multiple errors
-from stride.exceptions import MultipleValidationErrors
+from strider.exceptions import MultipleValidationErrors
 
 errors = [
     FieldValidationError("Email required", field="email"),
@@ -66,7 +66,7 @@ errors = [
 raise MultipleValidationErrors(errors)
 
 # Unique constraint
-from stride.exceptions import UniqueConstraintError
+from strider.exceptions import UniqueConstraintError
 
 raise UniqueConstraintError(
     message="Email already exists",
@@ -77,7 +77,7 @@ raise UniqueConstraintError(
 ### Database Errors
 
 ```python
-from stride.exceptions import DoesNotExist, MultipleObjectsReturned
+from strider.exceptions import DoesNotExist, MultipleObjectsReturned
 
 # Not found
 raise DoesNotExist(
@@ -97,7 +97,7 @@ raise MultipleObjectsReturned(
 ### Auth Errors
 
 ```python
-from stride.exceptions import (
+from strider.exceptions import (
     AuthenticationFailed,
     InvalidCredentials,
     InvalidToken,
@@ -119,7 +119,7 @@ raise PermissionDenied(
 ### HTTP Errors
 
 ```python
-from stride.exceptions import (
+from strider.exceptions import (
     BadRequest,
     Unauthorized,
     Forbidden,
@@ -157,7 +157,7 @@ raise TooManyRequests(
 ### Business Errors
 
 ```python
-from stride.exceptions import (
+from strider.exceptions import (
     ResourceLocked,
     PreconditionFailed,
     OperationNotAllowed,
@@ -233,7 +233,7 @@ StrideApp auto-registers handlers for:
 ## Custom Exception
 
 ```python
-from stride.exceptions import StrideException
+from strider.exceptions import StrideException
 
 class PaymentFailedException(StrideException):
     """Payment processing failed."""
@@ -259,7 +259,7 @@ class PaymentFailedException(StrideException):
 ```python
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from stride import StrideApp
+from strider import StrideApp
 
 app = StrideApp()
 
@@ -274,8 +274,8 @@ async def payment_failed_handler(request: Request, exc: PaymentFailedException):
 ## In ViewSets
 
 ```python
-from stride import ModelViewSet
-from stride.exceptions import NotFound, Forbidden
+from strider import ModelViewSet
+from strider.exceptions import NotFound, Forbidden
 
 class PostViewSet(ModelViewSet):
     model = Post

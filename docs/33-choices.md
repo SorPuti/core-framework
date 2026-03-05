@@ -9,7 +9,7 @@ Django-style TextChoices and IntegerChoices.
 For string values.
 
 ```python
-from stride.choices import TextChoices
+from strider.choices import TextChoices
 
 class Status(TextChoices):
     DRAFT = "draft", "Draft"
@@ -22,7 +22,7 @@ class Status(TextChoices):
 For integer values.
 
 ```python
-from stride.choices import IntegerChoices
+from strider.choices import IntegerChoices
 
 class Priority(IntegerChoices):
     LOW = 1, "Low Priority"
@@ -34,7 +34,7 @@ class Priority(IntegerChoices):
 ## Usage in Models
 
 ```python
-from stride import Model, Field
+from strider import Model, Field
 from sqlalchemy.orm import Mapped
 
 class Status(TextChoices):
@@ -112,7 +112,7 @@ post.priority == 3                # True
 ### CommonStatus
 
 ```python
-from stride.choices import CommonStatus
+from strider.choices import CommonStatus
 
 CommonStatus.ACTIVE      # "active"
 CommonStatus.INACTIVE    # "inactive"
@@ -123,7 +123,7 @@ CommonStatus.SUSPENDED   # "suspended"
 ### PublishStatus
 
 ```python
-from stride.choices import PublishStatus
+from strider.choices import PublishStatus
 
 PublishStatus.DRAFT           # "draft"
 PublishStatus.PENDING_REVIEW  # "pending_review"
@@ -134,7 +134,7 @@ PublishStatus.ARCHIVED        # "archived"
 ### OrderStatus
 
 ```python
-from stride.choices import OrderStatus
+from strider.choices import OrderStatus
 
 OrderStatus.PENDING     # "pending"
 OrderStatus.PROCESSING  # "processing"
@@ -146,7 +146,7 @@ OrderStatus.REFUNDED    # "refunded"
 ### PaymentStatus
 
 ```python
-from stride.choices import PaymentStatus
+from strider.choices import PaymentStatus
 
 PaymentStatus.PENDING     # "pending"
 PaymentStatus.PROCESSING  # "processing"
@@ -159,7 +159,7 @@ PaymentStatus.CANCELLED   # "cancelled"
 ### TaskPriority
 
 ```python
-from stride.choices import TaskPriority
+from strider.choices import TaskPriority
 
 TaskPriority.LOW       # 1
 TaskPriority.MEDIUM    # 2
@@ -170,7 +170,7 @@ TaskPriority.CRITICAL  # 4
 ### Weekday
 
 ```python
-from stride.choices import Weekday
+from strider.choices import Weekday
 
 Weekday.MONDAY     # 1
 Weekday.TUESDAY    # 2
@@ -181,7 +181,7 @@ Weekday.SUNDAY     # 7
 ### Month
 
 ```python
-from stride.choices import Month
+from strider.choices import Month
 
 Month.JANUARY   # 1
 Month.FEBRUARY  # 2
@@ -192,7 +192,7 @@ Month.DECEMBER  # 12
 ### Gender
 
 ```python
-from stride.choices import Gender
+from strider.choices import Gender
 
 Gender.MALE          # "M"
 Gender.FEMALE        # "F"
@@ -203,7 +203,7 @@ Gender.NOT_INFORMED  # "N"
 ### Visibility
 
 ```python
-from stride.choices import Visibility
+from strider.choices import Visibility
 
 Visibility.PUBLIC    # "public"
 Visibility.PRIVATE   # "private"
@@ -216,7 +216,7 @@ Visibility.MEMBERS   # "members"
 ### In Serializers
 
 ```python
-from stride.serializers import InputSchema
+from strider.serializers import InputSchema
 from pydantic import field_validator
 
 class PostInput(InputSchema):
@@ -233,7 +233,7 @@ class PostInput(InputSchema):
 ### With ChoiceValidator
 
 ```python
-from stride.validators import ChoiceValidator
+from strider.validators import ChoiceValidator
 
 validator = ChoiceValidator(choices=Status.values)
 validator("draft")    # OK
@@ -267,7 +267,7 @@ class PostInput(InputSchema):
 ## Custom Choices
 
 ```python
-from stride.choices import TextChoices, IntegerChoices
+from strider.choices import TextChoices, IntegerChoices
 
 class TicketType(TextChoices):
     BUG = "bug", "Bug Report"

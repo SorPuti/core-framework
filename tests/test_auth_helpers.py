@@ -14,7 +14,7 @@ class TestGetRequestUser:
     
     def test_returns_none_when_no_user(self):
         """Test returns None when no user is set."""
-        from stride.auth.helpers import get_request_user
+        from strider.auth.helpers import get_request_user
         
         request = MagicMock()
         request.user = None
@@ -26,7 +26,7 @@ class TestGetRequestUser:
     
     def test_returns_user_from_starlette_pattern(self):
         """Test returns user from request.user (Starlette pattern)."""
-        from stride.auth.helpers import get_request_user
+        from strider.auth.helpers import get_request_user
         
         # Create a mock user that looks like AuthenticatedUser
         mock_user = MagicMock()
@@ -42,7 +42,7 @@ class TestGetRequestUser:
     
     def test_returns_user_from_legacy_pattern(self):
         """Test returns user from request.state.user (legacy pattern)."""
-        from stride.auth.helpers import get_request_user
+        from strider.auth.helpers import get_request_user
         
         mock_user = MagicMock()
         mock_user.email = "test@example.com"
@@ -58,7 +58,7 @@ class TestGetRequestUser:
     
     def test_prefers_starlette_over_legacy(self):
         """Test prefers request.user over request.state.user."""
-        from stride.auth.helpers import get_request_user
+        from strider.auth.helpers import get_request_user
         
         starlette_user = MagicMock()
         starlette_user.is_authenticated = True
@@ -79,7 +79,7 @@ class TestGetRequestUser:
     
     def test_handles_missing_state(self):
         """Test handles request without state attribute."""
-        from stride.auth.helpers import get_request_user
+        from strider.auth.helpers import get_request_user
         
         request = MagicMock(spec=[])  # No attributes by default
         request.user = None
@@ -94,7 +94,7 @@ class TestIsAuthenticated:
     
     def test_returns_false_when_no_user(self):
         """Test returns False when no user."""
-        from stride.auth.helpers import is_authenticated
+        from strider.auth.helpers import is_authenticated
         
         request = MagicMock()
         request.user = None
@@ -105,7 +105,7 @@ class TestIsAuthenticated:
     
     def test_returns_true_for_starlette_user(self):
         """Test returns True for Starlette authenticated user."""
-        from stride.auth.helpers import is_authenticated
+        from strider.auth.helpers import is_authenticated
         
         mock_user = MagicMock()
         mock_user.is_authenticated = True
@@ -117,7 +117,7 @@ class TestIsAuthenticated:
     
     def test_returns_true_for_legacy_user(self):
         """Test returns True for legacy user."""
-        from stride.auth.helpers import is_authenticated
+        from strider.auth.helpers import is_authenticated
         
         mock_user = MagicMock()
         
@@ -135,7 +135,7 @@ class TestSetRequestUser:
     
     def test_sets_user_on_state(self):
         """Test sets user on request.state."""
-        from stride.auth.helpers import set_request_user
+        from strider.auth.helpers import set_request_user
         
         mock_user = MagicMock()
         request = MagicMock()
@@ -147,7 +147,7 @@ class TestSetRequestUser:
     
     def test_clears_user_when_none(self):
         """Test clears user when None is passed."""
-        from stride.auth.helpers import set_request_user
+        from strider.auth.helpers import set_request_user
         
         request = MagicMock()
         request.state = MagicMock()
@@ -163,7 +163,7 @@ class TestAuthenticatedUserWrapper:
     
     def test_is_authenticated_property(self):
         """Test is_authenticated returns True."""
-        from stride.auth.middleware import AuthenticatedUser
+        from strider.auth.middleware import AuthenticatedUser
         
         mock_model = MagicMock()
         wrapper = AuthenticatedUser(mock_model)
@@ -172,7 +172,7 @@ class TestAuthenticatedUserWrapper:
     
     def test_proxies_attributes(self):
         """Test proxies attribute access to underlying model."""
-        from stride.auth.middleware import AuthenticatedUser
+        from strider.auth.middleware import AuthenticatedUser
         
         mock_model = MagicMock()
         mock_model.email = "test@example.com"
@@ -185,7 +185,7 @@ class TestAuthenticatedUserWrapper:
     
     def test_display_name(self):
         """Test display_name returns email."""
-        from stride.auth.middleware import AuthenticatedUser
+        from strider.auth.middleware import AuthenticatedUser
         
         mock_model = MagicMock()
         mock_model.email = "test@example.com"
@@ -196,7 +196,7 @@ class TestAuthenticatedUserWrapper:
     
     def test_identity(self):
         """Test identity returns string id."""
-        from stride.auth.middleware import AuthenticatedUser
+        from strider.auth.middleware import AuthenticatedUser
         
         mock_model = MagicMock()
         mock_model.id = 123
@@ -211,8 +211,8 @@ class TestAuthViewSetExtraFields:
     
     def test_detects_extra_fields_from_custom_schema(self):
         """Extra fields should be auto-detected from custom register_schema."""
-        from stride.auth.views import AuthViewSet
-        from stride.auth.schemas import BaseRegisterInput
+        from strider.auth.views import AuthViewSet
+        from strider.auth.schemas import BaseRegisterInput
         from pydantic import create_model
         from typing import Optional
         
@@ -238,7 +238,7 @@ class TestAuthViewSetExtraFields:
     
     def test_returns_empty_for_base_schema(self):
         """Should return empty list when using base schema."""
-        from stride.auth.views import AuthViewSet
+        from strider.auth.views import AuthViewSet
         
         class TestAuthViewSet(AuthViewSet):
             # Using default BaseRegisterInput
@@ -251,8 +251,8 @@ class TestAuthViewSetExtraFields:
     
     def test_explicit_extra_register_fields_takes_precedence(self):
         """Explicit extra_register_fields should take precedence over auto-detect."""
-        from stride.auth.views import AuthViewSet
-        from stride.auth.schemas import BaseRegisterInput
+        from strider.auth.views import AuthViewSet
+        from strider.auth.schemas import BaseRegisterInput
         from pydantic import create_model
         from typing import Optional
         
@@ -283,8 +283,8 @@ class TestAuthViewSetExtraFields:
     
     def test_dynamic_schema_with_extra_register_fields(self):
         """Dynamic schema creation via extra_register_fields should work."""
-        from stride.auth.views import AuthViewSet
-        from stride.auth.schemas import BaseRegisterInput
+        from strider.auth.views import AuthViewSet
+        from strider.auth.schemas import BaseRegisterInput
         from unittest.mock import MagicMock, patch
         
         class TestAuthViewSet(AuthViewSet):

@@ -1,0 +1,511 @@
+"""
+AdminRouter — Cria e configura o router do admin panel.
+
+Inclui:
+- API endpoints JSON (/api/...)
+- Frontend HTML (/dashboard, /login, list views, detail views)
+- Static files (em debug mode)
+"""
+
+from __future__ import annotations
+
+import logging
+import secrets
+from datetime import datetime, timedelta
+from typing import Any, TYPE_CHECKING
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Form, status
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+
+from strider.admin.permissions import check_admin_access, _get_admin_user
+
+if TYPE_CHECKING:
+    from strider.admin.site import AdminSite
+    from strider.config import Settings
+
+logger = logging.getLogger("strider.admin")
+
+
+def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
+    """
+    Cria o router principal do admin panel.
+    
+    Combina:
+    - API endpoints (JSON) sob /api/
+    - Frontend endpoints (HTML) na raiz
+    """
+    router = APIRouter(tags=["admin"])
+    
+    # ── IMPORTANTE: ordem de registro de routers ──
+    # Rotas literais PRIMEIRO, rotas com path params genéricos DEPOIS.
+    # FastAPI avalia rotas por ordem de registro — se /api/{app}/{model}
+    # vier antes de /api/ops/*, o "ops" é capturado como app_label. (Issue #10, #14)
+    
+    # 1. Operations Center API (rotas literais: /api/ops/*)
+    ops_enabled = getattr(settings, "ops_enabled", True)
+    if ops_enabled:
+        from strider.admin.ops_views import create_ops_api
+        ops_router = create_ops_api(site)
+        router.include_router(ops_router)
+        
+        # WebSocket endpoint for real-time updates
+        from strider.admin.ws_events import create_ws_router
+        ws_router = create_ws_router(site)
+        router.include_router(ws_router)
+        
+        from strider.admin.log_handler import setup_log_buffer
+        setup_log_buffer()
+    
+    # 1.5. User Preferences API (rotas literais: /api/preferences/*)
+    prefs_router = APIRouter(prefix="/api/preferences", tags=["admin-preferences"])
+    
+    @prefs_router.post("/theme")
+    async def set_theme_preference(request: Request) -> dict:
+        """Salva a preferência de tema do usuário."""
+        user = _get_admin_user(request)
+        if not user:
+            return {"status": "error", "message": "Not authenticated"}
+        
+        try:
+            body = await request.json()
+            theme = body.get("theme", "light")
+            
+            # Validate theme value
+            if theme not in ("light", "dark"):
+                return {"status": "error", "message": "Invalid theme value"}
+            
+            if hasattr(user, "admin_theme"):
+                from strider.models import get_session
+                from sqlalchemy import select
+                
+                # Get user model class
+                user_model = type(user)
+                user_id = user.id
+                
+                db = await get_session()
+                async with db:
+                    # Re-fetch user in this session to avoid detached instance error
+                    stmt = select(user_model).where(user_model.id == user_id)
+                    result = await db.execute(stmt)
+                    db_user = result.scalar_one_or_none()
+                    
+                    if db_user:
+                        db_user.admin_theme = theme
+                        await db.commit()
+                        return {"status": "ok", "theme": theme, "saved": True}
+            
+            return {"status": "ok", "theme": theme, "saved": False}
+        except Exception as e:
+            logger.exception("Error saving theme preference")
+            return {"status": "error", "message": str(e)}
+    
+    @prefs_router.get("/theme")
+    async def get_theme_preference(request: Request) -> dict:
+        """Obtém a preferência de tema do usuário."""
+        user = _get_admin_user(request)
+        if not user:
+            return {"theme": None}
+        
+        theme = getattr(user, "admin_theme", None)
+        return {"theme": theme}
+    
+    router.include_router(prefs_router)
+    
+    # 2. API views genéricas (rotas com path params: /api/{app_label}/{model_name})
+    from strider.admin.views import create_api_views
+    api_router = create_api_views(site)
+    router.include_router(api_router)
+    
+    # Template rendering
+    _templates = _setup_templates(settings)
+    
+    prefix = getattr(settings, "admin_url_prefix", "/admin").rstrip("/")
+    debug = getattr(settings, "debug", False)
+    
+    # -- Context helpers --
+    
+    def _base_context(request: Request, **extra: Any) -> dict:
+        """Contexto base para todos os templates."""
+        from stride import __version__ as core_version
+        
+        # Resolve current page for active sidebar indicator
+        current_path = str(request.url.path).rstrip("/")
+        
+        user = _get_admin_user(request)
+        user_is_superuser = user and getattr(user, "is_superuser", False)
+        show_ops = ops_enabled and user_is_superuser
+        
+        # User theme preference (from user profile or None)
+        user_theme = getattr(user, "admin_theme", None) if user else None
+        
+        return {
+            "request": request,
+            "site_title": getattr(settings, "admin_site_title", "Admin"),
+            "site_header": getattr(settings, "admin_site_header", "Stride Admin"),
+            "admin_prefix": prefix,
+            "static_prefix": f"{prefix}/static",
+            "apps": site.get_app_list(),
+            "errors": site.errors,
+            "debug": debug,
+            "theme": getattr(settings, "admin_theme", "default"),
+            "user_theme": user_theme,  # User's personal preference
+            "primary_color": getattr(settings, "admin_primary_color", "#3B82F6"),
+            "logo_url": getattr(settings, "admin_logo_url", None),
+            "core_version": core_version,
+            "current_path": current_path,
+            "ops_enabled": show_ops,
+            **extra,
+        }
+    
+    # =========================================================================
+    # Frontend Routes (HTML)
+    # =========================================================================
+    
+    @router.get("/login", response_class=HTMLResponse)
+    async def login_page(request: Request) -> Response:
+        """Página de login do admin."""
+        user = _get_admin_user(request)
+        if user and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            return RedirectResponse(f"{prefix}/", status_code=302)
+        
+        ctx = _base_context(request, error=request.query_params.get("error"))
+        return _templates.TemplateResponse("admin/login.html", ctx)
+    
+    @router.post("/login")
+    async def login_action(
+        request: Request,
+        response: Response,
+        email: str = Form(...),
+        password: str = Form(...),
+    ) -> Response:
+        """Processa login no admin."""
+        try:
+            from strider.auth.models import get_user_model
+            User = get_user_model()
+        except RuntimeError:
+            return RedirectResponse(
+                f"{prefix}/login?error=Admin+not+configured",
+                status_code=303,
+            )
+        
+        from strider.models import get_session
+        
+        try:
+            db = await get_session()
+            async with db:
+                user = await User.objects.using(db).filter(email=email).first()
+                
+                if user is None:
+                    return RedirectResponse(
+                        f"{prefix}/login?error=Invalid+credentials",
+                        status_code=303,
+                    )
+                
+                # Verificar senha
+                valid = False
+                if hasattr(user, "check_password"):
+                    valid = user.check_password(password)
+                    if hasattr(valid, "__await__"):
+                        valid = await valid
+                elif hasattr(user, "verify_password"):
+                    valid = user.verify_password(password)
+                    if hasattr(valid, "__await__"):
+                        valid = await valid
+                
+                if not valid:
+                    return RedirectResponse(
+                        f"{prefix}/login?error=Invalid+credentials",
+                        status_code=303,
+                    )
+                
+                if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+                    return RedirectResponse(
+                        f"{prefix}/login?error=Admin+access+required",
+                        status_code=303,
+                    )
+                
+                # Criar sessão
+                session_key = secrets.token_urlsafe(48)
+                
+                try:
+                    from strider.admin.models import AdminSession
+                    from strider.datetime import timezone
+                    
+                    session = AdminSession(
+                        session_key=session_key,
+                        user_id=str(user.id),
+                        ip_address=request.client.host if request.client else None,
+                        user_agent=request.headers.get("user-agent", "")[:500],
+                        expires_at=timezone.now() + timedelta(hours=24),
+                    )
+                    await session.save(db)
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("Could not save admin session to DB: %s", e)
+                
+                response = RedirectResponse(f"{prefix}/", status_code=303)
+                
+                # Cookie Secure: detecta automaticamente pelo scheme
+                # Em HTTP (dev local), Secure=False é obrigatório
+                cookie_secure = getattr(settings, "admin_cookie_secure", None)
+                if cookie_secure is None:
+                    cookie_secure = request.url.scheme == "https"
+                
+                response.set_cookie(
+                    key="admin_session",
+                    value=session_key,
+                    httponly=True,
+                    samesite="lax",
+                    max_age=86400,
+                    secure=cookie_secure,
+                    path="/",
+                )
+                return response
+                
+        except Exception as e:
+            logger.error("Login error: %s", e)
+            return RedirectResponse(
+                f"{prefix}/login?error=Internal+error",
+                status_code=303,
+            )
+    
+    @router.get("/logout")
+    async def logout(request: Request) -> Response:
+        """Logout do admin."""
+        response = RedirectResponse(f"{prefix}/login", status_code=302)
+        response.delete_cookie("admin_session")
+        return response
+    
+    @router.get("/", response_class=HTMLResponse)
+    async def dashboard(request: Request) -> Response:
+        """Dashboard principal do admin."""
+        user = _get_admin_user(request)
+        if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            return RedirectResponse(f"{prefix}/login", status_code=302)
+        
+        ctx = _base_context(request, user=user)
+        return _templates.TemplateResponse("admin/dashboard.html", ctx)
+    
+    # =========================================================================
+    # Operations Center Routes (HTML) — BEFORE model routes
+    # =========================================================================
+    
+    if ops_enabled:
+        def _require_superuser(request: Request) -> Any:
+            """
+            Verifica se o usuário é superuser para acessar Operations Center.
+            
+            Operations Center contém funcionalidades de infraestrutura que podem
+            comprometer o servidor. Apenas superusers (criados via CLI) devem ter
+            acesso, nunca administradores comuns.
+            """
+            user = _get_admin_user(request)
+            if not user:
+                return None
+            if not getattr(user, "is_superuser", False):
+                return False  # Acesso negado (403)
+            return user  # OK
+        
+        @router.get("/ops/", response_class=HTMLResponse)
+        async def ops_dashboard(request: Request) -> Response:
+            """Operations Center dashboard — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/dashboard.html", ctx)
+        
+        @router.get("/ops/infrastructure/", response_class=HTMLResponse)
+        async def ops_infrastructure(request: Request) -> Response:
+            """Infrastructure panel — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/infrastructure.html", ctx)
+        
+        @router.get("/ops/tasks/", response_class=HTMLResponse)
+        async def ops_tasks(request: Request) -> Response:
+            """Task Manager — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/tasks.html", ctx)
+        
+        @router.get("/ops/workers/", response_class=HTMLResponse)
+        async def ops_workers(request: Request) -> Response:
+            """Worker Manager — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/workers.html", ctx)
+        
+        @router.get("/ops/logs/", response_class=HTMLResponse)
+        async def ops_logs(request: Request) -> Response:
+            """Log Viewer with streaming — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/logs.html", ctx)
+        
+        @router.get("/ops/periodic/", response_class=HTMLResponse)
+        async def ops_periodic(request: Request) -> Response:
+            """Periodic Tasks — Redirect to Task Center with Scheduler tab."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            # Redirect to unified Task Center (periodic is now a tab there)
+            return RedirectResponse(f"{prefix}/ops/tasks/#scheduled", status_code=302)
+        
+        @router.get("/ops/kafka/", response_class=HTMLResponse)
+        async def ops_kafka(request: Request) -> Response:
+            """Kafka Dashboard — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/kafka.html", ctx)
+        
+        @router.get("/ops/events/", response_class=HTMLResponse)
+        async def ops_events(request: Request) -> Response:
+            """Events Panel — SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/events.html", ctx)
+    
+    # =========================================================================
+    # Model Routes (HTML)
+    # =========================================================================
+    
+    @router.get("/{app_label}/{model_name}/", response_class=HTMLResponse)
+    async def model_list(
+        request: Request,
+        app_label: str,
+        model_name: str,
+    ) -> Response:
+        """List view HTML para um model."""
+        user = _get_admin_user(request)
+        if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            return RedirectResponse(f"{prefix}/login", status_code=302)
+        
+        result = site.get_model_by_name(app_label, model_name)
+        if not result:
+            raise HTTPException(404, f"Model not found: {app_label}.{model_name}")
+        
+        model, admin_instance = result
+        
+        # Verificar erros do model
+        model_errors = site.errors.get_errors_for_model(model.__name__)
+        
+        # Obter permissões do usuário para este model
+        from strider.admin.permissions import get_user_model_permissions
+        user_perms = await get_user_model_permissions(user, app_label, model_name)
+        
+        # Resolve tipo de cada filtro para gerar opcoes corretas no template
+        filter_types = {}
+        for filter_name in admin_instance.list_filter:
+            col = getattr(model, filter_name, None)
+            if col is not None:
+                try:
+                    col_type = str(col.property.columns[0].type).upper()
+                    if "BOOL" in col_type:
+                        filter_types[filter_name] = "boolean"
+                    else:
+                        filter_types[filter_name] = "string"
+                except Exception:
+                    filter_types[filter_name] = "string"
+            else:
+                filter_types[filter_name] = "string"
+        
+        import json as _json
+        
+        ctx = _base_context(
+            request,
+            user=user,
+            app_label=app_label,
+            model_name=model_name,
+            admin=admin_instance,
+            model_errors=model_errors,
+            filter_types=filter_types,
+            filter_types_json=_json.dumps(filter_types),
+            user_perms=user_perms,
+        )
+        return _templates.TemplateResponse("admin/list.html", ctx)
+    
+    @router.get("/{app_label}/{model_name}/{pk}/", response_class=HTMLResponse)
+    async def model_detail(
+        request: Request,
+        app_label: str,
+        model_name: str,
+        pk: str,
+    ) -> Response:
+        """Detail/edit view HTML para um objeto."""
+        user = _get_admin_user(request)
+        if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            return RedirectResponse(f"{prefix}/login", status_code=302)
+        
+        result = site.get_model_by_name(app_label, model_name)
+        if not result:
+            raise HTTPException(404, f"Model not found: {app_label}.{model_name}")
+        
+        model, admin_instance = result
+        
+        # Obter permissões do usuário para este model
+        from strider.admin.permissions import get_user_model_permissions
+        user_perms = await get_user_model_permissions(user, app_label, model_name)
+        
+        import json as _json
+        fields_json = _json.dumps(admin_instance.get_column_info())
+        editable_fields_json = _json.dumps(admin_instance.get_editable_fields())
+        
+        ctx = _base_context(
+            request,
+            user=user,
+            app_label=app_label,
+            model_name=model_name,
+            pk=pk,
+            admin=admin_instance,
+            is_new=(pk == "new"),
+            fields_json=fields_json,
+            editable_fields_json=editable_fields_json,
+            user_perms=user_perms,
+        )
+        return _templates.TemplateResponse("admin/detail.html", ctx)
+    
+    return router
+
+
+def _setup_templates(settings: "Settings") -> Any:
+    """Configura Jinja2 templates para o admin."""
+    from pathlib import Path
+    from starlette.templating import Jinja2Templates
+    
+    templates_dir = Path(__file__).parent / "templates"
+    
+    templates = Jinja2Templates(directory=str(templates_dir))
+    
+    # Adiciona helpers ao ambiente Jinja2
+    templates.env.globals["now"] = datetime.utcnow
+    
+    return templates

@@ -92,7 +92,7 @@ class AppSettings(Settings):
 ## Model de Tenant
 
 ```python
-from stride import Model, Field
+from strider import Model, Field
 from sqlalchemy.orm import Mapped
 
 class Workspace(Model):
@@ -108,8 +108,8 @@ class Workspace(Model):
 Adicione aos models que pertencem a um tenant:
 
 ```python
-from stride import Model, Field
-from stride.tenancy import TenantMixin, TenantManager
+from strider import Model, Field
+from strider.tenancy import TenantMixin, TenantManager
 from sqlalchemy.orm import Mapped
 
 class Project(Model, TenantMixin):
@@ -163,7 +163,7 @@ O middleware extrai tenant de:
 ### No Middleware
 
 ```python
-from stride.tenancy import set_tenant_context
+from strider.tenancy import set_tenant_context
 
 class CustomTenantMiddleware(ASGIMiddleware):
     async def before_request(self, scope, request):
@@ -175,7 +175,7 @@ class CustomTenantMiddleware(ASGIMiddleware):
 ### Na View
 
 ```python
-from stride.tenancy import set_tenant_context
+from strider.tenancy import set_tenant_context
 
 async def my_view(request, db):
     set_tenant_context(request.user.workspace_id)
@@ -187,8 +187,8 @@ async def my_view(request, db):
 ## Integração com ViewSet
 
 ```python
-from stride import ModelViewSet
-from stride.tenancy import TenantMixin
+from strider import ModelViewSet
+from strider.tenancy import TenantMixin
 
 class ProjectViewSet(ModelViewSet):
     model = Project
@@ -240,7 +240,7 @@ class ProjectViewSet(ModelViewSet):
 Para models que podem ser tenant-scoped ou globais:
 
 ```python
-from stride.tenancy import FlexibleTenantMixin
+from strider.tenancy import FlexibleTenantMixin
 
 class Template(Model, FlexibleTenantMixin):
     __tablename__ = "templates"
@@ -268,7 +268,7 @@ all_templates = await Template.objects.using(db).filter(
 ## Com Soft Delete
 
 ```python
-from stride.models import TenantSoftDeleteManager
+from strider.models import TenantSoftDeleteManager
 
 class Project(Model, TenantMixin, SoftDeleteMixin):
     __tablename__ = "projects"
@@ -312,7 +312,7 @@ class AppSettings(Settings):
     ]
 
 # src/apps/workspaces/models.py
-from stride import Model, Field
+from strider import Model, Field
 from sqlalchemy.orm import Mapped
 
 class Workspace(Model):
@@ -323,8 +323,8 @@ class Workspace(Model):
     slug: Mapped[str] = Field.string(max_length=50, unique=True)
 
 # src/apps/projects/models.py
-from stride import Model, Field
-from stride.tenancy import TenantMixin, TenantManager
+from strider import Model, Field
+from strider.tenancy import TenantMixin, TenantManager
 from sqlalchemy.orm import Mapped
 
 class Project(Model, TenantMixin):
@@ -335,7 +335,7 @@ class Project(Model, TenantMixin):
     name: Mapped[str] = Field.string(max_length=200)
 
 # src/apps/projects/views.py
-from stride import ModelViewSet
+from strider import ModelViewSet
 
 class ProjectViewSet(ModelViewSet):
     model = Project

@@ -44,8 +44,8 @@ flowchart LR
 ## Imports
 
 ```python
-from stride import WebSocketView, SSEView, Channel, sse_response
-from stride import IsAuthenticated, AllowAny, HasRole  # permissões
+from strider import WebSocketView, SSEView, Channel, sse_response
+from strider import IsAuthenticated, AllowAny, HasRole  # permissões
 ```
 
 ---
@@ -57,7 +57,7 @@ Classe base para endpoints WebSocket.  Cada conexão cria uma nova instância (s
 ### Exemplo público (sem auth)
 
 ```python
-from stride import WebSocketView, Router
+from strider import WebSocketView, Router
 
 class EchoWS(WebSocketView):
     encoding = "json"
@@ -79,7 +79,7 @@ router.register_websocket("/ws/{room}", EchoWS)
 ### Exemplo protegido (com auth)
 
 ```python
-from stride import WebSocketView, IsAuthenticated
+from strider import WebSocketView, IsAuthenticated
 
 class PrivateStream(WebSocketView):
     permission_classes = [IsAuthenticated]
@@ -206,7 +206,7 @@ Classe base para endpoints Server-Sent Events (HTTP streaming).
 ### Exemplo público
 
 ```python
-from stride import SSEView, Router
+from strider import SSEView, Router
 
 class SystemEvents(SSEView):
     ping_interval = 15
@@ -223,7 +223,7 @@ router.register_sse("/system", SystemEvents)
 ### Exemplo protegido
 
 ```python
-from stride import SSEView, IsAuthenticated
+from strider import SSEView, IsAuthenticated
 
 class UserNotifications(SSEView):
     permission_classes = [IsAuthenticated]
@@ -293,7 +293,7 @@ Pub/sub in-process para fan-out de mensagens.  Cada subscriber recebe uma cópia
 ### Uso básico
 
 ```python
-from stride import Channel
+from strider import Channel
 
 # Criar canal global
 notifications = Channel(maxlen=500)
@@ -336,7 +336,7 @@ Quando a queue de um subscriber está cheia (`maxlen`), a mensagem mais antiga �
 Para endpoints que não precisam de uma classe completa:
 
 ```python
-from stride import sse_response
+from strider import sse_response
 
 @router.get("/events")
 async def events(request: Request):
@@ -353,7 +353,7 @@ async def events(request: Request):
 ### Router
 
 ```python
-from stride import Router
+from strider import Router
 
 router = Router(prefix="/api/v1", tags=["Realtime"])
 
@@ -367,7 +367,7 @@ router.register_sse("/events/{userId}", TradeEventsSSE)
 ### AutoRouter
 
 ```python
-from stride import AutoRouter
+from strider import AutoRouter
 
 api = AutoRouter(prefix="/api")
 api.register_websocket("/ws/chat/{room}", ChatWS)
@@ -413,7 +413,7 @@ Todas as permissões do sistema de auth funcionam em WebSocket e SSE:
 ### Permissão customizada
 
 ```python
-from stride.permissions import Permission
+from strider.permissions import Permission
 
 class IsSubscriber(Permission):
     message = "Subscription required"
@@ -470,7 +470,7 @@ location /api/ws/ {
 
 ```python
 # routes.py
-from stride import Router, WebSocketView, SSEView, IsAuthenticated, Channel
+from strider import Router, WebSocketView, SSEView, IsAuthenticated, Channel
 from starlette.websockets import WebSocket, WebSocketState
 
 # Canal global de ticks
@@ -510,7 +510,7 @@ router.register_sse("/events/{userId}", TradeEventsSSE)
 
 ```python
 # main.py
-from stride import StrideApp, AutoRouter
+from strider import StrideApp, AutoRouter
 
 api = AutoRouter(prefix="/api")
 api.include_router(router)

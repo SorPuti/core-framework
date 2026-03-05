@@ -15,17 +15,17 @@ import pytest
 import pytest_asyncio
 from unittest.mock import patch, MagicMock
 
-from stride.admin.site import AdminSite
-from stride.admin.options import ModelAdmin, InlineModelAdmin
-from stride.admin.exceptions import (
+from strider.admin.site import AdminSite
+from strider.admin.options import ModelAdmin, InlineModelAdmin
+from strider.admin.exceptions import (
     AdminConfigurationError,
     AdminRegistrationError,
     AdminRuntimeError,
     AdminError,
     AdminErrorCollector,
 )
-from stride.admin.permissions import IsAdminUser, check_model_permission
-from stride.admin.serializers import (
+from strider.admin.permissions import IsAdminUser, check_model_permission
+from strider.admin.serializers import (
     generate_list_schema,
     generate_detail_schema,
     generate_write_schema,
@@ -530,7 +530,7 @@ class TestCollectstatic:
     """Testes do sistema de coleta de assets."""
     
     def test_collectstatic(self, tmp_path):
-        from stride.admin.collectstatic import collectstatic
+        from strider.admin.collectstatic import collectstatic
         
         output_dir = str(tmp_path / "static" / "stride-admin")
         result = collectstatic(output_dir=output_dir, no_hash=True)
@@ -540,7 +540,7 @@ class TestCollectstatic:
         assert "output_dir" in result
     
     def test_collectstatic_with_hash(self, tmp_path):
-        from stride.admin.collectstatic import collectstatic
+        from strider.admin.collectstatic import collectstatic
         
         output_dir = str(tmp_path / "static" / "hashed")
         result = collectstatic(output_dir=output_dir, no_hash=False)
@@ -569,7 +569,7 @@ class TestAdminExports:
     """Testes dos exports do pacote admin."""
     
     def test_imports(self):
-        from stride.admin import (
+        from strider.admin import (
             AdminSite,
             ModelAdmin,
             InlineModelAdmin,
@@ -588,7 +588,7 @@ class TestAdminExports:
         assert default_site is admin
     
     def test_action_decorator(self):
-        from stride.admin import action
+        from strider.admin import action
         
         @action(description="Test action")
         def my_action(self, db, queryset):
@@ -607,7 +607,7 @@ class TestCreateSuperuserCLI:
     
     def test_parser_registered(self):
         """createsuperuser deve estar registrado no parser."""
-        from stride.cli.main import create_parser
+        from strider.cli.main import create_parser
         parser = create_parser()
         # --help faz sys.exit(0), entao capturamos SystemExit
         with pytest.raises(SystemExit) as exc_info:
@@ -616,15 +616,15 @@ class TestCreateSuperuserCLI:
     
     def test_noinput_requires_email(self):
         """--noinput sem --email deve falhar."""
-        from stride.cli.main import create_parser, cmd_createsuperuser
+        from strider.cli.main import create_parser, cmd_createsuperuser
         parser = create_parser()
         parsed = parser.parse_args(["createsuperuser", "--noinput", "--password", "test12345"])
         
-        with patch("stride.cli.main.load_config", return_value={
+        with patch("strider.cli.main.load_config", return_value={
             "database_url": "sqlite+aiosqlite:///test.db"
         }):
-            with patch("stride.cli.main.check_database_connection", return_value=True):
-                with patch("stride.auth.models.get_user_model") as mock_get:
+            with patch("strider.cli.main.check_database_connection", return_value=True):
+                with patch("strider.auth.models.get_user_model") as mock_get:
                     mock_model = MagicMock()
                     mock_model.USERNAME_FIELD = "email"
                     mock_model.REQUIRED_FIELDS = []
@@ -634,15 +634,15 @@ class TestCreateSuperuserCLI:
     
     def test_noinput_requires_password(self):
         """--noinput sem --password deve falhar."""
-        from stride.cli.main import create_parser, cmd_createsuperuser
+        from strider.cli.main import create_parser, cmd_createsuperuser
         parser = create_parser()
         parsed = parser.parse_args(["createsuperuser", "--noinput", "--email", "a@b.com"])
         
-        with patch("stride.cli.main.load_config", return_value={
+        with patch("strider.cli.main.load_config", return_value={
             "database_url": "sqlite+aiosqlite:///test.db"
         }):
-            with patch("stride.cli.main.check_database_connection", return_value=True):
-                with patch("stride.auth.models.get_user_model") as mock_get:
+            with patch("strider.cli.main.check_database_connection", return_value=True):
+                with patch("strider.auth.models.get_user_model") as mock_get:
                     mock_model = MagicMock()
                     mock_model.USERNAME_FIELD = "email"
                     mock_model.REQUIRED_FIELDS = []
@@ -652,14 +652,14 @@ class TestCreateSuperuserCLI:
     
     def test_fails_if_no_db_connection(self):
         """Deve falhar se banco inacessivel."""
-        from stride.cli.main import create_parser, cmd_createsuperuser
+        from strider.cli.main import create_parser, cmd_createsuperuser
         parser = create_parser()
         parsed = parser.parse_args(["createsuperuser"])
         
-        with patch("stride.cli.main.load_config", return_value={
+        with patch("strider.cli.main.load_config", return_value={
             "database_url": "sqlite+aiosqlite:///test.db"
         }):
-            with patch("stride.cli.main.check_database_connection", return_value=False):
+            with patch("strider.cli.main.check_database_connection", return_value=False):
                 result = cmd_createsuperuser(parsed)
                 assert result == 1
 
@@ -673,8 +673,8 @@ class TestCookieSecureFix:
     
     def test_secure_auto_detect_https(self):
         """Cookie deve ser Secure quando request e HTTPS."""
-        from stride.admin.router import create_admin_router
-        from stride.admin.site import AdminSite
+        from strider.admin.router import create_admin_router
+        from strider.admin.site import AdminSite
         
         site = AdminSite()
         settings = MagicMock()
@@ -717,7 +717,7 @@ class TestCookieSecureFix:
     
     def test_config_has_admin_cookie_secure_field(self):
         """Settings deve ter o campo admin_cookie_secure."""
-        from stride.config import Settings
+        from strider.config import Settings
         s = Settings()
         assert hasattr(s, "admin_cookie_secure")
         # Default e None (auto-detect)
@@ -746,33 +746,33 @@ class TestDiscoveryAlwaysScans:
     
     def test_discovery_does_scan_even_with_explicit_config(self):
         """Scan deve rodar mesmo quando ha config explicita."""
-        from stride.admin.discovery import discover_admin_modules
-        from stride.admin.site import AdminSite
+        from strider.admin.discovery import discover_admin_modules
+        from strider.admin.site import AdminSite
         
         site = AdminSite()
         
         # Mock: config explicita retorna 1 modulo (que falha ao importar)
-        with patch("stride.admin.discovery._get_explicit_admin_modules", return_value=["fake.admin"]):
-            with patch("stride.admin.discovery._import_admin_module", return_value=False):
-                with patch("stride.admin.discovery._scan_for_admin_files", return_value=[]) as mock_scan:
+        with patch("strider.admin.discovery._get_explicit_admin_modules", return_value=["fake.admin"]):
+            with patch("strider.admin.discovery._import_admin_module", return_value=False):
+                with patch("strider.admin.discovery._scan_for_admin_files", return_value=[]) as mock_scan:
                     discover_admin_modules(site)
                     # O scan DEVE ser chamado mesmo com config explicita
                     mock_scan.assert_called_once()
     
     def test_discovery_deduplicates_modules(self):
         """Modulos explicitos nao devem ser importados 2x pelo scan."""
-        from stride.admin.discovery import discover_admin_modules
-        from stride.admin.site import AdminSite
+        from strider.admin.discovery import discover_admin_modules
+        from strider.admin.site import AdminSite
         from pathlib import Path
         
         site = AdminSite()
         
-        with patch("stride.admin.discovery._get_explicit_admin_modules", return_value=["apps.users.admin"]):
-            with patch("stride.admin.discovery._import_admin_module", return_value=True) as mock_import:
-                with patch("stride.admin.discovery._scan_for_admin_files", return_value=[
+        with patch("strider.admin.discovery._get_explicit_admin_modules", return_value=["apps.users.admin"]):
+            with patch("strider.admin.discovery._import_admin_module", return_value=True) as mock_import:
+                with patch("strider.admin.discovery._scan_for_admin_files", return_value=[
                     Path("/project/apps/users/admin.py")
                 ]):
-                    with patch("stride.admin.discovery._file_to_module", return_value="apps.users.admin"):
+                    with patch("strider.admin.discovery._file_to_module", return_value="apps.users.admin"):
                         discover_admin_modules(site)
                         # Deve importar apenas 1x (via explicito), nao 2x
                         assert mock_import.call_count == 1
@@ -795,7 +795,7 @@ class TestSetupAdminUsesDefaultSite:
         source = app_py.read_text()
         
         # Procura pelo corpo de _setup_admin
-        # Deve conter "from stride.admin import default_site"
+        # Deve conter "from strider.admin import default_site"
         # E NAO deve conter "AdminSite(name="
         in_setup = False
         found_default_site_import = False
@@ -809,23 +809,23 @@ class TestSetupAdminUsesDefaultSite:
             if in_setup:
                 if stripped.startswith("def ") and "_setup_admin" not in stripped:
                     break
-                if "from stride.admin import default_site" in stripped:
+                if "from strider.admin import default_site" in stripped:
                     found_default_site_import = True
                 if "AdminSite(" in stripped and "name=" in stripped:
                     found_new_adminsite = True
         
-        assert found_default_site_import, "_setup_admin deve usar 'from stride.admin import default_site'"
+        assert found_default_site_import, "_setup_admin deve usar 'from strider.admin import default_site'"
         assert not found_new_adminsite, "_setup_admin NAO deve criar AdminSite() novo"
     
     def test_default_site_is_singleton(self):
         """default_site deve ser o mesmo objeto que admin."""
-        from stride.admin import default_site, admin
+        from strider.admin import default_site, admin
         assert default_site is admin
     
     def test_register_goes_to_default_site(self):
         """@admin.register() deve registrar no default_site."""
-        from stride.admin import admin, default_site
-        from stride.admin.site import AdminSite
+        from strider.admin import admin, default_site
+        from strider.admin.site import AdminSite
         
         # Reset para teste isolado
         original_registry = dict(default_site._registry)
@@ -849,17 +849,17 @@ class TestAdminSessionMiddleware:
     
     def test_middleware_importable(self):
         """Middleware deve ser importavel."""
-        from stride.admin.middleware import AdminSessionMiddleware
+        from strider.admin.middleware import AdminSessionMiddleware
         assert AdminSessionMiddleware is not None
     
     def test_middleware_in_exports(self):
         """Middleware deve estar nos exports do admin."""
-        from stride.admin import AdminSessionMiddleware
+        from strider.admin import AdminSessionMiddleware
         assert AdminSessionMiddleware is not None
     
     def test_middleware_skips_non_admin_paths(self):
         """Middleware nao deve interceptar rotas fora do admin."""
-        from stride.admin.middleware import AdminSessionMiddleware
+        from strider.admin.middleware import AdminSessionMiddleware
         import asyncio
         
         call_next_called = False
@@ -880,7 +880,7 @@ class TestAdminSessionMiddleware:
     
     def test_middleware_skips_login_path(self):
         """Middleware nao deve tentar resolver sessao na rota de login."""
-        from stride.admin.middleware import AdminSessionMiddleware
+        from strider.admin.middleware import AdminSessionMiddleware
         import asyncio
         
         call_next_called = False
@@ -901,7 +901,7 @@ class TestAdminSessionMiddleware:
     
     def test_middleware_skips_no_cookie(self):
         """Middleware deve prosseguir se nao ha cookie admin_session."""
-        from stride.admin.middleware import AdminSessionMiddleware
+        from strider.admin.middleware import AdminSessionMiddleware
         import asyncio
         
         call_next_called = False
@@ -922,7 +922,7 @@ class TestAdminSessionMiddleware:
     
     def test_mount_registers_middleware(self):
         """AdminSite.mount() deve registrar AdminSessionMiddleware."""
-        from stride.admin.site import AdminSite
+        from strider.admin.site import AdminSite
         
         site = AdminSite()
         app = MagicMock()
@@ -939,7 +939,7 @@ class TestAdminSessionMiddleware:
         site.mount(app, settings)
         
         # Verifica que add_middleware foi chamado com AdminSessionMiddleware
-        from stride.admin.middleware import AdminSessionMiddleware
+        from strider.admin.middleware import AdminSessionMiddleware
         app.add_middleware.assert_called_once_with(
             AdminSessionMiddleware, admin_prefix="/admin"
         )
@@ -953,20 +953,20 @@ class TestPKCast:
     """Testa _cast_pk para conversao de tipo de PK."""
     
     def test_cast_integer_pk(self):
-        from stride.admin.views import _cast_pk
+        from strider.admin.views import _cast_pk
         result = _cast_pk(MockModel, "id", "42")
         # MockModel tem INTEGER PK
         assert result == 42
         assert isinstance(result, int)
     
     def test_cast_string_pk_fallback(self):
-        from stride.admin.views import _cast_pk
+        from strider.admin.views import _cast_pk
         # Se conversao falhar, retorna string original
         result = _cast_pk(MockModel, "id", "not-a-number")
         assert result == "not-a-number"
     
     def test_cast_unknown_field_returns_string(self):
-        from stride.admin.views import _cast_pk
+        from strider.admin.views import _cast_pk
         result = _cast_pk(MockModel, "nonexistent", "abc")
         assert result == "abc"
 

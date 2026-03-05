@@ -9,7 +9,7 @@ Dependency injection system.
 Database session.
 
 ```python
-from stride.dependencies import get_db
+from strider.dependencies import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends
 
@@ -22,7 +22,7 @@ async def my_view(db: AsyncSession = Depends(get_db)):
 Authenticated user (required).
 
 ```python
-from stride.dependencies import get_current_user
+from strider.dependencies import get_current_user
 
 async def my_view(user = Depends(get_current_user)):
     # Raises 401 if not authenticated
@@ -34,7 +34,7 @@ async def my_view(user = Depends(get_current_user)):
 Authenticated user (optional).
 
 ```python
-from stride.dependencies import get_optional_user
+from strider.dependencies import get_optional_user
 
 async def my_view(user = Depends(get_optional_user)):
     if user:
@@ -47,8 +47,8 @@ async def my_view(user = Depends(get_optional_user)):
 Application settings.
 
 ```python
-from stride.dependencies import get_settings_dep
-from stride.config import Settings
+from strider.dependencies import get_settings_dep
+from strider.config import Settings
 
 async def my_view(settings: Settings = Depends(get_settings_dep)):
     return {"app_name": settings.app_name}
@@ -57,7 +57,7 @@ async def my_view(settings: Settings = Depends(get_settings_dep)):
 ## Type Aliases
 
 ```python
-from stride.dependencies import DatabaseSession, CurrentUser, OptionalUser, AppSettings
+from strider.dependencies import DatabaseSession, CurrentUser, OptionalUser, AppSettings
 
 async def my_view(
     db: DatabaseSession,
@@ -74,7 +74,7 @@ async def my_view(
 Set up user loading.
 
 ```python
-from stride.dependencies import configure_auth
+from strider.dependencies import configure_auth
 from src.apps.users.models import User
 
 async def load_user(user_id: int, db):
@@ -86,7 +86,7 @@ configure_auth(user_loader=load_user)
 With token decoder:
 
 ```python
-from stride.auth import decode_token
+from strider.auth import decode_token
 
 configure_auth(
     user_loader=load_user,
@@ -99,8 +99,8 @@ configure_auth(
 Custom session factory.
 
 ```python
-from stride.dependencies import set_session_factory
-from stride.database import get_db_replicas
+from strider.dependencies import set_session_factory
+from strider.database import get_db_replicas
 
 # Use replicas globally
 set_session_factory(get_db_replicas)
@@ -109,7 +109,7 @@ set_session_factory(get_db_replicas)
 ## Pagination
 
 ```python
-from stride.dependencies import PaginationParams
+from strider.dependencies import PaginationParams
 from fastapi import Depends
 
 async def list_items(
@@ -130,7 +130,7 @@ PaginationParams attributes:
 ## Sorting
 
 ```python
-from stride.dependencies import SortingParams
+from strider.dependencies import SortingParams
 from fastapi import Depends
 
 async def list_items(
@@ -151,7 +151,7 @@ SortingParams attributes:
 ## Request Context
 
 ```python
-from stride.dependencies import get_request_context, RequestContext
+from strider.dependencies import get_request_context, RequestContext
 from fastapi import Depends
 
 async def my_view(context: RequestContext = Depends(get_request_context)):
@@ -202,7 +202,7 @@ async def my_view(_: bool = Depends(rate_limiter)):
 ### Service Dependency
 
 ```python
-from stride.dependencies import DependencyFactory
+from strider.dependencies import DependencyFactory
 
 class UserService:
     def __init__(self, db: AsyncSession):
@@ -255,7 +255,7 @@ response = client.get("/items")
 ### Require Admin
 
 ```python
-from stride.dependencies import get_current_user
+from strider.dependencies import get_current_user
 
 async def require_admin(user = Depends(get_current_user)):
     if not user.is_admin:

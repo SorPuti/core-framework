@@ -10,7 +10,7 @@ The framework automatically discovers and loads URLs from `urls.py` files in eac
 
 ```python
 # src/main.py
-from stride import StrideApp
+from strider import StrideApp
 
 app = StrideApp()  # Everything loaded automatically
 ```
@@ -21,7 +21,7 @@ Create a `urls.py` file in each app:
 
 ```python
 # src/apps/users/urls.py
-from stride import path
+from strider import path
 from .views import UserViewSet, AuthViewSet
 
 urlpatterns = [
@@ -36,7 +36,7 @@ Configure the prefix in `settings.py`:
 
 ```python
 # src/settings.py
-from stride import Settings
+from strider import Settings
 
 class AppSettings(Settings):
     url_prefix: str = "/api/v1"  # Default
@@ -51,7 +51,7 @@ class AppSettings(Settings):
 Define URL patterns similar to Django.
 
 ```python
-from stride import path
+from strider import path
 
 urlpatterns = [
     path("users", UserViewSet),                    # ViewSet
@@ -77,7 +77,7 @@ path(
 Include URLs from other modules.
 
 ```python
-from stride import path, include
+from strider import path, include
 
 urlpatterns = [
     path("api/v1/", include("src.apps.users.urls")),
@@ -89,7 +89,7 @@ urlpatterns = [
 
 ```python
 # src/apps/api/urls.py
-from stride import path, include
+from strider import path, include
 
 urlpatterns = [
     path("v1/", include("src.apps.users.urls")),
@@ -103,7 +103,7 @@ urlpatterns = [
 Main router for registering ViewSets (used internally by auto-discovery).
 
 ```python
-from stride import AutoRouter
+from strider import AutoRouter
 
 api = AutoRouter(prefix="/api/v1", tags=["API"])
 ```
@@ -111,7 +111,7 @@ api = AutoRouter(prefix="/api/v1", tags=["API"])
 ### Register ViewSet Manually
 
 ```python
-from stride import AutoRouter
+from strider import AutoRouter
 from .views import UserViewSet, PostViewSet
 
 api = AutoRouter(prefix="/api/v1")
@@ -135,7 +135,7 @@ For a `ModelViewSet`:
 ## Custom Actions
 
 ```python
-from stride import ModelViewSet, action
+from strider import ModelViewSet, action
 
 class UserViewSet(ModelViewSet):
     model = User
@@ -159,7 +159,7 @@ class UserViewSet(ModelViewSet):
 Lower-level router (extends FastAPI's `APIRouter`).
 
 ```python
-from stride.routing import Router
+from strider.routing import Router
 
 router = Router(prefix="/api/v1")
 router.register_viewset("/users", UserViewSet, basename="user")
@@ -168,7 +168,7 @@ router.register_viewset("/users", UserViewSet, basename="user")
 ### Register View
 
 ```python
-from stride import APIView
+from strider import APIView
 
 class HealthView(APIView):
     async def get(self, request):
@@ -203,7 +203,7 @@ src/
 
 ```python
 """Application entry point."""
-from stride import StrideApp
+from strider import StrideApp
 
 app = StrideApp()
 ```
@@ -212,7 +212,7 @@ app = StrideApp()
 
 ```python
 """Application settings."""
-from stride import Settings
+from strider import Settings
 
 class AppSettings(Settings):
     app_name: str = "My API"
@@ -228,7 +228,7 @@ class AppSettings(Settings):
 While auto-discovery is the recommended approach, you can still manually register routers if needed (not recommended for new projects):
 
 ```python
-from stride import StrideApp, AutoRouter
+from strider import StrideApp, AutoRouter
 from src.apps.users.views import UserViewSet
 
 # Manual router (legacy)

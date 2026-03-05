@@ -4,8 +4,8 @@ Tests for custom action routing behavior.
 
 import pytest
 
-from stride.routing import Router, _iter_sorted_custom_actions
-from stride.views import ViewSet, action
+from strider.routing import Router, _iter_sorted_custom_actions
+from strider.views import ViewSet, action
 
 
 class TestCustomActionOrdering:

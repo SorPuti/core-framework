@@ -95,7 +95,7 @@ class AppSettings(Settings):
 ## Worker com Decorator
 
 ```python
-from stride.messaging import worker
+from strider.messaging import worker
 
 @worker(
     topic="tasks",
@@ -110,7 +110,7 @@ async def process_task(message: dict) -> dict:
 ## Worker Baseado em Classe
 
 ```python
-from stride.messaging import Worker
+from strider.messaging import Worker
 
 class EmailWorker(Worker):
     input_topic = "emails"
@@ -179,7 +179,7 @@ class BatchWorker(Worker):
 ## Política de Retry
 
 ```python
-from stride.messaging import worker
+from strider.messaging import worker
 
 @worker(
     topic="tasks",
@@ -234,7 +234,7 @@ core kafka worker EmailWorker --concurrency 8
 ## Publicar Tasks
 
 ```python
-from stride.messaging import get_producer
+from strider.messaging import get_producer
 
 producer = get_producer("kafka")
 
@@ -249,7 +249,7 @@ await producer.send(
 ## Registry de Workers
 
 ```python
-from stride.messaging import (
+from strider.messaging import (
     get_worker,
     get_all_workers,
     list_workers,
@@ -329,7 +329,7 @@ class AppSettings(Settings):
 
 ```python
 # src/workers/email.py
-from stride.messaging import Worker
+from strider.messaging import Worker
 from src.services.email import EmailService
 
 class EmailWorker(Worker):

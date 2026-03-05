@@ -13,7 +13,7 @@ import pytest
 import sys
 from unittest.mock import patch, MagicMock
 
-from stride.relations import (
+from strider.relations import (
     _resolve_target,
     _ensure_model_loaded,
     _get_model_path,
@@ -68,7 +68,7 @@ class TestResolveTarget:
     
     def test_user_special_case_without_auth_returns_simple_name(self):
         """'User' sem auth configurado retorna nome simples."""
-        with patch("stride.auth.models.get_user_model") as mock:
+        with patch("strider.auth.models.get_user_model") as mock:
             mock.side_effect = RuntimeError("No user_model configured")
             
             # Agora retorna "User" em vez de levantar exceção
@@ -81,7 +81,7 @@ class TestResolveTarget:
         mock_user.__module__ = "src.apps.users.models"
         mock_user.__name__ = "User"
         
-        with patch("stride.auth.models.get_user_model", return_value=mock_user):
+        with patch("strider.auth.models.get_user_model", return_value=mock_user):
             result = _resolve_target("User")
             # Retorna nome simples (model já está no registry)
             assert result == "User"
@@ -201,7 +201,7 @@ class TestRelMethods:
         mock_module.Workspace = MagicMock()
         
         with patch.dict(sys.modules, {"src.apps.workspaces.models": mock_module}):
-            with patch("stride.relations.relationship") as mock_rel:
+            with patch("strider.relations.relationship") as mock_rel:
                 mock_rel.return_value = MagicMock()
                 
                 Rel.many_to_one("workspaces.Workspace", back_populates="users")
@@ -218,7 +218,7 @@ class TestRelMethods:
         mock_module.Post = MagicMock()
         
         with patch.dict(sys.modules, {"src.apps.posts.models": mock_module}):
-            with patch("stride.relations.relationship") as mock_rel:
+            with patch("strider.relations.relationship") as mock_rel:
                 mock_rel.return_value = MagicMock()
                 
                 Rel.one_to_many("posts.Post", back_populates="author")
@@ -233,7 +233,7 @@ class TestRelMethods:
         mock_module.Tag = MagicMock()
         
         with patch.dict(sys.modules, {"src.apps.tags.models": mock_module}):
-            with patch("stride.relations.relationship") as mock_rel:
+            with patch("strider.relations.relationship") as mock_rel:
                 mock_rel.return_value = MagicMock()
                 
                 Rel.many_to_many(
@@ -248,7 +248,7 @@ class TestRelMethods:
     
     def test_fully_qualified_path_not_modified(self):
         """Paths fully-qualified não são modificados."""
-        with patch("stride.relations.relationship") as mock_rel:
+        with patch("strider.relations.relationship") as mock_rel:
             mock_rel.return_value = MagicMock()
             
             Rel.many_to_one(
@@ -333,24 +333,24 @@ class TestPreloadModelsModule:
         
         Isso é crucial para resolver dependências circulares.
         """
-        from stride.config import _preload_models_module
+        from strider.config import _preload_models_module
         
         # Mock settings com models_module
         mock_settings = MagicMock()
         mock_settings.models_module = "src.apps.models"
         
-        with patch("stride.config.import_module") as mock_import:
+        with patch("strider.config.import_module") as mock_import:
             _preload_models_module(mock_settings)
             mock_import.assert_called_once_with("src.apps.models")
     
     def test_preload_handles_missing_module(self):
         """Não falha se models_module não existe."""
-        from stride.config import _preload_models_module
+        from strider.config import _preload_models_module
 
         mock_settings = MagicMock()
         mock_settings.models_module = "nonexistent.module"
 
-        with patch("stride.config._models_loaded", False), patch("stride.config.import_module") as mock_import:
+        with patch("strider.config._models_loaded", False), patch("strider.config.import_module") as mock_import:
             mock_import.side_effect = ImportError("No module")
 
             # Não deve levantar exceção
@@ -358,7 +358,7 @@ class TestPreloadModelsModule:
 
     def test_preload_handles_list_of_modules(self):
         """Suporta lista de módulos."""
-        from stride.config import _preload_models_module
+        from strider.config import _preload_models_module
 
         mock_settings = MagicMock()
         mock_settings.models_module = [
@@ -366,7 +366,7 @@ class TestPreloadModelsModule:
             "src.apps.workspaces.models",
         ]
 
-        with patch("stride.config._models_loaded", False), patch("stride.config.import_module") as mock_import:
+        with patch("strider.config._models_loaded", False), patch("strider.config.import_module") as mock_import:
             _preload_models_module(mock_settings)
 
             assert mock_import.call_count == 2

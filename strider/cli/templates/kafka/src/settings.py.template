@@ -1,0 +1,37 @@
+"""App settings: Kafka + PostgreSQL (Settings + .env)."""
+from strider.config import Settings, configure
+
+
+class AppSettings(Settings):
+    """Central config with Kafka; override via env."""
+
+    app_name: str = "{{project_name}}"
+    app_version: str = "0.1.0"
+
+    migrations_dir: str = "./migrations"
+    app_label: str = "main"
+    models_module: str = "src.models"
+    app_module: str = "src.main"
+
+    middleware: list[str] = [
+        "timing",
+        "request_id",
+        "security_headers",
+        "rate_limit",
+        "content_length_limit",
+        "auth",
+        "logging",
+    ]
+
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost/{{project_name}}"
+
+    kafka_enabled: bool = True
+    kafka_bootstrap_servers: str = "localhost:9092"
+    kafka_schema_registry_url: str | None = None  # opcional, para Avro
+    avro_default_namespace: str = "com.core.events"
+
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
+
+
+settings = configure(settings_class=AppSettings)

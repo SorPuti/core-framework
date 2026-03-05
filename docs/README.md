@@ -172,7 +172,7 @@ my-api/
 
 ```python
 # src/settings.py
-from stride.config import Settings, configure
+from strider.config import Settings, configure
 
 class AppSettings(Settings):
     app_name: str = "Minha API"
@@ -182,7 +182,7 @@ settings = configure(settings_class=AppSettings)
 
 ```python
 # src/apps/items/models.py
-from stride import Model, Field
+from strider import Model, Field
 from sqlalchemy.orm import Mapped
 
 class Item(Model):
@@ -193,7 +193,7 @@ class Item(Model):
 
 ```python
 # src/apps/items/views.py
-from stride import ModelViewSet
+from strider import ModelViewSet
 from .models import Item
 
 class ItemViewSet(ModelViewSet):
@@ -202,7 +202,7 @@ class ItemViewSet(ModelViewSet):
 
 ```python
 # src/main.py
-from stride import StrideApp, AutoRouter
+from strider import StrideApp, AutoRouter
 from src.apps.items.routes import router as items_router
 
 api = AutoRouter(prefix="/api/v1")
@@ -215,7 +215,7 @@ app = StrideApp(routers=[api])
 
 ```python
 # src/settings.py
-from stride.config import Settings, PydanticField, configure
+from strider.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════
@@ -288,8 +288,8 @@ FileField estilo Django para upload e acesso a arquivos com signed URLs:
 # STORAGE_GCS_USE_SIGNED_URLS=true
 
 # 2. No model, use AdvancedField.file() - estilo Django
-from stride import Model, Field
-from stride.fields import AdvancedField
+from strider import Model, Field
+from strider.fields import AdvancedField
 
 class Course(Model):
     __tablename__ = "courses"
@@ -308,7 +308,7 @@ course.cover.save("foto.jpg", content, "image/jpeg")  # Upload
 course.cover.delete() # Remove do storage
 
 # 4. Em schemas, transforme com get_file_url()
-from stride.storage import get_file_url
+from strider.storage import get_file_url
 
 class CourseResponse(OutputSchema):
     cover_url: str | None = None

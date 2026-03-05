@@ -1,0 +1,7 @@
+"""Items app URLs."""
+from strider.urls import path
+from .views import ItemViewSet
+
+urlpatterns = [
+    path("items", ItemViewSet),
+]

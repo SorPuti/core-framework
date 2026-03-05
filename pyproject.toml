@@ -1,7 +1,7 @@
 [project]
-name = "stride-framework"
-version = "0.17.60"
-description = "Stride - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
+name = "strider-framework"
+version = "0.17.62"
+description = "Strider - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.10,<4.0"
 readme = "README.md"
 license = { text = "MIT" }
@@ -36,10 +36,10 @@ dependencies = [
 ]
 
 [project.scripts]
-stride = "stride.cli:main"
+strider = "strider.cli:main"
 
 [project.entry-points."pytest11"]
-stride = "stride.testing.plugin"
+strider = "strider.testing.plugin"
 
 [project.optional-dependencies]
 dev = [
@@ -102,7 +102,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["stride", "example"]
+packages = ["strider", "example"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -133,7 +133,7 @@ ignore = [
 ]
 
 [tool.ruff.isort]
-known-first-party = ["stride", "example"]
+known-first-party = ["strider", "example"]
 
 [dependency-groups]
 dev = [

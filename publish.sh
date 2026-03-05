@@ -88,7 +88,7 @@ if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 # ── Resumo interativo ──
-title "Publicar stride"
+title "Publicar strider"
 info "Versão atual:  ${BOLD}$CURRENT${NC}"
 info "Nova versão:   ${BOLD}$NEW_VERSION${NC}"
 if [[ -n "$VERSION_ARG" && "$VERSION_ARG" != "patch" ]]; then
@@ -99,10 +99,10 @@ if [[ "$DRY_RUN" == "true" ]]; then
   warn "Modo dry-run: nenhuma alteração será feita."
   echo ""
   echo "Passos que seriam executados:"
-  echo "  1. Atualizar version em pyproject.toml e stride/__init__.py para $NEW_VERSION"
+  echo "  1. Atualizar version em pyproject.toml e strider/__init__.py para $NEW_VERSION"
   echo "  2. rm -rf dist/ && python -m build"
   echo "  3. twine upload dist/*"
-  echo "  4. git add pyproject.toml stride/__init__.py && git commit -m \"chore: bump version to $NEW_VERSION\" && git push"
+  echo "  4. git add pyproject.toml strider/__init__.py && git commit -m \"chore: bump version to $NEW_VERSION\" && git push"
   exit 0
 fi
 
@@ -116,8 +116,8 @@ fi
 # ── 1. Bump nos arquivos ──
 title "1. Atualizando versão"
 sed -i "s/^version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" pyproject.toml
-sed -i "s/^__version__ = \"[^\"]*\"/__version__ = \"$NEW_VERSION\"/" stride/__init__.py
-ok "Versão $NEW_VERSION definida em pyproject.toml e stride/__init__.py"
+sed -i "s/^__version__ = \"[^\"]*\"/__version__ = \"$NEW_VERSION\"/" strider/__init__.py
+ok "Versão $NEW_VERSION definida em pyproject.toml e strider/__init__.py"
 
 # ── 2. Build ──
 title "2. Build do pacote"
@@ -135,7 +135,7 @@ fi
 read -p "Enviar para PyPI? (y/N): " UPLOAD
 if [[ "$UPLOAD" == "y" || "$UPLOAD" == "Y" ]]; then
   twine upload dist/*
-  ok "Publicado: https://pypi.org/project/stride/$NEW_VERSION/"
+  ok "Publicado: https://pypi.org/project/strider-framework/$NEW_VERSION/"
 else
   warn "Upload para PyPI ignorado."
 fi
@@ -143,8 +143,8 @@ fi
 # ── 4. Git commit e push ──
 title "4. Git"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if ! git diff --quiet pyproject.toml stride/__init__.py 2>/dev/null; then
-  git add pyproject.toml stride/__init__.py
+if ! git diff --quiet pyproject.toml strider/__init__.py 2>/dev/null; then
+  git add pyproject.toml strider/__init__.py
   git status
   read -p "Fazer commit e push para '$BRANCH'? (y/N): " PUSH
   if [[ "$PUSH" == "y" || "$PUSH" == "Y" ]]; then
@@ -155,7 +155,7 @@ if ! git diff --quiet pyproject.toml stride/__init__.py 2>/dev/null; then
     warn "Commit/push ignorado. Versão alterada apenas localmente."
   fi
 else
-  info "Nenhuma alteração pendente em pyproject.toml / stride/__init__.py"
+  info "Nenhuma alteração pendente em pyproject.toml / strider/__init__.py"
 fi
 
 title "Concluído"

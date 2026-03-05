@@ -1,0 +1,19 @@
+"""Item model with tenant isolation (TenantMixin)."""
+from strider import Model, Field
+from strider.tenancy import TenantMixin
+from strider.datetime import DateTime
+from sqlalchemy.orm import Mapped
+import uuid
+
+
+class Item(TenantMixin, Model):
+    """Item scoped by tenant (tenant_id, for_tenant)."""
+
+    __tablename__ = "items"
+
+    id: Mapped[int] = Field.pk()
+    tenant_id: Mapped[uuid.UUID] = Field.uuid(index=True)
+    name: Mapped[str] = Field.string(max_length=200)
+    description: Mapped[str | None] = Field.text(nullable=True)
+    price: Mapped[float] = Field.float(default=0.0)
+    created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)

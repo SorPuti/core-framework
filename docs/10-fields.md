@@ -126,7 +126,7 @@ Field.choice(
 )
 
 # Example
-from stride.choices import TextChoices
+from strider.choices import TextChoices
 
 class Status(TextChoices):
     DRAFT = "draft", "Draft"
@@ -142,7 +142,7 @@ status: Mapped[str] = Field.choice(Status, default=Status.DRAFT)
 UUID primary key (uses UUID7 by default).
 
 ```python
-from stride.fields import AdvancedField
+from strider.fields import AdvancedField
 from uuid import UUID
 
 id: Mapped[UUID] = AdvancedField.uuid_pk()
@@ -250,8 +250,8 @@ AdvancedField.file(
 **Exemplo completo:**
 
 ```python
-from stride import Model, Field
-from stride.fields import AdvancedField
+from strider import Model, Field
+from strider.fields import AdvancedField
 
 class Course(Model):
     __tablename__ = "courses"
@@ -288,10 +288,10 @@ cover = AdvancedField.file("cover_url", upload_to=course_path)
 ## Complete Model Example
 
 ```python
-from stride import Model, Field
-from stride.fields import AdvancedField
-from stride.choices import TextChoices
-from stride.datetime import DateTime
+from strider import Model, Field
+from strider.fields import AdvancedField
+from strider.choices import TextChoices
+from strider.datetime import DateTime
 from sqlalchemy.orm import Mapped
 from uuid import UUID
 

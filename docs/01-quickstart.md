@@ -71,7 +71,7 @@ my-api/
 Edite `src/settings.py`:
 
 ```python
-from stride.config import Settings, configure
+from strider.config import Settings, configure
 
 class AppSettings(Settings):
     app_name: str = "Minha API"
@@ -95,7 +95,7 @@ DEBUG=true
 
 ```python
 # src/apps/posts/models.py
-from stride import Model, Field
+from strider import Model, Field
 from sqlalchemy.orm import Mapped
 
 class Post(Model):
@@ -118,8 +118,8 @@ from src.apps.posts.models import Post  # noqa
 
 ```python
 # src/apps/posts/views.py
-from stride import ModelViewSet
-from stride.permissions import AllowAny
+from strider import ModelViewSet
+from strider.permissions import AllowAny
 from .models import Post
 
 class PostViewSet(ModelViewSet):
@@ -131,7 +131,7 @@ class PostViewSet(ModelViewSet):
 
 ```python
 # src/apps/posts/urls.py
-from stride import path
+from strider import path
 from .views import PostViewSet
 
 urlpatterns = [
@@ -143,7 +143,7 @@ urlpatterns = [
 
 ```python
 # src/main.py
-from stride import StrideApp
+from strider import StrideApp
 
 app = StrideApp()  # Auto-discovery carrega tudo automaticamente
 ```
@@ -187,7 +187,7 @@ Endpoints gerados:
 
 ```python
 # src/settings.py
-from stride.config import Settings, PydanticField, configure
+from strider.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════

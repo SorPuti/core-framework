@@ -90,7 +90,7 @@ Salva o conteúdo no backend configurado (local ou GCS).
 - **Retorno**: **path relativo** a ser armazenado no modelo.
 
 ```python
-from stride.storage import save_file
+from strider.storage import save_file
 
 path = save_file("uploads/2025/02/foto.jpg", file_bytes, "image/jpeg")
 # Retorna sempre: "uploads/2025/02/foto.jpg"
@@ -106,7 +106,7 @@ Gera URL de acesso ao arquivo. Para buckets privados, retorna **signed URL**.
 - **Retorno**: URL de acesso (signed URL para bucket privado).
 
 ```python
-from stride.storage import get_file_url
+from strider.storage import get_file_url
 
 url = get_file_url("uploads/2025/02/foto.jpg")
 # Bucket privado → "https://storage.googleapis.com/bucket/...?X-Goog-Signature=..."
@@ -125,7 +125,7 @@ Remove o arquivo físico do backend.
 - **Retorno**: `True` se removeu ou não existia; `False` em erro (erro é logado).
 
 ```python
-from stride.storage import delete_file
+from strider.storage import delete_file
 
 delete_file("uploads/2025/02/foto.jpg")
 ```
@@ -135,7 +135,7 @@ delete_file("uploads/2025/02/foto.jpg")
 Verifica se o arquivo existe no storage.
 
 ```python
-from stride.storage import file_exists
+from strider.storage import file_exists
 
 if file_exists("uploads/foto.jpg"):
     print("Arquivo existe!")
@@ -146,8 +146,8 @@ if file_exists("uploads/foto.jpg"):
 O framework oferece `AdvancedField.file()` - um FileField nativo que funciona igual ao Django:
 
 ```python
-from stride import Model, Field
-from stride.fields import AdvancedField
+from strider import Model, Field
+from strider.fields import AdvancedField
 
 class Course(Model):
     __tablename__ = "courses"
@@ -208,7 +208,7 @@ class Course(Model):
 Para casos mais simples (somente leitura), existe também o `storage_file_property`:
 
 ```python
-from stride.storage import storage_file_property
+from strider.storage import storage_file_property
 
 class Course(Model):
     cover_image_url: Mapped[str | None] = Field.string(500, nullable=True)
@@ -225,8 +225,8 @@ Para retornar signed URLs automaticamente nas respostas da API, use um `model_va
 
 ```python
 from pydantic import model_validator
-from stride.serializers import OutputSchema
-from stride.storage import get_file_url
+from strider.serializers import OutputSchema
+from strider.storage import get_file_url
 
 class CourseResponse(OutputSchema):
     id: UUID
@@ -314,7 +314,7 @@ Com `storage_backend="local"`, os arquivos ficam em `storage_local_media_root` (
 
 ```python
 from fastapi.staticfiles import StaticFiles
-from stride.config import get_settings
+from strider.config import get_settings
 
 settings = get_settings()
 if settings.storage_backend == "local":
@@ -332,7 +332,7 @@ Retorna os nomes dos campos do model que são de arquivo (widget `file_upload`).
 Coleta os valores (path/URL) de arquivo de uma instância para os campos dados.
 
 ```python
-from stride.storage import collect_file_paths, get_storage_file_fields, delete_file
+from strider.storage import collect_file_paths, get_storage_file_fields, delete_file
 
 file_fields = get_storage_file_fields(admin_instance)
 paths = collect_file_paths(obj, file_fields)

@@ -55,7 +55,7 @@ flowchart LR
 
 ```python
 # src/settings.py
-from stride.config import Settings, configure
+from strider.config import Settings, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════
@@ -131,8 +131,8 @@ settings = configure(settings_class=AppSettings)
 
 ```python
 # src/apps/users/models.py
-from stride.auth import AbstractUser, PermissionsMixin
-from stride import Field
+from strider.auth import AbstractUser, PermissionsMixin
+from strider import Field
 from sqlalchemy.orm import Mapped
 
 class User(AbstractUser, PermissionsMixin):
@@ -153,7 +153,7 @@ class User(AbstractUser, PermissionsMixin):
 
 ```python
 # src/apps/users/views.py
-from stride.auth import AuthViewSet
+from strider.auth import AuthViewSet
 
 class AuthViewSet(AuthViewSet):
     pass  # Usa defaults
@@ -161,7 +161,7 @@ class AuthViewSet(AuthViewSet):
 
 ```python
 # src/apps/users/routes.py
-from stride import AutoRouter
+from strider import AutoRouter
 from .views import AuthViewSet
 
 auth_router = AutoRouter(prefix="/auth", tags=["Auth"])
@@ -170,7 +170,7 @@ auth_router.register("", AuthViewSet)
 
 ```python
 # src/main.py
-from stride import StrideApp, AutoRouter
+from strider import StrideApp, AutoRouter
 from src.apps.users.routes import auth_router
 
 api = AutoRouter(prefix="/api/v1")
@@ -232,8 +232,8 @@ curl http://localhost:8000/api/v1/posts/ \
 ## Proteger Endpoints
 
 ```python
-from stride import ModelViewSet
-from stride.permissions import IsAuthenticated, AllowAny
+from strider import ModelViewSet
+from strider.permissions import IsAuthenticated, AllowAny
 
 class PostViewSet(ModelViewSet):
     model = Post
@@ -248,7 +248,7 @@ class PostViewSet(ModelViewSet):
 ## Acessar Usuário Atual
 
 ```python
-from stride import ModelViewSet
+from strider import ModelViewSet
 
 class PostViewSet(ModelViewSet):
     model = Post
@@ -262,7 +262,7 @@ Ou em qualquer rota:
 
 ```python
 from fastapi import Depends
-from stride.auth import get_current_user
+from strider.auth import get_current_user
 
 @router.get("/me")
 async def me(user = Depends(get_current_user)):
@@ -310,8 +310,8 @@ class AppSettings(Settings):
 ## AuthViewSet Customizado
 
 ```python
-from stride.auth import AuthViewSet
-from stride import action
+from strider.auth import AuthViewSet
+from strider import action
 
 class CustomAuthViewSet(AuthViewSet):
     

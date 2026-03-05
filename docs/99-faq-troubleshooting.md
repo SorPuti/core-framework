@@ -88,7 +88,7 @@ stride migrate
 # Ou crie tabelas via SQLAlchemy
 python -c "
 import asyncio
-from stride.models import Model, init_database, create_tables
+from strider.models import Model, init_database, create_tables
 
 async def setup():
     await init_database('postgresql+asyncpg://...')
@@ -127,7 +127,7 @@ user, created = await User.objects.get_or_create(
 **Solução:**
 ```python
 # No arquivo de migration, remova FK primeiro
-from stride.migrations.operations import DropForeignKey, DropColumn
+from strider.migrations.operations import DropForeignKey, DropColumn
 
 operations = [
     DropForeignKey(
@@ -151,7 +151,7 @@ operations = [
 
 **Solução:**
 ```python
-from stride import StrideApp
+from strider import StrideApp
 
 app = StrideApp(
     middleware=["auth"],  # Adicione isto!
@@ -160,7 +160,7 @@ app = StrideApp(
 
 Ou formato antigo:
 ```python
-from stride.auth import AuthenticationMiddleware
+from strider.auth import AuthenticationMiddleware
 
 app = StrideApp(
     middlewares=[(AuthenticationMiddleware, {})],
@@ -221,7 +221,7 @@ class MyAuthViewSet(AuthViewSet):
 
 **Diagnóstico:**
 ```python
-from stride.auth import decode_token, verify_token
+from strider.auth import decode_token, verify_token
 
 try:
     # Tenta decodificar (ignora expiração)
@@ -265,7 +265,7 @@ if (error.response?.status === 400) {
 
 **Personalização:**
 ```python
-from stride.auth.schemas import BaseRegisterInput
+from strider.auth.schemas import BaseRegisterInput
 from pydantic import field_validator
 
 class CustomRegisterInput(BaseRegisterInput):
@@ -292,7 +292,7 @@ class MyAuthViewSet(AuthViewSet):
 
 **Solução:**
 ```python
-from stride.auth import configure_auth
+from strider.auth import configure_auth
 from myapp.models import User
 
 # No início da aplicação
@@ -361,7 +361,7 @@ DETAIL: Key columns "user_id" and "id" are of incompatible types: uuid and integ
 
 **Solução v0.12.2+:**
 ```python
-from stride.auth import AbstractUUIDUser, PermissionsMixin
+from strider.auth import AbstractUUIDUser, PermissionsMixin
 
 class User(AbstractUUIDUser, PermissionsMixin):
     __tablename__ = "users"
@@ -581,7 +581,7 @@ if user is None:
     raise HTTPException(401, "Not authenticated")
 
 # ✅ Ou use dependency
-from stride.dependencies import get_current_user
+from strider.dependencies import get_current_user
 
 @router.get("/me")
 async def me(user: User = Depends(get_current_user)):
@@ -594,7 +594,7 @@ async def me(user: User = Depends(get_current_user)):
 
 **Diagnóstico:**
 ```python
-from stride.middleware import print_middleware_stack
+from strider.middleware import print_middleware_stack
 
 print_middleware_stack(app)
 # Verifique se seu middleware aparece
@@ -608,7 +608,7 @@ print_middleware_stack(app)
 **Solução:**
 ```python
 # Verifique registro
-from stride.middleware import get_registered_middlewares
+from strider.middleware import get_registered_middlewares
 for mw in get_registered_middlewares():
     print(mw.name, mw.enabled)
 
@@ -627,7 +627,7 @@ class MyMiddleware(BaseMiddleware):
 
 **Solução:**
 ```python
-from stride.serializers import InputSchema
+from strider.serializers import InputSchema
 
 class MyInput(InputSchema):
     name: str
@@ -730,7 +730,7 @@ if not user.is_in_group("admin"):
     raise HTTPException(403, "Acesso negado")
 
 # Adicione ao grupo
-from stride.auth import Group
+from strider.auth import Group
 
 admin_group = await Group.get_or_create("admin", db=db)
 await user.add_to_group(admin_group, db)
@@ -746,7 +746,7 @@ await user.add_to_group(admin_group, db)
 
 **Solução:**
 ```python
-from stride.tenancy import set_tenant, tenant_context
+from strider.tenancy import set_tenant, tenant_context
 
 # Opção 1: Set manual
 set_tenant(workspace_id)
@@ -939,7 +939,7 @@ def process(user: "User"):  # String annotation
 # main.py - importe todos os models
 import myapp.models  # Força registro
 
-from stride import StrideApp
+from strider import StrideApp
 app = StrideApp(...)
 ```
 
@@ -997,7 +997,7 @@ STORAGE_GCS_EXPIRATION_SECONDS=86400
 
 ```python
 # Teste se arquivo existe
-from stride.storage import file_exists
+from strider.storage import file_exists
 
 if file_exists("uploads/foto.jpg"):
     print("Arquivo existe!")
@@ -1056,7 +1056,7 @@ Se o erro persistir:
 2. **Informações úteis:**
    ```python
    import sys
-   import stride
+   import strider
    import sqlalchemy
    import fastapi
    

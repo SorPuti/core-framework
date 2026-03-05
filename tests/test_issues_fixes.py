@@ -20,7 +20,7 @@ class TestIssue1UUIDValidation:
     
     def test_invalid_uuid_raises_422(self):
         """Invalid UUID should raise 422 with proper error format."""
-        from stride.views import ViewSet
+        from strider.views import ViewSet
         from fastapi import HTTPException
         
         class TestViewSet(ViewSet):
@@ -42,7 +42,7 @@ class TestIssue1UUIDValidation:
     
     def test_error_format_matches_pydantic(self):
         """Error format should match Pydantic validation errors."""
-        from stride.views import ViewSet
+        from strider.views import ViewSet
         from fastapi import HTTPException
         
         class TestViewSet(ViewSet):
@@ -69,8 +69,8 @@ class TestIssue2ActionPermissions:
     
     def test_action_stores_permission_classes(self):
         """@action decorator should store permission_classes."""
-        from stride.views import action
-        from stride.permissions import IsAuthenticated
+        from strider.views import action
+        from strider.permissions import IsAuthenticated
         
         @action(methods=["POST"], detail=True, permission_classes=[IsAuthenticated])
         async def my_action(self, request, db, **kwargs):
@@ -80,7 +80,7 @@ class TestIssue2ActionPermissions:
     
     def test_action_without_permissions(self):
         """@action without permissions should have None."""
-        from stride.views import action
+        from strider.views import action
         
         @action(methods=["GET"], detail=False)
         async def my_action(self, request, db, **kwargs):
@@ -95,7 +95,7 @@ class TestIssue3AuthViewSetEndpoints:
     @pytest.mark.asyncio
     async def test_list_returns_405(self):
         """AuthViewSet.list() should return 405."""
-        from stride.auth.views import AuthViewSet
+        from strider.auth.views import AuthViewSet
         from fastapi import HTTPException
         
         viewset = AuthViewSet()
@@ -109,7 +109,7 @@ class TestIssue3AuthViewSetEndpoints:
     @pytest.mark.asyncio
     async def test_retrieve_returns_405(self):
         """AuthViewSet.retrieve() should return 405."""
-        from stride.auth.views import AuthViewSet
+        from strider.auth.views import AuthViewSet
         from fastapi import HTTPException
         
         viewset = AuthViewSet()
@@ -122,7 +122,7 @@ class TestIssue3AuthViewSetEndpoints:
     @pytest.mark.asyncio
     async def test_create_returns_405(self):
         """AuthViewSet.create() should return 405 (use /register)."""
-        from stride.auth.views import AuthViewSet
+        from strider.auth.views import AuthViewSet
         from fastapi import HTTPException
         
         viewset = AuthViewSet()
@@ -136,7 +136,7 @@ class TestIssue3AuthViewSetEndpoints:
     @pytest.mark.asyncio
     async def test_update_returns_405(self):
         """AuthViewSet.update() should return 405."""
-        from stride.auth.views import AuthViewSet
+        from strider.auth.views import AuthViewSet
         from fastapi import HTTPException
         
         viewset = AuthViewSet()
@@ -149,7 +149,7 @@ class TestIssue3AuthViewSetEndpoints:
     @pytest.mark.asyncio
     async def test_destroy_returns_405(self):
         """AuthViewSet.destroy() should return 405."""
-        from stride.auth.views import AuthViewSet
+        from strider.auth.views import AuthViewSet
         from fastapi import HTTPException
         
         viewset = AuthViewSet()
@@ -165,35 +165,35 @@ class TestIssue5MigrationSerialization:
     
     def test_serialize_none(self):
         """None should serialize to 'None'."""
-        from stride.migrations.operations import _serialize_default
+        from strider.migrations.operations import _serialize_default
         
         assert _serialize_default(None) == "None"
     
     def test_serialize_string(self):
         """Strings should use repr()."""
-        from stride.migrations.operations import _serialize_default
+        from strider.migrations.operations import _serialize_default
         
         result = _serialize_default("hello")
         assert result == "'hello'"
     
     def test_serialize_bool(self):
         """Booleans should serialize to 'True'/'False'."""
-        from stride.migrations.operations import _serialize_default
+        from strider.migrations.operations import _serialize_default
         
         assert _serialize_default(True) == "True"
         assert _serialize_default(False) == "False"
     
     def test_serialize_number(self):
         """Numbers should serialize correctly."""
-        from stride.migrations.operations import _serialize_default
+        from strider.migrations.operations import _serialize_default
         
         assert _serialize_default(42) == "42"
         assert _serialize_default(3.14) == "3.14"
     
     def test_serialize_callable(self):
         """Callables should serialize to module.function format."""
-        from stride.migrations.operations import _serialize_default
-        from stride.datetime import timezone
+        from strider.migrations.operations import _serialize_default
+        from strider.datetime import timezone
         
         result = _serialize_default(timezone.now)
         
@@ -205,7 +205,7 @@ class TestIssue5MigrationSerialization:
     
     def test_serialize_lambda_returns_none(self):
         """Lambdas (no module) should fallback to 'None'."""
-        from stride.migrations.operations import _serialize_default
+        from strider.migrations.operations import _serialize_default
         
         # Lambdas don't have meaningful __module__ path
         result = _serialize_default(lambda: None)
@@ -214,8 +214,8 @@ class TestIssue5MigrationSerialization:
     
     def test_add_column_to_code_with_callable(self):
         """AddColumn.to_code() should serialize callable defaults correctly."""
-        from stride.migrations.operations import AddColumn, ColumnDef
-        from stride.datetime import timezone
+        from strider.migrations.operations import AddColumn, ColumnDef
+        from strider.datetime import timezone
         
         col = ColumnDef(
             name="created_at",
@@ -235,8 +235,8 @@ class TestIssue5MigrationSerialization:
     
     def test_create_table_to_code_with_callable(self):
         """CreateTable.to_code() should serialize callable defaults correctly."""
-        from stride.migrations.operations import CreateTable, ColumnDef
-        from stride.datetime import timezone
+        from strider.migrations.operations import CreateTable, ColumnDef
+        from strider.datetime import timezone
         
         cols = [
             ColumnDef(name="id", type="INTEGER", primary_key=True),
@@ -254,8 +254,8 @@ class TestIssue5MigrationSerialization:
     
     def test_alter_column_to_code_with_callable(self):
         """AlterColumn.to_code() should serialize callable defaults correctly."""
-        from stride.migrations.operations import AlterColumn
-        from stride.datetime import timezone
+        from strider.migrations.operations import AlterColumn
+        from strider.datetime import timezone
         
         op = AlterColumn(
             table_name="users",
@@ -275,7 +275,7 @@ class TestIssue5MigrationSerialization:
         # Should be valid Python
         assert "AlterColumn" in code
         # Should have proper serialization
-        assert "stride.datetime.timezone.now" in code or "timezone.now" in code
+        assert "strider.datetime.timezone.now" in code or "timezone.now" in code
 
 
 class TestIssue6ResetDbCascade:
@@ -284,7 +284,7 @@ class TestIssue6ResetDbCascade:
     def test_cascade_in_drop_statement(self):
         """PostgreSQL should use CASCADE when dropping tables."""
         # This is more of an integration test - we verify the code path exists
-        from stride.cli.main import cmd_reset_db
+        from strider.cli.main import cmd_reset_db
         
         # The fix is in the code, we just verify the function exists
         assert cmd_reset_db is not None
@@ -297,7 +297,7 @@ class TestIssue7CheckCommandSyntaxError:
         """Check command should report syntax errors without crashing."""
         # This test verifies the error handling code exists
         # Full integration test would require mocking the file system
-        from stride.cli.main import cmd_check
+        from strider.cli.main import cmd_check
         
         assert cmd_check is not None
 
@@ -307,7 +307,7 @@ class TestValidUUIDConversion:
     
     def test_valid_uuid_is_converted(self):
         """Valid UUID string should be converted to UUID object."""
-        from stride.views import ViewSet
+        from strider.views import ViewSet
         import uuid
         
         class TestViewSet(ViewSet):
@@ -334,8 +334,8 @@ class TestIssue11TopologicalSort:
     
     def test_simple_fk_dependency(self):
         """Table with FK should come after referenced table."""
-        from stride.migrations.state import TableState, ForeignKeyState
-        from stride.migrations.engine import MigrationEngine
+        from strider.migrations.state import TableState, ForeignKeyState
+        from strider.migrations.engine import MigrationEngine
         
         parent = TableState(name='parent', columns={}, foreign_keys=[])
         child = TableState(name='child', columns={}, foreign_keys=[
@@ -349,8 +349,8 @@ class TestIssue11TopologicalSort:
     
     def test_chain_dependency(self):
         """Chain A -> B -> C should result in C, B, A order."""
-        from stride.migrations.state import TableState, ForeignKeyState
-        from stride.migrations.engine import MigrationEngine
+        from strider.migrations.state import TableState, ForeignKeyState
+        from strider.migrations.engine import MigrationEngine
         
         a = TableState(name='a', columns={}, foreign_keys=[])
         b = TableState(name='b', columns={}, foreign_keys=[
@@ -367,8 +367,8 @@ class TestIssue11TopologicalSort:
     
     def test_many_to_many_association(self):
         """Association table should come after both referenced tables."""
-        from stride.migrations.state import TableState, ForeignKeyState
-        from stride.migrations.engine import MigrationEngine
+        from strider.migrations.state import TableState, ForeignKeyState
+        from strider.migrations.engine import MigrationEngine
         
         users = TableState(name='users', columns={}, foreign_keys=[])
         roles = TableState(name='roles', columns={}, foreign_keys=[])
@@ -386,8 +386,8 @@ class TestIssue11TopologicalSort:
     
     def test_complex_dependency_graph(self):
         """Complex graph: link_clicks -> tracking_links -> campaigns -> workspaces -> users."""
-        from stride.migrations.state import TableState, ForeignKeyState
-        from stride.migrations.engine import MigrationEngine
+        from strider.migrations.state import TableState, ForeignKeyState
+        from strider.migrations.engine import MigrationEngine
         
         users = TableState(name='users', columns={}, foreign_keys=[])
         workspaces = TableState(name='workspaces', columns={}, foreign_keys=[
@@ -419,8 +419,8 @@ class TestIssue11TopologicalSort:
     
     def test_circular_dependency_raises_error(self):
         """Circular dependency should raise RuntimeError with formatted message."""
-        from stride.migrations.state import TableState, ForeignKeyState
-        from stride.migrations.engine import MigrationEngine
+        from strider.migrations.state import TableState, ForeignKeyState
+        from strider.migrations.engine import MigrationEngine
         
         a = TableState(name='a', columns={}, foreign_keys=[
             ForeignKeyState(column='b_id', references_table='b', references_column='id')

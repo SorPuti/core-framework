@@ -126,7 +126,7 @@ Response
 
 ```python
 # src/middleware.py
-from stride.middleware import ASGIMiddleware
+from strider.middleware import ASGIMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Scope
@@ -191,7 +191,7 @@ class AppSettings(Settings):
 Ou programaticamente:
 
 ```python
-from stride.middleware import register_middleware
+from strider.middleware import register_middleware
 
 register_middleware(
     "src.middleware.RateLimitMiddleware",
@@ -292,7 +292,7 @@ class ErrorHandlerMiddleware(ASGIMiddleware):
 ## Registry de Middleware
 
 ```python
-from stride.middleware import (
+from strider.middleware import (
     register_middleware,
     unregister_middleware,
     get_registered_middlewares,

@@ -53,7 +53,7 @@ flowchart LR
 
 ```python
 # src/settings.py
-from stride.config import Settings, PydanticField, configure
+from strider.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════
@@ -217,7 +217,7 @@ REDIS_MAX_CONNECTIONS=50
 ## Verificar Status dos Subsistemas
 
 ```python
-from stride.config import get_configured_subsystems
+from strider.config import get_configured_subsystems
 
 status = get_configured_subsystems()
 # {
@@ -292,7 +292,7 @@ Você escolhe o backend via `storage_backend` e configura os detalhes por settin
 
 ```python
 # src/settings.py
-from stride.config import Settings, configure
+from strider.config import Settings, configure
 
 
 class AppSettings(Settings):
@@ -337,7 +337,7 @@ STORAGE_GCS_EXPIRATION_SECONDS=3600
 course.cover_image_path  # "uploads/cover.jpg"
 
 # API retorna signed URL
-from stride.storage import get_file_url
+from strider.storage import get_file_url
 url = get_file_url(course.cover_image_path)
 # → "https://storage.googleapis.com/bucket/...?X-Goog-Signature=..."
 ```
@@ -368,7 +368,7 @@ STORAGE_MEDIA_URL=https://storage.googleapis.com/minha-api-media-publica/
 
 ```python
 # src/settings.py
-from stride.config import Settings, configure
+from strider.config import Settings, configure
 
 
 class AppSettings(Settings):
@@ -682,7 +682,7 @@ middleware: list[str] = [
 ## Acessando Settings
 
 ```python
-from stride.config import get_settings
+from strider.config import get_settings
 
 # Sem tipo - retorna Settings base
 settings = get_settings()
@@ -723,7 +723,7 @@ ALLOWED_IPS='["10.0.0.1", "10.0.0.2"]'
 
 ```python
 # src/settings.py
-from stride.config import Settings, PydanticField, configure
+from strider.config import Settings, PydanticField, configure
 
 class AppSettings(Settings):
     # ══════════════════════════════════════════════════════════════════

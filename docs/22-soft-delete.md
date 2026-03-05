@@ -7,8 +7,8 @@ Deleção lógica ao invés de remoção permanente, com configuração via Sett
 Adicione `SoftDeleteMixin` ao seu model:
 
 ```python
-from stride import Model, Field
-from stride.models import SoftDeleteMixin, SoftDeleteManager
+from strider import Model, Field
+from strider.models import SoftDeleteMixin, SoftDeleteManager
 from sqlalchemy.orm import Mapped
 
 class Item(Model, SoftDeleteMixin):
@@ -144,7 +144,7 @@ class Item(Model, SoftDeleteMixin):
 Use `TenantSoftDeleteManager` para ambos:
 
 ```python
-from stride.models import TenantSoftDeleteManager
+from strider.models import TenantSoftDeleteManager
 
 class Item(Model, SoftDeleteMixin, TenantMixin):
     __tablename__ = "items"

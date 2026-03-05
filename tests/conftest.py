@@ -7,7 +7,7 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from stride.models import init_database, create_tables, drop_tables, get_session
+from strider.models import init_database, create_tables, drop_tables, get_session
 from example.app import app
 
 

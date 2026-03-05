@@ -44,7 +44,7 @@ Generated in `migrations/`:
 
 ```python
 # migrations/0001_add_posts.py
-from stride.migrations import Migration, CreateTable, ColumnDef
+from strider.migrations import Migration, CreateTable, ColumnDef
 
 class Migration(Migration):
     dependencies = []
@@ -79,7 +79,7 @@ class Migration(Migration):
 
 ```python
 # migrations/0002_custom.py
-from stride.migrations import Migration, AddColumn, ColumnDef
+from strider.migrations import Migration, AddColumn, ColumnDef
 
 class Migration(Migration):
     dependencies = ["0001_add_posts"]
@@ -106,7 +106,7 @@ stride makemigrations --name custom_sql --empty
 
 ```python
 # migrations/0003_custom_sql.py
-from stride.migrations import Migration, RunSQL
+from strider.migrations import Migration, RunSQL
 
 class Migration(Migration):
     dependencies = ["0002_custom"]

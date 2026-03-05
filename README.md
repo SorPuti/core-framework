@@ -293,7 +293,7 @@ Interface administrativa auto-gerada a partir dos models. Inspirada no Django Ad
 
 ```python
 # Planejado
-from stride.admin import AdminSite, ModelAdmin
+from strider.admin import AdminSite, ModelAdmin
 
 class UserAdmin(ModelAdmin):
     list_display = ["id", "email", "is_active", "created_at"]

@@ -1,7 +1,0 @@
-"""Items app URLs."""
-from stride.urls import path
-from .views import ItemViewSet
-
-urlpatterns = [
-    path("items", ItemViewSet),
-]

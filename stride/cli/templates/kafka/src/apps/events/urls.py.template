@@ -1,7 +1,0 @@
-"""Events app URLs."""
-from stride.urls import path
-from .views import EventViewSet
-
-urlpatterns = [
-    path("events", EventViewSet),
-]

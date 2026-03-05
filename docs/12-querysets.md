@@ -245,7 +245,7 @@ Use `field__lookup=value` syntax.
 ## Aggregations
 
 ```python
-from stride.querysets import Count, Sum, Avg, Max, Min
+from strider.querysets import Count, Sum, Avg, Max, Min
 
 result = await Item.objects.using(db).aggregate(
     total=Count("id"),

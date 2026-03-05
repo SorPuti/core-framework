@@ -14,7 +14,7 @@ Customizable authentication backends.
 
 ```python
 # src/apps/auth/backends.py
-from stride.auth import AuthBackend, register_auth_backend
+from strider.auth import AuthBackend, register_auth_backend
 
 class OAuthBackend(AuthBackend):
     """OAuth2 authentication backend."""
@@ -51,7 +51,7 @@ class AppSettings(Settings):
 Or use MultiBackend:
 
 ```python
-from stride.auth import MultiBackend, register_auth_backend
+from strider.auth import MultiBackend, register_auth_backend
 
 multi = MultiBackend(backends=["oauth", "token", "model"])
 register_auth_backend("multi", multi)
@@ -73,7 +73,7 @@ class AppSettings(Settings):
 ### Custom Hasher
 
 ```python
-from stride.auth import PasswordHasher, register_password_hasher
+from strider.auth import PasswordHasher, register_password_hasher
 
 class MyHasher(PasswordHasher):
     algorithm = "my_algo"
@@ -94,7 +94,7 @@ Default: JWT (`"jwt"`)
 ### Custom Token Backend
 
 ```python
-from stride.auth import TokenBackend, register_token_backend
+from strider.auth import TokenBackend, register_token_backend
 
 class MyTokenBackend(TokenBackend):
     def create_token(self, payload, token_type="access", expires_delta=None):
@@ -126,7 +126,7 @@ register_token_backend("my_tokens", MyTokenBackend())
 ### RBAC Example
 
 ```python
-from stride.auth import RoleBasedPermissionBackend, register_permission_backend
+from strider.auth import RoleBasedPermissionBackend, register_permission_backend
 
 rbac = RoleBasedPermissionBackend(
     role_permissions={
@@ -143,7 +143,7 @@ register_permission_backend("rbac", rbac)
 ### Integer ID (Default)
 
 ```python
-from stride.auth import AbstractUser
+from strider.auth import AbstractUser
 
 class User(AbstractUser):
     __tablename__ = "users"
@@ -153,7 +153,7 @@ class User(AbstractUser):
 ### UUID ID
 
 ```python
-from stride.auth import AbstractUUIDUser
+from strider.auth import AbstractUUIDUser
 
 class User(AbstractUUIDUser):
     __tablename__ = "users"
@@ -163,8 +163,8 @@ class User(AbstractUUIDUser):
 ### Custom ID
 
 ```python
-from stride.auth import AbstractUser
-from stride.fields import AdvancedField
+from strider.auth import AbstractUser
+from strider.fields import AdvancedField
 from uuid import UUID
 
 class User(AbstractUser):
@@ -182,7 +182,7 @@ class User(AbstractUser):
 Full configuration:
 
 ```python
-from stride.auth import configure_auth, AuthConfig
+from strider.auth import configure_auth, AuthConfig
 
 configure_auth(
     secret_key="your-secret-key",

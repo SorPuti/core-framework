@@ -1,4 +1,0 @@
-"""App entry point - auto-discovery carrega tudo automaticamente."""
-from stride import StrideApp
-
-app = StrideApp()

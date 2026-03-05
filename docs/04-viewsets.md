@@ -29,7 +29,7 @@ flowchart TB
 ## Basic ViewSet
 
 ```python
-from stride import ModelViewSet
+from strider import ModelViewSet
 from .models import Post
 
 class PostViewSet(ModelViewSet):
@@ -52,7 +52,7 @@ Generated endpoints:
 Control input/output data:
 
 ```python
-from stride import ModelViewSet, InputSchema, OutputSchema
+from strider import ModelViewSet, InputSchema, OutputSchema
 from .models import Post
 
 class PostInput(InputSchema):
@@ -76,8 +76,8 @@ class PostViewSet(ModelViewSet):
 ## Permissions
 
 ```python
-from stride import ModelViewSet
-from stride.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from strider import ModelViewSet
+from strider.permissions import AllowAny, IsAuthenticated, IsAdminUser
 
 class PostViewSet(ModelViewSet):
     model = Post
@@ -98,7 +98,7 @@ class PostViewSet(ModelViewSet):
 ## Custom Actions
 
 ```python
-from stride import ModelViewSet, action
+from strider import ModelViewSet, action
 from fastapi import Response
 
 class PostViewSet(ModelViewSet):
@@ -222,7 +222,7 @@ Response:
 ## Read-Only ViewSet
 
 ```python
-from stride import ReadOnlyModelViewSet
+from strider import ReadOnlyModelViewSet
 
 class PostViewSet(ReadOnlyModelViewSet):
     model = Post
@@ -233,7 +233,7 @@ class PostViewSet(ReadOnlyModelViewSet):
 
 ```python
 # src/apps/posts/routes.py
-from stride import AutoRouter
+from strider import AutoRouter
 from .views import PostViewSet
 
 router = AutoRouter(prefix="/posts", tags=["Posts"])
@@ -242,7 +242,7 @@ router.register("", PostViewSet)
 
 ```python
 # src/main.py
-from stride import StrideApp, AutoRouter
+from strider import StrideApp, AutoRouter
 from src.apps.posts.routes import router as posts_router
 
 api = AutoRouter(prefix="/api/v1")

@@ -1,0 +1,12 @@
+"""Item CRUD ViewSet."""
+from strider import ModelViewSet
+from strider.permissions import AllowAny
+from .models import Item
+
+
+class ItemViewSet(ModelViewSet):
+    """Item list/create/retrieve/update/delete."""
+
+    model = Item
+    permission_classes = [AllowAny]
+    tags = ["Items"]
