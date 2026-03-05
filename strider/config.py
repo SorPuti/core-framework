@@ -862,6 +862,14 @@ class Settings(BaseSettings):
         default="src.main",
         description="Módulo Python da aplicação principal (ex: 'myapp.main')",
     )
+    root_urlconf: str | None = PydanticField(
+        default=None,
+        description=(
+            "Módulo Python de URLs raiz (ex: 'src.urls'). "
+            "Se definido, carrega urlpatterns deste módulo em vez de fazer auto-discovery das apps. "
+            "Use None para auto-discovery automático de todas as apps em installed_apps."
+        ),
+    )
     
     # =========================================================================
     # HEALTH CHECK

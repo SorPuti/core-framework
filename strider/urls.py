@@ -174,8 +174,12 @@ def autodiscover(settings: Any) -> "AutoRouter":
     
     Esta função é chamada automaticamente pelo StrideApp.
     
+    Se settings.root_urlconf estiver definido, carrega URLs deste módulo
+    (similar ao Django ROOT_URLCONF). Caso contrário, faz auto-discovery
+    de todas as apps em installed_apps.
+    
     Args:
-        settings: Instância de Settings com installed_apps
+        settings: Instância de Settings com installed_apps ou root_urlconf
     
     Returns:
         AutoRouter configurado com todas as rotas
@@ -189,11 +193,34 @@ def autodiscover(settings: Any) -> "AutoRouter":
     """
     from strider.routing import AutoRouter
     
-    installed_apps: list[str] = getattr(settings, "installed_apps", [])
     url_prefix: str = getattr(settings, "url_prefix", "/api/v1")
+    root_urlconf: str | None = getattr(settings, "root_urlconf", None)
     
     # Cria o router principal
     router = AutoRouter(prefix=url_prefix)
+    
+    # Se root_urlconf definido, carrega de lá (modo Django-like)
+    if root_urlconf:
+        logger.info(f"Loading URLs from root_urlconf: {root_urlconf}")
+        patterns = _load_url_module(root_urlconf)
+        
+        if patterns is None:
+            logger.warning(f"No urlpatterns found in {root_urlconf}")
+            return router
+        
+        logger.info(f"Loaded {len(patterns)} URL patterns from {root_urlconf}")
+        
+        for pattern in patterns:
+            if not isinstance(pattern, URLPattern):
+                logger.warning(f"Invalid pattern in {root_urlconf}: {pattern}")
+                continue
+            
+            _register_pattern(router, pattern, root_urlconf)
+        
+        return router
+    
+    # Modo auto-discovery: carrega de cada app em installed_apps
+    installed_apps: list[str] = getattr(settings, "installed_apps", [])
     
     if not installed_apps:
         logger.warning("No installed_apps configured, skipping URL autodiscovery")

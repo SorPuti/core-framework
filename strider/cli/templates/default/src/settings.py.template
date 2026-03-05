@@ -13,7 +13,18 @@ class AppSettings(Settings):
     app_label: str = "main"
     models_module: str = "src.models"
     app_module: str = "src.main"
+    
+    # URL Configuration
+    # Set root_urlconf to use manual URL routing (similar to Django's ROOT_URLCONF)
+    # If None, the framework auto-discovers URLs from all apps in installed_apps
+    # Example: root_urlconf: str = "src.urls"
+    root_urlconf: str | None = None
 
+    # Apps for auto-discovery
+    installed_apps: list[str] = [
+        "src.apps.users",
+    ]
+    
     user_model: str = "src.apps.users.models.User"
 
     middleware: list[str] = [

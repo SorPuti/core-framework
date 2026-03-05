@@ -1,0 +1,25 @@
+"""Root URL configuration (optional).
+
+This file is only needed if you want to manually configure URLs
+instead of using auto-discovery from apps.
+
+To use this file, set in your settings.py:
+    root_urlconf: str = "src.urls"
+
+Otherwise, the framework will auto-discover URLs from each app's urls.py.
+"""
+from strider.urls import path, include
+
+# Import views from apps
+# from src.apps.users.views import UserViewSet
+# from src.apps.items.views import ItemViewSet
+
+urlpatterns = [
+    # Example: Include URLs from apps manually
+    # path("users", include("src.apps.users.urls")),
+    # path("items", include("src.apps.items.urls")),
+    
+    # Or register views directly
+    # path("users", UserViewSet),
+    # path("items", ItemViewSet),
+]

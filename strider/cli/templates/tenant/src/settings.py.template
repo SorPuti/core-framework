@@ -12,6 +12,15 @@ class AppSettings(Settings):
     app_label: str = "main"
     models_module: str = "src.models"
     app_module: str = "src.main"
+    
+    # Apps for auto-discovery
+    installed_apps: list[str] = [
+        "src.apps.tenants",
+        "src.apps.items",
+    ]
+    
+    # URL Configuration (None for auto-discovery, or "src.urls" for manual)
+    root_urlconf: str | None = None
 
     middleware: list[str] = [
         "timing",
