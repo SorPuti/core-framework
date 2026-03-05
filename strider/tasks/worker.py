@@ -533,7 +533,9 @@ class TaskWorker:
                     await broadcast_worker_heartbeat(payload)
                 except Exception:
                     pass
-    
+        except Exception as e:
+            logger.debug("Failed to update heartbeat: %s", e)
+
     async def _mark_offline(self) -> None:
         """Mark this worker as offline."""
         try:
