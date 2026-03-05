@@ -250,11 +250,15 @@ def autodiscover(settings: Any) -> "AutoRouter":
     """
     from strider.routing import AutoRouter
     
-    url_prefix: str = getattr(settings, "url_prefix", "/api/v1")
+    url_prefix: str = getattr(settings, "url_prefix", "/")
     root_urlconf: str | None = getattr(settings, "root_urlconf", None)
     
+    # Se usar root_urlconf (src/urls.py), não aplica prefixo automático
+    # O prefixo é definido manualmente nas urlpatterns
+    effective_prefix = "/" if root_urlconf else url_prefix
+    
     # Cria o router principal
-    router = AutoRouter(prefix=url_prefix)
+    router = AutoRouter(prefix=effective_prefix)
     
     # Se root_urlconf definido, carrega de lá (modo Django-like)
     if root_urlconf:
@@ -333,10 +337,7 @@ def _register_pattern(
     """
     from strider.views import ViewSet, APIView
     
-    # Garante barra entre prefixo e rota
-    prefix_clean = prefix.rstrip("/")
-    route_clean = pattern.route.lstrip("/")
-    route = f"{prefix_clean}/{route_clean}".strip("/")
+    route = f"{prefix}{pattern.route}".strip("/")
     view = pattern.view
     
     # Se for um include, processa recursivamente

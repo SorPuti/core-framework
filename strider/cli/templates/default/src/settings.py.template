@@ -15,10 +15,14 @@ class AppSettings(Settings):
     app_module: str = "src.main"
     
     # URL Configuration
-    # Set root_urlconf to use manual URL routing (similar to Django's ROOT_URLCONF)
-    # If None, the framework auto-discovers URLs from all apps in installed_apps
-    # Example: root_urlconf: str = "src.urls"
-    root_urlconf: str | None = None
+    # url_prefix: prefixo global para todas as rotas (default: "/" para rotas na raiz)
+    #   - Auto-discovery: aplica prefixo a todas as rotas descobertas
+    #   - Manual (root_urlconf): prefixo é ignorado, controle total via src/urls.py
+    # root_urlconf: use "src.urls" para routing manual tipo Django
+    #   - Se definido, o framework carrega urlpatterns de src/urls.py
+    #   - Se None, faz auto-discovery de cada app em installed_apps
+    url_prefix: str = "/api"  # Prefixo para auto-discovery (use "/" para sem prefixo)
+    root_urlconf: str | None = None  # Set to "src.urls" for manual routing
 
     # Apps for auto-discovery (nomes curtos são auto-resolvidos para src.apps.{name})
     installed_apps: list[str] = [

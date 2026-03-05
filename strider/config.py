@@ -899,7 +899,7 @@ class Settings(BaseSettings):
         ),
     )
     url_prefix: str = PydanticField(
-        default="/api/v1",
+        default="/",
         description=(
             "Prefixo global para as rotas da API. "
             "Usado pelo auto-discovery de URLs. "
