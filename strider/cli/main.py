@@ -490,9 +490,44 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
     except Exception:
         installed_apps = []
     if installed_apps:
-        # Discovery via installed_apps: {app}.models for each app
-        modules_to_check = [f"{app}.models" for app in installed_apps]
+        # Discovery via installed_apps: resolve app names para caminhos completos
+        def _resolve_app_models(app_name: str) -> str | None:
+            """Resolve nome curto do app para caminho completo do módulo models."""
+            import importlib.util
+            
+            # Se já tem ponto, assume caminho completo
+            if "." in app_name:
+                return f"{app_name}.models"
+            
+            # Tenta locais padrão
+            search_paths = [
+                f"src.apps.{app_name}.models",
+                f"apps.{app_name}.models",
+                f"src.{app_name}.models",
+                f"{app_name}.models",
+            ]
+            
+            for path in search_paths:
+                try:
+                    parent = ".".join(path.split(".")[:-1])  # Remove .models
+                    spec = importlib.util.find_spec(parent)
+                    if spec:
+                        return path
+                except (ImportError, ModuleNotFoundError, ValueError):
+                    continue
+            
+            # Fallback: retorna como estava
+            return f"{app_name}.models"
+        
+        modules_to_check = []
+        for app in installed_apps:
+            resolved = _resolve_app_models(app)
+            if resolved:
+                modules_to_check.append(resolved)
+        
         print(info(f"Using installed_apps: {len(modules_to_check)} app(s)"))
+        if modules_to_check:
+            print(info(f"  Modules: {', '.join(modules_to_check)}"))
     elif models_module:
         # Explicit models_module (string or list)
         if isinstance(models_module, str):
@@ -530,6 +565,7 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
         print(info(f"Included {core_model_count} Stride internal model(s)"))
     
     # ── Coletar models do projeto do usuário ──
+    user_models_count = 0
     for module_path in modules_to_check:
         # Skip se já foi carregado como core module
         if module_path in core_loaded:
@@ -537,6 +573,7 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
         
         # Verifica se o módulo existe antes de tentar importar
         # models.py é opcional - apps podem não ter models
+        module_found = False
         try:
             parent_module = ".".join(module_path.split(".")[:-1])  # Remove .models
             if parent_module:
@@ -550,12 +587,17 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
             if spec is None:
                 # App existe mas não tem models.py - silenciosamente ignora
                 continue
+            module_found = True
         except (ImportError, ModuleNotFoundError, ValueError):
             # Erro ao verificar - tenta importar mesmo assim
-            pass
+            module_found = True  # Tenta importar mesmo com erro na verificação
+        
+        if not module_found:
+            continue
         
         try:
             module = importlib.import_module(module_path)
+            module_models = 0
             for name in dir(module):
                 obj = getattr(module, name)
                 if (
@@ -568,10 +610,17 @@ def discover_models(models_module: str | list[str] | None = None, rescan: bool =
                     # Avoid duplicates (same model imported in multiple places)
                     if obj not in models:
                         models.append(obj)
+                        user_models_count += 1
+                        module_models += 1
+            if module_models > 0:
+                print(info(f"  Imported {module_models} model(s) from {module_path}"))
         except ImportError as e:
-            # Só mostra warning se o módulo existe mas deu erro de importação
+            # Só mostra warning se o módulo existe mas tem erro de importação
             print(warning(f"Cannot import '{module_path}': {e}"))
             continue
+    
+    if user_models_count > 0:
+        print(info(f"Found {user_models_count} user model(s)"))
     
     return models
 
