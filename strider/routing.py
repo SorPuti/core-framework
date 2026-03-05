@@ -13,13 +13,13 @@ Características:
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Optional, TYPE_CHECKING
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, get_args, get_origin
 from collections.abc import Callable
 import inspect
 import logging
 
 from fastapi import APIRouter, Request, Depends, Body
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel, ValidationError as PydanticValidationError, create_model
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from strider.dependencies import get_db, get_optional_user
@@ -346,6 +346,135 @@ def _build_error_responses(
     return responses
 
 
+def _annotation_contains_basemodel(annotation: Any) -> bool:
+    """Return True when annotation references a Pydantic BaseModel."""
+    if annotation in (inspect._empty, Any, None):
+        return False
+    if isinstance(annotation, type):
+        try:
+            return issubclass(annotation, BaseModel)
+        except TypeError:
+            return False
+    origin = get_origin(annotation)
+    if origin is None:
+        return False
+    return any(_annotation_contains_basemodel(arg) for arg in get_args(annotation))
+
+
+def _annotation_accepts_mapping(annotation: Any) -> bool:
+    """Return True when annotation accepts a dict-like payload."""
+    if annotation in (inspect._empty, Any):
+        return True
+    if annotation is dict:
+        return True
+    origin = get_origin(annotation)
+    if origin is dict:
+        return True
+    if origin is None:
+        return False
+    return any(_annotation_accepts_mapping(arg) for arg in get_args(annotation))
+
+
+def _extract_first_basemodel_type(annotation: Any) -> type[BaseModel] | None:
+    """Extract first BaseModel type found in an annotation tree."""
+    if annotation in (inspect._empty, Any, None):
+        return None
+    if isinstance(annotation, type):
+        try:
+            if issubclass(annotation, BaseModel):
+                return annotation
+        except TypeError:
+            return None
+    origin = get_origin(annotation)
+    if origin is None:
+        return None
+    for arg in get_args(annotation):
+        model_type = _extract_first_basemodel_type(arg)
+        if model_type is not None:
+            return model_type
+    return None
+
+
+def _pick_body_param_name(
+    target_callable: Callable,
+    *,
+    path_params: dict[str, Any],
+) -> tuple[str | None, bool, dict[str, inspect.Parameter]]:
+    """
+    Resolve which callable parameter should receive request body.
+    Returns (target_param_name, has_var_kwargs, method_params).
+    """
+    method_sig = inspect.signature(target_callable)
+    method_params = method_sig.parameters
+    has_var_kwargs = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD
+        for p in method_params.values()
+    )
+    candidate_body_params = [
+        p.name
+        for p in method_params.values()
+        if p.name not in {"self", "request", "db", "_user"}
+        and p.kind in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        )
+    ]
+    preferred_names = ("data", "payload", "body", "input", "dto", "schema")
+
+    for preferred in preferred_names:
+        if preferred in candidate_body_params and preferred not in path_params:
+            return preferred, has_var_kwargs, method_params
+    for candidate in candidate_body_params:
+        if candidate not in path_params:
+            return candidate, has_var_kwargs, method_params
+    return None, has_var_kwargs, method_params
+
+
+def _build_body_call_kwargs(
+    target_callable: Callable,
+    *,
+    path_params: dict[str, Any],
+    body: Any,
+    default_name: str = "data",
+    exclude_unset: bool = False,
+) -> dict[str, Any]:
+    """Build kwargs for a callable, injecting body into the most suitable parameter."""
+    kwargs: dict[str, Any] = dict(path_params)
+    if body is None:
+        return kwargs
+
+    target_param, has_var_kwargs, method_params = _pick_body_param_name(
+        target_callable,
+        path_params=path_params,
+    )
+
+    body_value = body
+    if target_param is not None:
+        target_annotation = method_params[target_param].annotation
+        if not hasattr(body_value, "model_dump"):
+            target_model_type = _extract_first_basemodel_type(target_annotation)
+            if target_model_type is not None:
+                try:
+                    body_value = target_model_type.model_validate(body_value)
+                except PydanticValidationError:
+                    # Let FastAPI/global exception handlers render structured 422
+                    raise
+        if (
+            hasattr(body, "model_dump")
+            and _annotation_accepts_mapping(target_annotation)
+            and not _annotation_contains_basemodel(target_annotation)
+        ):
+            body_value = body.model_dump(exclude_unset=exclude_unset)
+    elif hasattr(body, "model_dump"):
+        body_value = body.model_dump(exclude_unset=exclude_unset)
+
+    if target_param is not None:
+        kwargs[target_param] = body_value
+    elif has_var_kwargs:
+        kwargs[default_name] = body_value
+    return kwargs
+
+
 # =============================================================================
 # Router
 # =============================================================================
@@ -547,9 +676,12 @@ class Router(APIRouter):
             _user=Depends(get_optional_user),
         ):
             vs = viewset_class()
-            # Converte Pydantic model → dict para manter compatibilidade com ViewSet
-            data_dict = data.model_dump() if hasattr(data, "model_dump") else data
-            return await vs.create(request, db, data_dict)
+            call_kwargs = _build_body_call_kwargs(
+                vs.create,
+                path_params={},
+                body=data,
+            )
+            return await vs.create(request, db, **call_kwargs)
         
         create_route.__annotations__ = {
             "request": Request,
@@ -616,9 +748,13 @@ class Router(APIRouter):
             _user=Depends(get_optional_user),
         ):
             vs = viewset_class()
-            data_dict = data.model_dump() if hasattr(data, "model_dump") else data
             path_params = request.path_params
-            return await vs.update(request, db, data_dict, **path_params)
+            call_kwargs = _build_body_call_kwargs(
+                vs.update,
+                path_params=path_params,
+                body=data,
+            )
+            return await vs.update(request, db, **call_kwargs)
         
         update_route.__annotations__ = {
             "request": Request,
@@ -652,13 +788,14 @@ class Router(APIRouter):
             _user=Depends(get_optional_user),
         ):
             vs = viewset_class()
-            # exclude_unset=True garante que só campos enviados sejam atualizados
-            if hasattr(data, "model_dump"):
-                data_dict = data.model_dump(exclude_unset=True)
-            else:
-                data_dict = data
             path_params = request.path_params
-            return await vs.partial_update(request, db, data_dict, **path_params)
+            call_kwargs = _build_body_call_kwargs(
+                vs.partial_update,
+                path_params=path_params,
+                body=data,
+                exclude_unset=True,
+            )
+            return await vs.partial_update(request, db, **call_kwargs)
         
         partial_update_route.__annotations__ = {
             "request": Request,
@@ -829,8 +966,12 @@ class Router(APIRouter):
                             
                             path_params = request.path_params
                             if data is not None:
-                                data_dict = data.model_dump() if hasattr(data, "model_dump") else data
-                                return await action_method(vs, request, db, data=data_dict, **path_params)
+                                call_kwargs = _build_body_call_kwargs(
+                                    action_method,
+                                    path_params=path_params,
+                                    body=data,
+                                )
+                                return await action_method(vs, request, db, **call_kwargs)
                             return await action_method(vs, request, db, **path_params)
                         
                         # Typed annotations para OpenAPI
@@ -907,6 +1048,7 @@ class Router(APIRouter):
             request: Request,
             db: AsyncSession = Depends(get_db),
             _user: Any = Depends(get_optional_user),
+            data: Any = Body(None),
         ) -> Any:
             method = request.method.lower()
             handler = getattr(view, method, None)
@@ -917,6 +1059,13 @@ class Router(APIRouter):
             
             await view.check_permissions(request, method)
             path_params = request.path_params
+            if request.method.upper() in {"POST", "PUT", "PATCH"} and data is not None:
+                call_kwargs = _build_body_call_kwargs(
+                    handler,
+                    path_params=path_params,
+                    body=data,
+                )
+                return await handler(request, db=db, **call_kwargs)
             return await handler(request, db=db, **path_params)
         
         self.add_api_route(
