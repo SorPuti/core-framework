@@ -306,6 +306,25 @@ class Settings(BaseSettings):
             "Auto-habilitado em development se não configurado."
         ),
     )
+    openapi_examples_enabled: bool = PydanticField(
+        default=True,
+        description=(
+            "Habilita geração automática de exemplos request/response no OpenAPI "
+            "(/docs e /redoc)."
+        ),
+    )
+    openapi_examples_provider: Literal["native", "faker", "hybrid"] = PydanticField(
+        default="native",
+        description=(
+            "Provider de geração de exemplos OpenAPI: "
+            "native (sem dependências), faker (requer Faker), "
+            "hybrid (faker quando disponível, fallback nativo)."
+        ),
+    )
+    openapi_examples_locale: str = PydanticField(
+        default="pt_BR",
+        description="Locale usado pelo provider Faker na geração de exemplos.",
+    )
     
     # =========================================================================
     # CORS

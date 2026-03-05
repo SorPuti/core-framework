@@ -35,6 +35,7 @@ from strider.serializers import (
     NotFoundResponse,
     ConflictResponse,
 )
+from strider.openapi_examples import build_schema_example, build_response_example
 
 if TYPE_CHECKING:
     from strider.views import ViewSet, APIView
@@ -347,6 +348,68 @@ def _build_error_responses(
     return responses
 
 
+def _get_openapi_example_settings() -> Any:
+    """Load settings lazily to avoid import-time coupling."""
+    try:
+        from strider.config import get_settings
+
+        return get_settings()
+    except Exception:
+        return None
+
+
+def _merge_response_specs(
+    base: dict[int, dict[str, Any]] | None,
+    extra: dict[int, dict[str, Any]] | None,
+) -> dict[int, dict[str, Any]]:
+    merged: dict[int, dict[str, Any]] = dict(base or {})
+    for code, spec in (extra or {}).items():
+        existing = merged.get(code)
+        if isinstance(existing, dict):
+            patched = dict(existing)
+            patched.update(spec)
+            merged[code] = patched
+        else:
+            merged[code] = spec
+    return merged
+
+
+def _build_openapi_examples(
+    *,
+    input_schema: type[BaseModel] | None = None,
+    output_schema: type[BaseModel] | None = None,
+    success_status: int = 200,
+    settings: Any = None,
+) -> tuple[dict[str, Any] | None, dict[int, dict[str, Any]]]:
+    request_example = build_schema_example(input_schema, settings=settings) if input_schema else None
+    response_example = build_response_example(output_schema, settings=settings) if output_schema else None
+
+    openapi_extra: dict[str, Any] | None = None
+    if request_example is not None:
+        openapi_extra = {
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "example": request_example,
+                    },
+                },
+            },
+        }
+
+    responses: dict[int, dict[str, Any]] = {}
+    if response_example is not None:
+        responses[success_status] = {
+            "description": "Exemplo de resposta",
+            "content": {
+                "application/json": {
+                    "example": response_example,
+                },
+            },
+        }
+
+    return openapi_extra, responses
+
+
 def _annotation_contains_basemodel(annotation: Any) -> bool:
     """Return True when annotation references a Pydantic BaseModel."""
     if annotation in (inspect._empty, Any, None):
@@ -595,6 +658,7 @@ class Router(APIRouter):
             include_crud: Forçar criação de rotas CRUD (default: auto-detecta por model)
         """
         viewset = viewset_class()
+        openapi_settings = _get_openapi_example_settings()
         
         # Detecta se tem model (para decidir sobre CRUD routes)
         has_model = hasattr(viewset_class, "model") and viewset_class.model is not None
@@ -664,6 +728,11 @@ class Router(APIRouter):
             "page_size": int,
         }
         
+        list_openapi_extra, list_success_responses = _build_openapi_examples(
+            output_schema=list_response_model,
+            success_status=200,
+            settings=openapi_settings,
+        )
         self.add_api_route(
             f"{prefix}/",
             list_route,
@@ -677,7 +746,11 @@ class Router(APIRouter):
                 f"O `page_size` máximo é {viewset_class.max_page_size}."
             ),
             response_model=list_response_model,
-            responses=_build_error_responses(include_422=False),
+            responses=_merge_response_specs(
+                _build_error_responses(include_422=False),
+                list_success_responses,
+            ),
+            openapi_extra=list_openapi_extra,
         )
         
         # ==================================================================
@@ -702,6 +775,12 @@ class Router(APIRouter):
             "_user": Any,
         }
         
+        create_openapi_extra, create_success_responses = _build_openapi_examples(
+            input_schema=input_schema,
+            output_schema=detail_response_model,
+            success_status=201,
+            settings=openapi_settings,
+        )
         self.add_api_route(
             f"{prefix}/",
             create_route,
@@ -712,7 +791,11 @@ class Router(APIRouter):
             description=f"Cria um novo **{model_label}**.",
             status_code=201,
             response_model=detail_response_model,
-            responses=_build_error_responses(include_422=True, include_409=True),
+            responses=_merge_response_specs(
+                _build_error_responses(include_422=True, include_409=True),
+                create_success_responses,
+            ),
+            openapi_extra=create_openapi_extra,
         )
         
         # ==================================================================
@@ -740,6 +823,11 @@ class Router(APIRouter):
             "_user": Any,
         }
         
+        retrieve_openapi_extra, retrieve_success_responses = _build_openapi_examples(
+            output_schema=detail_response_model,
+            success_status=200,
+            settings=openapi_settings,
+        )
         self.add_api_route(
             f"{prefix}/{{{lookup_url_kwarg}}}",
             retrieve_route,
@@ -749,7 +837,11 @@ class Router(APIRouter):
             summary=f"Get {basename} by {lookup_url_kwarg}",
             description=f"Retorna detalhes de um **{model_label}** específico pelo `{lookup_url_kwarg}`.",
             response_model=detail_response_model,
-            responses=_build_error_responses(include_404=True, include_422=False),
+            responses=_merge_response_specs(
+                _build_error_responses(include_404=True, include_422=False),
+                retrieve_success_responses,
+            ),
+            openapi_extra=retrieve_openapi_extra,
         )
         
         # ==================================================================
@@ -775,6 +867,12 @@ class Router(APIRouter):
             "_user": Any,
         }
         
+        update_openapi_extra, update_success_responses = _build_openapi_examples(
+            input_schema=input_schema,
+            output_schema=detail_response_model,
+            success_status=200,
+            settings=openapi_settings,
+        )
         self.add_api_route(
             f"{prefix}/{{{lookup_url_kwarg}}}",
             update_route,
@@ -787,9 +885,13 @@ class Router(APIRouter):
                 f"Todos os campos obrigatórios devem ser enviados."
             ),
             response_model=detail_response_model,
-            responses=_build_error_responses(
-                include_404=True, include_409=True, include_422=True,
+            responses=_merge_response_specs(
+                _build_error_responses(
+                    include_404=True, include_409=True, include_422=True,
+                ),
+                update_success_responses,
             ),
+            openapi_extra=update_openapi_extra,
         )
         
         # ==================================================================
@@ -816,6 +918,12 @@ class Router(APIRouter):
             "_user": Any,
         }
         
+        patch_openapi_extra, patch_success_responses = _build_openapi_examples(
+            input_schema=partial_input_schema if partial_input_schema else input_schema,
+            output_schema=detail_response_model,
+            success_status=200,
+            settings=openapi_settings,
+        )
         self.add_api_route(
             f"{prefix}/{{{lookup_url_kwarg}}}",
             partial_update_route,
@@ -829,9 +937,13 @@ class Router(APIRouter):
                 f"Campos omitidos permanecem inalterados."
             ),
             response_model=detail_response_model,
-            responses=_build_error_responses(
-                include_404=True, include_409=True, include_422=True,
+            responses=_merge_response_specs(
+                _build_error_responses(
+                    include_404=True, include_409=True, include_422=True,
+                ),
+                patch_success_responses,
             ),
+            openapi_extra=patch_openapi_extra,
         )
         
         # ==================================================================
@@ -850,6 +962,11 @@ class Router(APIRouter):
             "_user": Any,
         }
         
+        delete_openapi_extra, delete_success_responses = _build_openapi_examples(
+            output_schema=DeleteResponse,
+            success_status=200,
+            settings=openapi_settings,
+        )
         self.add_api_route(
             f"{prefix}/{{{lookup_url_kwarg}}}",
             destroy_route,
@@ -859,7 +976,11 @@ class Router(APIRouter):
             summary=f"Delete {basename}",
             description=f"Remove permanentemente um **{model_label}** pelo `{lookup_url_kwarg}`.",
             response_model=DeleteResponse,
-            responses=_build_error_responses(include_404=True, include_422=False),
+            responses=_merge_response_specs(
+                _build_error_responses(include_404=True, include_422=False),
+                delete_success_responses,
+            ),
+            openapi_extra=delete_openapi_extra,
         )
         
         # ==================================================================
@@ -901,6 +1022,7 @@ class Router(APIRouter):
                           - None: registra todas as actions
         """
         viewset_input_schema, viewset_output_schema = _resolve_schemas(viewset_class)
+        openapi_settings = _get_openapi_example_settings()
 
         registered_signatures: set[tuple[str, str]] = set()
         conflict_policy = str(getattr(viewset_class, "route_conflict_policy", "warn")).lower()
@@ -1023,6 +1145,12 @@ class Router(APIRouter):
                     
                     return action_endpoint
                 
+                action_openapi_extra, action_success_responses = _build_openapi_examples(
+                    input_schema=action_input_schema if method_has_body else None,
+                    output_schema=action_output_schema,
+                    success_status=200,
+                    settings=openapi_settings,
+                )
                 self.add_api_route(
                     path,
                     make_action_endpoint(
@@ -1034,6 +1162,8 @@ class Router(APIRouter):
                     name=route_name,
                     summary=f"{name.replace('_', ' ').title()}",
                     response_model=action_output_schema,
+                    responses=action_success_responses if action_success_responses else None,
+                    openapi_extra=action_openapi_extra,
                 )
     
     def register_view(
@@ -1055,6 +1185,9 @@ class Router(APIRouter):
         view = view_class()
         methods = methods or ["GET", "POST", "PUT", "PATCH", "DELETE"]
         tags = kwargs.pop("tags", view_class.tags or [])
+        input_schema = getattr(view_class, "input_schema", None)
+        output_schema = getattr(view_class, "output_schema", None)
+        openapi_settings = _get_openapi_example_settings()
         
         async def endpoint(
             request: Request,
@@ -1080,11 +1213,21 @@ class Router(APIRouter):
                 return await handler(request, db=db, **call_kwargs)
             return await handler(request, db=db, **path_params)
         
+        view_openapi_extra, view_success_responses = _build_openapi_examples(
+            input_schema=input_schema,
+            output_schema=output_schema,
+            success_status=200,
+            settings=openapi_settings,
+        )
+        existing_responses = kwargs.pop("responses", None)
+        merged_responses = _merge_response_specs(existing_responses, view_success_responses)
         self.add_api_route(
             path,
             endpoint,
             methods=methods,
             tags=tags,
+            responses=merged_responses if merged_responses else None,
+            openapi_extra=view_openapi_extra,
             **kwargs,
         )
 

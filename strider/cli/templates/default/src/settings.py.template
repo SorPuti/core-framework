@@ -25,6 +25,11 @@ class AppSettings(Settings):
     #   - None => auto-discovery usando installed_apps + {app}.urls
     url_prefix: str = "/api"  # Prefixo para auto-discovery (use "/" para sem prefixo)
     root_urlconf: str | None = None  # Set to "src.urls" for manual routing
+    # OpenAPI examples automáticos:
+    # - provider: "native" (sem deps), "faker" (requer Faker), "hybrid" (fallback nativo)
+    openapi_examples_enabled: bool = True
+    openapi_examples_provider: str = "native"
+    openapi_examples_locale: str = "pt_BR"
 
     # Apps for auto-discovery (nomes curtos são auto-resolvidos para src.apps.{name})
     installed_apps: list[str] = [
