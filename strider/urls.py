@@ -333,7 +333,10 @@ def _register_pattern(
     """
     from strider.views import ViewSet, APIView
     
-    route = f"{prefix}{pattern.route}".strip("/")
+    # Garante barra entre prefixo e rota
+    prefix_clean = prefix.rstrip("/")
+    route_clean = pattern.route.lstrip("/")
+    route = f"{prefix_clean}/{route_clean}".strip("/")
     view = pattern.view
     
     # Se for um include, processa recursivamente
