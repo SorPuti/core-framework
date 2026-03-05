@@ -15,12 +15,14 @@ class AppSettings(Settings):
     app_module: str = "src.main"
     
     # URL Configuration
-    # url_prefix: prefixo global para todas as rotas (default: "/" para rotas na raiz)
-    #   - Auto-discovery: aplica prefixo a todas as rotas descobertas
-    #   - Manual (root_urlconf): prefixo é ignorado, controle total via src/urls.py
-    # root_urlconf: use "src.urls" para routing manual tipo Django
-    #   - Se definido, o framework carrega urlpatterns de src/urls.py
-    #   - Se None, faz auto-discovery de cada app em installed_apps
+    # Convenção única: cada app deve ter urls.py com urlpatterns.
+    # Qualquer import quebrado em urls.py/views.py falha no startup/CLI (fail-fast).
+    # url_prefix:
+    #   - aplicado apenas no modo auto-discovery (root_urlconf=None)
+    #   - ignorado quando root_urlconf está definido (routing manual)
+    # root_urlconf:
+    #   - "src.urls" => roteamento manual via include()/path()
+    #   - None => auto-discovery usando installed_apps + {app}.urls
     url_prefix: str = "/api"  # Prefixo para auto-discovery (use "/" para sem prefixo)
     root_urlconf: str | None = None  # Set to "src.urls" for manual routing
 

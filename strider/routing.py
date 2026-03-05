@@ -17,6 +17,7 @@ from typing import Any, ClassVar, Optional, TYPE_CHECKING, get_args, get_origin
 from collections.abc import Callable
 import inspect
 import logging
+import os
 
 from fastapi import APIRouter, Request, Depends, Body
 from pydantic import BaseModel, ValidationError as PydanticValidationError, create_model
@@ -499,6 +500,16 @@ class Router(APIRouter):
         self._ws_routes: list = []
         # Rastreia rotas registradas para prevenir duplicação
         self._registered_routes: set[tuple[str, str]] = set()  # (path, method)
+        self._route_conflict_policy = os.getenv(
+            "STRIDER_ROUTE_CONFLICT_POLICY",
+            "raise",
+        ).lower()
+        if self._route_conflict_policy not in {"raise", "warn", "ignore"}:
+            logger.warning(
+                "Invalid STRIDER_ROUTE_CONFLICT_POLICY=%r; using 'raise'",
+                self._route_conflict_policy,
+            )
+            self._route_conflict_policy = "raise"
     
     def add_api_route(
         self,
@@ -529,13 +540,14 @@ class Router(APIRouter):
         
         if duplicates:
             route_name = kwargs.get("name", endpoint.__name__)
-            warnings.warn(
-                f"Rota duplicada ignorada: {duplicates} {path} "
-                f"(name={route_name}). Verifique se o ViewSet ou router "
-                f"não está sendo registrado duas vezes.",
-                UserWarning,
-                stacklevel=2,
+            message = (
+                f"Rota duplicada detectada: {duplicates} {path} (name={route_name}). "
+                "Verifique includes, auto-discovery e registro duplicado de ViewSet/router."
             )
+            if self._route_conflict_policy == "raise":
+                raise RuntimeError(message)
+            if self._route_conflict_policy == "warn":
+                warnings.warn(message, UserWarning, stacklevel=2)
             return
         
         super().add_api_route(path, endpoint, methods=methods, **kwargs)

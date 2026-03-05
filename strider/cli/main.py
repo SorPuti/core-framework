@@ -641,6 +641,13 @@ def load_app(app_module: str):
     except ImportError as e:
         print(error(f"Cannot import app module '{app_module}': {e}"))
         return None
+    except Exception as e:
+        # Fail-fast de discovery de rotas com mensagem curta e acionável.
+        if e.__class__.__name__ == "RouteDiscoveryError":
+            print(error(f"{e}"))
+            return None
+        print(error(f"Failed to load app module '{app_module}': {e}"))
+        return None
 
 
 # ============================================================
@@ -2123,7 +2130,7 @@ def cmd_createapp(args: argparse.Namespace) -> int:
         ├── schemas.py
         ├── views.py
         ├── services.py
-        ├── routes.py
+        ├── urls.py
         └── tests/
             ├── __init__.py
             └── test_{app_name}.py
@@ -2192,9 +2199,9 @@ Este módulo contém a lógica do app {app_name}.
 
 from {import_path}.models import *  # noqa: F401, F403
 from {import_path}.views import *  # noqa: F401, F403
-from {import_path}.routes import router  # noqa: F401
+from {import_path}.urls import urlpatterns  # noqa: F401
 
-__all__ = ["router"]
+__all__ = ["urlpatterns"]
 ''',
         app_dir / "models.py": f'''"""
 Models do app {app_name}.
@@ -2287,25 +2294,21 @@ if TYPE_CHECKING:
 #         # Sua lógica aqui
 #         return data
 ''',
-        app_dir / "routes.py": f'''"""
-Rotas do app {app_name}.
+        app_dir / "urls.py": f'''"""
+URLs do app {app_name}.
 
-Configure as rotas e registre os ViewSets aqui.
+Convenção obrigatória do auto-discovery:
+- arquivo deve ser chamado urls.py
+- deve exportar urlpatterns (list[URLPattern])
 """
 
-from strider import AutoRouter
+from strider.urls import path
 
-# from {import_path}.views import ...
+# from {import_path}.views import {app_name.title().replace("_", "")}ViewSet
 
-router = AutoRouter(prefix="/{app_name.replace("_", "-")}", tags=["{app_name.replace("_", " ").title()}"])
-
-# Registre seus ViewSets
-# router.register("", {app_name.title().replace("_", "")}ViewSet, basename="{app_name}")
-
-# Ou adicione rotas customizadas
-# @router.get("/custom")
-# async def custom_endpoint():
-#     return {{"message": "Custom endpoint"}}
+urlpatterns = [
+    # path("{app_name.replace("_", "-")}/", {app_name.title().replace("_", "")}ViewSet),
+]
 ''',
         app_dir / "tests" / "__init__.py": f'"""Tests for {app_name} app."""\n',
         app_dir / "tests" / f"test_{app_name}.py": f'''"""
@@ -2335,10 +2338,10 @@ from httpx import AsyncClient
     print(f"  1. Edit {app_dir.relative_to(cwd)}/models.py to define your models")
     print(f"  2. Edit {app_dir.relative_to(cwd)}/schemas.py to define your schemas")
     print(f"  3. Edit {app_dir.relative_to(cwd)}/views.py to create your ViewSets")
-    print(f"  4. Register the router in your main app:")
+    print(f"  4. Defina rotas em {app_dir.relative_to(cwd)}/urls.py (convenção obrigatória)")
     print()
-    print(f"     from {import_path} import router as {app_name}_router")
-    print(f"     app = StrideApp()  # Auto-discovery carrega automaticamente")
+    print(f"     # urlpatterns = [path('prefix/', ViewSet)]")
+    print(f"     # StrideApp() fará auto-discovery automático")
     print()
     
     return 0

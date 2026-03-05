@@ -24,6 +24,7 @@ Usage:
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import logging
 from typing import Any, TYPE_CHECKING
 from collections.abc import Callable
@@ -33,6 +34,12 @@ if TYPE_CHECKING:
     from strider.routing import Router, AutoRouter
 
 logger = logging.getLogger("strider.urls")
+
+
+class RouteDiscoveryError(RuntimeError):
+    """Erro explícito de discovery/import de rotas."""
+
+    pass
 
 
 class URLPattern:
@@ -139,7 +146,12 @@ def include(module: str, namespace: str | None = None) -> URLInclude:
     return URLInclude(module, namespace)
 
 
-def _load_url_module(module_path: str) -> list[URLPattern] | None:
+def _load_url_module(
+    module_path: str,
+    *,
+    app_name: str | None = None,
+    required: bool = True,
+) -> list[URLPattern] | None:
     """
     Carrega um módulo de URLs e retorna os urlpatterns.
     
@@ -147,24 +159,50 @@ def _load_url_module(module_path: str) -> list[URLPattern] | None:
         module_path: Caminho do módulo (ex: "src.apps.users.urls")
     
     Returns:
-        Lista de URLPattern ou None se não encontrar
+        Lista de URLPattern ou None (quando required=False e módulo não existe)
     """
+    module_spec = importlib.util.find_spec(module_path)
+    if module_spec is None:
+        if required:
+            target = app_name or module_path
+            raise RouteDiscoveryError(
+                f"Rotas não encontradas para '{target}'. "
+                f"Esperado módulo '{module_path}' com 'urlpatterns'."
+            )
+        return None
+
     try:
         module = importlib.import_module(module_path)
+    except ModuleNotFoundError as e:
+        # Se a falha for do próprio módulo alvo, tratamos como módulo ausente.
+        # Se for dependência interna, falha explícita com contexto.
+        if e.name in {module_path, module_path.rsplit(".", 1)[0]} and not required:
+            return None
+        target = app_name or module_path
+        raise RouteDiscoveryError(
+            f"Falha ao importar rotas de '{target}' ({module_path}): {e}"
+        ) from e
     except ImportError as e:
-        # Loga o erro real para debug, mas retorna None
-        logger.debug(f"Could not import {module_path}: {e}")
-        return None
+        target = app_name or module_path
+        raise RouteDiscoveryError(
+            f"Falha ao importar rotas de '{target}' ({module_path}): {e}"
+        ) from e
     
     # Busca urlpatterns no módulo
     patterns = getattr(module, "urlpatterns", None)
     if patterns is None:
-        logger.debug(f"Module {module_path} has no urlpatterns")
-        return None
+        target = app_name or module_path
+        raise RouteDiscoveryError(
+            f"Módulo de rotas inválido para '{target}': "
+            f"'{module_path}' não define 'urlpatterns'."
+        )
     
     if not isinstance(patterns, list):
-        logger.warning(f"urlpatterns in {module_path} is not a list")
-        return None
+        target = app_name or module_path
+        raise RouteDiscoveryError(
+            f"Módulo de rotas inválido para '{target}': "
+            f"'urlpatterns' em '{module_path}' deve ser uma lista."
+        )
     
     return patterns
 
@@ -185,14 +223,11 @@ def _resolve_app_module(app_name: str, sub_module: str = "urls") -> str | None:
     Returns:
         Caminho completo do módulo ou None se não encontrado
     """
-    import importlib.util
-    
     # Se já tem ponto, tenta como caminho absoluto primeiro
     if "." in app_name:
         full_path = f"{app_name}.{sub_module}"
         try:
-            parent_module = full_path.rsplit(".", 1)[0]  # Remove .{sub_module}
-            if importlib.util.find_spec(parent_module):
+            if importlib.util.find_spec(full_path):
                 return full_path
         except (ImportError, ModuleNotFoundError):
             pass
@@ -207,15 +242,13 @@ def _resolve_app_module(app_name: str, sub_module: str = "urls") -> str | None:
     
     for path in search_paths:
         try:
-            # Verifica se o módulo pai existe
-            parent_module = path.rsplit(".", 1)[0]  # Remove .{sub_module}
-            if importlib.util.find_spec(parent_module):
+            if importlib.util.find_spec(path):
                 return path
         except (ImportError, ModuleNotFoundError, ValueError):
             continue
-    
-    # Fallback: retorna como estava se não conseguiu resolver
-    return f"{app_name}.{sub_module}"
+
+    # Não faz fallback permissivo: discovery estrito exige módulo real.
+    return None
 
 
 def autodiscover(settings: Any) -> "AutoRouter":
@@ -261,18 +294,20 @@ def autodiscover(settings: Any) -> "AutoRouter":
     # Se root_urlconf definido, carrega de lá (modo Django-like)
     if root_urlconf:
         logger.info(f"Loading URLs from root_urlconf: {root_urlconf}")
-        patterns = _load_url_module(root_urlconf)
-        
-        if patterns is None:
-            logger.warning(f"No urlpatterns found in {root_urlconf}")
-            return router
+        patterns = _load_url_module(
+            root_urlconf,
+            app_name=root_urlconf,
+            required=True,
+        )
         
         logger.info(f"Loaded {len(patterns)} URL patterns from {root_urlconf}")
         
         for pattern in patterns:
             if not isinstance(pattern, URLPattern):
-                logger.warning(f"Invalid pattern in {root_urlconf}: {pattern}")
-                continue
+                raise RouteDiscoveryError(
+                    f"urlpatterns inválido em '{root_urlconf}': "
+                    f"item não é URLPattern ({pattern!r})."
+                )
             
             _register_pattern(router, pattern, root_urlconf)
         
@@ -292,24 +327,28 @@ def autodiscover(settings: Any) -> "AutoRouter":
     for app_name in installed_apps:
         # Resolve o caminho completo do app (aceita nomes curtos ou completos)
         url_module = _resolve_app_module(app_name, "urls")
-        
+
         if url_module is None:
-            logger.debug(f"Could not resolve app: {app_name}")
-            continue
-        
-        patterns = _load_url_module(url_module)
-        
-        if patterns is None:
-            logger.debug(f"No urls.py found for app: {app_name} (tried: {url_module})")
-            continue
+            raise RouteDiscoveryError(
+                f"App '{app_name}' sem módulo de rotas válido. "
+                "Crie 'urls.py' com 'urlpatterns' (convenção obrigatória)."
+            )
+
+        patterns = _load_url_module(
+            url_module,
+            app_name=app_name,
+            required=True,
+        )
         
         logger.info(f"Discovered {len(patterns)} URL patterns from {app_name}")
         
         # Registra cada padrão no router
         for pattern in patterns:
             if not isinstance(pattern, URLPattern):
-                logger.warning(f"Invalid pattern in {url_module}: {pattern}")
-                continue
+                raise RouteDiscoveryError(
+                    f"urlpatterns inválido em '{url_module}': "
+                    f"item não é URLPattern ({pattern!r})."
+                )
             
             _register_pattern(router, pattern, app_name)
             discovered_count += 1
@@ -343,11 +382,14 @@ def _register_pattern(
     
     # Se for um include, processa recursivamente
     if isinstance(view, URLInclude):
-        included_patterns = _load_url_module(view.module)
-        if included_patterns:
-            for included in included_patterns:
-                if isinstance(included, URLPattern):
-                    _register_pattern(router, included, app_path, f"{route}/")
+        included_patterns = _load_url_module(
+            view.module,
+            app_name=app_path,
+            required=True,
+        )
+        for included in included_patterns:
+            if isinstance(included, URLPattern):
+                _register_pattern(router, included, app_path, f"{route}/")
         return
     
     # Determina o tipo de view e registra adequadamente

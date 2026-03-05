@@ -18,7 +18,12 @@ class AppSettings(Settings):
         "items",  # Resolvido automaticamente para src.apps.items
     ]
     
-    # URL Configuration (None for auto-discovery, or "src.urls" for manual)
+    # URL Configuration
+    # Convenção única: cada app deve ter urls.py com urlpatterns.
+    # Qualquer import quebrado em urls.py/views.py falha no startup/CLI.
+    # root_urlconf:
+    #   - "src.urls" => roteamento manual via include()/path()
+    #   - None => auto-discovery usando installed_apps + {app}.urls
     root_urlconf: str | None = None
 
     middleware: list[str] = [
