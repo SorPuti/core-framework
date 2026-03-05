@@ -253,7 +253,7 @@ def autodiscover(settings: Any) -> "AutoRouter":
     url_prefix: str = getattr(settings, "url_prefix", "/")
     root_urlconf: str | None = getattr(settings, "root_urlconf", None)
     
-    effective_prefix = "" if root_urlconf else (url_prefix or "").
+    effective_prefix = "" if root_urlconf else (url_prefix or "")
     
     # Cria o router principal
     router = AutoRouter(prefix=effective_prefix)
