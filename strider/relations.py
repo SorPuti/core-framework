@@ -1,9 +1,15 @@
 """
 Relationship helpers for SQLAlchemy models.
 
-Provides a cleaner, Django-like API for defining relationships between models.
-Handles common patterns like ForeignKey, OneToMany, ManyToOne, ManyToMany,
-and OneToOne with sensible defaults and validation.
+Padrão obrigatório para targets de relacionamento: app_label.ModelName (estilo Django).
+- app_label = nome da pasta do app em src.apps (ex: core, strategies)
+- ModelName = nome da classe do model em src.apps.<app_label>.models
+
+Exemplo:
+    Rel.many_to_one("core.User", ...)
+    Rel.one_to_many("strategies.Strategy", ...)
+
+Se o target não seguir esse padrão, o app interrompe (exit 0) com mensagem explicativa.
 
 Example:
     from strider import Model, Field
@@ -53,6 +59,8 @@ Example:
 from __future__ import annotations
 
 import logging
+import re
+import sys
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 from uuid import UUID
 
@@ -66,6 +74,10 @@ if TYPE_CHECKING:
 T = TypeVar("T", bound="Model")
 
 logger = logging.getLogger("strider.relations")
+
+# Padrão obrigatório para targets de relacionamento: app_label.ModelName
+# Corresponde a src.apps.<app_label>.models.<ModelName>
+RELATIONSHIP_TARGET_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 # =============================================================================
@@ -183,190 +195,211 @@ class AssociationTable:
 # Relationship Helpers
 # =============================================================================
 
+def _app_label_from_module(module_name: str) -> str | None:
+    """
+    Extrai o app_label do módulo do modelo.
+    Ex: "src.apps.core.models" -> "core"
+    """
+    if not module_name or "src.apps." not in module_name:
+        return None
+    parts = module_name.split(".")
+    try:
+        idx = parts.index("apps")
+        if idx + 2 < len(parts):
+            return parts[idx + 2]
+    except ValueError:
+        pass
+    return None
+
+
+def _validate_relationship_target(target: str, owner: type, attr_name: str) -> None:
+    """
+    Valida que o target segue o padrão app_label.ModelName.
+    Se não seguir, imprime mensagem explicativa e encerra com sys.exit(0).
+    """
+    if RELATIONSHIP_TARGET_PATTERN.match(target):
+        return
+    app_label = _app_label_from_module(owner.__module__)
+    suggestion = f"{app_label}.{target}" if app_label else f"<app_label>.{target}"
+    msg = (
+        f"\n{'='*60}\n"
+        "Relacionamento fora do padrão obrigatório.\n"
+        f"{'='*60}\n\n"
+        f"  Modelo:  {owner.__module__}.{owner.__name__}\n"
+        f"  Atributo: {attr_name}\n"
+        f"  Valor atual: {target!r}\n\n"
+        "O framework exige o padrão Django: app_label.ModelName\n"
+        "  - app_label = pasta do app em src.apps (ex: core, strategies)\n"
+        "  - ModelName = nome da classe do model em src.apps.<app_label>.models\n\n"
+        f"Substitua por: {suggestion!r}\n\n"
+        "Exemplo: Rel.many_to_one(\"core.User\", ...) em vez de Rel.many_to_one(\"User\", ...)\n"
+        f"{'='*60}\n"
+    )
+    print(msg, file=sys.stderr)
+    sys.exit(0)
+
+
+def _get_registry_from_class(cls: type) -> Any:
+    """Obtém o registry do SQLAlchemy a partir de uma classe mapeada."""
+    for c in cls.__mro__:
+        if hasattr(c, "registry"):
+            return c.registry
+    return None
+
+
+def _get_target_class(owner_class: type, target: str) -> type | None:
+    """Resolve o nome do modelo (string) para a classe, via registry da base."""
+    registry = _get_registry_from_class(owner_class)
+    if registry is None:
+        return None
+    reg = getattr(registry, "_class_registry", None)
+    if reg is None:
+        return None
+    val = reg.get(target)
+    if val is None:
+        return None
+    # Pode ser _MultipleClassMarker com .contents (weakref.ref para classes)
+    if hasattr(val, "contents"):
+        refs = getattr(val, "contents", ())
+        if refs:
+            first_ref = next(iter(refs))
+            return first_ref() if callable(first_ref) else first_ref
+        return None
+    return val
+
+
+def _resolve_foreign_keys_to_columns(
+    owner_class: type,
+    target: str | type,
+    foreign_keys: list[str],
+    side: str,
+) -> list[Any]:
+    """
+    Converte nomes de coluna (strings) em Column objects para relationship().
+    SQLAlchemy 2.0 exige Column objects em foreign_keys, não strings.
+    target pode ser o nome da classe (str) ou a classe (type) para one_to_many.
+    """
+    if side == "many_to_one":
+        return [getattr(owner_class, name) for name in foreign_keys]
+    if isinstance(target, type):
+        target_class = target
+    else:
+        target_class = _get_target_class(owner_class, target)
+    if target_class is None:
+        raise ValueError(
+            f"Não foi possível resolver a classe alvo {target!r} para "
+            "foreign_keys. Use o padrão app_label.ModelName (ex: core.User)."
+        )
+    return [getattr(target_class, name) for name in foreign_keys]
+
+
+class _RelationshipDescriptor:
+    """
+    Descriptor que atrasa a criação do relationship() até __set_name__,
+    quando a classe já existe e podemos resolver foreign_keys (strings -> Columns).
+    Necessário porque SQLAlchemy 2.0 exige Column objects em foreign_keys.
+    """
+
+    def __init__(
+        self,
+        target: str,
+        side: str,
+        kwargs: dict[str, Any],
+        foreign_keys_names: list[str],
+    ):
+        self._target = target
+        self._side = side
+        self._kwargs = kwargs
+        self._foreign_keys_names = foreign_keys_names
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        _validate_relationship_target(self._target, owner, name)
+        resolved_class = _resolve_target_to_class(self._target)
+        fk_columns = _resolve_foreign_keys_to_columns(
+            owner, resolved_class, self._foreign_keys_names, self._side
+        )
+        kwargs = {**self._kwargs, "foreign_keys": fk_columns}
+        rel = relationship(resolved_class, **kwargs)
+        setattr(owner, name, rel)
+
+
+class _SelfReferentialDescriptor:
+    """
+    Descriptor para self_referential que resolve foreign_keys e remote_side
+    (strings) para Column objects em __set_name__.
+    """
+
+    def __init__(
+        self,
+        *,
+        back_populates: str | None,
+        lazy: str,
+        cascade: str,
+        uselist: bool,
+        foreign_keys: str | None,
+        remote_side: str | None,
+    ):
+        self._back_populates = back_populates
+        self._lazy = lazy
+        self._cascade = cascade
+        self._uselist = uselist
+        self._foreign_keys = foreign_keys
+        self._remote_side = remote_side
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        kwargs: dict[str, Any] = {
+            "back_populates": self._back_populates,
+            "lazy": self._lazy,
+            "cascade": self._cascade,
+            "uselist": self._uselist,
+        }
+        if self._foreign_keys:
+            kwargs["foreign_keys"] = [getattr(owner, self._foreign_keys)]
+        if self._remote_side:
+            kwargs["remote_side"] = [getattr(owner, self._remote_side)]
+        argument = "self" if self._back_populates else None
+        setattr(owner, name, relationship(argument, **kwargs))
+
+
 def _resolve_target(target: str) -> str:
     """
-    Resolve target de relacionamento com suporte a lazy loading.
-    
-    Estratégia de resolução (ordem de prioridade):
-    
-    1. **Fully-qualified paths** (3+ pontos): Usados diretamente pelo SQLAlchemy
-       para lazy resolution em runtime. Ex: "src.apps.workspaces.models.Workspace"
-       
-    2. **Sintaxe app.Model** (exatamente 1 ponto): Resolve para nome simples
-       após garantir que o model está registrado no SQLAlchemy registry.
-       Ex: "workspaces.Workspace" → "Workspace" (após importar o módulo)
-       
-    3. **"User" especial**: Resolve via get_user_model() para o User configurado.
-    
-    4. **Nomes simples**: Passados diretamente para SQLAlchemy resolver no mesmo
-       registry/módulo. Funciona apenas se o model estiver no mesmo arquivo ou
-       já registrado.
-    
-    Args:
-        target: Nome do modelo. Formatos suportados:
-            - "src.apps.posts.models.Post" (fully-qualified)
-            - "posts.Post" (app.Model syntax - RECOMENDADO)
-            - "User" (resolve via auth config)
-            - "Post" (nome simples - mesmo módulo)
-    
-    Returns:
-        Target string para SQLAlchemy (nome simples quando possível)
-    
-    Raises:
-        ValueError: Se target "User" não puder ser resolvido
-    
-    Examples:
-        >>> _resolve_target("src.apps.posts.models.Post")
-        "src.apps.posts.models.Post"
-        
-        >>> _resolve_target("posts.Post")  # app.Model syntax
-        "Post"  # Retorna nome simples após garantir que está no registry
-        
-        >>> _resolve_target("User")  # resolve via get_user_model()
-        "User"  # Nome simples após garantir que está no registry
-        
-        >>> _resolve_target("Comment")  # nome simples
-        "Comment"
+    (Deprecated) Mantido para compatibilidade. Use _resolve_target_to_class.
     """
-    # 1. Fully-qualified paths (múltiplos ".") → usar diretamente
-    # Ex: "src.apps.workspaces.models.Workspace"
-    if target.count(".") > 1:
-        logger.debug("Using fully-qualified target: %s", target)
-        return target
-    
-    # 2. Sintaxe app.Model (exatamente um ".") → importar e retornar nome simples
-    # Ex: "workspaces.Workspace" → "Workspace"
-    if "." in target:
-        app_name, model_name = target.split(".", 1)
-        
-        # Tenta importar o model e retorna nome simples
-        if _ensure_model_loaded(app_name, model_name):
-            logger.debug("Resolved '%s' -> '%s' (model loaded into registry)", target, model_name)
-            return model_name
-        
-        # Se não conseguiu carregar, tenta retornar path fully-qualified como fallback
-        resolved = _get_model_path(app_name, model_name)
-        if resolved:
-            logger.debug("Resolved '%s' -> '%s' (fallback to full path)", target, resolved)
-            return resolved
-        
-        # Último recurso: retorna nome simples e espera que esteja no registry
-        logger.debug("Could not load '%s', using simple name '%s' (hope it's in registry)", target, model_name)
-        return model_name
-    
-    # 3. Caso especial: "User" → resolve via get_user_model()
-    if target == "User":
-        try:
-            from strider.auth.models import get_user_model
-            User = get_user_model()
-            # Retorna nome simples - o model já está no registry
-            logger.debug("Resolved 'User' -> '%s' (from auth config)", User.__name__)
-            return User.__name__
-        except Exception as e:
-            # Se não conseguiu resolver, retorna "User" e espera que esteja no registry
-            logger.debug("Could not resolve 'User' via auth config: %s. Using simple name.", e)
-            return "User"
-    
-    # 4. Nomes simples → SQLAlchemy resolve em runtime no mesmo registry
-    # Ex: "Comment" quando definido no mesmo arquivo
-    logger.debug("Using simple target '%s' (SQLAlchemy will resolve in registry)", target)
-    return target
+    cls = _resolve_target_to_class(target)
+    return cls.__name__
+
+
+def _resolve_target_to_class(target: str) -> type:
+    """
+    Resolve target no formato app_label.ModelName para a classe do model.
+    Convenção: model em src.apps.<app_label>.models.<ModelName>.
+    """
+    if not RELATIONSHIP_TARGET_PATTERN.match(target):
+        raise ValueError(
+            "Target de relacionamento deve ser app_label.ModelName "
+            "(ex: core.User, strategies.Strategy). "
+            "O model deve estar em src.apps.<app_label>.models"
+        )
+    from importlib import import_module
+    app_label, model_name = target.split(".", 1)
+    module_path = f"src.apps.{app_label}.models"
+    try:
+        module = import_module(module_path)
+    except ImportError as e:
+        raise ImportError(
+            f"Não foi possível importar {module_path!r} para o target {target!r}. "
+            "Verifique que o app existe em src.apps e que o model está em models.py."
+        ) from e
+    if not hasattr(module, model_name):
+        raise AttributeError(
+            f"Model {model_name!r} não encontrado em {module_path}. "
+            f"Classes disponíveis: {[x for x in dir(module) if not x.startswith('_')]}"
+        )
+    return getattr(module, model_name)
 
 
 # Cache de módulos já tentados (evita importações repetidas)
 _model_import_cache: dict[str, bool] = {}
-
-
-def _ensure_model_loaded(app_name: str, model_name: str) -> bool:
-    """
-    Garante que um model está carregado no SQLAlchemy registry.
-    
-    Tenta importar o módulo do model se ainda não estiver carregado.
-    Usa cache para evitar tentativas repetidas de importação.
-    
-    Args:
-        app_name: Nome da app (ex: "workspaces", "users")
-        model_name: Nome do model (ex: "Workspace", "User")
-    
-    Returns:
-        True se o model foi encontrado/carregado, False caso contrário
-    """
-    import sys
-    from importlib import import_module
-    
-    cache_key = f"{app_name}.{model_name}"
-    
-    # Verifica cache primeiro
-    if cache_key in _model_import_cache:
-        return _model_import_cache[cache_key]
-    
-    # Convenções de módulo a tentar (ordem de prioridade)
-    module_conventions = [
-        f"src.apps.{app_name}.models",
-        f"src.{app_name}.models",
-        f"apps.{app_name}.models",
-        f"{app_name}.models",
-    ]
-    
-    # Primeiro, verifica se algum módulo já está carregado
-    for module_path in module_conventions:
-        if module_path in sys.modules:
-            module = sys.modules[module_path]
-            if hasattr(module, model_name):
-                logger.debug("Found '%s' in already-loaded module '%s'", model_name, module_path)
-                _model_import_cache[cache_key] = True
-                return True
-    
-    # Tenta importar cada convenção
-    for module_path in module_conventions:
-        try:
-            module = import_module(module_path)
-            if hasattr(module, model_name):
-                logger.debug("Loaded '%s' from module '%s'", model_name, module_path)
-                _model_import_cache[cache_key] = True
-                return True
-        except ImportError:
-            continue
-        except Exception as e:
-            logger.debug("Error importing '%s': %s", module_path, e)
-            continue
-    
-    # Não encontrou em nenhuma convenção
-    logger.debug("Could not find model '%s' in app '%s'", model_name, app_name)
-    _model_import_cache[cache_key] = False
-    return False
-
-
-def _get_model_path(app_name: str, model_name: str) -> str | None:
-    """
-    Retorna o path fully-qualified de um model se encontrado.
-    
-    Verifica módulos já carregados para encontrar o path correto.
-    
-    Args:
-        app_name: Nome da app (ex: "workspaces", "users")
-        model_name: Nome do model (ex: "Workspace", "User")
-    
-    Returns:
-        Path fully-qualified ou None se não encontrado
-    """
-    import sys
-    
-    # Convenções de path a tentar
-    conventions = [
-        f"src.apps.{app_name}.models",
-        f"src.{app_name}.models",
-        f"apps.{app_name}.models",
-        f"{app_name}.models",
-    ]
-    
-    for module_path in conventions:
-        if module_path in sys.modules:
-            module = sys.modules[module_path]
-            if hasattr(module, model_name):
-                return f"{module_path}.{model_name}"
-    
-    return None
 
 
 def clear_model_cache() -> None:
@@ -523,7 +556,21 @@ class Rel:
         Note:
             Also known as: belongs_to, ForeignKey relationship
         """
-        resolved = _resolve_target(target)
+        if foreign_keys and isinstance(foreign_keys, list) and all(
+            isinstance(x, str) for x in foreign_keys
+        ):
+            return _RelationshipDescriptor(
+                target,
+                "many_to_one",
+                dict(
+                    back_populates=back_populates,
+                    backref=backref,
+                    lazy=lazy,
+                    uselist=False,
+                ),
+                foreign_keys,
+            )
+        resolved = _resolve_target_to_class(target)
         return relationship(
             resolved,
             back_populates=back_populates,
@@ -583,8 +630,26 @@ class Rel:
         Note:
             Also known as: has_many, reverse ForeignKey
         """
-        resolved = _resolve_target(target)
-        kwargs: dict[str, Any] = {
+        if foreign_keys and isinstance(foreign_keys, list) and all(
+            isinstance(x, str) for x in foreign_keys
+        ):
+            kwargs: dict[str, Any] = {
+                "back_populates": back_populates,
+                "backref": backref,
+                "lazy": lazy,
+                "cascade": cascade,
+                "passive_deletes": passive_deletes,
+            }
+            if order_by:
+                kwargs["order_by"] = order_by
+            return _RelationshipDescriptor(
+                target,
+                "one_to_many",
+                kwargs,
+                foreign_keys,
+            )
+        resolved = _resolve_target_to_class(target)
+        kwargs = {
             "back_populates": back_populates,
             "backref": backref,
             "lazy": lazy,
@@ -592,10 +657,8 @@ class Rel:
             "cascade": cascade,
             "passive_deletes": passive_deletes,
         }
-        
         if order_by:
             kwargs["order_by"] = order_by
-        
         return relationship(resolved, **kwargs)
     
     # Alias for Rails users
@@ -651,7 +714,22 @@ class Rel:
                     back_populates="profile",
                 )
         """
-        resolved = _resolve_target(target)
+        if foreign_keys and isinstance(foreign_keys, list) and all(
+            isinstance(x, str) for x in foreign_keys
+        ):
+            return _RelationshipDescriptor(
+                target,
+                "many_to_one",
+                dict(
+                    back_populates=back_populates,
+                    backref=backref,
+                    lazy=lazy,
+                    cascade=cascade,
+                    uselist=False,
+                ),
+                foreign_keys,
+            )
+        resolved = _resolve_target_to_class(target)
         return relationship(
             resolved,
             back_populates=back_populates,
@@ -734,7 +812,7 @@ class Rel:
             if cached_table is not None:
                 secondary = cached_table
         
-        resolved = _resolve_target(target)
+        resolved = _resolve_target_to_class(target)
         kwargs: dict[str, Any] = {
             "secondary": secondary,
             "back_populates": back_populates,
@@ -805,21 +883,30 @@ class Rel:
         # Note: This is a simplified helper. For complex self-referential
         # relationships, you may need to use relationship() directly with
         # proper remote_side configuration.
+        if (foreign_keys and isinstance(foreign_keys, str)) or (
+            remote_side and isinstance(remote_side, str)
+        ):
+            return _SelfReferentialDescriptor(
+                back_populates=back_populates,
+                lazy=lazy,
+                cascade=cascade,
+                uselist=uselist,
+                foreign_keys=foreign_keys,
+                remote_side=remote_side,
+            )
         kwargs: dict[str, Any] = {
             "back_populates": back_populates,
             "lazy": lazy,
             "cascade": cascade,
             "uselist": uselist,
         }
-        
         if remote_side:
             kwargs["remote_side"] = remote_side
         if foreign_keys:
             kwargs["foreign_keys"] = foreign_keys
-        
-        # For self-referential, we return a partial that needs the class name
-        # This is a limitation - user should use the class name explicitly
-        return relationship(kwargs.pop("back_populates", None) and "self" or None, **kwargs)
+        return relationship(
+            kwargs.pop("back_populates", None) and "self" or None, **kwargs
+        )
 
 
 # =============================================================================
@@ -830,4 +917,5 @@ __all__ = [
     "Rel",
     "AssociationTable",
     "clear_model_cache",
+    "validate_relationship_target_format",
 ]
