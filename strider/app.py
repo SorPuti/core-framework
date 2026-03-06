@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import traceback
 from typing import Any
 from collections.abc import Callable, Sequence
 from contextlib import asynccontextmanager
@@ -683,7 +684,8 @@ class StrideApp:
             request: Request,
             exc: Exception,
         ) -> JSONResponse:
-            # Sempre logar no servidor (com traceback); nunca expor detalhes na resposta
+            # Garantir que o traceback apareça no console (stderr), independente da config de logging
+            traceback.print_exc(file=sys.stderr)
             app_logger.exception("Unhandled exception: %s", exc)
             return JSONResponse(
                 status_code=500,

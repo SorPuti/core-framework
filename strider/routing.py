@@ -50,6 +50,9 @@ logger = logging.getLogger("strider.routing")
 # Cache para modelos parciais (PATCH)
 _partial_model_cache: dict[type, type] = {}
 
+# Cache for list item schema (when output_schema has list_include / list_exclude)
+_list_item_schema_cache: dict[tuple[type, frozenset[str]], type[BaseModel]] = {}
+
 # Cache for model-based fallback schemas (OpenAPI docs when user does not set input_schema/output_schema)
 _fallback_schemas_cache: dict[type, tuple[type[BaseModel], type[BaseModel]]] = {}
 
@@ -186,6 +189,42 @@ def _make_partial_model(schema: type[BaseModel]) -> type[BaseModel]:
     
     _partial_model_cache[schema] = partial_model
     return partial_model
+
+
+def _get_list_item_schema(output_schema: type[BaseModel]) -> type[BaseModel]:
+    """
+    Retorna o schema a usar para cada item da listagem.
+    Se o output_schema define list_include ou list_exclude (OutputSchema),
+    cria um modelo com o subconjunto de campos; senão retorna o próprio output_schema.
+    """
+    list_include = getattr(output_schema, "list_include", None)
+    list_exclude = getattr(output_schema, "list_exclude", None)
+    if not list_include and not list_exclude:
+        return output_schema
+    all_names = set(output_schema.model_fields.keys())
+    if list_include is not None:
+        names = all_names & set(list_include)
+    else:
+        names = all_names - set(list_exclude)
+    if not names:
+        return output_schema
+    key = (output_schema, frozenset(names))
+    if key in _list_item_schema_cache:
+        return _list_item_schema_cache[key]
+    fields: dict[str, Any] = {}
+    for name in sorted(names):
+        if name not in output_schema.model_fields:
+            continue
+        fi = output_schema.model_fields[name]
+        default = ... if fi.is_required() else fi.default
+        fields[name] = (fi.annotation, default)
+    list_item_model = create_model(
+        f"{output_schema.__name__}ListItem",
+        __base__=OutputSchema,
+        **fields,
+    )
+    _list_item_schema_cache[key] = list_item_model
+    return list_item_model
 
 
 def _resolve_schemas(
@@ -701,8 +740,9 @@ class Router(APIRouter):
         input_schema, output_schema = _resolve_schemas(viewset_class)
         partial_input_schema = _make_partial_model(input_schema) if input_schema else None
         
-        # Response models
-        list_response_model = PaginatedResponse[output_schema] if output_schema else None
+        # Response models (list pode usar subset de campos via list_include/list_exclude)
+        list_item_schema = _get_list_item_schema(output_schema) if output_schema else None
+        list_response_model = PaginatedResponse[list_item_schema] if list_item_schema else None
         detail_response_model = output_schema
         
         # Nome do model para descrições

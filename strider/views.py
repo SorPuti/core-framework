@@ -798,7 +798,7 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         objects = await queryset.offset(offset).limit(page_size).all()
         
         output_schema = self.get_output_schema()
-        items = [output_schema.model_validate(obj).model_dump() for obj in objects]
+        items = [output_schema.dump_for_list(obj) for obj in objects]
         
         return {
             "items": items,
@@ -1218,7 +1218,7 @@ class SearchModelViewSet(ModelViewSet[ModelT, InputT, OutputT]):
         objects = await queryset.offset(offset).limit(page_size).all()
         
         output_schema = self.get_output_schema()
-        items = [output_schema.model_validate(obj).model_dump() for obj in objects]
+        items = [output_schema.dump_for_list(obj) for obj in objects]
         
         return {
             "items": items,

@@ -84,9 +84,11 @@ class AdminSessionMiddleware(BaseHTTPMiddleware):
     def _error_response(self, exc: Exception, path: str) -> JSONResponse:
         """
         Gera uma resposta de erro JSON garantida.
-        Detalhes e traceback vão apenas para o log; a resposta ao cliente é genérica.
+        Traceback vai para stderr e para o log; a resposta ao cliente é genérica.
         """
+        import sys
         tb = traceback.format_exc()
+        traceback.print_exc(file=sys.stderr)
         logger.error(
             "Error in request path=%s type=%s message=%s\n%s",
             path,

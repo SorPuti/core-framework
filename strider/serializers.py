@@ -58,24 +58,45 @@ class OutputSchema(BaseModel):
     
     Use para serializar dados retornados em respostas.
     
+    Opções estilo Django para listagem (evita criar schema separado para list):
+        list_include: se definido, apenas esses campos na resposta de list (GET lista).
+        list_exclude: se definido, esses campos ficam de fora na listagem.
+        Use dump_for_list(obj) para serializar um item da lista.
+    
     Exemplo:
         class UserOutput(OutputSchema):
             id: int
             email: str
             name: str
             created_at: datetime
-            
-            # Campos computados
-            @computed_field
-            @property
-            def display_name(self) -> str:
-                return f"{self.name} <{self.email}>"
+            # Lista retorna só estes campos (sem list_include/list_exclude = retorna todos)
+            list_include = ("id", "name", "email", "created_at")
     """
     
     model_config = ConfigDict(
         from_attributes=True,
         validate_default=True,
     )
+    
+    list_include: ClassVar[set[str] | tuple[str, ...] | None] = None
+    list_exclude: ClassVar[set[str] | tuple[str, ...] | None] = None
+    
+    @classmethod
+    def dump_for_list(cls, obj: Any) -> dict[str, Any]:
+        """
+        Serializa um objeto para uso em resposta de listagem.
+        Respeita list_include / list_exclude quando definidos no schema.
+        """
+        data = cls.model_validate(obj).model_dump()
+        list_exclude = getattr(cls, "list_exclude", None)
+        list_include = getattr(cls, "list_include", None)
+        if list_exclude:
+            excl = set(list_exclude)
+            data = {k: v for k, v in data.items() if k not in excl}
+        if list_include is not None:
+            incl = set(list_include)
+            data = {k: v for k, v in data.items() if k in incl}
+        return data
     
     @classmethod
     def from_orm(cls, obj: Any) -> "OutputSchema":
