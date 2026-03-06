@@ -314,12 +314,27 @@ class _RelationshipDescriptor:
 
     def __set_name__(self, owner: type, name: str) -> None:
         _validate_relationship_target(self._target, owner, name)
-        resolved_class = _resolve_target_to_class(self._target)
-        fk_columns = _resolve_foreign_keys_to_columns(
-            owner, resolved_class, self._foreign_keys_names, self._side
-        )
-        kwargs = {**self._kwargs, "foreign_keys": fk_columns}
-        rel = relationship(resolved_class, **kwargs)
+        try:
+            resolved_class = _resolve_target_to_class(self._target)
+            fk_columns = _resolve_foreign_keys_to_columns(
+                owner, resolved_class, self._foreign_keys_names, self._side
+            )
+            kwargs = {**self._kwargs, "foreign_keys": fk_columns}
+            rel = relationship(resolved_class, **kwargs)
+        except AttributeError:
+            # Import circular: o model alvo ainda não foi definido no módulo.
+            # Passamos string para o SQLAlchemy resolver depois e foreign_keys como callable.
+            target_str = self._target
+            fk_names = self._foreign_keys_names
+            side = self._side
+
+            def _lazy_foreign_keys() -> list[Any]:
+                cls = _resolve_target_to_class(target_str)
+                return _resolve_foreign_keys_to_columns(owner, cls, fk_names, side)
+
+            lazy_target = _target_to_lazy_string(self._target)
+            kwargs = {**self._kwargs, "foreign_keys": _lazy_foreign_keys}
+            rel = relationship(lazy_target, **kwargs)
         setattr(owner, name, rel)
 
 
@@ -396,6 +411,14 @@ def _resolve_target_to_class(target: str) -> type:
             f"Classes disponíveis: {[x for x in dir(module) if not x.startswith('_')]}"
         )
     return getattr(module, model_name)
+
+
+def _target_to_lazy_string(target: str) -> str:
+    """Converte app_label.ModelName em path completo para resolução tardia do SQLAlchemy."""
+    if not RELATIONSHIP_TARGET_PATTERN.match(target):
+        return target
+    app_label, model_name = target.split(".", 1)
+    return f"src.apps.{app_label}.models.{model_name}"
 
 
 # Cache de módulos já tentados (evita importações repetidas)
