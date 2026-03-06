@@ -42,6 +42,22 @@ ModelT = TypeVar("ModelT")
 InputT = TypeVar("InputT", bound=InputSchema)
 OutputT = TypeVar("OutputT", bound=OutputSchema)
 
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Merge recursivo: override sobrescreve base; dicts aninhados são mesclados (listas substituem)."""
+    out = dict(base)
+    for key, value in override.items():
+        if (
+            key in out
+            and isinstance(out[key], dict)
+            and isinstance(value, dict)
+            and not isinstance(out[key], list)
+        ):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
 # Registry for viewsets pending validation
 _pending_viewsets: set[type] = set()
 
@@ -336,6 +352,9 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
     # Validadores assíncronos customizados por campo
     # Formato: {"field_name": [validator1, validator2]}
     field_validators: ClassVar[dict[str, list[AsyncValidator]]] = {}
+    
+    # Campos cujo valor é struct/JSON: em PUT e PATCH faz merge profundo com o atual (evita perda de dados)
+    struct_merge_fields: ClassVar[list[str]] = []
     
     # Schema/Model Validation
     # Se True, valida schemas contra model no startup (falha em DEBUG)
@@ -912,13 +931,23 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         # 3. Hook antes de atualizar
         validated_data = await self.perform_update_validation(validated_data, obj, db)
         
-        # 4. Atualiza o objeto
+        # 4. Merge profundo para struct_merge_fields (PUT/PATCH não perdem dados aninhados)
+        struct_merge_fields = getattr(self, "struct_merge_fields", []) or []
+        for key in struct_merge_fields:
+            if key not in validated_data:
+                continue
+            current = getattr(obj, key, None) or {}
+            new_val = validated_data[key]
+            if isinstance(current, dict) and isinstance(new_val, dict):
+                validated_data[key] = _deep_merge(current, new_val)
+        
+        # 5. Atualiza o objeto
         for field, value in validated_data.items():
             setattr(obj, field, value)
         
         await obj.save(db)
         
-        # 5. Hook após atualizar
+        # 6. Hook após atualizar
         await self.after_update(obj, db)
         
         output_schema = self.get_output_schema()
