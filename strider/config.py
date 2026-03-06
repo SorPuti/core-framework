@@ -453,6 +453,10 @@ class Settings(BaseSettings):
         default=True,
         description="Emitir warning se AuthenticationMiddleware não estiver configurado",
     )
+    auth_require_middleware: bool = PydanticField(
+        default=True,
+        description="Se True, a aplicação não inicia sem AuthenticationMiddleware (evita request.user sem middleware). Defina False apenas se não usar request.user/get_request_user.",
+    )
 
     # =========================================================================
     # Middleware (Django-style)

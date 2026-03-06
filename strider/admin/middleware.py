@@ -84,24 +84,21 @@ class AdminSessionMiddleware(BaseHTTPMiddleware):
     def _error_response(self, exc: Exception, path: str) -> JSONResponse:
         """
         Gera uma resposta de erro JSON garantida.
-        
-        NUNCA deixa o middleware sem retornar um Response.
+        Detalhes e traceback vão apenas para o log; a resposta ao cliente é genérica.
         """
-        error_type = type(exc).__name__
-        error_message = str(exc)
-        
-        # Log detalhado para debug
         tb = traceback.format_exc()
-        logger.error(f"Admin middleware error response for {path}:\n{tb}")
-        
+        logger.error(
+            "Error in request path=%s type=%s message=%s\n%s",
+            path,
+            type(exc).__name__,
+            str(exc),
+            tb,
+        )
         return JSONResponse(
             status_code=500,
             content={
-                "detail": error_message or "Internal server error",
+                "detail": "Internal server error",
                 "code": "internal_error",
-                "type": error_type,
-                "path": path,
-                "traceback": tb,
             },
         )
     

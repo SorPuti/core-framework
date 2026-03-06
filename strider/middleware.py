@@ -234,19 +234,16 @@ class BaseMiddleware(BaseHTTPMiddleware):
             return self._fallback_error_response(request, exc)
     
     def _fallback_error_response(self, request: Request, exc: Exception) -> Response:
-        """Resposta de erro garantida quando on_error não trata."""
+        """Resposta de erro garantida quando on_error não trata. Detalhes só no log."""
         from starlette.responses import JSONResponse
-        import traceback
-        
-        logger.exception(f"Unhandled error in {self.name}: {exc}")
-        
+
+        logger.exception("Unhandled error in %s (path=%s): %s", self.name, request.url.path, exc)
+
         return JSONResponse(
             status_code=500,
             content={
-                "detail": str(exc) or "Internal server error",
-                "type": type(exc).__name__,
-                "middleware": self.name,
-                "path": str(request.url.path),
+                "detail": "Internal server error",
+                "code": "internal_error",
             },
         )
     

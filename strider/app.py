@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import sys
 from typing import Any
 from collections.abc import Callable, Sequence
 from contextlib import asynccontextmanager
@@ -118,6 +119,7 @@ class StrideApp:
         
         # Store settings on app.state for dependency injection
         # Evita chamadas get_settings() em hot paths
+        self._auth_middleware_added = False
         
         # ── Step 2: Create FastAPI app ──
         self.app = FastAPI(
@@ -149,6 +151,8 @@ class StrideApp:
         # ── Step 6: Legacy middleware format ──
         if middlewares:
             for middleware_class, middleware_kwargs in middlewares:
+                if self._is_auth_middleware_class(middleware_class):
+                    self._auth_middleware_added = True
                 self.app.add_middleware(middleware_class, **middleware_kwargs)
         
         # ── Step 7: Exception handlers ──
@@ -190,13 +194,9 @@ class StrideApp:
         
         Boot sequence:
         0. Auto-configure auth (if user_model is set in Settings)
+        0.5. Valida presença do AuthenticationMiddleware (se auth_require_middleware)
         1. Schema validation (fail-fast)
-        1.5. Load models via registry (lazy, apenas se necessário)
-        2. Database initialization
-        3. Table creation (if configured)
-        4. Tenancy setup
-        5. Auto-collect permissions (if configured)
-        6. User startup callbacks
+        ...
         """
         app_logger.info(
             "Starting %s (environment=%s, debug=%s)",
@@ -206,13 +206,25 @@ class StrideApp:
         )
         
         # ── Step 0: Auto-configure auth from Settings (plug-and-play) ──
-        # This allows user_model to be configured in Settings without
-        # needing to call configure_auth() manually in main.py
         from strider.config import auto_configure_auth, is_auth_configured
         
         if not is_auth_configured() and getattr(self.settings, "user_model", None):
             if auto_configure_auth(self.settings):
                 app_logger.debug("Auth auto-configured from Settings")
+        
+        # ── Step 0.5: Exigir AuthenticationMiddleware quando configurado ──
+        if not self._auth_middleware_added:
+            msg = (
+                "AuthenticationMiddleware não está configurado. "
+                "Rotas que usam request.user ou get_request_user() precisam deste middleware. "
+                "Adicione: StrideApp(middleware=['auth']) ou em settings: middleware=['auth']. "
+                "Se não usar autenticação, defina auth_require_middleware=False em settings."
+            )
+            if getattr(self.settings, "auth_warn_missing_middleware", True):
+                app_logger.warning(msg)
+            if getattr(self.settings, "auth_require_middleware", True):
+                app_logger.error("Startup bloqueado: %s", msg)
+                sys.exit(1)
         
         # ── Step 1: Schema/Model validation (before DB for fail-fast) ──
         if getattr(self.settings, "strict_validation", self.settings.debug):
@@ -433,11 +445,38 @@ class StrideApp:
         """
         from strider.middleware import configure_middleware, apply_middlewares
         
+        for item in middleware_list:
+            if isinstance(item, tuple):
+                m, _ = item
+            else:
+                m = item
+            if self._is_auth_middleware(m):
+                self._auth_middleware_added = True
+                break
+            if isinstance(m, type) and self._is_auth_middleware_class(m):
+                self._auth_middleware_added = True
+                break
+        
         # Configura no registry global
         configure_middleware(middleware_list, clear_existing=True)
         
         # Aplica ao app
         apply_middlewares(self.app)
+    
+    def _is_auth_middleware(self, m: str | type) -> bool:
+        """Verifica se o item é auth ou optional_auth (string ou path)."""
+        if isinstance(m, str):
+            return (
+                m in ("auth", "optional_auth", "authentication")
+                or "AuthenticationMiddleware" in m
+                or "OptionalAuthenticationMiddleware" in m
+            )
+        return False
+    
+    def _is_auth_middleware_class(self, cls: type) -> bool:
+        """Verifica se a classe é AuthenticationMiddleware ou OptionalAuthenticationMiddleware."""
+        name = getattr(cls, "__name__", "")
+        return name in ("AuthenticationMiddleware", "OptionalAuthenticationMiddleware")
     
     def _setup_exception_handlers(
         self,
@@ -644,19 +683,7 @@ class StrideApp:
             request: Request,
             exc: Exception,
         ) -> JSONResponse:
-            # NUNCA expor traceback em produção, mesmo se debug=True acidental
-            if self.settings.debug and not self.settings.is_production:
-                import traceback
-                return JSONResponse(
-                    status_code=500,
-                    content={
-                        "detail": str(exc),
-                        "code": "internal_error",
-                        "type": type(exc).__name__,
-                        "traceback": traceback.format_exc(),
-                    },
-                )
-            # Log the error server-side, return generic message to client
+            # Sempre logar no servidor (com traceback); nunca expor detalhes na resposta
             app_logger.exception("Unhandled exception: %s", exc)
             return JSONResponse(
                 status_code=500,
