@@ -907,6 +907,12 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         obj = await self.get_object(db, **kwargs)
         await self.check_object_permissions(request, obj, "update")
         
+        # Body pode vir como dict (raw) ou modelo Pydantic (FastAPI injeta o schema parcial)
+        if hasattr(data, "model_dump"):
+            data = data.model_dump(exclude_unset=partial)
+        elif not isinstance(data, dict):
+            data = dict(data) if data else {}
+        
         # 1. Valida com Pydantic
         input_schema = self.get_input_schema()
         
@@ -917,7 +923,7 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
             for field in input_schema.model_fields:
                 if hasattr(obj, field):
                     current_data[field] = getattr(obj, field)
-            # Mescla com novos dados
+            # Mescla com novos dados (data já é dict aqui)
             merged_data = {**current_data, **data}
             pydantic_validated = input_schema.model_validate(merged_data)
             data_dict = {k: v for k, v in pydantic_validated.model_dump().items() if k in data}

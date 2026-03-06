@@ -29,6 +29,38 @@ from strider.urls import autodiscover
 app_logger = logging.getLogger("strider.app")
 
 
+def _normalize_cors_origins(origins: list[str] | None) -> list[str]:
+    """Normaliza origens: sem barra final + com barra final, para evitar falha por diferença do browser."""
+    if not origins:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for o in origins:
+        if not o or not isinstance(o, str):
+            continue
+        o = o.strip().rstrip("/")
+        if not o:
+            continue
+        if o not in seen:
+            seen.add(o)
+            out.append(o)
+        with_slash = o + "/"
+        if with_slash not in seen:
+            seen.add(with_slash)
+            out.append(with_slash)
+    return out
+
+
+def _default_dev_cors_origins() -> list[str]:
+    """Origens padrão em desenvolvimento quando cors_origins está vazio."""
+    ports = (3000, 5173, 8080, 8081, 8000)
+    origins = []
+    for port in ports:
+        origins.append(f"http://localhost:{port}")
+        origins.append(f"http://127.0.0.1:{port}")
+    return origins
+
+
 class StrideApp:
     """
     Aplicação principal do framework.
@@ -402,13 +434,23 @@ class StrideApp:
             await close_database()
     
     def _setup_cors(self) -> None:
-        """Configura CORS."""
+        """Configura CORS (plug-and-play: normaliza origens, em dev aceita localhost em qualquer porta)."""
+        origins = _normalize_cors_origins(self.settings.cors_origins)
+        allow_origin_regex = None
+        if getattr(self.settings, "is_development", False) or self.settings.debug:
+            if not origins:
+                origins = _default_dev_cors_origins()
+            if getattr(self.settings, "cors_dev_allow_any_localhost_port", True):
+                allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+        allow_methods = getattr(self.settings, "cors_allow_methods", None) or ["*"]
+        allow_headers = getattr(self.settings, "cors_allow_headers", None) or ["*"]
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=self.settings.cors_origins,
+            allow_origins=origins,
             allow_credentials=self.settings.cors_allow_credentials,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_methods=allow_methods,
+            allow_headers=allow_headers,
+            allow_origin_regex=allow_origin_regex,
         )
     
     def _setup_tenancy_middleware(self) -> None:

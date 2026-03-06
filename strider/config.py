@@ -349,6 +349,10 @@ class Settings(BaseSettings):
         default=["*"],
         description="Headers permitidos em CORS",
     )
+    cors_dev_allow_any_localhost_port: bool = PydanticField(
+        default=True,
+        description="Em dev: aceita qualquer porta em localhost/127.0.0.1 (regex). Desative para restringir.",
+    )
     
     # =========================================================================
     # Authentication
