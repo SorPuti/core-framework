@@ -285,6 +285,138 @@ cover = AdvancedField.file("cover_url", upload_to=course_path)
 
 **Ver também:** [Storage](37-storage.md) para configuração de GCS e signed URLs.
 
+## StructSchema em models
+
+Campos JSON estruturados com validação, defaults e acesso tipado. O banco armazena JSON/JSONB; em Python você usa um schema (classe herdando de `StructSchema`) para definir formato, validação e conversão.
+
+### Definir o schema
+
+Em `strider.schema` use os campos disponíveis: `StringField`, `IntegerField`, `FloatField`, `BooleanField`, `ListField`, `NestedField`, `DictField`, `ChoiceField`.
+
+```python
+from strider.schema import (
+    StructSchema,
+    StringField,
+    BooleanField,
+    IntegerField,
+    NestedField,
+)
+
+class UserPreferences(StructSchema):
+    theme = StringField(
+        default="system",
+        choices=["light", "dark", "system"],
+    )
+    language = StringField(default="pt-BR", aliases=["lang"])
+    notifications = NestedField({
+        "email": BooleanField(default=True),
+        "push": BooleanField(default=True),
+    })
+    items_per_page = IntegerField(default=20, min_value=5, max_value=100)
+```
+
+- **aliases**: nomes alternativos ao ler do banco (ex.: `"lang"` → `language`). Útil para migrar dados antigos sem alterar o schema.
+- **NestedField**: objeto aninhado; pode ser um `dict` de campos ou outra classe `StructSchema`.
+- Campos ausentes no JSON usam o **default** do campo; campos desconhecidos ficam em `_extra_data` e são preservados ao salvar.
+
+### Usar na model com tipagem
+
+Use `Field.struct(schema_class)` e anote com `Mapped[SeuSchema]`:
+
+```python
+from strider import Model, Field
+from strider.schema import StructSchema, StringField, BooleanField, NestedField
+from sqlalchemy.orm import Mapped
+
+class UserPreferences(StructSchema):
+    theme = StringField(default="system", choices=["light", "dark", "system"])
+    language = StringField(default="pt-BR", aliases=["lang"])
+    notifications = NestedField({
+        "email": BooleanField(default=True),
+        "push": BooleanField(default=True),
+    })
+
+class User(Model):
+    __tablename__ = "users"
+    id: Mapped[int] = Field.pk()
+    name: Mapped[str] = Field.string(255)
+    preferences: Mapped[dict] = Field.struct(
+        UserPreferences,
+        default=None,   # opcional; se None, usa UserPreferences.default_dict()
+        nullable=False,
+        index=False,    # True = índice GIN no PostgreSQL
+    )
+```
+
+Parâmetros de `Field.struct()`:
+
+| Parâmetro     | Descrição |
+|---------------|-----------|
+| `schema_class`| Classe que herda de `StructSchema`. |
+| `default`     | `None` (usa defaults do schema), `dict` ou instância do schema. |
+| `nullable`    | Se a coluna pode ser NULL. |
+| `index`       | Se deve criar índice GIN no PostgreSQL (útil para filtros em JSON). |
+
+O tipo na coluna é **AdaptiveJSON**: no PostgreSQL vira **JSONB**, nos demais dialetos **JSON**. A anotação `Mapped[dict]` reflete o que o banco guarda; para tipo “schema” use `Mapped[dict]` e converta com o schema quando precisar de atributos tipados.
+
+### Acesso tipado e leitura/gravação
+
+O valor carregado do banco é um **dict**. Para acesso por atributos e validação, converta com o schema:
+
+```python
+# Carregar do banco (instance.preferences é um dict)
+prefs = UserPreferences.from_dict_safe(user.preferences)
+prefs.theme           # "system"
+prefs.notifications.email  # True
+
+# Atribuir: pode passar dict (será normalizado/validado pelo default_factory ao inserir)
+user.preferences = {"theme": "dark", "language": "en"}
+# Ou construir e serializar
+prefs = UserPreferences(theme="dark", language="en")
+user.preferences = prefs.to_dict()
+```
+
+- **from_dict_safe**: tolerante a dados faltando, aliases e campos extras; preenche com defaults e mapeia aliases.
+- **to_dict**: serializa para gravar no banco; usa sempre os nomes oficiais dos campos e inclui `_extra_data`.
+
+Validação ao atribuir em código pode ser feita com `prefs.validate()` ou `prefs.is_valid()`; ao definir via model, o default é montado com `schema_class.default_dict()` e, se você passar dict, pode normalizar com `schema_class.from_dict_safe(d).to_dict()` antes de setar.
+
+### Migrações
+
+- A coluna gerada é **JSON/JSONB** (tipo interno `AdaptiveJSON`). O sistema de migrações trata esse tipo como equivalente a JSON/JSONB (`state.EQUIVALENT_TYPES`: `JSON`, `JSONB`, `ADAPTIVEJSON`).
+- **makemigrations** gera `CreateTable` / `AddColumn` com tipo mapeado para o dialeto (ex.: PostgreSQL → JSONB).
+- **Não existe migração automática do “formato” do StructSchema**: mudar campos ou defaults no Python não altera o banco. Só a coluna (JSON) existe no schema do BD.
+- **Evolução de dados**: ao adicionar um novo campo no StructSchema, registros antigos continuam com o JSON que tinham; ao serem lidos, `from_dict_safe` preenche o novo campo com o **default** definido no schema. Renomear campos pode ser tratado com **aliases** (ex.: alias `"lang"` para `language`) para compatibilidade com dados antigos.
+
+Resumo: migrações cuidam apenas da coluna JSON/JSONB; a “migração” dos dados dentro do JSON é feita em tempo de leitura pelo schema (defaults + aliases).
+
+### Filtros em QuerySet (path JSON)
+
+Colunas com `struct_schema` no `info` são tratadas como JSON para filtros por path:
+
+```python
+# Filtro por campo interno do struct
+users = await User.objects.filter(preferences__theme="dark").all()
+users = await User.objects.filter(preferences__language__exact="pt-BR").all()
+```
+
+O mesmo mecanismo de path JSON usado em `AdvancedField.json_field()` se aplica a campos definidos com `Field.struct()`.
+
+### Admin
+
+No admin, colunas que têm `info["struct_schema"]` usam o widget **struct_editor** para editar o JSON de acordo com os campos do schema (tipos e opções vêm de `_fields` do schema).
+
+### Resumo
+
+| Aspecto        | Comportamento |
+|----------------|----------------|
+| Tipo no banco  | JSON (SQLite/MySQL) ou JSONB (PostgreSQL). |
+| Tipo em Python | `dict` na coluna; use `Schema.from_dict_safe()` para acesso tipado. |
+| Default        | `schema_class.default_dict()` ou o que você passar em `default`. |
+| Migrações      | Apenas coluna JSON/JSONB; evolução de “schema” via defaults e aliases ao ler. |
+| Filtros        | Suporte a path (`preferences__theme=...`). |
+| Admin          | Widget `struct_editor` para edição do struct. |
+
 ## Complete Model Example
 
 ```python
@@ -342,6 +474,9 @@ class Post(Model):
 | `Field.float()` | `FLOAT` | `REAL` | `FLOAT` |
 | `AdvancedField.uuid_pk()` | `UUID` | `VARCHAR(36)` | `VARCHAR(36)` |
 | `AdvancedField.json_field()` | `JSONB` | `JSON` | `JSON` |
+| `Field.struct(StructSchema)` | `JSONB` | `JSON` | `JSON` |
+
+(O campo struct usa internamente `AdaptiveJSON`; no PostgreSQL vira JSONB, nos demais JSON.)
 
 ## Next
 
