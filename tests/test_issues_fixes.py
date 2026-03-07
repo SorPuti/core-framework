@@ -277,6 +277,32 @@ class TestIssue5MigrationSerialization:
         # Should have proper serialization
         assert "strider.datetime.timezone.now" in code or "timezone.now" in code
 
+    def test_serialize_nested_textchoices_in_dict_default(self):
+        """TextChoices inside nested dict/list should serialize to literal values."""
+        from strider.choices import TextChoices
+        from strider.migrations.operations import _serialize_default
+
+        class NegotiationMode(TextChoices):
+            NORMAL = "normal", "Normal"
+
+        class RiskProfile(TextChoices):
+            CONSERVATIVE = "conservative", "Conservative"
+
+        value = {
+            "modo": NegotiationMode.NORMAL,
+            "nested": {
+                "perfil_risco": RiskProfile.CONSERVATIVE,
+                "arr": [NegotiationMode.NORMAL],
+            },
+        }
+
+        serialized = _serialize_default(value)
+
+        assert "NegotiationMode.NORMAL" not in serialized
+        assert "RiskProfile.CONSERVATIVE" not in serialized
+        assert "'normal'" in serialized
+        assert "'conservative'" in serialized
+
 
 class TestIssue6ResetDbCascade:
     """Issue #6: reset_db should use CASCADE for PostgreSQL."""

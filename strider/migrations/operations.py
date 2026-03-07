@@ -5,7 +5,10 @@ import hashlib
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from decimal import Decimal
+from enum import Enum
 from typing import Any, Callable, ClassVar, TYPE_CHECKING
+from uuid import UUID
 from collections.abc import Awaitable
 
 from sqlalchemy import text
@@ -42,6 +45,66 @@ def _get_compiler(dialect: str) -> "DialectCompiler":
 
 # Global registry for imports needed during serialization
 _SERIALIZATION_IMPORTS: set[str] = set()
+
+def _normalize_default_value(value: Any) -> Any:
+    """
+    Normalize default values to safe Python literals.
+
+    This prevents generated migration files from containing references
+    to non-imported symbols (e.g. TextChoices members inside struct defaults).
+    """
+    from datetime import datetime, date, time
+
+    if isinstance(value, Enum):
+        return _normalize_default_value(value.value)
+
+    if value is None or isinstance(value, (bool, str, int, float)):
+        return value
+
+    if isinstance(value, UUID):
+        return str(value)
+
+    if isinstance(value, Decimal):
+        return float(value)
+
+    # Static datetime/date/time values are not portable in migration source;
+    # existing behavior already drops them, keep the same strategy.
+    if isinstance(value, (datetime, date, time)):
+        return None
+
+    if isinstance(value, dict):
+        normalized: dict[Any, Any] = {}
+        for k, v in value.items():
+            key = _normalize_default_value(k)
+            if not isinstance(key, (str, int, float, bool)) and key is not None:
+                key = str(key)
+            normalized[key] = _normalize_default_value(v)
+        return normalized
+
+    if isinstance(value, list):
+        return [_normalize_default_value(v) for v in value]
+
+    if isinstance(value, tuple):
+        return tuple(_normalize_default_value(v) for v in value)
+
+    if isinstance(value, set):
+        normalized_set = [_normalize_default_value(v) for v in value]
+        return sorted(normalized_set, key=repr)
+
+    if hasattr(value, "model_dump") and callable(value.model_dump):
+        try:
+            return _normalize_default_value(value.model_dump())
+        except Exception:
+            pass
+
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        try:
+            return _normalize_default_value(value.to_dict())
+        except Exception:
+            pass
+
+    # Last-resort fallback to a plain string literal (safe for source generation).
+    return str(value)
 
 
 def _serialize_default(value: Any) -> str:
@@ -80,6 +143,8 @@ def _serialize_default(value: Any) -> str:
         except Exception:
             return "None"
     
+    value = _normalize_default_value(value)
+
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, (datetime, date, time)):
