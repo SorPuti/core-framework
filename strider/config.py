@@ -812,6 +812,14 @@ class Settings(BaseSettings):
         default=4,
         description="Tarefas concorrentes por worker",
     )
+    task_shutdown_grace_seconds: float = PydanticField(
+        default=5.0,
+        description="Tempo máximo para shutdown gracioso de worker/scheduler (segundos)",
+    )
+    task_shutdown_force_seconds: float = PydanticField(
+        default=2.0,
+        description="Tempo adicional após cancelamento forçado antes de encerrar (segundos)",
+    )
     task_result_backend: Literal["none", "redis", "database"] = PydanticField(
         default="none",
         description="Onde armazenar resultados de tasks",

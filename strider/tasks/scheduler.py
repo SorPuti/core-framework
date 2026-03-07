@@ -11,7 +11,6 @@ from typing import Any
 import asyncio
 import logging
 import signal
-import sys
 
 from strider.tasks.base import PeriodicTask, TaskMessage
 from strider.config import get_settings
@@ -43,7 +42,11 @@ class TaskScheduler:
         self._running = False
         self._shutdown_event = asyncio.Event()
         self._task: asyncio.Task | None = None
-        self._signal_received = False
+        self._signal_count = 0
+        self._stop_task: asyncio.Task | None = None
+        self._shutdown_grace_seconds = float(
+            getattr(self._settings, "task_shutdown_grace_seconds", 5.0)
+        )
     
     async def start(self) -> None:
         """Start the scheduler."""
@@ -85,9 +88,10 @@ class TaskScheduler:
             status = "enabled" if task.enabled else "disabled"
             logger.info(f"  - {name}: {schedule} ({status})")
     
-    async def stop(self) -> None:
+    async def stop(self, *, force: bool = False) -> None:
         """Stop the scheduler."""
         if not self._running:
+            self._shutdown_event.set()
             return
         
         logger.info("Stopping scheduler...")
@@ -96,9 +100,14 @@ class TaskScheduler:
         if self._task:
             self._task.cancel()
             try:
-                await self._task
+                await asyncio.wait_for(
+                    self._task,
+                    timeout=0.1 if force else max(0.1, self._shutdown_grace_seconds),
+                )
             except asyncio.CancelledError:
                 pass
+            except asyncio.TimeoutError:
+                logger.warning("Scheduler task stop timeout reached")
             self._task = None
         
         self._shutdown_event.set()
@@ -115,18 +124,17 @@ class TaskScheduler:
     
     def _handle_signal(self) -> None:
         """Handle shutdown signal."""
-        if self._signal_received:
-            # Second signal - force exit
-            logger.warning("Forced shutdown")
-            sys.exit(1)
-        
-        self._signal_received = True
-        logger.info("Received shutdown signal (press Ctrl+C again to force)")
-        
-        # Schedule stop in the event loop
-        asyncio.get_running_loop().call_soon_threadsafe(
-            lambda: asyncio.create_task(self.stop())
-        )
+        self._signal_count += 1
+        loop = asyncio.get_running_loop()
+        if self._signal_count == 1:
+            logger.info("Received shutdown signal (press Ctrl+C again to force)")
+            if self._stop_task is None or self._stop_task.done():
+                self._stop_task = loop.create_task(self.stop(force=False))
+            return
+        logger.warning("Forced shutdown requested")
+        if self._stop_task is None or self._stop_task.done():
+            self._stop_task = loop.create_task(self.stop(force=True))
+        self._shutdown_event.set()
     
     async def _scheduler_loop(self) -> None:
         """Main scheduler loop."""

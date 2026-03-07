@@ -1,6 +1,6 @@
 [project]
 name = "strider-framework"
-version = "0.17.93"
+version = "0.17.94"
 description = "Strider - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.10,<4.0"
 readme = "README.md"

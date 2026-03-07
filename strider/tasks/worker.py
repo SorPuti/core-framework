@@ -62,8 +62,16 @@ class TaskWorker:
         self._consumer = None
         self._semaphore: asyncio.Semaphore | None = None
         self._active_tasks: set[asyncio.Task] = set()
+        self._signal_count = 0
+        self._stop_task: asyncio.Task | None = None
         self._tasks_processed = 0
         self._tasks_errors = 0
+        self._shutdown_grace_seconds = float(
+            getattr(self._settings, "task_shutdown_grace_seconds", 5.0)
+        )
+        self._shutdown_force_seconds = float(
+            getattr(self._settings, "task_shutdown_force_seconds", 2.0)
+        )
         
         # Worker identity for heartbeat
         import uuid
@@ -112,6 +120,9 @@ class TaskWorker:
         last_error = None
         
         for attempt in range(max_retries):
+            if not self._running:
+                logger.info("Shutdown requested during Kafka connection attempts")
+                break
             try:
                 # Create consumer using the configured backend (aiokafka or confluent)
                 self._consumer = create_consumer(
@@ -141,11 +152,23 @@ class TaskWorker:
                         f"Failed to connect to Kafka (attempt {attempt + 1}/{max_retries}): {e}. "
                         f"Retrying in {retry_delay}s..."
                     )
-                    await asyncio.sleep(retry_delay)
+                    try:
+                        await asyncio.wait_for(
+                            self._shutdown_event.wait(),
+                            timeout=retry_delay,
+                        )
+                        if not self._running:
+                            break
+                    except asyncio.TimeoutError:
+                        pass
                     retry_delay = min(retry_delay * 2, 60)  # Max 60s delay
                 else:
                     logger.error(f"Failed to connect to Kafka after {max_retries} attempts: {last_error}")
                     raise
+
+        if not self._running or self._consumer is None:
+            self._shutdown_event.set()
+            return
         
         logger.info(
             f"Worker started: queues={self._queues}, concurrency={self._concurrency}"
@@ -155,9 +178,10 @@ class TaskWorker:
         await self._register_heartbeat()
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
     
-    async def stop(self) -> None:
+    async def stop(self, *, force: bool = False) -> None:
         """Stop the worker gracefully."""
         if not self._running:
+            self._shutdown_event.set()
             return
         
         logger.info("Stopping worker...")
@@ -166,7 +190,31 @@ class TaskWorker:
         # Wait for active tasks to complete
         if self._active_tasks:
             logger.info(f"Waiting for {len(self._active_tasks)} active tasks...")
-            await asyncio.gather(*self._active_tasks, return_exceptions=True)
+            if force:
+                for task in list(self._active_tasks):
+                    task.cancel()
+                await asyncio.gather(*list(self._active_tasks), return_exceptions=True)
+            else:
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*list(self._active_tasks), return_exceptions=True),
+                        timeout=max(0.1, self._shutdown_grace_seconds),
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Graceful shutdown timeout reached; cancelling active tasks"
+                    )
+                    for task in list(self._active_tasks):
+                        task.cancel()
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.gather(
+                                *list(self._active_tasks), return_exceptions=True
+                            ),
+                            timeout=max(0.1, self._shutdown_force_seconds),
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("Forced cancellation timeout reached")
         
         # Stop heartbeat
         if self._heartbeat_task:
@@ -176,7 +224,13 @@ class TaskWorker:
         
         # Stop consumer
         if self._consumer:
-            await self._consumer.stop()
+            try:
+                await asyncio.wait_for(
+                    self._consumer.stop(),
+                    timeout=max(0.1, self._shutdown_grace_seconds),
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Consumer stop timeout reached")
             self._consumer = None
         
         self._shutdown_event.set()
@@ -189,12 +243,24 @@ class TaskWorker:
     async def run_forever(self) -> None:
         """Run worker until interrupted."""
         await self.start()
-        await self.wait()
+        try:
+            await self.wait()
+        finally:
+            if self._running:
+                await self.stop()
     
     def _handle_signal(self) -> None:
         """Handle shutdown signal."""
-        logger.info("Received shutdown signal")
-        asyncio.create_task(self.stop())
+        self._signal_count += 1
+        if self._signal_count == 1:
+            logger.info("Received shutdown signal")
+            if self._stop_task is None or self._stop_task.done():
+                self._stop_task = asyncio.create_task(self.stop(force=False))
+            return
+        logger.warning("Second shutdown signal received, forcing stop")
+        if self._stop_task is None or self._stop_task.done():
+            self._stop_task = asyncio.create_task(self.stop(force=True))
+        self._shutdown_event.set()
     
     async def _handle_message(self, message: dict[str, Any]) -> None:
         """Handle incoming task message."""

@@ -548,9 +548,13 @@ async def _run_worker_config(config: WorkerConfig) -> None:
     try:
         _hb_interval = getattr(_settings, "ops_worker_heartbeat_interval", 30)
         _offline_ttl_hours = getattr(_settings, "ops_worker_offline_ttl", 24)
+        _shutdown_grace_seconds = float(
+            getattr(_settings, "task_shutdown_grace_seconds", 5.0)
+        )
     except Exception:
         _hb_interval = 30
         _offline_ttl_hours = 24
+        _shutdown_grace_seconds = 5.0
     
     async def _get_session():
         """Get a DB session, trying both session factories. (Issue #18)"""
@@ -792,6 +796,8 @@ async def _run_worker_config(config: WorkerConfig) -> None:
         # Process batch with retries
         last_error = None
         for attempt in range(config.retry_policy.max_retries + 1):
+            if not _running:
+                return
             try:
                 if config.batch_handler:
                     await config.batch_handler(messages_to_process)
@@ -804,6 +810,8 @@ async def _run_worker_config(config: WorkerConfig) -> None:
             except Exception as e:
                 last_error = e
                 if attempt < config.retry_policy.max_retries:
+                    if not _running:
+                        return
                     delay = config.retry_policy.get_delay(attempt)
                     logger.warning(f"Batch retry {attempt + 1}/{config.retry_policy.max_retries} in {delay}s: {e}")
                     await asyncio.sleep(delay)
@@ -879,6 +887,8 @@ async def _run_worker_config(config: WorkerConfig) -> None:
                 except Exception as e:
                     last_error = e
                     if attempt < config.retry_policy.max_retries:
+                        if not _running:
+                            return
                         delay = config.retry_policy.get_delay(attempt)
                         logger.warning(f"Retry {attempt + 1}/{config.retry_policy.max_retries} in {delay}s: {e}")
                         await asyncio.sleep(delay)
@@ -936,7 +946,13 @@ async def _run_worker_config(config: WorkerConfig) -> None:
         
         # Flush remaining batch
         if batch:
-            await flush_batch()
+            try:
+                await asyncio.wait_for(
+                    flush_batch(),
+                    timeout=max(0.1, _shutdown_grace_seconds),
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Batch flush timeout reached during shutdown")
         
         if timer_task:
             timer_task.cancel()

@@ -2477,8 +2477,23 @@ def cmd_consumer(args: argparse.Namespace) -> int:
         print(warning(f"Warning: Could not import app module: {e}"))
     
     async def run_consumer():
+        import signal
         from strider.messaging.kafka import KafkaConsumer
-        from strider.messaging.registry import get_consumer, get_consumers
+        from strider.messaging.registry import get_consumer
+        
+        shutdown_event = asyncio.Event()
+        force_event = asyncio.Event()
+        signal_count = 0
+        loop = asyncio.get_running_loop()
+        registered_signals: list[int] = []
+        
+        def _handle_shutdown_signal() -> None:
+            nonlocal signal_count
+            signal_count += 1
+            if signal_count == 1:
+                shutdown_event.set()
+                return
+            force_event.set()
         
         # Get consumer class if registered
         try:
@@ -2493,17 +2508,34 @@ def cmd_consumer(args: argparse.Namespace) -> int:
         consumer = KafkaConsumer(group_id=group_id, topics=topics_to_use)
         await consumer.start()
         
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, _handle_shutdown_signal)
+                registered_signals.append(sig)
+            except NotImplementedError:
+                continue
+        
         print(success(f"Consumer started, listening on: {topics_to_use}"))
-        print(info("Press Ctrl+C to stop"))
+        print(info("Press Ctrl+C to stop (Ctrl+C twice para forçar)"))
         
         # Wait forever
         try:
-            while True:
-                await asyncio.sleep(1)
+            while not shutdown_event.is_set():
+                await asyncio.sleep(0.2)
+            if force_event.is_set():
+                print(warning("Forced shutdown requested..."))
         except asyncio.CancelledError:
             pass
         finally:
-            await consumer.stop()
+            for sig in registered_signals:
+                try:
+                    loop.remove_signal_handler(sig)
+                except Exception:
+                    pass
+            try:
+                await asyncio.wait_for(consumer.stop(), timeout=3.0)
+            except asyncio.TimeoutError:
+                print(warning("Consumer stop timeout reached (3s)."))
     
     try:
         asyncio.run(run_consumer())
