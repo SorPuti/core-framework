@@ -37,6 +37,29 @@ if TYPE_CHECKING:
 logger = logging.getLogger("strider.admin")
 
 
+def _make_json_safe(obj: Any) -> Any:
+    """
+    Converte valores para formas serializáveis em JSON (para get_column_info).
+    Remove type, callable e outros não serializáveis.
+    """
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, (list, tuple)):
+        return [_make_json_safe(x) for x in obj]
+    if isinstance(obj, dict):
+        return {str(k): _make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, type):
+        return obj.__name__
+    if callable(obj):
+        return getattr(obj, "__name__", repr(obj))
+    try:
+        import json as _json
+        _json.dumps(obj)
+        return obj
+    except (TypeError, ValueError):
+        return repr(obj)
+
+
 def _enum_to_choices(enum_class: Any) -> list[dict[str, str]]:
     """
     Converte uma classe Enum/TextChoices para lista de choices do frontend.
@@ -779,7 +802,7 @@ class ModelAdmin(Generic[ModelT]):
                 # StructSchema overrides widget to "struct_editor"
                 if struct_schema_info:
                     widget = "struct_editor"
-                    extra["struct_schema"] = struct_schema_info
+                    extra["struct_schema"] = _make_json_safe(struct_schema_info)
                 
                 # Enum overrides widget to "choices"
                 if enum_choices:
