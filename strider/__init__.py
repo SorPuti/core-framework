@@ -35,6 +35,7 @@ from strider.serializers import (
     ValidationErrorResponse,
     NotFoundResponse,
     ConflictResponse,
+    computed_field,
 )
 from strider.views import (
     APIView,
@@ -332,7 +333,7 @@ from strider.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.17.96"
+__version__ = "0.17.97"
 __all__ = [
     # Models
     "Model",
