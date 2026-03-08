@@ -91,23 +91,40 @@ class _LoggerManager:
         root_logger = logging.getLogger()
         root_logger.setLevel(level_int)
 
-        # Remove handlers existentes se estiver reconfigurando ou se ainda não configurou
-        if force or not cls._configured:
+        # Verifica se já existem handlers (ex: Uvicorn já configurou)
+        has_existing_handlers = len(root_logger.handlers) > 0
+
+        if force:
+            # Remove todos os handlers se estiver forçando reconfiguração
             for handler in root_logger.handlers[:]:
                 root_logger.removeHandler(handler)
-        
-        # Cria handler para stdout
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(level_int)
-        
-        # Formatter
-        formatter = logging.Formatter(cls._log_format, datefmt="%Y-%m-%d %H:%M:%S")
-        handler.setFormatter(formatter)
-        
-        # Adiciona handler ao root
-        root_logger.addHandler(handler)
-        cls._handlers = [handler]
-        
+            has_existing_handlers = False
+
+        # Só adiciona nosso handler se não houver handlers existentes
+        # Isso preserva a configuração do Uvicorn quando ele já configurou
+        if not has_existing_handlers:
+            # Cria handler para stdout
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setLevel(level_int)
+
+            # Formatter
+            formatter = logging.Formatter(cls._log_format, datefmt="%Y-%m-%d %H:%M:%S")
+            handler.setFormatter(formatter)
+
+            # Adiciona handler ao root
+            root_logger.addHandler(handler)
+            cls._handlers = [handler]
+
+        # Configura loggers do Uvicorn para o mesmo nível
+        # Isso garante que as logs de request apareçam
+        uvicorn_logger = logging.getLogger("uvicorn")
+        uvicorn_access = logging.getLogger("uvicorn.access")
+        uvicorn_error = logging.getLogger("uvicorn.error")
+
+        uvicorn_logger.setLevel(level_int)
+        uvicorn_access.setLevel(level_int)
+        uvicorn_error.setLevel(level_int)
+
         # Configura loggers de bibliotecas comuns para não poluir
         # quando o nível é DEBUG
         if level_int <= logging.DEBUG:

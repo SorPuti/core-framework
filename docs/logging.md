@@ -2,6 +2,8 @@
 
 O Stride Framework possui um sistema de logging global simples e poderoso. Você nunca mais precisa usar `logging.getLogger()` diretamente.
 
+**Compatível com Uvicorn**: O sistema preserva as logs do Uvicorn (incluindo logs de requests HTTP) e apenas ajusta os níveis conforme configurado.
+
 ## Uso Básico
 
 ### Importe e Use Diretamente
@@ -124,6 +126,19 @@ configure_logging(
 ```
 
 ## Compatibilidade
+
+### Com Uvicorn
+
+O sistema **preserva** a configuração de logging do Uvicorn. As logs de requests HTTP continuam funcionando normalmente:
+
+```
+INFO:     127.0.0.1:58234 - "GET /api/users HTTP/1.1" 200 OK
+DEBUG:    127.0.0.1:58234 - "GET /api/users HTTP/1.1" 200 OK  # com DEBUG=True
+```
+
+Quando você define `LOG_LEVEL=DEBUG`, as logs do Uvicorn também mudam para DEBUG automaticamente.
+
+### Com código existente
 
 O sistema é compatível com código existente que usa `logging.getLogger()`:
 
