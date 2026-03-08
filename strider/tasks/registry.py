@@ -132,6 +132,21 @@ async def get_task_producer() -> "Producer":
     return _task_producer
 
 
+async def reset_task_producer() -> None:
+    """
+    Fecha o producer em cache e zera a referência.
+    Na próxima chamada a get_task_producer() um novo producer será criado
+    (útil após criar tópicos para que o novo producer busque metadados atualizados).
+    """
+    global _task_producer
+    if _task_producer is not None:
+        try:
+            await _task_producer.stop()
+        except Exception:
+            pass
+        _task_producer = None
+
+
 def clear_registry() -> None:
     """
     Clear all registries.

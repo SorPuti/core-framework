@@ -735,6 +735,10 @@ class Settings(BaseSettings):
         default=100,
         description="Backoff entre retries (ms)",
     )
+    kafka_metadata_max_age_ms: int = PydanticField(
+        default=5000,
+        description="Idade máxima dos metadados em ms antes de refresh (aiokafka). Reduzir para descobrir novos tópicos mais rápido.",
+    )
     
     # Consumer settings
     kafka_auto_offset_reset: Literal["earliest", "latest", "none"] = PydanticField(

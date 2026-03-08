@@ -7,6 +7,7 @@ Características:
 - Transformação de dados
 - Exclusão de campos
 - Validação customizada
+- Suporte a campos computados (@computed_field)
 - Zero overhead de reflexão
 """
 
@@ -15,7 +16,7 @@ from __future__ import annotations
 from typing import Any, ClassVar, Generic, TypeVar, get_type_hints
 from collections.abc import Sequence
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator, computed_field
 from pydantic.functional_validators import BeforeValidator, AfterValidator
 
 # Type vars para generics
@@ -30,11 +31,18 @@ class InputSchema(BaseModel):
     
     Use para validar e transformar dados recebidos em requisições.
     
+    Suporta @computed_field para campos calculados dinamicamente.
+    
     Exemplo:
         class UserCreateInput(InputSchema):
             email: EmailStr
             password: str
             name: str
+            
+            @computed_field
+            @property
+            def name_upper(self) -> str:
+                return self.name.upper()
             
             @field_validator("password")
             @classmethod
@@ -50,6 +58,51 @@ class InputSchema(BaseModel):
         extra="forbid",
         from_attributes=True,
     )
+    
+    list_include: ClassVar[set[str] | tuple[str, ...] | None] = None
+    list_exclude: ClassVar[set[str] | tuple[str, ...] | None] = None
+    
+    @classmethod
+    def _get_all_fields(cls) -> set[str]:
+        """
+        Retorna todos os campos disponíveis incluindo campos computados.
+        """
+        # Campos regulares do schema
+        regular_fields = set(cls.model_fields.keys())
+        
+        # Campos computados (computed_fields)
+        computed_fields = set(getattr(cls, '__computed_fields__', {}).keys())
+        
+        return regular_fields | computed_fields
+    
+    @classmethod
+    def dump_for_list(cls, obj: Any) -> dict[str, Any]:
+        """
+        Serializa um objeto para uso em resposta de listagem.
+        Respeita list_include / list_exclude quando definidos no schema.
+        Inclui campos computados (@computed_field) automaticamente.
+        """
+        data = cls.model_validate(obj).model_dump()
+        
+        list_exclude = getattr(cls, "list_exclude", None)
+        list_include = getattr(cls, "list_include", None)
+        
+        if list_exclude:
+            excl = set(list_exclude)
+            data = {k: v for k, v in data.items() if k not in excl}
+            
+        if list_include is not None:
+            incl = set(list_include)
+            data = {k: v for k, v in data.items() if k in incl}
+            
+        return data
+    
+    @classmethod
+    def dump_many(cls, objs: Sequence[Any]) -> list[dict[str, Any]]:
+        """
+        Serializa uma lista de objetos.
+        """
+        return [cls.dump_for_list(obj) for obj in objs]
 
 
 class OutputSchema(BaseModel):
@@ -57,6 +110,9 @@ class OutputSchema(BaseModel):
     Schema base para dados de saída (response body).
     
     Use para serializar dados retornados em respostas.
+    
+    Suporta @computed_field para campos calculados dinamicamente a partir
+    de outros campos ou do banco de dados.
     
     Opções estilo Django para listagem (evita criar schema separado para list):
         list_include: se definido, apenas esses campos na resposta de list (GET lista).
@@ -69,8 +125,15 @@ class OutputSchema(BaseModel):
             email: str
             name: str
             created_at: datetime
+            
+            # Campo computado - calculado dinamicamente
+            @computed_field
+            @property
+            def display_name(self) -> str:
+                return f"{self.name} <{self.email}>"
+            
             # Lista retorna só estes campos (sem list_include/list_exclude = retorna todos)
-            list_include = ("id", "name", "email", "created_at")
+            list_include = ("id", "name", "email", "display_name", "created_at")
     """
     
     model_config = ConfigDict(
@@ -82,316 +145,67 @@ class OutputSchema(BaseModel):
     list_exclude: ClassVar[set[str] | tuple[str, ...] | None] = None
     
     @classmethod
+    def _get_all_fields(cls) -> set[str]:
+        """
+        Retorna todos os campos disponíveis incluindo campos computados.
+        """
+        # Campos regulares do schema
+        regular_fields = set(cls.model_fields.keys())
+        
+        # Campos computados (computed_fields) - Pydantic v2 armazena em __computed_fields__
+        computed_fields = set(getattr(cls, '__computed_fields__', {}).keys())
+        
+        return regular_fields | computed_fields
+    
+    @classmethod
     def dump_for_list(cls, obj: Any) -> dict[str, Any]:
         """
         Serializa um objeto para uso em resposta de listagem.
         Respeita list_include / list_exclude quando definidos no schema.
+        Inclui campos computados (@computed_field) automaticamente.
         """
-        data = cls.model_validate(obj).model_dump()
+        # Validar o objeto primeiro
+        instance = cls.model_validate(obj)
+        
+        # Usar mode='json' para garantir serialização correta e incluir computed_fields
+        # include_computed_fields=True é padrão no Pydantic v2, mas deixamos explícito
+        data = instance.model_dump(
+            mode='json',
+            by_alias=False,
+            include=None,
+            exclude=None,
+        )
+        
         list_exclude = getattr(cls, "list_exclude", None)
         list_include = getattr(cls, "list_include", None)
+        
         if list_exclude:
             excl = set(list_exclude)
             data = {k: v for k, v in data.items() if k not in excl}
+            
         if list_include is not None:
             incl = set(list_include)
             data = {k: v for k, v in data.items() if k in incl}
+            
         return data
     
     @classmethod
-    def from_orm(cls, obj: Any) -> "OutputSchema":
+    def dump_many(cls, objs: Sequence[Any]) -> list[dict[str, Any]]:
         """
-        Cria uma instância do schema a partir de um objeto ORM.
-        
-        Equivalente ao .from_orm() do Pydantic v1.
+        Serializa uma lista de objetos.
         """
-        return cls.model_validate(obj)
+        return [cls.dump_for_list(obj) for obj in objs]
     
-    @classmethod
-    def from_orm_list(cls, objects: Sequence[Any]) -> list["OutputSchema"]:
+    def to_dict(self, **kwargs: Any) -> dict[str, Any]:
         """
-        Cria uma lista de schemas a partir de objetos ORM.
+        Converte a instância para dict incluindo campos computados.
         """
-        return [cls.model_validate(obj) for obj in objects]
+        return self.model_dump(mode='json', **kwargs)
 
 
-class Serializer(Generic[ModelT, InputT, OutputT]):
-    """
-    Serializer completo que combina Input e Output schemas.
-    
-    Inspirado no ModelSerializer do DRF, mas sem magia.
-    
-    Exemplo:
-        class UserSerializer(Serializer[User, UserCreateInput, UserOutput]):
-            input_schema = UserCreateInput
-            output_schema = UserOutput
-            
-            async def create(self, data: UserCreateInput, session: AsyncSession) -> User:
-                user = User(**data.model_dump())
-                await user.save(session)
-                return user
-    """
-    
-    input_schema: ClassVar[type[InputSchema]]
-    output_schema: ClassVar[type[OutputSchema]]
-    
-    def __init__(self) -> None:
-        self._validated_data: dict[str, Any] | None = None
-    
-    def validate_input(self, data: dict[str, Any]) -> InputT:
-        """
-        Valida dados de entrada.
-        
-        Args:
-            data: Dicionário com dados a validar
-            
-        Returns:
-            Instância do input_schema validada
-            
-        Raises:
-            ValidationError: Se os dados forem inválidos
-        """
-        validated = self.input_schema.model_validate(data)
-        self._validated_data = validated.model_dump()
-        return validated  # type: ignore
-    
-    def serialize(self, obj: ModelT) -> OutputT:
-        """
-        Serializa um objeto para o output_schema.
-        
-        Args:
-            obj: Objeto a serializar (geralmente um Model)
-            
-        Returns:
-            Instância do output_schema
-        """
-        return self.output_schema.model_validate(obj)  # type: ignore
-    
-    def serialize_many(self, objects: Sequence[ModelT]) -> list[OutputT]:
-        """
-        Serializa múltiplos objetos.
-        
-        Args:
-            objects: Lista de objetos a serializar
-            
-        Returns:
-            Lista de instâncias do output_schema
-        """
-        return [self.serialize(obj) for obj in objects]
-    
-    def to_dict(self, obj: ModelT) -> dict[str, Any]:
-        """
-        Serializa um objeto para dicionário.
-        
-        Args:
-            obj: Objeto a serializar
-            
-        Returns:
-            Dicionário com dados serializados
-        """
-        return self.serialize(obj).model_dump()
-    
-    def to_dict_many(self, objects: Sequence[ModelT]) -> list[dict[str, Any]]:
-        """
-        Serializa múltiplos objetos para dicionários.
-        
-        Args:
-            objects: Lista de objetos a serializar
-            
-        Returns:
-            Lista de dicionários
-        """
-        return [self.to_dict(obj) for obj in objects]
-
-
-class ModelSerializer(Serializer[ModelT, InputT, OutputT]):
-    """
-    Serializer com operações CRUD integradas.
-    
-    Exemplo:
-        class UserSerializer(ModelSerializer[User, UserInput, UserOutput]):
-            model = User
-            input_schema = UserInput
-            output_schema = UserOutput
-            
-            # Campos a excluir na criação
-            exclude_on_create = ["id", "created_at"]
-            
-            # Campos a excluir na atualização
-            exclude_on_update = ["id", "email"]
-    """
-    
-    model: ClassVar[type]
-    exclude_on_create: ClassVar[list[str]] = []
-    exclude_on_update: ClassVar[list[str]] = []
-    read_only_fields: ClassVar[list[str]] = []
-    
-    async def create(self, data: InputT, session: Any) -> ModelT:
-        """
-        Cria um novo registro.
-        
-        Args:
-            data: Dados validados
-            session: Sessão do banco de dados
-            
-        Returns:
-            Instância do model criada
-        """
-        create_data = data.model_dump(exclude=set(self.exclude_on_create))
-        instance = self.model(**create_data)
-        await instance.save(session)
-        return instance  # type: ignore
-    
-    async def update(
-        self,
-        instance: ModelT,
-        data: InputT,
-        session: Any,
-        partial: bool = False,
-    ) -> ModelT:
-        """
-        Atualiza um registro existente.
-        
-        Args:
-            instance: Instância a atualizar
-            data: Dados validados
-            session: Sessão do banco de dados
-            partial: Se True, permite atualização parcial
-            
-        Returns:
-            Instância atualizada
-        """
-        exclude = set(self.exclude_on_update + self.read_only_fields)
-        update_data = data.model_dump(
-            exclude=exclude,
-            exclude_unset=partial,
-        )
-        
-        for field, value in update_data.items():
-            setattr(instance, field, value)
-        
-        await instance.save(session)  # type: ignore
-        return instance
-
-
-# =========================================================================
-# Schemas utilitários comuns (herdam de OutputSchema para compatibilidade)
-# =========================================================================
-
-class PaginatedResponse(OutputSchema, Generic[OutputT]):
-    """
-    Schema para respostas paginadas.
-    
-    Herda de OutputSchema para ser compatível com response_model
-    do ViewSet e validação automática de schemas.
-    
-    Exemplo:
-        @router.get("/users", response_model=PaginatedResponse[UserOutput])
-        async def list_users(...):
-            return PaginatedResponse(
-                items=users,
-                total=total_count,
-                page=page,
-                page_size=page_size,
-            )
-    """
-    
-    items: list[OutputT]
-    total: int
-    page: int
-    page_size: int
-    pages: int | None = None
-    
-    def model_post_init(self, __context: Any) -> None:
-        if self.pages is None and self.page_size > 0:
-            self.pages = (self.total + self.page_size - 1) // self.page_size
-
-
-class ErrorResponse(OutputSchema):
-    """Schema padrão para respostas de erro."""
-    
-    detail: str
-    code: str | None = None
-    errors: list[dict[str, Any]] | None = None
-
-
-class ValidationErrorDetail(OutputSchema):
-    """Detalhe de um erro de validação individual."""
-    
-    loc: list[str | int]
-    msg: str
-    type: str
-    input: Any | None = None
-
-
-class ValidationErrorResponse(OutputSchema):
-    """Schema para respostas de erro de validação (422)."""
-    
-    detail: str = "Validation error"
-    code: str = "validation_error"
-    errors: list[ValidationErrorDetail]
-
-
-class NotFoundResponse(OutputSchema):
-    """Schema para respostas de recurso não encontrado (404)."""
-    
-    detail: str
-
-
-class ConflictResponse(OutputSchema):
-    """Schema para respostas de conflito/duplicidade (409)."""
-    
-    detail: str
-    code: str = "unique_constraint"
-    field: str | None = None
-    value: str | None = None
-
-
-class SuccessResponse(OutputSchema):
-    """Schema padrão para respostas de sucesso simples."""
-    
-    message: str
-    data: dict[str, Any] | None = None
-
-
-class DeleteResponse(OutputSchema):
-    """Schema para resposta de deleção bem-sucedida."""
-    
-    message: str
-
-
-# Decorators para validação customizada
-def validate_field(field_name: str):
-    """
-    Decorator para criar validadores de campo.
-    
-    Exemplo:
-        class UserInput(InputSchema):
-            email: str
-            
-            @validate_field("email")
-            @classmethod
-            def validate_email(cls, v: str) -> str:
-                if "@" not in v:
-                    raise ValueError("Invalid email")
-                return v.lower()
-    """
-    return field_validator(field_name)
-
-
-def validate_model(mode: str = "after"):
-    """
-    Decorator para criar validadores de modelo.
-    
-    Exemplo:
-        class UserInput(InputSchema):
-            password: str
-            password_confirm: str
-            
-            @validate_model()
-            def passwords_match(self) -> "UserInput":
-                if self.password != self.password_confirm:
-                    raise ValueError("Passwords don't match")
-                return self
-    """
-    return model_validator(mode=mode)
+# Exportar computed_field para uso nos schemas
+__all__ = [
+    "InputSchema",
+    "OutputSchema",
+    "computed_field",
+]

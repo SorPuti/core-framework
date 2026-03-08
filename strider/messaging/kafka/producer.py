@@ -52,6 +52,9 @@ class KafkaProducer(Producer):
             "key_serializer": self._serialize_key,
             "request_timeout_ms": self._settings.kafka_request_timeout_ms,
             "retry_backoff_ms": self._settings.kafka_retry_backoff_ms,
+            "metadata_max_age_ms": getattr(
+                self._settings, "kafka_metadata_max_age_ms", 5000
+            ),
             "max_batch_size": self._settings.kafka_max_batch_size,
             "linger_ms": self._settings.kafka_linger_ms,
             "compression_type": compression,
