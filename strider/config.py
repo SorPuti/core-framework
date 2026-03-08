@@ -12,7 +12,6 @@ Usage:
     settings = configure(settings_class=AppSettings)
 """
 
-import logging
 import os
 import secrets
 import warnings
@@ -23,6 +22,9 @@ from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar, cast, overload
 from pydantic import Field as PydanticField, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Usa logging padrão temporariamente para evitar circular import
+# O logger será propriamente configurado quando o sistema de logging inicializar
+import logging
 logger = logging.getLogger("strider.config")
 
 # TypeVar para get_settings() genérico - permite autocomplete de subclasses

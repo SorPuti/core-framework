@@ -10,7 +10,6 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 import sys
 import traceback
 from typing import Any
@@ -26,6 +25,8 @@ from strider.models import create_tables, close_database
 from strider.routing import Router, AutoRouter, include_router
 from strider.urls import autodiscover
 
+# Usa logger padrão temporariamente - será substituído quando sistema de logging inicializar
+import logging
 app_logger = logging.getLogger("strider.app")
 
 
@@ -139,6 +140,23 @@ class StrideApp:
                 ("logging", {"log_body": True}),  # Com kwargs
             ]
         """
+        # ── Step 0: Configure Logging (MUST be first) ──
+        # Configura o sistema de logging global antes de qualquer outra coisa
+        from strider.logger import _LoggerManager
+        if not _LoggerManager.is_configured():
+            settings_for_log = settings
+            if settings_for_log is None:
+                try:
+                    settings_for_log = get_settings()
+                except Exception:
+                    settings_for_log = None
+            if settings_for_log:
+                _LoggerManager.configure(
+                    level=getattr(settings_for_log, "log_level", "INFO"),
+                    log_format=getattr(settings_for_log, "log_format", None),
+                    json_format=getattr(settings_for_log, "log_json", False),
+                )
+
         # ── Step 1: Settings (loaded, validated) ──
         self.settings = settings or get_settings()
         self._on_startup = on_startup or []

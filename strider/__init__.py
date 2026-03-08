@@ -59,16 +59,17 @@ from strider.realtime import WebSocketView, SSEView, Channel, sse_response
 from strider.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
 from strider.dependencies import Depends, get_db, get_current_user, set_session_factory
 from strider.config import (
-    Settings, 
-    get_settings, 
-    configure, 
+    Settings,
+    get_settings,
+    configure,
     apply_settings,
-    is_configured, 
+    is_configured,
     reset_settings,
     auto_configure_auth,
     is_auth_configured,
 )
 from strider.app import StrideApp, get_application
+from strider.logger import logger, get_logger, configure_logging
 
 # Validation
 from strider.validation import (
@@ -334,8 +335,12 @@ from strider.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.17.101"
+__version__ = "0.18.1"
 __all__ = [
+    # Logger - use diretamente: from strider import logger
+    "logger",
+    "get_logger",
+    "configure_logging",
     # Models
     "Model",
     "Field",
