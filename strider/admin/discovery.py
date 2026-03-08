@@ -113,8 +113,7 @@ def _resolve_app_path(app_name: str) -> str:
     
     for path in search_paths:
         try:
-            module_path = path.replace(".", "/")
-            if importlib.util.find_spec(module_path):
+            if importlib.util.find_spec(path):
                 return path
         except (ImportError, ModuleNotFoundError, ValueError):
             continue

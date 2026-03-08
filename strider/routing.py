@@ -196,12 +196,17 @@ def _get_list_item_schema(output_schema: type[BaseModel]) -> type[BaseModel]:
     Retorna o schema a usar para cada item da listagem.
     Se o output_schema define list_include ou list_exclude (OutputSchema),
     cria um modelo com o subconjunto de campos; senão retorna o próprio output_schema.
+    
+    Inclui campos computados (@computed_field e @computed_orm_field) automaticamente.
     """
     list_include = getattr(output_schema, "list_include", None)
     list_exclude = getattr(output_schema, "list_exclude", None)
     if not list_include and not list_exclude:
         return output_schema
-    all_names = set(output_schema.model_fields.keys())
+    
+    # Usar _get_all_fields() para incluir campos computados
+    all_names = output_schema._get_all_fields() if hasattr(output_schema, '_get_all_fields') else set(output_schema.model_fields.keys())
+    
     if list_include is not None:
         names = all_names & set(list_include)
     else:
@@ -211,18 +216,34 @@ def _get_list_item_schema(output_schema: type[BaseModel]) -> type[BaseModel]:
     key = (output_schema, frozenset(names))
     if key in _list_item_schema_cache:
         return _list_item_schema_cache[key]
+    # Coletar campos do modelo base
     fields: dict[str, Any] = {}
+    computed_field_names: set[str] = set()
+    
     for name in sorted(names):
-        if name not in output_schema.model_fields:
-            continue
-        fi = output_schema.model_fields[name]
-        default = ... if fi.is_required() else fi.default
-        fields[name] = (fi.annotation, default)
+        if name in output_schema.model_fields:
+            fi = output_schema.model_fields[name]
+            default = ... if fi.is_required() else fi.default
+            fields[name] = (fi.annotation, default)
+        else:
+            computed_field_names.add(name)
+    
     list_item_model = create_model(
         f"{output_schema.__name__}ListItem",
         __base__=OutputSchema,
         **fields,
     )
+    
+    if computed_field_names:
+        computed_fields: dict[str, Any] = {
+            name: (Any | None, None) for name in computed_field_names
+        }
+        list_item_model = create_model(
+            f"{output_schema.__name__}ListItem",
+            __base__=list_item_model,
+            **computed_fields,
+        )
+    
     _list_item_schema_cache[key] = list_item_model
     return list_item_model
 

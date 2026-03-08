@@ -840,7 +840,7 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         await self.check_object_permissions(request, obj, "retrieve")
         
         output_schema = self.get_output_schema()
-        return output_schema.model_validate(obj).model_dump()
+        return output_schema.dump_for_list(obj)
     
     async def create(
         self,
@@ -871,7 +871,8 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         await self.after_create(obj, db)
         
         output_schema = self.get_output_schema()
-        return output_schema.model_validate(obj).model_dump()
+        # Usar dump_for_list para incluir campos computados (incluindo @computed_orm_field)
+        return output_schema.dump_for_list(obj)
     
     async def perform_create_validation(
         self,
@@ -957,7 +958,8 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         await self.after_update(obj, db)
         
         output_schema = self.get_output_schema()
-        return output_schema.model_validate(obj).model_dump()
+        # Usar dump_for_list para incluir campos computados (incluindo @computed_orm_field)
+        return output_schema.dump_for_list(obj)
     
     async def perform_update_validation(
         self,

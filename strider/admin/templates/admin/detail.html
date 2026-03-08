@@ -626,24 +626,89 @@
 
                                                             <!-- List Field -->
                                                             <template x-if="fieldDef.type === 'ListField'">
-                                                                <div class="space-y-1">
-                                                                    <template x-for="(item, idx) in (formValues[fieldName] || [])" :key="idx">
-                                                                        <div class="flex items-center gap-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                x-model="formValues[fieldName][idx]"
-                                                                                @change="updateFormData()"
-                                                                                class="flex-1 px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                                                            />
-                                                                            <button @click="removeListItem(fieldName, idx)" class="text-red-400 hover:text-red-600">
-                                                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                                                <div class="space-y-2">
+                                                                    <!-- List of primitives (string/number) -->
+                                                                    <template x-if="!_isListOfObjects(fieldDef)">
+                                                                        <div class="space-y-1">
+                                                                            <template x-for="(item, idx) in (formValues[fieldName] || [])" :key="idx">
+                                                                                <div class="flex items-center gap-2">
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        :value="typeof formValues[fieldName][idx] === 'object' ? JSON.stringify(formValues[fieldName][idx]) : formValues[fieldName][idx]"
+                                                                                        @input="const v = $event.target.value; formValues[fieldName][idx] = (fieldDef.item_field && (fieldDef.item_field.type === 'IntegerField' || fieldDef.item_field.type === 'FloatField')) ? (v === '' ? '' : Number(v)) : v; updateFormData()"
+                                                                                        class="flex-1 px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                                                    />
+                                                                                    <button type="button" @click="removeListItem(fieldName, idx)" class="text-red-400 hover:text-red-600">
+                                                                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </template>
+                                                                            <button type="button" @click="addListItem(fieldName, fieldDef)" class="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                                                                                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                                                                                Add item
                                                                             </button>
                                                                         </div>
                                                                     </template>
-                                                                    <button @click="addListItem(fieldName)" class="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1">
-                                                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                                                                        Add item
-                                                                    </button>
+                                                                    <!-- List of objects (NestedField / item_field.fields) -->
+                                                                    <template x-if="_isListOfObjects(fieldDef)">
+                                                                        <div class="space-y-2">
+                                                                            <template x-for="(item, idx) in (formValues[fieldName] || [])" :key="idx">
+                                                                                <div class="pl-3 border-l-2 border-gray-200 dark:border-gray-600 space-y-1.5 bg-gray-50/50 dark:bg-gray-800/50 rounded-r p-2">
+                                                                                    <div class="flex items-center justify-between gap-2 mb-1">
+                                                                                        <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Item <span x-text="idx + 1"></span></span>
+                                                                                        <button type="button" @click="removeListItem(fieldName, idx)" class="text-red-400 hover:text-red-600">
+                                                                                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                    <template x-for="(nestedDef, nestedName) in (fieldDef.item_field && fieldDef.item_field.fields) || {}" :key="nestedName">
+                                                                                        <div class="flex flex-col gap-0.5">
+                                                                                            <label class="text-[11px] text-gray-500 dark:text-gray-500" x-text="nestedName"></label>
+                                                                                            <template x-if="nestedDef.type === 'StringField'">
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    x-model="formValues[fieldName][idx][nestedName]"
+                                                                                                    @change="updateFormData()"
+                                                                                                    class="w-full px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                                                                />
+                                                                                            </template>
+                                                                                            <template x-if="nestedDef.type === 'IntegerField' || nestedDef.type === 'FloatField'">
+                                                                                                <input
+                                                                                                    type="number"
+                                                                                                    :step="nestedDef.type === 'FloatField' ? '0.01' : '1'"
+                                                                                                    x-model.number="formValues[fieldName][idx][nestedName]"
+                                                                                                    @change="updateFormData()"
+                                                                                                    class="w-full px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                                                                />
+                                                                                            </template>
+                                                                                            <template x-if="nestedDef.type === 'BooleanField'">
+                                                                                                <label class="inline-flex items-center gap-1.5 text-xs">
+                                                                                                    <input
+                                                                                                        type="checkbox"
+                                                                                                        :checked="formValues[fieldName][idx][nestedName]"
+                                                                                                        @change="formValues[fieldName][idx][nestedName] = $event.target.checked; updateFormData()"
+                                                                                                        class="rounded border-gray-300"
+                                                                                                    />
+                                                                                                    <span x-text="formValues[fieldName][idx][nestedName] ? 'Yes' : 'No'"></span>
+                                                                                                </label>
+                                                                                            </template>
+                                                                                            <template x-if="nestedDef.type !== 'StringField' && nestedDef.type !== 'IntegerField' && nestedDef.type !== 'FloatField' && nestedDef.type !== 'BooleanField'">
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    :value="typeof formValues[fieldName][idx][nestedName] === 'object' ? JSON.stringify(formValues[fieldName][idx][nestedName]) : (formValues[fieldName][idx][nestedName] || '')"
+                                                                                                    @input="try { const v = $event.target.value; formValues[fieldName][idx][nestedName] = v ? (v.startsWith('{') || v.startsWith('[') ? JSON.parse(v) : v) : ''; updateFormData(); } catch(e) {}"
+                                                                                                    class="w-full px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                                                                />
+                                                                                            </template>
+                                                                                        </div>
+                                                                                    </template>
+                                                                                </div>
+                                                                            </template>
+                                                                            <button type="button" @click="addListItem(fieldName, fieldDef)" class="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                                                                                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                                                                                Add item
+                                                                            </button>
+                                                                        </div>
+                                                                    </template>
                                                                 </div>
                                                             </template>
                                                         </div>
@@ -2699,8 +2764,59 @@ function structEditorField(field) {
 
             const raw = root.formData[field.name] || {};
             this.formValues = this._deepCopy(raw);
-            this.jsonText = JSON.stringify(raw, null, 2);
+            this._normalizeStructValues();
+            this.jsonText = JSON.stringify(this.formValues, null, 2);
             this.errors = [];
+        },
+
+        _normalizeStructValues() {
+            if (!field.struct_schema || !field.struct_schema.fields) return;
+            for (const [fieldName, fieldDef] of Object.entries(field.struct_schema.fields)) {
+                if (fieldDef.type !== 'ListField' || !fieldDef.item_field) continue;
+                const isObjList = fieldDef.item_field.type === 'NestedField' || (fieldDef.item_field.fields && Object.keys(fieldDef.item_field.fields).length > 0);
+                if (!isObjList) continue;
+                if (!Array.isArray(this.formValues[fieldName])) this.formValues[fieldName] = [];
+                const defaultObj = this._getListItemDefault(fieldDef);
+                for (let i = 0; i < this.formValues[fieldName].length; i++) {
+                    const it = this.formValues[fieldName][i];
+                    if (it === null || it === undefined || typeof it !== 'object' || Array.isArray(it)) {
+                        this.formValues[fieldName][i] = this._deepCopy(defaultObj);
+                    } else {
+                        this.formValues[fieldName][i] = this._mergeWithDefaults(it, fieldDef.item_field);
+                    }
+                }
+            }
+        },
+
+        _mergeWithDefaults(obj, itemFieldDef) {
+            const fields = itemFieldDef.fields || {};
+            const out = this._deepCopy(obj);
+            for (const [k, f] of Object.entries(fields)) {
+                if (out[k] === undefined || out[k] === null) {
+                    out[k] = f.default !== undefined && f.default !== null ? f.default : (f.type === 'IntegerField' || f.type === 'FloatField' ? 0 : f.type === 'BooleanField' ? false : '');
+                }
+            }
+            return out;
+        },
+
+        _isListOfObjects(fieldDef) {
+            if (fieldDef.type !== 'ListField' || !fieldDef.item_field) return false;
+            return fieldDef.item_field.type === 'NestedField' || (fieldDef.item_field.fields && Object.keys(fieldDef.item_field.fields).length > 0);
+        },
+
+        _getListItemDefault(fieldDef) {
+            if (!fieldDef || !fieldDef.item_field) return '';
+            const f = fieldDef.item_field;
+            if (f.type === 'NestedField' || (f.fields && Object.keys(f.fields).length > 0)) {
+                const fields = f.fields || {};
+                return Object.fromEntries(Object.entries(fields).map(([k, sub]) => [
+                    k,
+                    sub.default !== undefined && sub.default !== null ? sub.default : (sub.type === 'IntegerField' || sub.type === 'FloatField' ? 0 : sub.type === 'BooleanField' ? false : '')
+                ]));
+            }
+            if (f.type === 'IntegerField' || f.type === 'FloatField') return 0;
+            if (f.type === 'BooleanField') return false;
+            return '';
         },
 
         updateFormData() {
@@ -2721,6 +2837,7 @@ function structEditorField(field) {
             try {
                 const parsed = JSON.parse(this.jsonText);
                 this.formValues = this._deepCopy(parsed);
+                this._normalizeStructValues();
                 this.updateFormData();
                 this.errors = [];
             } catch (e) {
@@ -2728,11 +2845,12 @@ function structEditorField(field) {
             }
         },
 
-        addListItem(fieldName) {
+        addListItem(fieldName, fieldDef) {
             if (!Array.isArray(this.formValues[fieldName])) {
                 this.formValues[fieldName] = [];
             }
-            this.formValues[fieldName].push("");
+            const defaultVal = this._getListItemDefault(fieldDef || field.struct_schema?.fields?.[fieldName]);
+            this.formValues[fieldName].push(typeof defaultVal === 'object' && defaultVal !== null ? this._deepCopy(defaultVal) : defaultVal);
             this.updateFormData();
         },
 

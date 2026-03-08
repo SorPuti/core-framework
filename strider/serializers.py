@@ -8,13 +8,15 @@ Características:
 - Exclusão de campos
 - Validação customizada
 - Suporte a campos computados (@computed_field)
+- Suporte a campos computados com acesso ao ORM (@computed_orm_field)
 - Zero overhead de reflexão
 """
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Generic, TypeVar, get_type_hints
+from typing import Any, ClassVar, Generic, TypeVar, get_type_hints, Callable
 from collections.abc import Sequence
+from functools import wraps
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator, computed_field
 from pydantic.functional_validators import BeforeValidator, AfterValidator
@@ -77,13 +79,13 @@ class InputSchema(BaseModel):
         return regular_fields | computed_fields
     
     @classmethod
-    def dump_for_list(cls, obj: Any) -> dict[str, Any]:
+    def dump_for_list(cls, obj: Any, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Serializa um objeto para uso em resposta de listagem.
         Respeita list_include / list_exclude quando definidos no schema.
         Inclui campos computados (@computed_field) automaticamente.
         """
-        data = cls.model_validate(obj).model_dump()
+        data = cls.model_validate(obj, context=context).model_dump()
         
         list_exclude = getattr(cls, "list_exclude", None)
         list_include = getattr(cls, "list_include", None)
@@ -99,11 +101,43 @@ class InputSchema(BaseModel):
         return data
     
     @classmethod
-    def dump_many(cls, objs: Sequence[Any]) -> list[dict[str, Any]]:
+    def dump_many(cls, objs: Sequence[Any], context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """
         Serializa uma lista de objetos.
         """
-        return [cls.dump_for_list(obj) for obj in objs]
+        return [cls.dump_for_list(obj, context=context) for obj in objs]
+
+
+def computed_orm_field(func: Callable[[Any, Any], Any]) -> property:
+    """
+    Decorator para criar campos computados que precisam acessar o objeto ORM original.
+    
+    Diferente do @computed_field padrão do Pydantic, este decorator permite que o campo
+    computado receba o objeto ORM original como parâmetro, permitindo acessar:
+    - Relacionamentos do modelo
+    - Métodos do modelo
+    - Campos que não estão no schema
+    
+    Args:
+        func: Função que recebe (self, orm_obj) e retorna o valor computado
+        
+    Example:
+        class StrategyOutput(OutputSchema):
+            @computed_orm_field
+            def user_email(self, orm_obj: Strategy) -> str | None:
+                # Acesso ao modelo ORM original!
+                return orm_obj.user.email if orm_obj.user else None
+            
+            @computed_orm_field
+            def config_summary(self, orm_obj: Strategy) -> dict[str, Any]:
+                # Acesso a dados complexos do modelo
+                return {
+                    "precisao": orm_obj.config.general.precMin if orm_obj.config else None,
+                    "retorno": orm_obj.config.general.retMin if orm_obj.config else None,
+                }
+    """
+    func._is_computed_orm_field = True  # Marca para identificação posterior
+    return property(func)
 
 
 class OutputSchema(BaseModel):
@@ -112,8 +146,9 @@ class OutputSchema(BaseModel):
     
     Use para serializar dados retornados em respostas.
     
-    Suporta @computed_field para campos calculados dinamicamente a partir
-    de outros campos ou do banco de dados.
+    Suporta campos computados de duas formas:
+    1. @computed_field - Campos calculados a partir de dados já no schema
+    2. @computed_orm_field - Campos calculados com acesso ao objeto ORM original
     
     Opções estilo Django para listagem (evita criar schema separado para list):
         list_include: se definido, apenas esses campos na resposta de list (GET lista).
@@ -127,14 +162,19 @@ class OutputSchema(BaseModel):
             name: str
             created_at: datetime
             
-            # Campo computado - calculado dinamicamente
+            # Campo computado simples (apenas dados do schema)
             @computed_field
             @property
             def display_name(self) -> str:
                 return f"{self.name} <{self.email}>"
             
-            # Lista retorna só estes campos (sem list_include/list_exclude = retorna todos)
-            list_include = ("id", "name", "email", "display_name", "created_at")
+            # Campo computado com acesso ao ORM
+            @computed_orm_field
+            def tenant_name(self, orm_obj: User) -> str:
+                return orm_obj.tenant.name if orm_obj.tenant else ""
+            
+            # Lista retorna só estes campos
+            list_include = ("id", "name", "email", "display_name", "tenant_name", "created_at")
     """
     
     model_config = ConfigDict(
@@ -145,6 +185,9 @@ class OutputSchema(BaseModel):
     list_include: ClassVar[set[str] | tuple[str, ...] | None] = None
     list_exclude: ClassVar[set[str] | tuple[str, ...] | None] = None
     
+    # Armazena o objeto ORM original durante a serialização
+    _orm_obj: Any = None
+    
     @classmethod
     def _get_all_fields(cls) -> set[str]:
         """
@@ -153,10 +196,51 @@ class OutputSchema(BaseModel):
         # Campos regulares do schema
         regular_fields = set(cls.model_fields.keys())
         
-        # Campos computados (computed_fields) - Pydantic v2 armazena em __computed_fields__
+        # Campos computados do Pydantic (computed_fields)
         computed_fields = set(getattr(cls, '__computed_fields__', {}).keys())
         
-        return regular_fields | computed_fields
+        # Campos computados com acesso ao ORM
+        orm_computed_fields = set()
+        for attr_name in dir(cls):
+            attr = getattr(cls, attr_name, None)
+            if isinstance(attr, property) and hasattr(attr.fget, '_is_computed_orm_field'):
+                orm_computed_fields.add(attr_name)
+        
+        return regular_fields | computed_fields | orm_computed_fields
+    
+    def get_orm_obj(self) -> Any:
+        """
+        Retorna o objeto ORM original usado para criar este schema.
+        
+        Útil em campos computados que precisam acessar dados fora do schema.
+        
+        Example:
+            @computed_field
+            @property
+            def user_email(self) -> str | None:
+                orm_obj = self.get_orm_obj()
+                return orm_obj.user.email if orm_obj and orm_obj.user else None
+        """
+        return getattr(self, '_orm_obj', None)
+    
+    @classmethod
+    def _process_computed_orm_fields(cls, instance: "OutputSchema", orm_obj: Any) -> dict[str, Any]:
+        """
+        Processa campos computados que precisam do objeto ORM.
+        
+        Identifica todos os @computed_orm_field e os chama com o objeto ORM.
+        """
+        result = {}
+        for attr_name in dir(cls):
+            attr = getattr(cls, attr_name, None)
+            if isinstance(attr, property) and hasattr(attr.fget, '_is_computed_orm_field'):
+                # Chama o método property com o objeto ORM
+                try:
+                    result[attr_name] = attr.fget(instance, orm_obj)
+                except Exception as e:
+                    # Em caso de erro, retorna None para não quebrar a serialização
+                    result[attr_name] = None
+        return result
     
     @classmethod
     def dump_for_list(cls, obj: Any) -> dict[str, Any]:
@@ -164,18 +248,23 @@ class OutputSchema(BaseModel):
         Serializa um objeto para uso em resposta de listagem.
         Respeita list_include / list_exclude quando definidos no schema.
         Inclui campos computados (@computed_field) automaticamente.
+        Inclui campos computados com ORM (@computed_orm_field) automaticamente.
         """
-        # Validar o objeto primeiro
+        # Valida o objeto primeiro
         instance = cls.model_validate(obj)
         
-        # Usar mode='json' para garantir serialização correta e incluir computed_fields
-        # include_computed_fields=True é padrão no Pydantic v2
+        # Armazena referência ao objeto ORM
+        instance._orm_obj = obj
+        
+        # Serializa usando mode='json' para garantir serialização correta
         data = instance.model_dump(
             mode='json',
             by_alias=False,
-            include=None,
-            exclude=None,
         )
+        
+        # Processa campos computados com acesso ao ORM
+        orm_fields = cls._process_computed_orm_fields(instance, obj)
+        data.update(orm_fields)
         
         list_exclude = getattr(cls, "list_exclude", None)
         list_include = getattr(cls, "list_include", None)
@@ -502,7 +591,7 @@ def validate_model(mode: str = "after"):
     return model_validator(mode=mode)
 
 
-# Exportar computed_field para uso nos schemas
+# Exportar decorators e classes principais
 __all__ = [
     "InputSchema",
     "OutputSchema",
@@ -517,6 +606,7 @@ __all__ = [
     "SuccessResponse",
     "DeleteResponse",
     "computed_field",
+    "computed_orm_field",
     "validate_field",
     "validate_model",
 ]
