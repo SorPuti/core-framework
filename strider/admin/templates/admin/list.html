@@ -440,6 +440,17 @@ function listView() {
                 const match = col.choices.find(c => c.value == val);
                 if (match) return match.label;
             }
+            // Array: show count or preview
+            if (Array.isArray(val)) {
+                if (val.length === 0) return '[]';
+                return `[${val.length} items]`;
+            }
+            // Object: show JSON preview or just indicate it's an object
+            if (typeof val === 'object') {
+                const keys = Object.keys(val);
+                if (keys.length === 0) return '{}';
+                return `{${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '...' : ''}}`;
+            }
             if (typeof val === 'string' && val.length > 80) return val.substring(0, 80) + '...';
             return String(val);
         }

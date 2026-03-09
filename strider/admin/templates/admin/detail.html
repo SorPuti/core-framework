@@ -937,6 +937,29 @@ endblock %}
                                                                 </div>
                                                             </template>
 
+                                                            <!-- Fallback: array not captured by ListField template (evita [object Object]) -->
+                                                            <template
+                                                                x-if="fieldDef.type !== 'ListField' && Array.isArray(formValues[fieldName])">
+                                                                <div class="space-y-2">
+                                                                    <div class="text-xs text-gray-500 mb-1">
+                                                                        <span x-text="formValues[fieldName].length"></span> items</div>
+                                                                    <template x-for="(item, idx) in formValues[fieldName]" :key="idx">
+                                                                        <div class="flex items-center gap-2">
+                                                                            <input type="text"
+                                                                                :value="typeof item === 'object' ? JSON.stringify(item) : String(item)"
+                                                                                @input="const v = $event.target.value; formValues[fieldName][idx] = v; updateFormData()"
+                                                                                class="flex-1 px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+                                                                            <button type="button" @click="formValues[fieldName].splice(idx, 1); updateFormData()"
+                                                                                class="text-red-400 hover:text-red-600">
+                                                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                                    <path d="M18 6L6 18M6 6l12 12" />
+                                                                                </svg>
+                                                                            </button>
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+
                                                             <!-- Fallback: unknown type with object value (evita [object Object]) -->
                                                             <template
                                                                 x-if="fieldDef.type !== 'StringField' && fieldDef.type !== 'IntegerField' && fieldDef.type !== 'FloatField' && fieldDef.type !== 'BooleanField' && fieldDef.type !== 'NestedField' && fieldDef.type !== 'ListField' && fieldDef.type !== 'DictField' && typeof formValues[fieldName] === 'object' && formValues[fieldName] !== null && !Array.isArray(formValues[fieldName])">
@@ -3149,6 +3172,12 @@ endblock %}
 
             init() {
                 this.reloadFromForm();
+                // Re-carregar quando os dados do servidor chegarem (caso o componente tenha sido inicializado antes)
+                window.addEventListener('formdata-loaded', () => {
+                    this.$nextTick(() => {
+                        this.reloadFromForm();
+                    });
+                });
             },
 
             reloadFromForm() {
