@@ -31,8 +31,9 @@ from collections.abc import Callable
 
 if TYPE_CHECKING:
     from strider.views import ViewSet, APIView
-    from strider.realtime import WebSocketView
     from strider.routing import Router, AutoRouter
+
+from strider.realtime import WebSocketView
 
 logger = logging.getLogger("strider.urls")
 
