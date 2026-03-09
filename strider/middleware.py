@@ -734,7 +734,7 @@ class RateLimitMiddleware(ASGIMiddleware):
                     "code": "rate_limit_exceeded",
                     "retry_after": self.window_seconds,
                 },
-                headers=[(b"retry-after", str(self.window_seconds).encode())],
+                headers={"retry-after": str(self.window_seconds)},
             )
         return None
 

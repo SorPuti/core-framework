@@ -335,7 +335,7 @@ from strider.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.18.8"
+__version__ = "0.18.9"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
@@ -419,6 +419,11 @@ __all__ = [
     "AdvancedField",
     "FileField",
     "FieldFile",
+    # Real-time
+    "WebSocketView",
+    "SSEView",
+    "Channel",
+    "sse_response",
     # Multi-Tenancy
     "set_tenant",
     "get_tenant",
