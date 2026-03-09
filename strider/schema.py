@@ -858,13 +858,21 @@ class StructDescriptor(Generic[T]):
         """Get StructSchema instance from dict stored in database."""
         if obj is None:
             return self
-        
+
         # Check cache
         if self._cache_enabled and obj in self._cache:
             return self._cache[obj]
-        
-        # Get raw dict from database column
-        raw_value = getattr(obj, self.column_name, None)
+
+        # Get raw dict from SQLAlchemy's internal instance state
+        # This bypasses any Python descriptors and accesses raw column values
+        column_key = self.column_name
+        instance_dict = obj.__dict__
+
+        if column_key in instance_dict:
+            raw_value = instance_dict[column_key]
+        else:
+            raw_value = None
+
         if raw_value is None:
             raw_value = {}
         
@@ -888,29 +896,37 @@ class StructDescriptor(Generic[T]):
         # Invalidate cache
         if obj in self._cache:
             del self._cache[obj]
-        
+
+        column_key = self.column_name
+        instance_dict = obj.__dict__
+
         if value is None:
-            setattr(obj, self.column_name, {} if not getattr(self.schema_class, "_nullable", False) else None)
-            return
-        
-        if isinstance(value, self.schema_class):
+            instance_dict[column_key] = {} if not getattr(self.schema_class, "_nullable", False) else None
+        elif isinstance(value, self.schema_class):
             # StructSchema instance → dict
-            raw_dict = value.to_dict()
+            instance_dict[column_key] = value.to_dict()
         elif isinstance(value, dict):
             # Dict - merge with existing for partial updates
-            existing = getattr(obj, self.column_name, None) or {}
-            if isinstance(existing, dict):
-                merged = {**existing, **value}
-            else:
-                merged = value
-            
+            existing = instance_dict.get(column_key)
+
+            if existing is None:
+                existing = {}
+            elif isinstance(existing, self.schema_class):
+                existing = existing.to_dict()
+            elif not isinstance(existing, dict):
+                existing = {}
+
+            merged = {**existing, **value}
+
             # Convert through schema for validation/normalization
             instance = self.schema_class.from_dict_safe(merged)
-            raw_dict = instance.to_dict()
+            instance_dict[column_key] = instance.to_dict()
         else:
             raise TypeError(f"Expected {self.schema_class.__name__} or dict, got {type(value).__name__}")
-        
-        setattr(obj, self.column_name, raw_dict)
+
+        # Mark SQLAlchemy instance as modified so the change is detected
+        from sqlalchemy.orm import attributes
+        attributes.flag_modified(obj, column_key)
     
     def __delete__(self, obj) -> None:
         """Delete the value."""

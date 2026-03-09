@@ -191,3 +191,130 @@ async def test_exists(setup_db):
         await session.commit()
     finally:
         await session.close()
+
+
+# =============================================================================
+# Testes para campos Struct (StructDescriptor auto-creation)
+# =============================================================================
+
+from strider.schema import StructSchema, StringField, IntegerField
+
+
+class RuntimeSettings(StructSchema):
+    """Schema de teste para runtime_overrides."""
+    timeout = IntegerField(default=30)
+    retries = IntegerField(default=3)
+    mode = StringField(default="standard", choices=["standard", "aggressive"])
+
+
+class TestSession(Model):
+    """Model com campo struct para testes."""
+
+    __tablename__ = "test_sessions"
+
+    id: Mapped[int] = Field.pk()
+    name: Mapped[str] = Field.string(max_length=100)
+    # Este campo deve automaticamente retornar uma StructSchema, nunca um dict
+    runtime_overrides: Mapped[RuntimeSettings] = Field.struct(RuntimeSettings)
+
+
+@pytest.mark.asyncio
+async def test_struct_field_returns_struct_instance(setup_db):
+    """
+    Testa que campos struct automaticamente retornam StructSchema.
+
+    Isso garante que não ocorra o erro:
+    AttributeError: 'dict' object has no attribute 'to_dict'
+    """
+    session = await get_session()
+
+    try:
+        # Cria sessão com valores padrão
+        test_session = await TestSession.objects.using(session).create(
+            name="Test Session",
+        )
+
+        # O campo runtime_overrides deve retornar uma StructSchema, nunca um dict
+        assert isinstance(test_session.runtime_overrides, RuntimeSettings), \
+            f"Expected RuntimeSettings, got {type(test_session.runtime_overrides)}"
+
+        # Deve ter o método to_dict()
+        assert hasattr(test_session.runtime_overrides, 'to_dict'), \
+            "Struct instance should have to_dict() method"
+
+        # Valores padrão devem estar presentes
+        assert test_session.runtime_overrides.timeout == 30
+        assert test_session.runtime_overrides.retries == 3
+        assert test_session.runtime_overrides.mode == "standard"
+
+        # to_dict() deve funcionar corretamente
+        overrides_dict = test_session.runtime_overrides.to_dict()
+        assert isinstance(overrides_dict, dict)
+        assert overrides_dict["timeout"] == 30
+        assert overrides_dict["retries"] == 3
+        assert overrides_dict["mode"] == "standard"
+
+        await session.commit()
+    finally:
+        await session.close()
+
+
+@pytest.mark.asyncio
+async def test_struct_field_with_custom_values(setup_db):
+    """Testa campo struct com valores customizados."""
+    session = await get_session()
+
+    try:
+        # Cria com valores customizados via dict
+        test_session = TestSession(name="Custom Session")
+        test_session.runtime_overrides = {"timeout": 60, "mode": "aggressive"}
+        session.add(test_session)
+        await session.flush()
+
+        # Recarrega do banco
+        await session.refresh(test_session)
+
+        # Deve retornar StructSchema, não dict
+        assert isinstance(test_session.runtime_overrides, RuntimeSettings)
+
+        # Valores customizados devem estar presentes
+        assert test_session.runtime_overrides.timeout == 60
+        assert test_session.runtime_overrides.mode == "aggressive"
+        # Valor não especificado usa default
+        assert test_session.runtime_overrides.retries == 3
+
+        # to_dict() deve funcionar
+        data = test_session.runtime_overrides.to_dict()
+        assert data["timeout"] == 60
+        assert data["mode"] == "aggressive"
+
+        await session.commit()
+    finally:
+        await session.close()
+
+
+@pytest.mark.asyncio
+async def test_struct_field_partial_update(setup_db):
+    """Testa atualização parcial do campo struct."""
+    session = await get_session()
+
+    try:
+        # Cria sessão
+        test_session = await TestSession.objects.using(session).create(
+            name="Update Test",
+            runtime_overrides={"timeout": 45, "retries": 5}
+        )
+
+        # Atualiza parcialmente
+        test_session.runtime_overrides = {"mode": "aggressive"}
+        await session.flush()
+        await session.refresh(test_session)
+
+        # Valores devem estar mergeados
+        assert test_session.runtime_overrides.timeout == 45  # Mantido
+        assert test_session.runtime_overrides.retries == 5    # Mantido
+        assert test_session.runtime_overrides.mode == "aggressive"  # Atualizado
+
+        await session.commit()
+    finally:
+        await session.close()

@@ -558,18 +558,53 @@ class Manager[T: "Model"]:
 class ModelMeta(type(Base)):
     """
     Metaclass para Models.
-    
-    Adiciona automaticamente o Manager 'objects' a cada Model.
+
+    Adiciona automaticamente:
+    - Manager 'objects' a cada Model
+    - StructDescriptor para campos JSON com struct_schema
     """
-    
+
     def __new__(mcs, name: str, bases: tuple, namespace: dict[str, Any], **kwargs: Any):
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)
-        
+
         # Não adiciona manager à classe Base
         if name != "Model" and name != "Base":
             cls.objects = Manager(cls)
-        
+
         return cls
+
+    def __init__(cls, name: str, bases: tuple, namespace: dict[str, Any], **kwargs: Any):
+        super().__init__(name, bases, namespace, **kwargs)
+
+        # Skip for abstract base classes
+        if name in ("Model", "Base"):
+            return
+
+        # Auto-create StructDescriptor for struct fields
+        # This runs after SQLAlchemy has processed the mapped columns
+        from strider.schema import StructDescriptor
+
+        for attr_name in dir(cls):
+            try:
+                attr = getattr(cls, attr_name, None)
+            except Exception:
+                continue
+
+            # Skip private attributes and methods
+            if attr_name.startswith("_"):
+                continue
+
+            # Check if this is a mapped column with struct_schema info
+            if hasattr(attr, "info") and isinstance(attr.info, dict):
+                schema_class = attr.info.get("struct_schema")
+                if schema_class is not None:
+                    # Get the actual column name (could be different from attr_name)
+                    column_name = getattr(attr, "name", attr_name)
+
+                    # Create and set the StructDescriptor on the class
+                    descriptor = StructDescriptor(schema_class, column_name)
+                    descriptor.__set_name__(cls, attr_name)
+                    setattr(cls, attr_name, descriptor)
 
 
 class Model(Base, metaclass=ModelMeta):
