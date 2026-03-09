@@ -197,7 +197,7 @@ async def test_exists(setup_db):
 # Testes para campos Struct (StructDescriptor auto-creation)
 # =============================================================================
 
-from strider.schema import StructSchema, StringField, IntegerField
+from strider.schema import StructSchema, StringField, IntegerField, BooleanField
 
 
 class RuntimeSettings(StructSchema):
@@ -314,6 +314,94 @@ async def test_struct_field_partial_update(setup_db):
         assert test_session.runtime_overrides.timeout == 45  # Mantido
         assert test_session.runtime_overrides.retries == 5    # Mantido
         assert test_session.runtime_overrides.mode == "aggressive"  # Atualizado
+
+        await session.commit()
+    finally:
+        await session.close()
+
+
+# =============================================================================
+# Teste para ListField com NestedField
+# =============================================================================
+
+from strider.schema import ListField, NestedField
+
+
+class FilterItem(StructSchema):
+    """Item de filtro para testes de lista."""
+    id = StringField(default="")
+    name = StringField(default="")
+    enabled = BooleanField(default=True)
+
+
+class ConfigWithFilters(StructSchema):
+    """Schema com lista de filtros."""
+    filters = ListField(
+        item_field=NestedField(FilterItem),
+        default=[]
+    )
+
+
+class TestConfigModel(Model):
+    """Model com campo struct contendo lista de nested schemas."""
+
+    __tablename__ = "test_config_models"
+
+    id: Mapped[int] = Field.pk()
+    name: Mapped[str] = Field.string(max_length=100)
+    config: Mapped[ConfigWithFilters] = Field.struct(ConfigWithFilters)
+
+
+@pytest.mark.asyncio
+async def test_list_field_with_nested_serialization(setup_db):
+    """
+    Testa que ListField com NestedField serializa corretamente para dict.
+
+    Isso garante que itens de lista sejam convertidos de StructSchema para dict
+    quando serializados para o banco (JSON).
+    """
+    session = await get_session()
+
+    try:
+        # Cria modelo com lista de filtros
+        test_config = await TestConfigModel.objects.using(session).create(
+            name="Test Config",
+            config={
+                "filters": [
+                    {"id": "filter-1", "name": "Filter One", "enabled": True},
+                    {"id": "filter-2", "name": "Filter Two", "enabled": False},
+                ]
+            }
+        )
+
+        # O campo config deve retornar uma instância ConfigWithFilters
+        assert isinstance(test_config.config, ConfigWithFilters)
+
+        # A lista de filtros deve conter instâncias FilterItem
+        assert len(test_config.config.filters) == 2
+        assert isinstance(test_config.config.filters[0], FilterItem)
+        assert isinstance(test_config.config.filters[1], FilterItem)
+
+        # Verifica valores
+        assert test_config.config.filters[0].id == "filter-1"
+        assert test_config.config.filters[0].name == "Filter One"
+        assert test_config.config.filters[0].enabled is True
+
+        assert test_config.config.filters[1].id == "filter-2"
+        assert test_config.config.filters[1].name == "Filter Two"
+        assert test_config.config.filters[1].enabled is False
+
+        # to_dict() deve converter tudo corretamente (incluindo itens da lista)
+        config_dict = test_config.config.to_dict()
+        assert isinstance(config_dict, dict)
+        assert "filters" in config_dict
+        assert isinstance(config_dict["filters"], list)
+        assert len(config_dict["filters"]) == 2
+
+        # Itens da lista devem ser dicts, não StructSchema
+        assert isinstance(config_dict["filters"][0], dict)
+        assert config_dict["filters"][0]["id"] == "filter-1"
+        assert config_dict["filters"][0]["name"] == "Filter One"
 
         await session.commit()
     finally:

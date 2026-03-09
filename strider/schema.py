@@ -311,30 +311,51 @@ class ListField(Field):
     def coerce(self, value: Any) -> list:
         if value is None:
             return self.get_default() if not self.nullable else None
-        
+
         if not isinstance(value, list):
-            return [value]
-        
+            value = [value]
+
         # Limit size during coercion
         if self.max_size and len(value) > self.max_size:
             logger.warning(f"ListField: truncating list from {len(value)} to {self.max_size} items")
-            return value[:self.max_size]
-        
+            value = value[:self.max_size]
+
+        # Coerce each item through the item_field if defined
+        if self.item_field:
+            return [self.item_field.coerce(item) for item in value]
+
         return value
     
     def fast_coerce(self, value: Any) -> list:
         """Fast path: don't validate items during loading."""
         if value is None:
             return self.get_default() if not self.nullable else None
-        
+
         if not isinstance(value, list):
-            return [value]
-        
+            value = [value]
+
         if self.max_size and len(value) > self.max_size:
-            return value[:self.max_size]
-        
+            value = value[:self.max_size]
+
+        # Fast coerce each item through the item_field if defined
+        if self.item_field:
+            return [self.item_field.fast_coerce(item) for item in value]
+
         return value
-    
+
+    def serialize(self, value: Any) -> Any:
+        """Serialize list items using the item_field's serialize method."""
+        if value is None:
+            return None
+
+        if not isinstance(value, list):
+            return value
+
+        if self.item_field:
+            return [self.item_field.serialize(item) for item in value]
+
+        return value
+
     def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({
