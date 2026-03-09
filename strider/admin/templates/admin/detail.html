@@ -1678,9 +1678,9 @@ endblock %}
 
 {% block extra_js %}
 <script>
-    const ADMIN_PREFIX = "{{ admin_prefix }}";
-    const APP_LABEL = "{{ app_label }}";
-    const MODEL_NAME = "{{ model_name }}";
+    var ADMIN_PREFIX = ADMIN_PREFIX || "{{ admin_prefix }}";
+    var APP_LABEL = APP_LABEL || "{{ app_label }}";
+    var MODEL_NAME = MODEL_NAME || "{{ model_name }}";
 
     function detailView() {
         const isNew = "{{ 'true' if is_new else 'false' }}" === "true";
@@ -1819,8 +1819,8 @@ endblock %}
 
             async loadData() {
                 if (isNew) {
-                    const allFields = JSON.parse('{{ fields_json | safe }}');
-                    const editableNames = JSON.parse('{{ editable_fields_json | safe }}');
+                    const allFields = {{ fields_json | tojson }};
+                    const editableNames = {{ editable_fields_json | tojson }};
 
                     this.fields = allFields;
                     this.categorizeFields(allFields, editableNames);

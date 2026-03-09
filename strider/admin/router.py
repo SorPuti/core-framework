@@ -475,9 +475,8 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         from strider.admin.permissions import get_user_model_permissions
         user_perms = await get_user_model_permissions(user, app_label, model_name)
         
-        import json as _json
-        fields_json = _json.dumps(admin_instance.get_column_info())
-        editable_fields_json = _json.dumps(admin_instance.get_editable_fields())
+        fields_data = admin_instance.get_column_info()
+        editable_fields_data = admin_instance.get_editable_fields()
         
         ctx = _base_context(
             request,
@@ -487,8 +486,8 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             pk=pk,
             admin=admin_instance,
             is_new=(pk == "new"),
-            fields_json=fields_json,
-            editable_fields_json=editable_fields_json,
+            fields_json=fields_data,
+            editable_fields_json=editable_fields_data,
             user_perms=user_perms,
         )
         return _templates.TemplateResponse("admin/detail.html", ctx)
