@@ -335,7 +335,7 @@ from strider.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.18.11"
+__version__ = "0.18.12"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",

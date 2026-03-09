@@ -15,6 +15,7 @@ import pytest
 import pytest_asyncio
 from unittest.mock import patch, MagicMock
 
+from strider.schema import StructSchema, StringField
 from strider.admin.site import AdminSite
 from strider.admin.options import ModelAdmin, InlineModelAdmin
 from strider.admin.exceptions import (
@@ -97,6 +98,12 @@ class MockModelNoTable:
     __name__ = "MockModelNoTable"
     __module__ = "apps.testing.models"
     __tablename__ = "mock_no_table"
+
+
+class MockStruct(StructSchema):
+    """Struct simples para validar serialização do admin."""
+
+    loginid = StringField(nullable=False)
 
 
 # =========================================================================
@@ -520,6 +527,16 @@ class TestSerializers:
         data = serialize_instance(obj, ["id", "name", "email"])
         assert data["id"] == 1
         assert data["name"] == "Test"
+
+    def test_serialize_instance_converts_structschema_to_dict(self):
+        obj = MagicMock()
+        obj.id = 1
+        obj.deriv_data = MockStruct(loginid="VRTC123456")
+
+        data = serialize_instance(obj, ["id", "deriv_data"])
+
+        assert data["id"] == 1
+        assert data["deriv_data"] == {"loginid": "VRTC123456"}
 
 
 # =========================================================================

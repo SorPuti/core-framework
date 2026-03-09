@@ -18,6 +18,42 @@ from pydantic import BaseModel, ConfigDict, create_model
 
 logger = logging.getLogger("strider.admin")
 
+
+def _convert_value(value: Any) -> Any:
+    """
+    Converte valores para tipos serializáveis.
+    
+    - StructSchema -> dict (via to_dict())
+    - datetime -> ISO string
+    - UUID -> string
+    - list/set -> lista serializada recursivamente
+    - outros -> valor original
+    """
+    if value is None:
+        return None
+    
+    # StructSchema (e classes similares com to_dict)
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        return value.to_dict()
+    
+    # datetime
+    if isinstance(value, datetime):
+        return value.isoformat()
+    
+    # UUID
+    if isinstance(value, UUID):
+        return str(value)
+    
+    # list/set - processar recursivamente
+    if isinstance(value, (list, set)):
+        return [_convert_value(item) for item in value]
+    
+    # dict - processar valores recursivamente
+    if isinstance(value, dict):
+        return {k: _convert_value(v) for k, v in value.items()}
+    
+    return value
+
 # Mapa de tipos SQLAlchemy para tipos Python
 _TYPE_MAP: dict[str, type] = {
     "INTEGER": int,
@@ -240,12 +276,8 @@ def serialize_instance(
                         serialized.append(str(item))
                 data[field_name] = serialized
                 continue
-            # Converte tipos não serializáveis
-            if isinstance(value, datetime):
-                value = value.isoformat()
-            elif isinstance(value, UUID):
-                value = str(value)
-            data[field_name] = value
+            # Converte tipos não serializáveis (StructSchema, datetime, UUID, etc.)
+            data[field_name] = _convert_value(value)
         # Tenta método do ModelAdmin
         elif admin and hasattr(admin, field_name) and callable(getattr(admin, field_name)):
             method = getattr(admin, field_name)
