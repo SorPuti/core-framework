@@ -555,7 +555,7 @@ class LoggingMiddleware(ASGIMiddleware):
         msg = f"-> {request.method} {request.url.path}"
         if request.query_params:
             msg += f"?{request.query_params}"
-        logger.info(msg)
+        logger.debug(msg)
         
         if self.log_headers:
             logger.debug(f"  Headers: {dict(request.headers)}")
@@ -575,7 +575,7 @@ class LoggingMiddleware(ASGIMiddleware):
         if start:
             duration = f" [{time.perf_counter() - start:.3f}s]"
         
-        logger.info(f"<- {status_code}{duration}")
+        logger.debug(f"<- {status_code}{duration}")
     
     async def on_error(self, scope: Scope, request: Request, exc: Exception) -> None:
         import logging

@@ -125,6 +125,26 @@ class _LoggerManager:
         uvicorn_access.setLevel(level_int)
         uvicorn_error.setLevel(level_int)
 
+        # Garante que os handlers existentes tenham o nível correto
+        if has_existing_handlers:
+            for handler in root_logger.handlers:
+                handler.setLevel(level_int)
+
+        # CRÍTICO: O Uvicorn pode ter propagate=False nos loggers de access/error
+        # Se não tiver handlers próprios, as logs somem. Precisamos garantir que
+        # esses loggers tenham handlers se estiverem com propagate=False
+        for uvicorn_logger_instance in [uvicorn_logger, uvicorn_access, uvicorn_error]:
+            # Ajusta nível dos handlers existentes
+            for handler in uvicorn_logger_instance.handlers:
+                handler.setLevel(level_int)
+
+            # Se o logger tem propagate=False e não tem handlers, adiciona um
+            if not uvicorn_logger_instance.propagate and not uvicorn_logger_instance.handlers:
+                handler = logging.StreamHandler(sys.stdout)
+                handler.setLevel(level_int)
+                handler.setFormatter(logging.Formatter('%(levelname)s:     %(message)s'))
+                uvicorn_logger_instance.addHandler(handler)
+
         # Configura loggers de bibliotecas comuns para não poluir
         # quando o nível é DEBUG
         if level_int <= logging.DEBUG:

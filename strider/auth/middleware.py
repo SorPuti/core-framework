@@ -174,7 +174,7 @@ class JWTAuthBackend(AuthenticationBackend):
             if user is None:
                 return None
             
-            logger.info(f"User authenticated: {getattr(user, 'email', user)}")
+            logger.debug(f"User authenticated: {getattr(user, 'email', user)}")
             return AuthCredentials(["authenticated"]), AuthenticatedUser(user)
             
         except InvalidToken as e:
