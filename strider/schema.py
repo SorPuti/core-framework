@@ -641,7 +641,7 @@ class StructSchema(metaclass=StructSchemaMeta):
         """
         from pydantic_core import core_schema
 
-        def validate_and_create(data: Any) -> Any:
+        def validate_and_create(data: Any, validator: Any) -> Any:
             if isinstance(data, cls):
                 return data
             if isinstance(data, dict):
@@ -655,15 +655,42 @@ class StructSchema(metaclass=StructSchemaMeta):
                 return obj
             return obj
 
-        # Use json_or_python_schema for flexibility
-        # Accepts both dict (from JSON) and StructSchema instances
-        full_schema = core_schema.json_or_python_schema(
-            json_schema=core_schema.no_info_plain_validator_function(
-                validate_and_create,
-            ),
-            python_schema=core_schema.no_info_plain_validator_function(
-                validate_and_create,
-            ),
+        # Build a typed dict schema for JSON Schema generation
+        # This provides type information for OpenAPI documentation
+        properties: dict[str, Any] = {}
+        for name, field in cls._fields.items():
+            default = field.get_default()
+            if isinstance(default, bool):
+                prop = core_schema.bool_schema()
+            elif isinstance(default, int):
+                prop = core_schema.int_schema()
+            elif isinstance(default, float):
+                prop = core_schema.float_schema()
+            elif isinstance(default, str):
+                prop = core_schema.str_schema()
+            elif isinstance(default, list):
+                prop = core_schema.list_schema()
+            elif isinstance(default, dict):
+                prop = core_schema.dict_schema()
+            else:
+                prop = core_schema.any_schema()
+
+            if field.nullable:
+                prop = core_schema.nullable_schema(prop)
+
+            properties[name] = prop
+
+        # Use typed-dict-schema for proper JSON Schema generation
+        # combined with validation function for StructSchema creation
+        dict_schema = core_schema.typed_dict_schema(
+            {name: core_schema.typed_dict_field(schema) for name, schema in properties.items()},
+            total=False,  # All fields are optional in JSON Schema
+        )
+
+        # Wrap with validator that converts dict -> StructSchema
+        full_schema = core_schema.no_info_wrap_validator_function(
+            validate_and_create,
+            dict_schema,
             serialization=core_schema.plain_serializer_function_ser_schema(
                 serialize_to_dict,
                 when_used="json",
@@ -671,6 +698,22 @@ class StructSchema(metaclass=StructSchemaMeta):
         )
 
         return full_schema
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """
+        Generate JSON Schema for OpenAPI documentation.
+
+        This allows FastAPI to generate proper OpenAPI schemas for StructSchema fields.
+        """
+        # Get the inner typed_dict schema
+        json_schema = handler(core_schema)
+
+        # Add metadata
+        json_schema["title"] = cls.__name__
+        json_schema["description"] = f"Struct schema: {cls.__name__}"
+
+        return json_schema
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Set attribute with validation for known fields."""
