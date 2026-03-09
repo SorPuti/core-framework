@@ -13,8 +13,15 @@ Comandos:
     run             Executa servidor de desenvolvimento
     shell           Abre shell interativo async
     routes          Lista rotas registradas
+    nginx-config    Gera configuração do Nginx com WebSocket support
     test            Executa testes com ambiente isolado
     version         Mostra versão do framework
+
+Comando nginx-config:
+    stride nginx-config                           # Mostra configuração na tela
+    stride nginx-config --ssl                     # Configuração com SSL
+    stride nginx-config -o /etc/nginx/conf.d/app.conf
+    stride nginx-config --upstream 127.0.0.1:8000 --port 443
 
 Comando test:
     stride test                       # Roda todos os testes em tests/
@@ -2082,40 +2089,293 @@ def cmd_shell(args: argparse.Namespace) -> int:
 def cmd_routes(args: argparse.Namespace) -> int:
     """Lista rotas registradas (excluindo rotas do Admin Panel)."""
     config = load_config()
-    
+
     # Adiciona diretório atual ao path
+    sys.path.insert(0, os.getcwd())
+
+    app = load_app(config["app_module"])
+    if app is None:
+        return 1
+
+    # Obtém FastAPI app
+    from strider import StrideApp
+    if isinstance(app, StrideApp):
+        fastapi_app = app.app
+        admin_prefix = getattr(app.settings, "admin_url_prefix", "/admin")
+        # Get WebSocket routes from separate router
+        ws_router = getattr(app, "_ws_router", None)
+    else:
+        fastapi_app = app
+        admin_prefix = "/admin"
+        ws_router = None
+
+    # Categorizar rotas
+    http_routes = []
+    ws_routes = []
+
+    # Process HTTP routes from FastAPI app
+    for route in fastapi_app.routes:
+        path = getattr(route, "path", "")
+        # Skip admin panel routes
+        if path.startswith(admin_prefix):
+            continue
+
+        # Detectar tipo de rota
+        route_type = type(route).__name__
+        name = getattr(route, "name", "") or ""
+
+        if hasattr(route, "methods"):
+            # Rota HTTP
+            methods = ", ".join(route.methods)
+            http_routes.append({
+                "methods": methods,
+                "path": path,
+                "name": name,
+                "type": "http"
+            })
+        elif "WebSocket" in route_type:
+            # Rota WebSocket no FastAPI app (ex: admin routes)
+            ws_routes.append({
+                "methods": "WS",
+                "path": path,
+                "name": name,
+                "type": "websocket"
+            })
+
+    # Process WebSocket routes from dedicated WS router
+    if ws_router and hasattr(ws_router, "routes"):
+        for route in ws_router.routes:
+            path = getattr(route, "path", "")
+            # Skip admin panel routes
+            if path.startswith(admin_prefix):
+                continue
+            name = getattr(route, "name", "") or ""
+            ws_routes.append({
+                "methods": "WS",
+                "path": path,
+                "name": name,
+                "type": "websocket"
+            })
+
+    # Agrupar por app/prefixo
+    def group_by_prefix(routes_list):
+        groups = {}
+        for route in routes_list:
+            path = route["path"]
+            # Extrair prefixo (ex: /api/auth/ -> auth)
+            parts = path.strip("/").split("/")
+            if len(parts) >= 2 and parts[0] in ("api", "admin"):
+                prefix = parts[1] if len(parts) > 1 else "other"
+            elif len(parts) >= 1:
+                prefix = parts[0] if parts[0] else "root"
+            else:
+                prefix = "other"
+
+            if prefix not in groups:
+                groups[prefix] = []
+            groups[prefix].append(route)
+        return groups
+
+    http_groups = group_by_prefix(http_routes)
+    ws_groups = group_by_prefix(ws_routes)
+
+    # Imprimir rotas HTTP
+    print(bold("\n📡 HTTP Routes\n"))
+
+    for prefix in sorted(http_groups.keys()):
+        routes_in_group = http_groups[prefix]
+        print(f"\n{Colors.CYAN}▸ {prefix.upper()}{Colors.ENDC}")
+        print(f"  {Colors.BOLD}{'Method':<10} {'Path':<45} {'Name':<30}{Colors.ENDC}")
+        print(f"  {'-' * 80}")
+
+        for route in sorted(routes_in_group, key=lambda x: x["path"]):
+            method_color = Colors.GREEN if route["methods"] in ("GET", "HEAD") else Colors.WARNING if route["methods"] in ("POST", "PUT", "PATCH") else Colors.FAIL
+            print(f"  {method_color}{route['methods']:<10}{Colors.ENDC} {route['path']:<45} {route['name']:<30}")
+
+    # Imprimir rotas WebSocket
+    if ws_routes:
+        print(bold("\n\n🔌 WebSocket Routes\n"))
+
+        for prefix in sorted(ws_groups.keys()):
+            routes_in_group = ws_groups[prefix]
+            print(f"\n{Colors.CYAN}▸ {prefix.upper()}{Colors.ENDC}")
+            print(f"  {Colors.BOLD}{'Type':<10} {'Path':<45} {'Name':<30}{Colors.ENDC}")
+            print(f"  {'-' * 80}")
+
+            for route in sorted(routes_in_group, key=lambda x: x["path"]):
+                print(f"  {Colors.BLUE}{route['methods']:<10}{Colors.ENDC} {route['path']:<45} {route['name']:<30}")
+
+    # Resumo
+    total_http = len(http_routes)
+    total_ws = len(ws_routes)
+    print(f"\n{Colors.GREEN}✓{Colors.ENDC} {info(f'Total: {total_http} HTTP + {total_ws} WebSocket routes (admin routes hidden)')}")
+    return 0
+
+
+def cmd_nginx_config(args: argparse.Namespace) -> int:
+    """
+    Gera configuração do Nginx com suporte automático a WebSocket upgrade.
+    
+    Detecta todas as rotas WebSocket registradas e gera as configurações
+    necessárias para proxy pass com upgrade de conexão.
+    """
+    config = load_config()
     sys.path.insert(0, os.getcwd())
     
     app = load_app(config["app_module"])
     if app is None:
         return 1
     
-    # Obtém FastAPI app
     from strider import StrideApp
     if isinstance(app, StrideApp):
         fastapi_app = app.app
-        admin_prefix = getattr(app.settings, "admin_url_prefix", "/admin")
+        ws_router = getattr(app, "_ws_router", None)
+        settings = app.settings
     else:
         fastapi_app = app
-        admin_prefix = "/admin"
+        ws_router = None
+        settings = None
     
-    print(bold("\nRegistered Routes:\n"))
-    print(f"{'Method':<10} {'Path':<40} {'Name':<30}")
-    print("-" * 80)
+    # Coletar rotas WebSocket
+    ws_paths = []
+    if ws_router and hasattr(ws_router, "routes"):
+        for route in ws_router.routes:
+            path = getattr(route, "path", "")
+            if path:
+                ws_paths.append(path)
     
-    route_count = 0
+    # Também verificar no fastapi_app.routes para rotas WebSocket
     for route in fastapi_app.routes:
-        if hasattr(route, "methods"):
-            # Skip admin panel routes
-            if route.path.startswith(admin_prefix):
-                continue
-            methods = ", ".join(route.methods)
-            name = route.name or ""
-            print(f"{methods:<10} {route.path:<40} {name:<30}")
-            route_count += 1
+        route_type = type(route).__name__
+        path = getattr(route, "path", "")
+        if "WebSocket" in route_type and path and not path.startswith("/admin"):
+            ws_paths.append(path)
     
-    print()
-    print(info(f"Total: {route_count} routes (admin routes hidden)"))
+    # Remover duplicatas
+    ws_paths = list(set(ws_paths))
+    
+    # Configurações
+    server_name = args.server_name or "_"
+    port = args.port or 80
+    upstream = args.upstream or "localhost:8000"
+    ssl = args.ssl
+    
+    # Gerar configuração
+    config_lines = []
+    config_lines.append("# Nginx Configuration for Stride Application")
+    config_lines.append("# Auto-generated with WebSocket support")
+    config_lines.append("")
+    
+    # Upstream
+    config_lines.append(f"upstream stride_app {{")
+    config_lines.append(f"    server {upstream};")
+    config_lines.append("}")
+    config_lines.append("")
+    
+    # Server block
+    config_lines.append(f"server {{")
+    config_lines.append(f"    listen {port};")
+    config_lines.append(f"    server_name {server_name};")
+    config_lines.append("")
+    
+    # Logs
+    config_lines.append("    access_log /var/log/nginx/stride_access.log;")
+    config_lines.append("    error_log /var/log/nginx/stride_error.log;")
+    config_lines.append("")
+    
+    # SSL (opcional)
+    if ssl:
+        config_lines.append("    # SSL Configuration")
+        config_lines.append(f"    listen 443 ssl http2;")
+        config_lines.append(f"    ssl_certificate /etc/nginx/ssl/cert.pem;")
+        config_lines.append(f"    ssl_certificate_key /etc/nginx/ssl/key.pem;")
+        config_lines.append("")
+    
+    # Client max body size
+    config_lines.append("    client_max_body_size 100M;")
+    config_lines.append("")
+    
+    # Gzip
+    config_lines.append("    # Gzip compression")
+    config_lines.append("    gzip on;")
+    config_lines.append("    gzip_types application/json text/plain text/css application/javascript;")
+    config_lines.append("")
+    
+    # WebSocket locations
+    if ws_paths:
+        config_lines.append("    # WebSocket Routes with automatic upgrade")
+        config_lines.append("    # These routes require Connection and Upgrade headers")
+        config_lines.append("")
+        
+        for path in sorted(ws_paths):
+            config_lines.append(f"    location {path} {{")
+            config_lines.append("        proxy_pass http://stride_app;")
+            config_lines.append("        proxy_http_version 1.1;")
+            config_lines.append("")
+            config_lines.append("        # WebSocket upgrade headers (automatic)")
+            config_lines.append("        proxy_set_header Upgrade $http_upgrade;")
+            config_lines.append('        proxy_set_header Connection "upgrade";')
+            config_lines.append("")
+            config_lines.append("        # Standard proxy headers")
+            config_lines.append("        proxy_set_header Host $host;")
+            config_lines.append("        proxy_set_header X-Real-IP $remote_addr;")
+            config_lines.append("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;")
+            config_lines.append("        proxy_set_header X-Forwarded-Proto $scheme;")
+            config_lines.append("")
+            config_lines.append("        # Timeouts for long-lived connections")
+            config_lines.append("        proxy_read_timeout 86400;")
+            config_lines.append("        proxy_send_timeout 86400;")
+            config_lines.append("    }")
+            config_lines.append("")
+    
+    # API location (catch-all)
+    config_lines.append("    # API Routes (HTTP)")
+    config_lines.append("    location / {")
+    config_lines.append("        proxy_pass http://stride_app;")
+    config_lines.append("        proxy_http_version 1.1;")
+    config_lines.append("")
+    config_lines.append("        # Standard proxy headers")
+    config_lines.append("        proxy_set_header Host $host;")
+    config_lines.append("        proxy_set_header X-Real-IP $remote_addr;")
+    config_lines.append("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;")
+    config_lines.append("        proxy_set_header X-Forwarded-Proto $scheme;")
+    config_lines.append("")
+    config_lines.append("        # Timeouts")
+    config_lines.append("        proxy_read_timeout 60s;")
+    config_lines.append("        proxy_send_timeout 60s;")
+    config_lines.append("    }")
+    config_lines.append("")
+    config_lines.append("}")
+    
+    # Output
+    nginx_config = "\n".join(config_lines)
+    
+    if args.output:
+        with open(args.output, "w") as f:
+            f.write(nginx_config)
+        print(success(f"✓ Nginx config saved to {args.output}"))
+    else:
+        print(bold("\n🌐 Generated Nginx Configuration\n"))
+        print(nginx_config)
+    
+    # Summary
+    print(bold("\n📊 Summary"))
+    print(f"  Server: {server_name}")
+    print(f"  Port: {port}")
+    print(f"  Upstream: {upstream}")
+    print(f"  SSL: {'enabled' if ssl else 'disabled'}")
+    if ws_paths:
+        print(f"  WebSocket routes: {len(ws_paths)}")
+        for path in sorted(ws_paths):
+            print(f"    • {path}")
+    else:
+        print("  WebSocket routes: none detected")
+    
+    print(f"\n{info('Copy this configuration to /etc/nginx/sites-available/ and enable it:')}")
+    print(f"  sudo ln -s /etc/nginx/sites-available/stride /etc/nginx/sites-enabled/")
+    print(f"  sudo nginx -t  # Test configuration")
+    print(f"  sudo systemctl reload nginx")
+    
     return 0
 
 
@@ -3575,7 +3835,34 @@ For more information, visit: https://github.com/SorPuti/strider
     # routes
     routes_parser = subparsers.add_parser("routes", help="List registered routes")
     routes_parser.set_defaults(func=cmd_routes)
-    
+
+    # nginx-config
+    nginx_parser = subparsers.add_parser(
+        "nginx-config",
+        help="Generate Nginx configuration with WebSocket support"
+    )
+    nginx_parser.add_argument(
+        "--server-name",
+        default="_",
+        help="Server name (default: _)")
+    nginx_parser.add_argument(
+        "--port",
+        type=int,
+        default=80,
+        help="Listen port (default: 80)")
+    nginx_parser.add_argument(
+        "--upstream",
+        default="localhost:8000",
+        help="Upstream server (default: localhost:8000)")
+    nginx_parser.add_argument(
+        "--ssl",
+        action="store_true",
+        help="Enable SSL configuration")
+    nginx_parser.add_argument(
+        "-o", "--output",
+        help="Output file path (default: stdout)")
+    nginx_parser.set_defaults(func=cmd_nginx_config)
+
     # createapp
     createapp_parser = subparsers.add_parser("createapp", help="Create a new app/module")
     createapp_parser.add_argument("name", help="App name")
