@@ -31,6 +31,7 @@ from collections.abc import Callable
 
 if TYPE_CHECKING:
     from strider.views import ViewSet, APIView
+    from strider.realtime import WebSocketView
     from strider.routing import Router, AutoRouter
 
 logger = logging.getLogger("strider.urls")
@@ -415,6 +416,14 @@ def _register_pattern(
                 **{k: v for k, v in pattern.kwargs.items() if k not in ("basename", "tags")},
             )
             logger.debug(f"Registered APIView {view.__name__} at /{route}")
+
+        elif issubclass(view, WebSocketView):
+            # WebSocketView - usa register_websocket()
+            router.register_websocket(
+                path=route,
+                view_class=view,
+            )
+            logger.debug(f"Registered WebSocketView {view.__name__} at {route}")
             
         else:
             # Outras classes - tenta registrar como View
