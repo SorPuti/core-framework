@@ -574,37 +574,109 @@ class ChoiceField(Field):
 
 class StructSchemaMeta(type):
     """Metaclass for StructSchema that collects field definitions."""
-    
+
     def __new__(mcs, name: str, bases: tuple, namespace: dict, **kwargs):
-        # Collect field definitions from class body
+        # Collect field definitions from class body (assignment style: name = Field())
         fields: dict[str, Field] = {}
-        
+
         for key, value in list(namespace.items()):
             if isinstance(value, Field) and not key.startswith("_"):
                 fields[key] = value
-        
+
+        # Create the class first (without annotations processing)
+        cls = super().__new__(mcs, name, bases, namespace, **kwargs)
+
+        # After class creation, collect from __annotations__ (PEP 526 style: name: FieldType)
+        # This handles cases like: class MyStruct(StructSchema): name: StringField
+        if hasattr(cls, "__annotations__"):
+            for key, anno in cls.__annotations__.items():
+                if not key.startswith("_") and key not in fields:
+                    # If annotation is a Field class (not an instance), instantiate it
+                    try:
+                        if isinstance(anno, type) and issubclass(anno, Field):
+                            fields[key] = anno()
+                        # If annotation is already a Field instance
+                        elif isinstance(anno, Field):
+                            fields[key] = anno
+                    except TypeError:
+                        # issubclass may fail for some types
+                        pass
+
         # Inherit fields from base classes
         for base in bases:
             if hasattr(base, "_fields"):
                 for field_name, field in base._fields.items():
                     if field_name not in fields:
                         fields[field_name] = field
-        
+
         # Build alias map
         alias_map: dict[str, str] = {}
         for field_name, field in fields.items():
             for alias in field.aliases:
                 alias_map[alias] = field_name
-        
-        # Create the class
-        cls = super().__new__(mcs, name, bases, namespace, **kwargs)
-        
+
         # Store metadata on the class
         cls._fields = fields
         cls._alias_map = alias_map
         cls._schema_name = name
-        
+
         return cls
+
+
+def _field_to_json_schema(field: "Field") -> dict[str, Any]:
+    """
+    Convert a Field to JSON Schema for Swagger UI.
+
+    Handles all field types including nested StructSchemas and lists.
+    """
+    # StringField
+    if isinstance(field, StringField):
+        schema: dict[str, Any] = {"type": "string"}
+        if field.choices:
+            schema["enum"] = field.choices
+        return schema
+
+    # IntegerField
+    if isinstance(field, IntegerField):
+        return {"type": "integer"}
+
+    # FloatField
+    if isinstance(field, FloatField):
+        return {"type": "number"}
+
+    # BooleanField
+    if isinstance(field, BooleanField):
+        return {"type": "boolean"}
+
+    # ListField with NestedField - expand the nested schema
+    if isinstance(field, ListField) and field.item_field is not None:
+        if isinstance(field.item_field, NestedField):
+            nested_class = field.item_field.schema_class
+            if nested_class is not None and hasattr(nested_class, "__get_pydantic_json_schema__"):
+                nested_schema = nested_class.__get_pydantic_json_schema__(None, None)
+                return {"type": "array", "items": nested_schema}
+        # Generic list
+        return {"type": "array", "items": {"type": "object"}}
+
+    # NestedField - expand the schema
+    if isinstance(field, NestedField):
+        if field.schema_class is not None and hasattr(field.schema_class, "__get_pydantic_json_schema__"):
+            return field.schema_class.__get_pydantic_json_schema__(None, None)
+        return {"type": "object"}
+
+    # DictField
+    if isinstance(field, DictField):
+        return {"type": "object"}
+
+    # ChoiceField
+    if isinstance(field, ChoiceField):
+        schema = {"type": "string"}
+        if hasattr(field.choices_class, "choices"):
+            schema["enum"] = [c[0] for c in field.choices_class.choices]
+        return schema
+
+    # Default fallback
+    return {"type": "object"}
 
 
 class StructSchema(metaclass=StructSchemaMeta):
@@ -702,18 +774,35 @@ class StructSchema(metaclass=StructSchemaMeta):
     @classmethod
     def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
         """
-        Generate JSON Schema for OpenAPI documentation.
+        Generate complete JSON Schema for Swagger UI.
 
-        This allows FastAPI to generate proper OpenAPI schemas for StructSchema fields.
+        This builds a proper JSON Schema with all properties expanded,
+        including nested StructSchemas and ListField with NestedField.
         """
-        # Get the inner typed_dict schema
-        json_schema = handler(core_schema)
+        # Generate the JSON schema manually with full field information
+        properties = {}
+        required = []
 
-        # Add metadata
-        json_schema["title"] = cls.__name__
-        json_schema["description"] = f"Struct schema: {cls.__name__}"
+        for name, field in cls._fields.items():
+            prop_schema = _field_to_json_schema(field)
+            properties[name] = prop_schema
 
-        return json_schema
+            # Field is required if not nullable and has a non-None default
+            if not field.nullable:
+                default = field.get_default()
+                if default is not None:
+                    required.append(name)
+
+        result: dict[str, Any] = {
+            "type": "object",
+            "title": cls.__name__,
+            "properties": properties,
+        }
+
+        if required:
+            result["required"] = required
+
+        return result
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Set attribute with validation for known fields."""
