@@ -321,6 +321,67 @@ async def test_struct_field_partial_update(setup_db):
 
 
 # =============================================================================
+# Teste para StructSchema em Pydantic OutputSchema
+# =============================================================================
+
+from strider import OutputSchema
+
+
+class AddressStruct(StructSchema):
+    """Struct de endereço para testes Pydantic."""
+    street = StringField(default="")
+    city = StringField(default="")
+    zip_code = StringField(default="")
+
+
+class UserWithAddressOutput(OutputSchema):
+    """OutputSchema que usa StructSchema diretamente."""
+    id: int
+    name: str
+    address: AddressStruct
+
+
+@pytest.mark.asyncio
+async def test_struct_schema_in_pydantic_output():
+    """
+    Testa que StructSchema pode ser usado diretamente em OutputSchema.
+
+    Isso garante que __get_pydantic_core_schema__ funciona corretamente
+    para serialização em responses da API.
+    """
+    # Criar instância com StructSchema
+    output = UserWithAddressOutput(
+        id=1,
+        name="John Doe",
+        address=AddressStruct(street="123 Main St", city="NYC", zip_code="10001")
+    )
+
+    # Verificar que o StructSchema está presente
+    assert isinstance(output.address, AddressStruct)
+    assert output.address.street == "123 Main St"
+    assert output.address.city == "NYC"
+
+    # Verificar serialização para JSON (o que realmente importa para a API)
+    from pydantic import TypeAdapter
+    ta = TypeAdapter(UserWithAddressOutput)
+    json_bytes = ta.dump_json(output)
+    json_str = json_bytes.decode('utf-8')
+
+    # Verificar que o JSON contém os valores corretos
+    assert '"street":"123 Main St"' in json_str
+    assert '"city":"NYC"' in json_str
+    assert '"zip_code":"10001"' in json_str
+    assert '"id":1' in json_str
+    assert '"name":"John Doe"' in json_str
+
+    # Verificar que pode fazer parse de JSON com dict
+    json_input = '{"id":2,"name":"Jane","address":{"street":"456 Oak","city":"LA","zip_code":"90001"}}'
+    parsed = ta.validate_json(json_input)
+    assert isinstance(parsed.address, AddressStruct)
+    assert parsed.address.street == "456 Oak"
+
+
+# =============================================================================
 # Teste para ListField com NestedField
 # =============================================================================
 

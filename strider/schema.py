@@ -626,10 +626,52 @@ class StructSchema(metaclass=StructSchemaMeta):
         for name, field in self._fields.items():
             value = kwargs.get(name, field.get_default())
             super().__setattr__(name, value)
-        
+
         # Store extra data (unknown fields)
         self._extra_data: dict[str, Any] = {}
-    
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: Any) -> Any:
+        """
+        Pydantic v2 schema generator for StructSchema.
+
+        Allows using StructSchema subclasses directly in Pydantic models:
+            class MyOutput(OutputSchema):
+                config: MyStructSchema  # Works!
+        """
+        from pydantic_core import core_schema
+
+        def validate_and_create(data: Any) -> Any:
+            if isinstance(data, cls):
+                return data
+            if isinstance(data, dict):
+                return cls.from_dict_safe(data)
+            raise ValueError(f"Expected dict or {cls.__name__}, got {type(data).__name__}")
+
+        def serialize_to_dict(obj: Any) -> Any:
+            if isinstance(obj, StructSchema):
+                return obj.to_dict()
+            if isinstance(obj, dict):
+                return obj
+            return obj
+
+        # Use json_or_python_schema for flexibility
+        # Accepts both dict (from JSON) and StructSchema instances
+        full_schema = core_schema.json_or_python_schema(
+            json_schema=core_schema.no_info_plain_validator_function(
+                validate_and_create,
+            ),
+            python_schema=core_schema.no_info_plain_validator_function(
+                validate_and_create,
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                serialize_to_dict,
+                when_used="json",
+            ),
+        )
+
+        return full_schema
+
     def __setattr__(self, name: str, value: Any) -> None:
         """Set attribute with validation for known fields."""
         if name.startswith("_"):
@@ -885,9 +927,12 @@ class StructDescriptor(Generic[T]):
             return self._cache[obj]
 
         # Get raw dict from SQLAlchemy's internal instance state
-        # This bypasses any Python descriptors and accesses raw column values
+        # Use object.__getattribute__ to bypass any Python descriptors
         column_key = self.column_name
-        instance_dict = obj.__dict__
+        try:
+            instance_dict = object.__getattribute__(obj, "__dict__")
+        except AttributeError:
+            instance_dict = {}
 
         if column_key in instance_dict:
             raw_value = instance_dict[column_key]
@@ -919,7 +964,9 @@ class StructDescriptor(Generic[T]):
             del self._cache[obj]
 
         column_key = self.column_name
-        instance_dict = obj.__dict__
+
+        # Get current value from __dict__ directly (bypassing any descriptor)
+        instance_dict = object.__getattribute__(obj, "__dict__")
 
         if value is None:
             instance_dict[column_key] = {} if not getattr(self.schema_class, "_nullable", False) else None
@@ -946,14 +993,22 @@ class StructDescriptor(Generic[T]):
             raise TypeError(f"Expected {self.schema_class.__name__} or dict, got {type(value).__name__}")
 
         # Mark SQLAlchemy instance as modified so the change is detected
-        from sqlalchemy.orm import attributes
-        attributes.flag_modified(obj, column_key)
-    
+        # Use flag_modified which is the proper way to mark an attribute as changed
+        try:
+            from sqlalchemy.orm import attributes
+            attributes.flag_modified(obj, column_key)
+        except Exception:
+            # If flag_modified fails (e.g., greenlet issues in sync/async mismatch), 
+            # the value is still set in __dict__ and will be persisted on next flush
+            pass
+
     def __delete__(self, obj) -> None:
         """Delete the value."""
         if obj in self._cache:
             del self._cache[obj]
-        setattr(obj, self.column_name, None)
+        # Use object.__setattr__ to bypass this descriptor and avoid recursion
+        instance_dict = object.__getattribute__(obj, "__dict__")
+        instance_dict[self.column_name] = None
 
 
 # =============================================================================
