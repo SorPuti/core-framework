@@ -111,6 +111,11 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
     
     router.include_router(prefs_router)
     
+    # 1.7. Importer API (rotas literais: /api/importer/*)
+    from strider.admin.importer_views import create_importer_router
+    importer_api_router = create_importer_router(site)
+    router.include_router(importer_api_router)
+
     # 2. API views genéricas (rotas com path params: /api/{app_label}/{model_name})
     from strider.admin.views import create_api_views
     api_router = create_api_views(site)
@@ -395,9 +400,22 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             return _templates.TemplateResponse("admin/ops/events.html", ctx)
     
     # =========================================================================
+    # Data Importer Route (HTML) — BEFORE model routes to avoid path conflict
+    # =========================================================================
+
+    @router.get("/importer/", response_class=HTMLResponse)
+    async def importer_page(request: Request) -> Response:
+        """Página de importação de dados SQL."""
+        user = _get_admin_user(request)
+        if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            return RedirectResponse(f"{prefix}/login", status_code=302)
+        ctx = _base_context(request, user=user)
+        return _templates.TemplateResponse("admin/importer.html", ctx)
+
+    # =========================================================================
     # Model Routes (HTML)
     # =========================================================================
-    
+
     @router.get("/{app_label}/{model_name}/", response_class=HTMLResponse)
     async def model_list(
         request: Request,

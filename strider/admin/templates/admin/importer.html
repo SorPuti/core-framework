@@ -1,0 +1,1079 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Data Importer — {{ site_header }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="importerWizard()" x-init="init()">
+
+    <!-- ================================================================
+         HEADER
+    ================================================================ -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Data Importer</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Importe dados de um dump SQL MySQL/MariaDB para os models do sistema</p>
+        </div>
+        <!-- Step indicator -->
+        <div class="hidden md:flex items-center gap-1">
+            <template x-for="(label, idx) in stepLabels" :key="idx">
+                <div class="flex items-center">
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-all"
+                             :class="idx + 1 < step ? 'bg-green-500 text-white' :
+                                     idx + 1 === step ? 'bg-primary-600 text-white' :
+                                     'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'">
+                            <template x-if="idx + 1 < step">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                            </template>
+                            <template x-if="idx + 1 >= step">
+                                <span x-text="idx + 1"></span>
+                            </template>
+                        </div>
+                        <span class="text-xs font-medium hidden lg:block"
+                              :class="idx + 1 === step ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400 dark:text-gray-500'"
+                              x-text="label"></span>
+                    </div>
+                    <div x-show="idx < stepLabels.length - 1"
+                         class="w-6 h-px mx-1"
+                         :class="idx + 1 < step ? 'bg-green-400' : 'bg-gray-200 dark:bg-gray-700'"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         STEP 1 — UPLOAD
+    ================================================================ -->
+    <template x-if="step === 1">
+        <div class="max-w-2xl mx-auto">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Upload do arquivo SQL</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Selecione um dump MySQL/MariaDB (.sql). Arquivos grandes são processados em streaming.</p>
+
+                <!-- Drop zone -->
+                <div class="relative"
+                     @dragover.prevent="dragover = true"
+                     @dragleave="dragover = false"
+                     @drop.prevent="handleDrop($event)">
+                    <div class="border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer"
+                         :class="dragover ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20' :
+                                 selectedFile ? 'border-green-400 bg-green-50 dark:bg-green-900/20' :
+                                 'border-gray-300 dark:border-gray-600 hover:border-primary-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'"
+                         @click="$refs.fileInput.click()">
+
+                        <template x-if="!selectedFile">
+                            <div>
+                                <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                                <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Arraste o arquivo .sql aqui</p>
+                                <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">ou clique para selecionar</p>
+                            </div>
+                        </template>
+
+                        <template x-if="selectedFile">
+                            <div class="flex items-center justify-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-5 h-5 text-green-600 dark:text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                </div>
+                                <div class="text-left">
+                                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200" x-text="selectedFile.name"></p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400" x-text="formatBytes(selectedFile.size)"></p>
+                                </div>
+                                <button @click.stop="selectedFile = null" class="ml-2 text-gray-400 hover:text-red-500 transition-colors">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                    <input type="file" accept=".sql" x-ref="fileInput" class="hidden" @change="handleFileSelect($event)">
+                </div>
+
+                <!-- Error -->
+                <template x-if="uploadError">
+                    <div class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400" x-text="uploadError"></div>
+                </template>
+
+                <!-- Upload button -->
+                <div class="mt-6 flex justify-end">
+                    <button @click="uploadFile()"
+                            :disabled="!selectedFile || uploading"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white text-sm font-medium rounded-xl hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                        <svg x-show="!uploading" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                        <svg x-show="uploading" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                        <span x-text="uploading ? 'Processando...' : 'Analisar arquivo'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- ================================================================
+         STEP 2 — SCHEMA
+    ================================================================ -->
+    <template x-if="step === 2">
+        <div>
+            <!-- Summary bar -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-5 flex flex-wrap gap-4 items-center">
+                <div class="flex items-center gap-2 text-sm">
+                    <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                    </div>
+                    <div>
+                        <div class="font-medium text-gray-900 dark:text-white" x-text="uploadResult.filename"></div>
+                        <div class="text-xs text-gray-500" x-text="formatBytes(uploadResult.file_size)"></div>
+                    </div>
+                </div>
+                <div class="flex gap-4 text-sm">
+                    <div class="text-center">
+                        <div class="text-lg font-bold text-gray-900 dark:text-white" x-text="Object.keys(uploadResult.tables).length"></div>
+                        <div class="text-xs text-gray-500">tabelas</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-bold text-gray-900 dark:text-white" x-text="uploadResult.total_rows.toLocaleString()"></div>
+                        <div class="text-xs text-gray-500">registros</div>
+                    </div>
+                </div>
+                <template x-if="uploadResult.parse_errors && uploadResult.parse_errors.length > 0">
+                    <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-lg">
+                        ⚠ <span x-text="uploadResult.parse_errors.length"></span> avisos de parse
+                    </div>
+                </template>
+                <div class="ml-auto flex gap-2">
+                    <button @click="step = 1" class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        ← Voltar
+                    </button>
+                    <button @click="goToMapping()" class="px-4 py-1.5 text-sm bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors">
+                        Configurar mapeamento →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tables grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                <template x-for="(schema, tableName) in uploadResult.tables" :key="tableName">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <!-- Table header -->
+                        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                                <span class="font-semibold text-sm text-gray-900 dark:text-white" x-text="tableName"></span>
+                            </div>
+                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full"
+                                  x-text="(uploadResult.row_counts[tableName] || 0).toLocaleString() + ' rows'"></span>
+                        </div>
+                        <!-- Columns list -->
+                        <div class="divide-y divide-gray-50 dark:divide-gray-700/50 max-h-48 overflow-y-auto">
+                            <template x-for="col in schema.columns" :key="col.name">
+                                <div class="flex items-center justify-between px-4 py-1.5 text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <template x-if="col.is_pk">
+                                            <span class="text-amber-500 font-bold" title="Primary Key">PK</span>
+                                        </template>
+                                        <template x-if="col.is_fk">
+                                            <span class="text-blue-400" title="Foreign Key">FK</span>
+                                        </template>
+                                        <span class="font-mono text-gray-700 dark:text-gray-300" x-text="col.name"></span>
+                                    </div>
+                                    <span class="font-medium px-1.5 py-0.5 rounded text-[10px]"
+                                          :class="{
+                                            'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400': col.python_type === 'json',
+                                            'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400': col.python_type === 'bool',
+                                            'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400': col.python_type === 'int' || col.python_type === 'float',
+                                            'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400': col.python_type === 'datetime' || col.python_type === 'date',
+                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400': col.python_type === 'str' || col.python_type === 'uuid',
+                                          }"
+                                          x-text="col.python_type"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+
+    <!-- ================================================================
+         STEP 3 — MAPPING
+    ================================================================ -->
+    <template x-if="step === 3">
+        <div>
+            <!-- Top bar -->
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Mapeamento de tabelas e campos</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Configure qual tabela SQL mapeia para qual model, e quais campos importar</p>
+                </div>
+                <div class="flex gap-2">
+                    <!-- Global settings -->
+                    <div class="flex items-center gap-3 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2">
+                        <label class="text-gray-600 dark:text-gray-400">Batch size:</label>
+                        <input type="number" x-model.number="executeConfig.batch_size" min="10" max="5000" step="50"
+                               class="w-20 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <label class="text-gray-600 dark:text-gray-400">Conflito:</label>
+                        <select x-model="executeConfig.on_conflict"
+                                class="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                            <option value="skip">Ignorar (skip)</option>
+                            <option value="fail">Falhar</option>
+                        </select>
+                    </div>
+                    <button @click="step = 2" class="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        ← Voltar
+                    </button>
+                    <button @click="runPreview()" class="px-4 py-2 text-sm bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 transition-colors">
+                        Preview →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table mappings -->
+            <div class="space-y-4">
+                <template x-for="(tableMap, idx) in mappings" :key="tableMap.source_table">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <!-- Table header accordion -->
+                        <div class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                             @click="tableMap._open = !tableMap._open">
+                            <!-- Enable toggle -->
+                            <button @click.stop="tableMap.enabled = !tableMap.enabled"
+                                    class="relative w-9 h-5 rounded-full transition-colors flex-shrink-0"
+                                    :class="tableMap.enabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'">
+                                <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
+                                      :class="tableMap.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
+                            </button>
+
+                            <!-- Table name -->
+                            <div class="flex items-center gap-2 flex-1">
+                                <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                                <span class="font-semibold text-sm text-gray-900 dark:text-white" x-text="tableMap.source_table"></span>
+                                <span class="text-xs text-gray-400" x-text="'(' + (uploadResult.row_counts[tableMap.source_table] || 0).toLocaleString() + ' rows)'"></span>
+                            </div>
+
+                            <!-- Arrow -->
+                            <svg class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+
+                            <!-- Model selector -->
+                            <select x-model="tableMap.target_model"
+                                    @click.stop
+                                    @change="onModelSelect(tableMap)"
+                                    :disabled="!tableMap.enabled"
+                                    class="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 min-w-[200px] disabled:opacity-50">
+                                <option value="">— Selecionar model —</option>
+                                <template x-for="m in availableModels" :key="m.key">
+                                    <option :value="m.key" x-text="m.key + ' (' + m.table_name + ')'"></option>
+                                </template>
+                            </select>
+
+                            <!-- Collapse icon -->
+                            <svg class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0"
+                                 :class="tableMap._open ? 'rotate-180' : ''"
+                                 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
+
+                        <!-- Column mappings -->
+                        <div x-show="tableMap._open && tableMap.enabled" x-collapse>
+                            <div class="border-t border-gray-100 dark:border-gray-700">
+                                <!-- Column headers -->
+                                <div class="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-700/50">
+                                    <div class="col-span-3">Campo origem (SQL)</div>
+                                    <div class="col-span-1 text-center">Tipo</div>
+                                    <div class="col-span-4">Campo destino (Model)</div>
+                                    <div class="col-span-3">Transformação</div>
+                                    <div class="col-span-1 text-center">Skip</div>
+                                </div>
+
+                                <template x-for="(colMap, cidx) in tableMap.columns" :key="colMap.source">
+                                    <div class="grid grid-cols-12 gap-2 px-4 py-2 items-center border-t border-gray-50 dark:border-gray-700/50 text-sm"
+                                         :class="colMap.target === null ? 'opacity-50' : ''">
+                                        <!-- Source column -->
+                                        <div class="col-span-3 flex items-center gap-1.5">
+                                            <span class="text-xs font-mono text-gray-600 dark:text-gray-300 truncate" x-text="colMap.source"></span>
+                                            <template x-if="colMap._schema && colMap._schema.is_pk">
+                                                <span class="text-[10px] font-bold text-amber-500">PK</span>
+                                            </template>
+                                        </div>
+
+                                        <!-- Source type badge -->
+                                        <div class="col-span-1 text-center">
+                                            <span class="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                                                  :class="{
+                                                    'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400': colMap._schema && colMap._schema.python_type === 'json',
+                                                    'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400': colMap._schema && colMap._schema.python_type === 'bool',
+                                                    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400': colMap._schema && (colMap._schema.python_type === 'int' || colMap._schema.python_type === 'float'),
+                                                    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400': colMap._schema && (colMap._schema.python_type === 'datetime' || colMap._schema.python_type === 'date'),
+                                                    'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400': !colMap._schema || colMap._schema.python_type === 'str' || colMap._schema.python_type === 'uuid',
+                                                  }"
+                                                  x-text="colMap._schema ? colMap._schema.python_type : '?'"></span>
+                                        </div>
+
+                                        <!-- Target field -->
+                                        <div class="col-span-4">
+                                            <select x-model="colMap.target"
+                                                    :disabled="colMap.target === null || !tableMap.target_model"
+                                                    class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-40">
+                                                <option value="">— ignorar coluna —</option>
+                                                <template x-for="f in getModelFields(tableMap.target_model)" :key="f.name">
+                                                    <option :value="f.name" x-text="f.name + ' (' + f.type + ')'"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+
+                                        <!-- Transform -->
+                                        <div class="col-span-3">
+                                            <select x-model="colMap.transform"
+                                                    :disabled="!colMap.target || !tableMap.target_model"
+                                                    class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-40">
+                                                <template x-for="t in availableTransforms" :key="t.id">
+                                                    <option :value="t.id" x-text="t.label"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+
+                                        <!-- Skip toggle -->
+                                        <div class="col-span-1 flex justify-center">
+                                            <button @click="colMap.target = colMap.target === null ? colMap.source : null"
+                                                    class="w-5 h-5 rounded border-2 flex items-center justify-center transition-all"
+                                                    :class="colMap.target === null ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-red-400'">
+                                                <template x-if="colMap.target === null">
+                                                    <svg class="w-3 h-3 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                </template>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+
+    <!-- ================================================================
+         STEP 4 — PREVIEW
+    ================================================================ -->
+    <template x-if="step === 4">
+        <div>
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Preview dos dados transformados</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">10 primeiras linhas de cada tabela após as transformações</p>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="step = 3" class="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        ← Ajustar mapeamento
+                    </button>
+                    <button @click="step = 5; startExecution()"
+                            class="px-4 py-2 text-sm bg-green-600 text-white font-medium rounded-xl hover:bg-green-700 transition-colors inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Executar importação
+                    </button>
+                </div>
+            </div>
+
+            <template x-if="previewLoading">
+                <div class="flex items-center justify-center py-20">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+                </div>
+            </template>
+
+            <template x-if="!previewLoading">
+                <div class="space-y-6">
+                    <template x-for="(tablePreview, tableName) in previewData" :key="tableName">
+                        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                                    <span class="font-semibold text-sm text-gray-900 dark:text-white" x-text="tableName"></span>
+                                    <span class="text-xs text-gray-400">→</span>
+                                    <span class="text-xs font-medium text-primary-600 dark:text-primary-400" x-text="getMappingTarget(tableName)"></span>
+                                </div>
+                                <span class="text-xs text-gray-500" x-text="tablePreview.rows.length + ' de ' + (uploadResult.row_counts[tableName] || 0).toLocaleString() + ' linhas'"></span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-gray-100 dark:border-gray-700">
+                                            <template x-for="col in getPreviewColumns(tablePreview)" :key="col">
+                                                <th class="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="col"></th>
+                                            </template>
+                                            <th class="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-50 dark:divide-gray-700/50">
+                                        <template x-for="(row, ridx) in tablePreview.rows" :key="ridx">
+                                            <tr :class="row.errors.length > 0 ? 'bg-red-50 dark:bg-red-900/10' : ''">
+                                                <template x-for="col in getPreviewColumns(tablePreview)" :key="col">
+                                                    <td class="px-3 py-1.5 font-mono text-gray-700 dark:text-gray-300 max-w-[200px] truncate" x-text="formatCellValue(row.data[col])"></td>
+                                                </template>
+                                                <td class="px-3 py-1.5">
+                                                    <template x-if="row.errors.length === 0">
+                                                        <span class="text-green-600 dark:text-green-400 text-[10px] font-medium">OK</span>
+                                                    </template>
+                                                    <template x-if="row.errors.length > 0">
+                                                        <span class="text-red-600 dark:text-red-400 text-[10px] font-medium" :title="row.errors.join('; ')">⚠ erro</span>
+                                                    </template>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+    </template>
+
+    <!-- ================================================================
+         STEP 5 — EXECUTE
+    ================================================================ -->
+    <template x-if="step === 5">
+        <div>
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Executando importação</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Inserindo dados em batch via SSE streaming</p>
+                </div>
+                <div class="flex gap-2">
+                    <template x-if="executionDone">
+                        <div class="flex gap-2">
+                            <button @click="downloadReport()" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                Exportar relatório
+                            </button>
+                            <button @click="resetWizard()" class="px-4 py-2 text-sm bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 transition-colors">
+                                Nova importação
+                            </button>
+                        </div>
+                    </template>
+                    <template x-if="!executionDone">
+                        <button @click="cancelExecution()"
+                                class="px-3 py-2 text-sm text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            Cancelar
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Overall progress -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 mb-5">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Progresso geral</span>
+                    <div class="flex gap-4 text-sm">
+                        <span class="text-green-600 dark:text-green-400 font-medium" x-text="totalInserted.toLocaleString() + ' inseridos'"></span>
+                        <span class="text-amber-500 font-medium" x-text="totalSkipped.toLocaleString() + ' ignorados'"></span>
+                        <span class="text-red-500 font-medium" x-text="totalErrors.toLocaleString() + ' erros'"></span>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-300"
+                         :class="executionDone ? 'bg-green-500' : 'bg-primary-500'"
+                         :style="'width: ' + overallProgress + '%'"></div>
+                </div>
+                <div class="flex justify-between text-xs text-gray-400 mt-1">
+                    <span x-text="completedTables + ' de ' + totalTables + ' tabelas'"></span>
+                    <span x-text="overallProgress.toFixed(1) + '%'"></span>
+                </div>
+            </div>
+
+            <!-- Per-table progress -->
+            <div class="space-y-3 mb-5">
+                <template x-for="(tableStatus, tableName) in executionStatus" :key="tableName">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <!-- Status icon -->
+                                <template x-if="tableStatus.status === 'waiting'">
+                                    <div class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                                        <div class="w-2 h-2 rounded-full bg-gray-400"></div>
+                                    </div>
+                                </template>
+                                <template x-if="tableStatus.status === 'running'">
+                                    <div class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                        <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                                    </div>
+                                </template>
+                                <template x-if="tableStatus.status === 'done'">
+                                    <div class="w-5 h-5 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                                        <svg class="w-3 h-3 text-green-600 dark:text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                    </div>
+                                </template>
+                                <template x-if="tableStatus.status === 'error'">
+                                    <div class="w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                        <svg class="w-3 h-3 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                    </div>
+                                </template>
+
+                                <span class="text-sm font-medium text-gray-800 dark:text-gray-200" x-text="tableName"></span>
+                                <span class="text-xs text-gray-400" x-text="'→ ' + (tableStatus.target || '?')"></span>
+                            </div>
+                            <div class="flex gap-3 text-xs">
+                                <span class="text-green-600 dark:text-green-400" x-text="(tableStatus.inserted || 0).toLocaleString() + ' inseridos'"></span>
+                                <span x-show="(tableStatus.skipped || 0) > 0" class="text-amber-500" x-text="(tableStatus.skipped || 0).toLocaleString() + ' ignorados'"></span>
+                                <span x-show="(tableStatus.errors || 0) > 0" class="text-red-500" x-text="(tableStatus.errors || 0).toLocaleString() + ' erros'"></span>
+                            </div>
+                        </div>
+
+                        <template x-if="tableStatus.total > 0">
+                            <div>
+                                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                                    <div class="h-full rounded-full transition-all duration-200"
+                                         :class="tableStatus.status === 'done' ? 'bg-green-500' : tableStatus.status === 'error' ? 'bg-red-500' : 'bg-primary-500'"
+                                         :style="'width: ' + Math.min(100, ((tableStatus.row || 0) / tableStatus.total) * 100) + '%'"></div>
+                                </div>
+                                <div class="text-right text-xs text-gray-400 mt-0.5"
+                                     x-text="(tableStatus.row || 0).toLocaleString() + ' / ' + tableStatus.total.toLocaleString()"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Event log -->
+            <div class="bg-gray-900 rounded-xl border border-gray-700 p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Log de eventos</span>
+                    <button @click="eventLog = []" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">Limpar</button>
+                </div>
+                <div class="max-h-48 overflow-y-auto space-y-1 font-mono text-xs" x-ref="logContainer">
+                    <template x-for="(entry, idx) in eventLog" :key="idx">
+                        <div :class="{
+                            'text-green-400': entry.type === 'done' || entry.type === 'complete',
+                            'text-blue-400': entry.type === 'start' || entry.type === 'progress',
+                            'text-red-400': entry.type === 'error' || entry.type === 'fatal',
+                            'text-gray-400': entry.type === 'info',
+                        }" x-text="entry.text"></div>
+                    </template>
+                    <div x-show="!executionDone" class="text-gray-500 animate-pulse">▊</div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+</div>
+
+<script>
+function importerWizard() {
+    return {
+        // State
+        step: 1,
+        stepLabels: ['Upload', 'Schema', 'Mapeamento', 'Preview', 'Execução'],
+
+        // Step 1
+        selectedFile: null,
+        uploading: false,
+        uploadError: null,
+        dragover: false,
+
+        // Step 2
+        uploadResult: null,
+
+        // Step 3
+        mappings: [],
+        availableModels: [],
+        availableTransforms: [],
+        executeConfig: {
+            batch_size: 500,
+            on_conflict: 'skip',
+            stop_on_error: false,
+        },
+
+        // Step 4
+        previewData: {},
+        previewLoading: false,
+
+        // Step 5
+        executionStatus: {},
+        eventLog: [],
+        totalInserted: 0,
+        totalSkipped: 0,
+        totalErrors: 0,
+        overallProgress: 0,
+        completedTables: 0,
+        totalTables: 0,
+        executionDone: false,
+        _eventSource: null,
+        _report: null,
+
+        // ----------------------------------------------------------------
+        // Lifecycle
+        // ----------------------------------------------------------------
+
+        async init() {
+            // Pre-load models and transforms for step 3
+            await this.loadModelsAndTransforms();
+        },
+
+        async loadModelsAndTransforms() {
+            try {
+                const [modelsRes, transformsRes] = await Promise.all([
+                    fetch('{{ admin_prefix }}/api/importer/models'),
+                    fetch('{{ admin_prefix }}/api/importer/transforms'),
+                ]);
+                const modelsData = await modelsRes.json();
+                const transformsData = await transformsRes.json();
+                this.availableModels = modelsData.models || [];
+                this.availableTransforms = transformsData.transforms || [];
+            } catch (e) {
+                console.error('Failed to load models/transforms', e);
+            }
+        },
+
+        // ----------------------------------------------------------------
+        // Step 1 — Upload
+        // ----------------------------------------------------------------
+
+        handleDrop(event) {
+            this.dragover = false;
+            const file = event.dataTransfer.files[0];
+            if (file && file.name.endsWith('.sql')) {
+                this.selectedFile = file;
+            } else {
+                this.uploadError = 'Apenas arquivos .sql são aceitos';
+            }
+        },
+
+        handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                this.selectedFile = file;
+                this.uploadError = null;
+            }
+        },
+
+        async uploadFile() {
+            if (!this.selectedFile) return;
+            this.uploading = true;
+            this.uploadError = null;
+
+            const formData = new FormData();
+            formData.append('file', this.selectedFile);
+
+            try {
+                const res = await fetch('{{ admin_prefix }}/api/importer/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    this.uploadError = data.detail || 'Erro ao processar o arquivo';
+                    return;
+                }
+
+                this.uploadResult = data;
+                this._buildMappings();
+                this.step = 2;
+            } catch (e) {
+                this.uploadError = 'Erro de conexão: ' + e.message;
+            } finally {
+                this.uploading = false;
+            }
+        },
+
+        // ----------------------------------------------------------------
+        // Step 2 — Schema
+        // ----------------------------------------------------------------
+
+        goToMapping() {
+            this.step = 3;
+        },
+
+        // ----------------------------------------------------------------
+        // Step 3 — Mapping
+        // ----------------------------------------------------------------
+
+        _buildMappings() {
+            this.mappings = Object.entries(this.uploadResult.tables).map(([tableName, schema]) => {
+                const columns = schema.columns.map(col => ({
+                    source: col.name,
+                    target: col.name,
+                    transform: this._guessTransform(col),
+                    default: col.default,
+                    _schema: col,
+                }));
+                return {
+                    source_table: tableName,
+                    target_model: '',
+                    enabled: true,
+                    _open: false,
+                    columns,
+                };
+            });
+        },
+
+        _guessTransform(col) {
+            switch (col.python_type) {
+                case 'bool':     return 'to_bool';
+                case 'int':      return 'to_int';
+                case 'float':    return 'to_float';
+                case 'datetime': return 'to_datetime';
+                case 'date':     return 'to_datetime';
+                case 'json':     return 'json_parse';
+                case 'uuid':     return 'uuid_str';
+                default:         return 'passthrough';
+            }
+        },
+
+        onModelSelect(tableMap) {
+            if (!tableMap.target_model) return;
+            const model = this.availableModels.find(m => m.key === tableMap.target_model);
+            if (!model) return;
+
+            // Auto-match columns by name
+            tableMap.columns.forEach(colMap => {
+                const match = model.fields.find(f => f.name === colMap.source);
+                if (match) {
+                    colMap.target = match.name;
+                } else {
+                    colMap.target = '';
+                }
+            });
+        },
+
+        getModelFields(modelKey) {
+            if (!modelKey) return [];
+            const model = this.availableModels.find(m => m.key === modelKey);
+            return model ? model.fields : [];
+        },
+
+        // ----------------------------------------------------------------
+        // Step 4 — Preview
+        // ----------------------------------------------------------------
+
+        async runPreview() {
+            this.step = 4;
+            this.previewLoading = true;
+            this.previewData = {};
+
+            const enabledTables = this.mappings.filter(m => m.enabled && m.target_model);
+
+            for (const tableMap of enabledTables) {
+                try {
+                    const res = await fetch('{{ admin_prefix }}/api/importer/preview', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            upload_id: this.uploadResult.upload_id,
+                            source_table: tableMap.source_table,
+                            columns: tableMap.columns
+                                .filter(c => c.target)
+                                .map(c => ({
+                                    source: c.source,
+                                    target: c.target,
+                                    transform: c.transform,
+                                    default: c.default,
+                                })),
+                        }),
+                    });
+                    const data = await res.json();
+                    this.previewData[tableMap.source_table] = data;
+                } catch (e) {
+                    console.error('Preview error for', tableMap.source_table, e);
+                }
+            }
+
+            this.previewLoading = false;
+        },
+
+        getPreviewColumns(tablePreview) {
+            if (!tablePreview.rows || tablePreview.rows.length === 0) return [];
+            return Object.keys(tablePreview.rows[0].data || {});
+        },
+
+        getMappingTarget(tableName) {
+            const m = this.mappings.find(m => m.source_table === tableName);
+            return m ? m.target_model : '?';
+        },
+
+        formatCellValue(val) {
+            if (val === null || val === undefined) return 'NULL';
+            if (typeof val === 'object') return JSON.stringify(val).substring(0, 60) + '…';
+            const s = String(val);
+            return s.length > 60 ? s.substring(0, 60) + '…' : s;
+        },
+
+        // ----------------------------------------------------------------
+        // Step 5 — Execute
+        // ----------------------------------------------------------------
+
+        startExecution() {
+            const enabledMappings = this.mappings.filter(m => m.enabled && m.target_model);
+            this.totalTables = enabledMappings.length;
+            this.completedTables = 0;
+            this.totalInserted = 0;
+            this.totalSkipped = 0;
+            this.totalErrors = 0;
+            this.overallProgress = 0;
+            this.executionDone = false;
+            this.eventLog = [];
+            this._report = null;
+
+            // Init status per table
+            this.executionStatus = {};
+            enabledMappings.forEach(m => {
+                this.executionStatus[m.source_table] = {
+                    status: 'waiting',
+                    target: m.target_model,
+                    inserted: 0,
+                    skipped: 0,
+                    errors: 0,
+                    row: 0,
+                    total: this.uploadResult.row_counts[m.source_table] || 0,
+                };
+            });
+
+            this._doExecute(enabledMappings);
+        },
+
+        async _doExecute(enabledMappings) {
+            const body = {
+                upload_id: this.uploadResult.upload_id,
+                batch_size: this.executeConfig.batch_size,
+                on_conflict: this.executeConfig.on_conflict,
+                stop_on_error: this.executeConfig.stop_on_error,
+                tables: enabledMappings.map(m => ({
+                    source_table: m.source_table,
+                    target_model: m.target_model,
+                    enabled: true,
+                    columns: m.columns
+                        .filter(c => c.target)
+                        .map(c => ({
+                            source: c.source,
+                            target: c.target,
+                            transform: c.transform,
+                            default: c.default,
+                        })),
+                })),
+            };
+
+            try {
+                const res = await fetch('{{ admin_prefix }}/api/importer/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+
+                if (!res.ok) {
+                    const data = await res.json();
+                    this._logEvent({ type: 'fatal', text: '✗ ' + (data.detail || 'Erro fatal') });
+                    this.executionDone = true;
+                    return;
+                }
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const event = JSON.parse(line.slice(6));
+                                this._handleSSEEvent(event);
+                            } catch (e) {
+                                // ignore parse error
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                this._logEvent({ type: 'fatal', text: '✗ Conexão perdida: ' + e.message });
+                this.executionDone = true;
+            }
+        },
+
+        _handleSSEEvent(event) {
+            const table = event.table;
+            const status = this.executionStatus;
+
+            switch (event.type) {
+                case 'start':
+                    if (status[table]) {
+                        status[table].status = 'running';
+                        status[table].total = event.total || status[table].total;
+                        status[table].target = event.target || status[table].target;
+                    }
+                    this._logEvent({
+                        type: 'start',
+                        text: `▶ ${table} → ${event.target} (${(event.total || 0).toLocaleString()} rows)`,
+                    });
+                    break;
+
+                case 'progress':
+                    if (status[table]) {
+                        status[table].inserted = event.inserted || 0;
+                        status[table].skipped = event.skipped || 0;
+                        status[table].errors = event.errors || 0;
+                        status[table].row = event.row || 0;
+                    }
+                    this._updateTotals();
+                    break;
+
+                case 'done':
+                    if (status[table]) {
+                        status[table].status = 'done';
+                        status[table].inserted = event.inserted || 0;
+                        status[table].skipped = event.skipped || 0;
+                        status[table].errors = event.errors || 0;
+                    }
+                    this.completedTables++;
+                    this._updateTotals();
+                    this._logEvent({
+                        type: 'done',
+                        text: `✔ ${table}: ${(event.inserted || 0).toLocaleString()} inseridos, ${event.skipped || 0} ignorados, ${event.errors || 0} erros`,
+                    });
+                    break;
+
+                case 'error':
+                    if (status[table]) {
+                        status[table].status = 'error';
+                        status[table].errors = (status[table].errors || 0) + 1;
+                    }
+                    this._logEvent({
+                        type: 'error',
+                        text: `✗ [${table}] row ${event.row || '?'}: ${event.message}`,
+                    });
+                    break;
+
+                case 'fatal':
+                    if (table && status[table]) {
+                        status[table].status = 'error';
+                    }
+                    this._logEvent({
+                        type: 'fatal',
+                        text: `✗✗ FATAL ${table || ''}: ${event.message}`,
+                    });
+                    break;
+
+                case 'complete':
+                    this.totalInserted = event.total_inserted || 0;
+                    this.totalSkipped = event.total_skipped || 0;
+                    this.totalErrors = event.total_errors || 0;
+                    this.overallProgress = 100;
+                    this.executionDone = true;
+                    this._report = event;
+                    this._logEvent({
+                        type: 'complete',
+                        text: `✔✔ COMPLETO: ${(event.total_inserted || 0).toLocaleString()} inseridos, ${event.total_skipped || 0} ignorados, ${event.total_errors || 0} erros`,
+                    });
+                    window.dispatchEvent(new CustomEvent('toast', {
+                        detail: {
+                            type: event.total_errors > 0 ? 'warning' : 'success',
+                            title: 'Importação concluída',
+                            message: `${(event.total_inserted || 0).toLocaleString()} registros importados`,
+                        }
+                    }));
+                    break;
+            }
+
+            // Scroll log to bottom
+            this.$nextTick(() => {
+                const logEl = this.$refs.logContainer;
+                if (logEl) logEl.scrollTop = logEl.scrollHeight;
+            });
+        },
+
+        _updateTotals() {
+            let ins = 0, skip = 0, errs = 0, totalProgress = 0, totalRows = 0;
+            Object.values(this.executionStatus).forEach(s => {
+                ins += s.inserted || 0;
+                skip += s.skipped || 0;
+                errs += s.errors || 0;
+                if (s.total > 0) {
+                    totalProgress += Math.min(s.row || 0, s.total);
+                    totalRows += s.total;
+                }
+            });
+            this.totalInserted = ins;
+            this.totalSkipped = skip;
+            this.totalErrors = errs;
+            this.overallProgress = totalRows > 0 ? (totalProgress / totalRows) * 100 : 0;
+        },
+
+        _logEvent(entry) {
+            this.eventLog.push(entry);
+            if (this.eventLog.length > 500) {
+                this.eventLog = this.eventLog.slice(-400);
+            }
+        },
+
+        cancelExecution() {
+            if (this._eventSource) {
+                this._eventSource.close();
+                this._eventSource = null;
+            }
+            this.executionDone = true;
+            this._logEvent({ type: 'info', text: '⊘ Cancelado pelo usuário' });
+        },
+
+        downloadReport() {
+            if (!this._report) return;
+            const data = {
+                filename: this.uploadResult.filename,
+                executed_at: new Date().toISOString(),
+                summary: this._report.summary,
+                total_inserted: this._report.total_inserted,
+                total_skipped: this._report.total_skipped,
+                total_errors: this._report.total_errors,
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'import-report-' + Date.now() + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        },
+
+        // ----------------------------------------------------------------
+        // Reset
+        // ----------------------------------------------------------------
+
+        async resetWizard() {
+            if (this.uploadResult && this.uploadResult.upload_id) {
+                try {
+                    await fetch(
+                        '{{ admin_prefix }}/api/importer/cancel/' + this.uploadResult.upload_id,
+                        { method: 'DELETE' }
+                    );
+                } catch (e) {}
+            }
+            this.step = 1;
+            this.selectedFile = null;
+            this.uploading = false;
+            this.uploadError = null;
+            this.uploadResult = null;
+            this.mappings = [];
+            this.previewData = {};
+            this.executionStatus = {};
+            this.eventLog = [];
+            this.executionDone = false;
+            this.totalInserted = 0;
+            this.totalSkipped = 0;
+            this.totalErrors = 0;
+            this.overallProgress = 0;
+            this.completedTables = 0;
+            this._report = null;
+        },
+
+        // ----------------------------------------------------------------
+        // Utilities
+        // ----------------------------------------------------------------
+
+        formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        },
+    };
+}
+</script>
+{% endblock %}
