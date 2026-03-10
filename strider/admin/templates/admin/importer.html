@@ -224,6 +224,48 @@
                 </div>
             </div>
 
+            <!-- FK Dependency Analysis Banner -->
+            <template x-if="depsOrder.length > 0 || depsWarnings.length > 0">
+                <div class="mb-4 space-y-3">
+                    <!-- Import order pill -->
+                    <template x-if="depsOrder.length > 0">
+                        <div class="flex items-center gap-2 flex-wrap bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-4 py-2.5">
+                            <span class="text-xs font-semibold text-blue-700 dark:text-blue-300 flex-shrink-0">
+                                <svg class="w-3.5 h-3.5 inline mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                                Ordem sugerida de importação:
+                            </span>
+                            <template x-for="(modelKey, oi) in depsOrder" :key="modelKey">
+                                <div class="flex items-center gap-1">
+                                    <span class="inline-flex items-center gap-1 text-[11px] font-medium bg-white dark:bg-blue-900/40 border border-blue-200 dark:border-blue-600 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                                        <span class="text-blue-400 dark:text-blue-500" x-text="oi + 1 + '.'"></span>
+                                        <span x-text="modelKey.split('.').pop()"></span>
+                                    </span>
+                                    <svg x-show="oi < depsOrder.length - 1" class="w-3 h-3 text-blue-300 dark:text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- FK warnings -->
+                    <template x-if="depsWarnings.length > 0">
+                        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 space-y-2">
+                            <p class="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-1">
+                                <svg class="w-3.5 h-3.5 inline mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                Avisos de dependências FK (<span x-text="depsWarnings.length"></span>)
+                            </p>
+                            <template x-for="(w, wi) in depsWarnings" :key="wi">
+                                <div class="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                                    <span class="font-mono font-semibold flex-shrink-0"
+                                          :class="w.type === 'fk_missing' ? 'text-orange-600 dark:text-orange-400' : 'text-amber-600 dark:text-amber-400'"
+                                          x-text="w.type === 'fk_missing' ? '⚠ FK faltando' : '⚠ Tipo divergente'"></span>
+                                    <span x-text="w.message"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
             <!-- Table mappings -->
             <div class="space-y-4">
                 <template x-for="(tableMap, idx) in mappings" :key="tableMap.source_table">
@@ -232,7 +274,7 @@
                         <div class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                              @click="tableMap._open = !tableMap._open">
                             <!-- Enable toggle -->
-                            <button @click.stop="tableMap.enabled = !tableMap.enabled"
+                            <button @click.stop="tableMap.enabled = !tableMap.enabled; analyzeDeps()"
                                     class="relative w-9 h-5 rounded-full transition-colors flex-shrink-0"
                                     :class="tableMap.enabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'">
                                 <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
@@ -272,18 +314,21 @@
                             <div class="border-t border-gray-100 dark:border-gray-700">
                                 <!-- Column headers -->
                                 <div class="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-700/50">
-                                    <div class="col-span-3">Campo origem (SQL)</div>
+                                    <div class="col-span-2">Campo origem (SQL)</div>
                                     <div class="col-span-1 text-center">Tipo</div>
-                                    <div class="col-span-4">Campo destino (Model)</div>
+                                    <div class="col-span-3">Campo destino (Model)</div>
                                     <div class="col-span-3">Transformação</div>
+                                    <div class="col-span-2">Default</div>
                                     <div class="col-span-1 text-center">Skip</div>
                                 </div>
 
                                 <template x-for="(colMap, cidx) in tableMap.columns" :key="colMap.source">
+                                    <div>
+                                    <!-- Main row -->
                                     <div class="grid grid-cols-12 gap-2 px-4 py-2 items-center border-t border-gray-50 dark:border-gray-700/50 text-sm"
                                          :class="colMap.target === null ? 'opacity-50' : ''">
                                         <!-- Source column -->
-                                        <div class="col-span-3 flex items-center gap-1.5">
+                                        <div class="col-span-2 flex items-center gap-1.5">
                                             <span class="text-xs font-mono text-gray-600 dark:text-gray-300 truncate" x-text="colMap.source"></span>
                                             <template x-if="colMap._schema && colMap._schema.is_pk">
                                                 <span class="text-[10px] font-bold text-amber-500">PK</span>
@@ -304,26 +349,76 @@
                                         </div>
 
                                         <!-- Target field -->
-                                        <div class="col-span-4">
-                                            <select x-model="colMap.target"
-                                                    :disabled="colMap.target === null || !tableMap.target_model"
-                                                    class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-40">
-                                                <option value="">— ignorar coluna —</option>
-                                                <template x-for="f in getModelFields(tableMap.target_model)" :key="f.name">
-                                                    <option :value="f.name" x-text="f.name + ' (' + f.type + ')'"></option>
+                                        <div class="col-span-3">
+                                            <div class="space-y-1">
+                                                <select x-model="colMap.target"
+                                                        :disabled="colMap.target === null || !tableMap.target_model"
+                                                        class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-40">
+                                                    <option value="">— ignorar coluna —</option>
+                                                    <template x-for="f in getModelFields(tableMap.target_model)" :key="f.name">
+                                                        <option :value="f.name" x-text="f.name + ' (' + f.type + ')'"></option>
+                                                    </template>
+                                                </select>
+                                                <!-- FK / Struct badges -->
+                                                <template x-if="colMap.target">
+                                                    <div class="flex flex-wrap gap-1">
+                                                        <template x-if="getTargetField(tableMap.target_model, colMap.target)?.is_fk">
+                                                            <span class="text-[10px] font-medium px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded cursor-default"
+                                                                  :title="'FK → ' + (getTargetField(tableMap.target_model, colMap.target)?.fk_target || '')"
+                                                                  x-text="'FK → ' + (getTargetField(tableMap.target_model, colMap.target)?.fk_target || '').split('.')[0]"></span>
+                                                        </template>
+                                                        <template x-if="getTargetField(tableMap.target_model, colMap.target)?.is_struct">
+                                                            <button @click.stop="colMap._structOpen = !colMap._structOpen"
+                                                                    class="text-[10px] font-medium px-1.5 py-0.5 bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 rounded hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors">
+                                                                ⬡ Struct <span x-text="colMap._structOpen ? '▲' : '▼'"></span>
+                                                            </button>
+                                                        </template>
+                                                    </div>
                                                 </template>
-                                            </select>
+                                            </div>
                                         </div>
 
                                         <!-- Transform -->
                                         <div class="col-span-3">
-                                            <select x-model="colMap.transform"
-                                                    :disabled="!colMap.target || !tableMap.target_model"
-                                                    class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-40">
-                                                <template x-for="t in availableTransforms" :key="t.id">
-                                                    <option :value="t.id" x-text="t.label"></option>
+                                            <div class="space-y-1">
+                                                <select x-model="colMap.transform"
+                                                        :disabled="!colMap.target || !tableMap.target_model"
+                                                        class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-40">
+                                                    <template x-for="t in availableTransforms" :key="t.id">
+                                                        <option :value="t.id" x-text="t.label"></option>
+                                                    </template>
+                                                </select>
+                                                <!-- Datetime config gear button -->
+                                                <template x-if="colMap.transform === 'to_datetime'">
+                                                    <button @click.stop="colMap._datetimeOpen = !colMap._datetimeOpen"
+                                                            class="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 hover:underline">
+                                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                                                        <span x-text="colMap._datetimeOpen ? 'Fechar config' : 'Config timezone/formato'"></span>
+                                                    </button>
                                                 </template>
-                                            </select>
+                                            </div>
+                                        </div>
+
+                                        <!-- Default value from model -->
+                                        <div class="col-span-2">
+                                            <template x-if="colMap.target && getTargetField(tableMap.target_model, colMap.target)">
+                                                <div class="flex flex-wrap gap-1 items-center">
+                                                    <template x-if="getTargetField(tableMap.target_model, colMap.target)?.default !== null && getTargetField(tableMap.target_model, colMap.target)?.default !== undefined">
+                                                        <span class="text-[10px] font-mono px-1.5 py-0.5 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 rounded"
+                                                              :title="'Default: ' + String(getTargetField(tableMap.target_model, colMap.target)?.default)"
+                                                              x-text="formatDefault(getTargetField(tableMap.target_model, colMap.target)?.default)"></span>
+                                                    </template>
+                                                    <template x-if="getTargetField(tableMap.target_model, colMap.target)?.choices?.length > 0">
+                                                        <span class="text-[10px] font-medium px-1.5 py-0.5 bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 rounded"
+                                                              :title="'Choices: ' + getTargetField(tableMap.target_model, colMap.target)?.choices?.map(c => c.value).join(', ')">
+                                                            choices
+                                                        </span>
+                                                    </template>
+                                                    <template x-if="getTargetField(tableMap.target_model, colMap.target)?.auto_now">
+                                                        <span class="text-[10px] font-medium px-1.5 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 rounded">auto_now</span>
+                                                    </template>
+                                                </div>
+                                            </template>
                                         </div>
 
                                         <!-- Skip toggle -->
@@ -336,6 +431,103 @@
                                                 </template>
                                             </button>
                                         </div>
+                                    </div>
+
+                                    <!-- Struct Mapper Sub-panel -->
+                                    <template x-if="colMap._structOpen && colMap.transform === 'struct_map' && getTargetField(tableMap.target_model, colMap.target)?.is_struct">
+                                        <div class="mx-4 mb-3 rounded-lg border border-violet-200 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-900/10 overflow-hidden">
+                                            <div class="px-3 py-2 bg-violet-100/60 dark:bg-violet-900/20 border-b border-violet-200 dark:border-violet-700 flex items-center justify-between">
+                                                <span class="text-xs font-semibold text-violet-700 dark:text-violet-300">
+                                                    Mapeamento JSON → StructSchema: <span x-text="colMap.target"></span>
+                                                </span>
+                                                <label class="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400 cursor-pointer">
+                                                    <input type="checkbox" x-model="colMap.struct_config.drop_unknown" class="rounded border-violet-300">
+                                                    Descartar chaves desconhecidas
+                                                </label>
+                                            </div>
+                                            <div class="p-3">
+                                                <!-- Header -->
+                                                <div class="grid grid-cols-5 gap-2 text-[10px] font-semibold text-violet-500 dark:text-violet-400 uppercase tracking-wider mb-2">
+                                                    <div class="col-span-2">Chave JSON (origem)</div>
+                                                    <div class="col-span-1 text-center">→</div>
+                                                    <div class="col-span-2">Campo StructSchema (destino)</div>
+                                                </div>
+                                                <!-- Fields from struct schema -->
+                                                <template x-for="sf in (getTargetField(tableMap.target_model, colMap.target)?.struct_fields || [])" :key="sf.name">
+                                                    <div class="grid grid-cols-5 gap-2 items-center mb-1.5">
+                                                        <!-- Source key input -->
+                                                        <div class="col-span-2">
+                                                            <input type="text"
+                                                                   :placeholder="sf.name"
+                                                                   :value="Object.entries(colMap.struct_config.field_map || {}).find(([k,v]) => v === sf.name)?.[0] || ''"
+                                                                   @input="
+                                                                       const prev = Object.entries(colMap.struct_config.field_map || {}).find(([k,v]) => v === sf.name);
+                                                                       if (prev) delete colMap.struct_config.field_map[prev[0]];
+                                                                       if ($event.target.value) colMap.struct_config.field_map[$event.target.value] = sf.name;
+                                                                   "
+                                                                   class="w-full text-xs border border-violet-200 dark:border-violet-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono placeholder-gray-400">
+                                                        </div>
+                                                        <div class="col-span-1 text-center">
+                                                            <svg class="w-4 h-4 text-violet-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                                        </div>
+                                                        <!-- Struct field info -->
+                                                        <div class="col-span-2 flex items-center gap-1.5">
+                                                            <span class="text-xs font-mono text-violet-700 dark:text-violet-300" x-text="sf.name"></span>
+                                                            <span class="text-[10px] text-violet-400 dark:text-violet-500" x-text="'(' + sf.type + ')'"></span>
+                                                            <template x-if="sf.default !== null && sf.default !== undefined">
+                                                                <span class="text-[10px] bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 px-1 rounded font-mono"
+                                                                      x-text="sf.default === '__auto__' ? 'auto' : String(sf.default)"></span>
+                                                            </template>
+                                                            <template x-if="sf.aliases && sf.aliases.length > 0">
+                                                                <span class="text-[10px] italic text-violet-400"
+                                                                      :title="'Aliases: ' + sf.aliases.join(', ')"
+                                                                      x-text="'~' + sf.aliases[0]"></span>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template x-if="!getTargetField(tableMap.target_model, colMap.target)?.struct_fields?.length">
+                                                    <p class="text-xs text-violet-400 italic">Nenhum campo de StructSchema encontrado.</p>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- Datetime Config Sub-panel -->
+                                    <template x-if="colMap._datetimeOpen && colMap.transform === 'to_datetime'">
+                                        <div class="mx-4 mb-3 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10 p-3">
+                                            <p class="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-2">Configuração de Datetime</p>
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="block text-[10px] text-amber-600 dark:text-amber-400 font-medium mb-1">Formato origem (strftime)</label>
+                                                    <input type="text"
+                                                           x-model="colMap.datetime_config.source_format"
+                                                           placeholder="Auto-detect (%Y-%m-%d %H:%M:%S)"
+                                                           class="w-full text-xs border border-amber-200 dark:border-amber-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono placeholder-gray-400">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-[10px] text-amber-600 dark:text-amber-400 font-medium mb-1">Timezone origem</label>
+                                                    <input type="text"
+                                                           x-model="colMap.datetime_config.source_tz"
+                                                           placeholder="America/Sao_Paulo (vazio = UTC)"
+                                                           class="w-full text-xs border border-amber-200 dark:border-amber-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono placeholder-gray-400">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-[10px] text-amber-600 dark:text-amber-400 font-medium mb-1">Timezone destino</label>
+                                                    <input type="text"
+                                                           x-model="colMap.datetime_config.target_tz"
+                                                           placeholder="UTC"
+                                                           class="w-full text-xs border border-amber-200 dark:border-amber-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono placeholder-gray-400">
+                                                </div>
+                                                <div class="flex items-center gap-2 pt-4">
+                                                    <input type="checkbox"
+                                                           x-model="colMap.datetime_config.assume_utc"
+                                                           class="rounded border-amber-300">
+                                                    <label class="text-xs text-amber-700 dark:text-amber-400">Assumir UTC quando sem timezone</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
                                     </div>
                                 </template>
                             </div>
@@ -357,7 +549,7 @@
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">10 primeiras linhas de cada tabela após as transformações</p>
                 </div>
                 <div class="flex gap-2">
-                    <button @click="step = 3" class="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    <button @click="goToMapping(4)" class="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                         ← Ajustar mapeamento
                     </button>
                     <button @click="step = 5; startExecution()"
@@ -436,7 +628,7 @@
                 <div class="flex gap-2">
                     <template x-if="executionDone">
                         <div class="flex gap-2">
-                            <button @click="step = 3" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                            <button @click="goToMapping(5)" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                 ← Ajustar mapeamento
                             </button>
                             <button @click="downloadReport()" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
@@ -468,7 +660,7 @@
                             <p class="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">Erro de inserção detectado</p>
                             <p class="text-sm text-red-700 dark:text-red-400" x-text="dbErrorMessage"></p>
                             <div class="mt-3 flex gap-2">
-                                <button @click="step = 3"
+                                <button @click="goToMapping(5)"
                                         class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
                                     Voltar ao Mapeamento
@@ -605,6 +797,10 @@ function importerWizard() {
             on_conflict: 'skip',
             stop_on_error: false,
         },
+        // FK dependency analysis
+        depsOrder: [],
+        depsWarnings: [],
+        depsLoading: false,
 
         // Step 4
         previewData: {},
@@ -704,7 +900,15 @@ function importerWizard() {
         // Step 2 — Schema
         // ----------------------------------------------------------------
 
-        goToMapping() {
+        goToMapping(fromStep = 2) {
+            // When coming from step 4/5, restore opened accordions for configured tables
+            if (fromStep > 3) {
+                this.mappings.forEach(m => {
+                    if (m.enabled && m.target_model) {
+                        m._open = true;
+                    }
+                });
+            }
             this.step = 3;
         },
 
@@ -719,7 +923,13 @@ function importerWizard() {
                     target: col.name,
                     transform: this._guessTransform(col),
                     default: col.default,
+                    struct_config: col.python_type === 'json' ? { field_map: {}, drop_unknown: false } : null,
+                    datetime_config: (col.python_type === 'datetime' || col.python_type === 'date')
+                        ? { source_format: null, source_tz: null, target_tz: 'UTC', assume_utc: true }
+                        : null,
                     _schema: col,
+                    _structOpen: false,
+                    _datetimeOpen: false,
                 }));
                 return {
                     source_table: tableName,
@@ -754,16 +964,71 @@ function importerWizard() {
                 const match = model.fields.find(f => f.name === colMap.source);
                 if (match) {
                     colMap.target = match.name;
+                    // Auto-select struct_map for struct fields
+                    if (match.is_struct && colMap._schema && colMap._schema.python_type === 'json') {
+                        colMap.transform = 'struct_map';
+                        if (!colMap.struct_config) {
+                            colMap.struct_config = { field_map: {}, drop_unknown: false };
+                        }
+                    }
                 } else {
                     colMap.target = '';
                 }
             });
+
+            // Re-run dependency analysis whenever a model is selected
+            this.analyzeDeps();
+        },
+
+        async analyzeDeps() {
+            if (!this.uploadResult) return;
+            const tableModelMap = {};
+            this.mappings.forEach(m => {
+                if (m.enabled && m.target_model) {
+                    tableModelMap[m.source_table] = m.target_model;
+                }
+            });
+            if (Object.keys(tableModelMap).length === 0) {
+                this.depsOrder = [];
+                this.depsWarnings = [];
+                return;
+            }
+            this.depsLoading = true;
+            try {
+                const res = await fetch('{{ admin_prefix }}/api/importer/analyze-deps', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        upload_id: this.uploadResult.upload_id,
+                        table_model_map: tableModelMap,
+                    }),
+                });
+                const data = await res.json();
+                this.depsOrder = data.order || [];
+                this.depsWarnings = data.warnings || [];
+            } catch (e) {
+                console.error('Deps analysis error', e);
+            } finally {
+                this.depsLoading = false;
+            }
         },
 
         getModelFields(modelKey) {
             if (!modelKey) return [];
             const model = this.availableModels.find(m => m.key === modelKey);
             return model ? model.fields : [];
+        },
+
+        getTargetField(modelKey, fieldName) {
+            const fields = this.getModelFields(modelKey);
+            return fields.find(f => f.name === fieldName) || null;
+        },
+
+        formatDefault(val) {
+            if (val === null || val === undefined) return null;
+            if (val === '__auto__') return 'auto';
+            if (typeof val === 'string') return val.length > 20 ? val.substring(0, 20) + '…' : val;
+            return String(val);
         },
 
         // ----------------------------------------------------------------
@@ -792,6 +1057,8 @@ function importerWizard() {
                                     target: c.target,
                                     transform: c.transform,
                                     default: c.default,
+                                    struct_config: c.struct_config || null,
+                                    datetime_config: c.datetime_config || null,
                                 })),
                         }),
                     });
@@ -873,6 +1140,8 @@ function importerWizard() {
                             target: c.target,
                             transform: c.transform,
                             default: c.default,
+                            struct_config: c.struct_config || null,
+                            datetime_config: c.datetime_config || null,
                         })),
                 })),
             };

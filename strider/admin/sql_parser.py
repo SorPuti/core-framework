@@ -557,22 +557,66 @@ def _coerce_float(v: Any) -> float | None:
         return None
 
 
-def _coerce_datetime(v: Any) -> str | None:
-    """Retorna string ISO para compatibilidade com SQLAlchemy."""
+def _coerce_datetime(v: Any, config: dict[str, Any] | None = None) -> str | None:
+    """Retorna string ISO para compatibilidade com SQLAlchemy.
+
+    config keys:
+        source_format: strftime format string (auto-detect if None)
+        source_tz: pytz/zoneinfo timezone name for naive datetimes (None = assume UTC)
+        target_tz: output timezone name (default "UTC")
+        assume_utc: treat naive datetimes as UTC (default True)
+    """
     if v is None or v == "":
         return None
     s = str(v).strip()
-    # MySQL format: 2023-01-15 10:30:00 or 2023-01-15 10:30:00.000000
-    s = s.replace("T", " ")
-    try:
-        # Try parse with microseconds
+    cfg = config or {}
+
+    source_fmt = cfg.get("source_format")
+    source_tz_name: str | None = cfg.get("source_tz")
+    target_tz_name: str = cfg.get("target_tz") or "UTC"
+    assume_utc: bool = cfg.get("assume_utc", True)
+
+    # Parse the datetime value
+    parsed: _dt.datetime | None = None
+    if source_fmt:
         try:
-            parsed = _dt.datetime.strptime(s, "%Y-%m-%d %H:%M:%S.%f")
-        except ValueError:
-            parsed = _dt.datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
-        return parsed.isoformat()
-    except (ValueError, TypeError):
-        return s  # pass-through
+            parsed = _dt.datetime.strptime(s, source_fmt)
+        except (ValueError, TypeError):
+            pass
+
+    if parsed is None:
+        # Auto-detect: try common MySQL/ISO formats
+        s_norm = s.replace("T", " ")
+        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                parsed = _dt.datetime.strptime(s_norm, fmt)
+                break
+            except (ValueError, TypeError):
+                continue
+
+    if parsed is None:
+        return s  # pass-through if unparseable
+
+    # Attach timezone info if datetime is naive
+    if parsed.tzinfo is None:
+        try:
+            import zoneinfo
+            tz_name = source_tz_name or ("UTC" if assume_utc else None)
+            if tz_name:
+                parsed = parsed.replace(tzinfo=zoneinfo.ZoneInfo(tz_name))
+        except Exception:
+            pass
+
+    # Convert to target timezone
+    try:
+        import zoneinfo as _zi
+        tgt_tz = _zi.ZoneInfo(target_tz_name)
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(tgt_tz)
+    except Exception:
+        pass
+
+    return parsed.isoformat()
 
 
 def _coerce_json(v: Any) -> Any:
@@ -588,6 +632,46 @@ def _coerce_json(v: Any) -> Any:
     return v
 
 
+def _apply_struct_map(v: Any, config: dict[str, Any] | None = None) -> Any:
+    """
+    Maps a JSON value to a StructSchema-compatible dict.
+
+    config keys:
+        field_map: dict mapping source JSON keys → StructSchema field names
+        use_aliases: if True, also search aliases defined in StructSchema
+        drop_unknown: if True, discard keys not in field_map
+    """
+    if v is None or v == "":
+        return None
+
+    # Parse JSON string if needed
+    data: dict[str, Any]
+    if isinstance(v, str):
+        try:
+            data = json.loads(v)
+        except (json.JSONDecodeError, TypeError):
+            return v
+    elif isinstance(v, dict):
+        data = v
+    else:
+        return v
+
+    if not config:
+        return data
+
+    field_map: dict[str, str] = config.get("field_map") or {}
+    drop_unknown: bool = config.get("drop_unknown", False)
+
+    result: dict[str, Any] = {}
+    for src_key, val in data.items():
+        dest_key = field_map.get(src_key, src_key)
+        if drop_unknown and src_key not in field_map:
+            continue
+        result[dest_key] = val
+
+    return result
+
+
 TRANSFORMS: dict[str, Any] = {
     "passthrough":    lambda v: v,
     "to_bool":        _coerce_bool,
@@ -595,6 +679,7 @@ TRANSFORMS: dict[str, Any] = {
     "to_float":       _coerce_float,
     "to_datetime":    _coerce_datetime,
     "json_parse":     _coerce_json,
+    "struct_map":     _apply_struct_map,
     "uuid_str":       lambda v: str(v) if v is not None else None,
     "strip":          lambda v: v.strip() if isinstance(v, str) else v,
     "lower":          lambda v: v.lower() if isinstance(v, str) else v,
@@ -604,7 +689,11 @@ TRANSFORMS: dict[str, Any] = {
 }
 
 
-def apply_transform(value: Any, transform: str | None) -> Any:
+def apply_transform(
+    value: Any,
+    transform: str | None,
+    config: dict[str, Any] | None = None,
+) -> Any:
     """Aplica uma transformação a um valor. Retorna o valor original se transform inválido."""
     if transform is None or transform == "passthrough":
         return value
@@ -612,6 +701,9 @@ def apply_transform(value: Any, transform: str | None) -> Any:
     if fn is None:
         return value
     try:
+        # Functions that accept an optional config param
+        if transform in ("to_datetime", "struct_map") and config is not None:
+            return fn(value, config)
         return fn(value)
     except Exception:
         return value
@@ -626,7 +718,8 @@ def transform_row(
 
     Args:
         row: dict original com valores brutos
-        column_mappings: lista de {source, target, transform, default}
+        column_mappings: lista de {source, target, transform, default,
+                                   struct_config, datetime_config}
 
     Returns:
         (transformed_row, errors)
@@ -647,8 +740,15 @@ def transform_row(
         if raw_value is None and default is not None:
             raw_value = default
 
+        # Resolve per-transform config
+        config: dict[str, Any] | None = None
+        if transform == "struct_map":
+            config = mapping.get("struct_config")
+        elif transform == "to_datetime":
+            config = mapping.get("datetime_config")
+
         try:
-            result[target] = apply_transform(raw_value, transform)
+            result[target] = apply_transform(raw_value, transform, config)
         except Exception as e:
             errs.append(f"Column '{source}' → '{target}': {e}")
             result[target] = None

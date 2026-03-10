@@ -98,6 +98,8 @@ class ColumnMapping(BaseModel):
     target: str | None = None
     transform: str | None = "passthrough"
     default: Any = None
+    struct_config: dict[str, Any] | None = None   # for transform=struct_map
+    datetime_config: dict[str, Any] | None = None  # for transform=to_datetime
 
 
 class TableMapping(BaseModel):
@@ -121,22 +123,121 @@ class ExecuteRequest(BaseModel):
     tables: list[TableMapping] = []
 
 
+class AnalyzeDepsRequest(BaseModel):
+    upload_id: str
+    # maps source table name → target model key (e.g. "auth.user")
+    table_model_map: dict[str, str] = {}
+
+
 # ---------------------------------------------------------------------------
 # Helper: introspect model fields
 # ---------------------------------------------------------------------------
 
+def _serialize_struct_schema(schema_class: type) -> list[dict[str, Any]]:
+    """Serializes a StructSchema subclass into a flat list of field descriptors."""
+    fields = []
+    try:
+        all_fields: dict[str, Any] = getattr(schema_class, "_fields", {})
+        for name, field in all_fields.items():
+            default = getattr(field, "default", None)
+            if callable(default):
+                default = "__auto__"
+            entry: dict[str, Any] = {
+                "name": name,
+                "type": type(field).__name__.replace("Field", "").lower() or "str",
+                "default": default,
+                "nullable": getattr(field, "nullable", True),
+                "aliases": getattr(field, "aliases", None) or [],
+                "choices": getattr(field, "choices", None),
+            }
+            # NestedField → recurse inline fields
+            inline = getattr(field, "_inline_fields", None)
+            schema_cls = getattr(field, "schema_class", None)
+            if inline and isinstance(inline, dict):
+                entry["nested"] = _serialize_struct_schema_dict(inline)
+            elif schema_cls is not None:
+                entry["nested"] = _serialize_struct_schema(schema_cls)
+            fields.append(entry)
+    except Exception as e:
+        logger.debug("Could not serialize struct schema %s: %s", schema_class, e)
+    return fields
+
+
+def _serialize_struct_schema_dict(fields_dict: dict[str, Any]) -> list[dict[str, Any]]:
+    """Serializes an inline dict of Field objects (used by NestedField)."""
+    result = []
+    for name, field in fields_dict.items():
+        default = getattr(field, "default", None)
+        if callable(default):
+            default = "__auto__"
+        result.append({
+            "name": name,
+            "type": type(field).__name__.replace("Field", "").lower() or "str",
+            "default": default,
+            "nullable": getattr(field, "nullable", True),
+            "aliases": getattr(field, "aliases", None) or [],
+            "choices": getattr(field, "choices", None),
+        })
+    return result
+
+
 def _get_model_fields(model_class: type) -> list[dict[str, Any]]:
-    """Extrai fields de um SQLAlchemy model para exibir no mapeamento."""
+    """Extrai fields de um SQLAlchemy model com metadados completos para o mapeamento."""
     fields = []
     try:
         from sqlalchemy import inspect as sa_inspect
         mapper = sa_inspect(model_class)
         for col in mapper.columns:
+            # --- Default value ---
+            default_val = None
+            if col.default is not None:
+                arg = getattr(col.default, "arg", None)
+                if arg is not None and not callable(arg):
+                    default_val = arg  # scalar default
+                else:
+                    default_val = "__auto__"  # callable / server-side default
+            elif col.server_default is not None:
+                default_val = "__auto__"
+
+            # --- Foreign key ---
+            fk_target = None
+            if col.foreign_keys:
+                fk = next(iter(col.foreign_keys))
+                fk_target = f"{fk.column.table.name}.{fk.column.name}"
+
+            # --- Struct schema ---
+            struct_fields: list[dict[str, Any]] | None = None
+            col_info: dict[str, Any] = getattr(col, "info", {}) or {}
+            if "struct_schema" in col_info:
+                ss = col_info["struct_schema"]
+                if isinstance(ss, type):
+                    struct_fields = _serialize_struct_schema(ss)
+
+            # --- Choices ---
+            choices: list[dict[str, Any]] | None = None
+            if "choices_class" in col_info:
+                try:
+                    choices = [
+                        {"value": e.value, "label": str(getattr(e, "label", e.value))}
+                        for e in col_info["choices_class"]
+                    ]
+                except Exception:
+                    pass
+            elif "choices" in col_info and isinstance(col_info["choices"], (list, tuple)):
+                choices = [{"value": v, "label": str(v)} for v in col_info["choices"]]
+
             fields.append({
                 "name": col.key,
-                "type": str(col.type.__class__.__name__).lower(),
+                "type": type(col.type).__name__.lower(),
                 "nullable": col.nullable,
                 "primary_key": col.primary_key,
+                "default": default_val,
+                "is_fk": fk_target is not None,
+                "fk_target": fk_target,
+                "is_struct": struct_fields is not None,
+                "struct_fields": struct_fields,
+                "choices": choices,
+                "auto_now": bool(getattr(col, "onupdate", None)),
             })
     except Exception as e:
         logger.debug("Could not introspect model %s: %s", model_class, e)
@@ -546,6 +647,7 @@ def create_importer_router(site: "AdminSite") -> APIRouter:
             {"id": "to_float",      "label": "→ Float / Decimal"},
             {"id": "to_datetime",   "label": "→ Datetime (ISO)"},
             {"id": "json_parse",    "label": "→ JSON (parse string)"},
+            {"id": "struct_map",    "label": "→ StructSchema (mapeamento visual)"},
             {"id": "uuid_str",      "label": "→ UUID string"},
             {"id": "strip",         "label": "Strip (remover espaços)"},
             {"id": "lower",         "label": "→ Lowercase"},
@@ -555,12 +657,147 @@ def create_importer_router(site: "AdminSite") -> APIRouter:
         ]
         return JSONResponse({"transforms": transforms})
 
+    # =========================================================================
+    # POST /api/importer/analyze-deps
+    # =========================================================================
+
+    @router.post("/analyze-deps")
+    async def analyze_deps(
+        request: Request,
+        body: AnalyzeDepsRequest,
+        _user: Any = Depends(check_admin_access),
+    ) -> JSONResponse:
+        """
+        Analisa dependências FK entre os models de destino selecionados.
+        Retorna a ordem topológica de importação e warnings de inconsistência.
+        """
+        sess = _get_session(body.upload_id)
+        table_model_map = body.table_model_map  # source_table → model_key
+
+        # Build reverse: model_key → source_table
+        model_source: dict[str, str] = {v: k for k, v in table_model_map.items() if v}
+
+        # Collect model_key → table_name from site registry
+        model_table_name: dict[str, str] = {}
+        model_fields_map: dict[str, list[dict[str, Any]]] = {}
+        for model_class, admin_instance in site.get_registry().items():
+            key = f"{admin_instance._app_label}.{admin_instance._model_name}"
+            tname = getattr(model_class, "__tablename__", None)
+            if tname:
+                model_table_name[key] = tname
+            model_fields_map[key] = _get_model_fields(model_class)
+
+        # Build table_name → model_key reverse index for FK resolution
+        table_name_to_model: dict[str, str] = {v: k for k, v in model_table_name.items()}
+
+        # Build adjacency: edges represent "A depends on B" (A has FK to B)
+        selected_keys = set(table_model_map.values()) - {""}
+        deps: dict[str, set[str]] = {k: set() for k in selected_keys}
+        warnings: list[dict[str, Any]] = []
+
+        for model_key in selected_keys:
+            fields = model_fields_map.get(model_key, [])
+            source_table = model_source.get(model_key, "?")
+            source_schema = sess.parse_result.tables.get(source_table)
+
+            for field in fields:
+                if not field.get("is_fk") or not field.get("fk_target"):
+                    continue
+                fk_ref = field["fk_target"]  # e.g. "users.id"
+                ref_table = fk_ref.split(".")[0]
+                ref_model = table_name_to_model.get(ref_table)
+
+                if ref_model and ref_model in selected_keys:
+                    # FK to another model being imported → dependency edge
+                    deps[model_key].add(ref_model)
+
+                    # Check type mismatch between source and target FK field
+                    if source_schema:
+                        src_col = next(
+                            (c for c in source_schema.columns if c.name == field["name"]),
+                            None,
+                        )
+                        if src_col:
+                            src_type = src_col.python_type
+                            tgt_type = field.get("type", "")
+                            if src_type != tgt_type and not (
+                                src_type in ("str", "uuid") and tgt_type in ("varchar", "uuid", "char")
+                            ):
+                                warnings.append({
+                                    "type": "fk_type_mismatch",
+                                    "table": source_table,
+                                    "field": field["name"],
+                                    "source_type": src_type,
+                                    "target_type": tgt_type,
+                                    "message": (
+                                        f"{source_table}.{field['name']}: tipo origem "
+                                        f"'{src_type}' diverge do destino '{tgt_type}'. "
+                                        "Configure a transformação adequada."
+                                    ),
+                                })
+                else:
+                    # FK to a table NOT being imported
+                    if ref_model:
+                        warnings.append({
+                            "type": "fk_missing",
+                            "table": source_table,
+                            "field": field["name"],
+                            "fk_target": fk_ref,
+                            "ref_model": ref_model,
+                            "message": (
+                                f"{source_table}.{field['name']} referencia "
+                                f"'{ref_model}' ({ref_table}) que não está sendo importado."
+                            ),
+                        })
+
+        # Topological sort (Kahn's algorithm)
+        order = _topological_sort(selected_keys, deps)
+
+        return JSONResponse({
+            "order": order,
+            "warnings": warnings,
+        })
+
     return router
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _topological_sort(nodes: set[str], deps: dict[str, set[str]]) -> list[str]:
+    """Kahn's algorithm: returns nodes in dependency order (parents before children)."""
+    from collections import deque
+    in_degree = {n: 0 for n in nodes}
+    for node, predecessors in deps.items():
+        for p in predecessors:
+            if p in in_degree:
+                in_degree[node] = in_degree.get(node, 0) + 1
+
+    # Recalculate correctly
+    in_degree = {n: 0 for n in nodes}
+    adj: dict[str, set[str]] = {n: set() for n in nodes}
+    for child, parents in deps.items():
+        for parent in parents:
+            if parent in nodes:
+                adj[parent].add(child)
+                in_degree[child] = in_degree.get(child, 0) + 1
+
+    queue: deque[str] = deque(n for n in nodes if in_degree[n] == 0)
+    result: list[str] = []
+    while queue:
+        node = queue.popleft()
+        result.append(node)
+        for child in sorted(adj.get(node, [])):
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                queue.append(child)
+
+    # Handle cycles: append remaining nodes at the end
+    remaining = [n for n in nodes if n not in result]
+    result.extend(sorted(remaining))
+    return result
+
 
 def _sse_event(data: dict[str, Any]) -> str:
     """Formata um evento SSE."""
