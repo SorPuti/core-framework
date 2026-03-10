@@ -416,7 +416,7 @@ def create_importer_router(site: "AdminSite") -> APIRouter:
 
                         if len(current_batch) >= batch_size:
                             batch_num += 1
-                            batch_ins, batch_skip, batch_err = await _insert_batch(
+                            batch_ins, batch_skip, batch_err, batch_err_msg = await _insert_batch(
                                 target_sa_table,
                                 current_batch,
                                 on_conflict,
@@ -425,6 +425,17 @@ def create_importer_router(site: "AdminSite") -> APIRouter:
                             skipped += batch_skip
                             errors += batch_err
                             current_batch = []
+
+                            if batch_err_msg and batch_err > 0:
+                                yield _sse_event({
+                                    "type": "db_error",
+                                    "table": source_table,
+                                    "message": batch_err_msg,
+                                    "count": batch_err,
+                                    "batch": batch_num,
+                                })
+                                if body.stop_on_error:
+                                    break
 
                             yield _sse_event({
                                 "type": "progress",
@@ -441,7 +452,7 @@ def create_importer_router(site: "AdminSite") -> APIRouter:
                     # Flush remaining
                     if current_batch:
                         batch_num += 1
-                        batch_ins, batch_skip, batch_err = await _insert_batch(
+                        batch_ins, batch_skip, batch_err, batch_err_msg = await _insert_batch(
                             target_sa_table,
                             current_batch,
                             on_conflict,
@@ -449,6 +460,14 @@ def create_importer_router(site: "AdminSite") -> APIRouter:
                         inserted += batch_ins
                         skipped += batch_skip
                         errors += batch_err
+                        if batch_err_msg and batch_err > 0:
+                            yield _sse_event({
+                                "type": "db_error",
+                                "table": source_table,
+                                "message": batch_err_msg,
+                                "count": batch_err,
+                                "batch": batch_num,
+                            })
 
                 except Exception as e:
                     logger.exception("Fatal error importing table %s", source_table)
@@ -597,22 +616,105 @@ def _build_insert_stmt(sa_table: Any, batch: list[dict[str, Any]], on_conflict: 
         return insert(sa_table).prefix_with("OR IGNORE").values(batch)
 
 
+def _coerce_value_for_sa_type(val: Any, type_name: str) -> Any:
+    """
+    Converte um valor para o tipo Python correto baseado no tipo SQLAlchemy.
+    Evita erros de driver (ex: asyncpg rejeita string '0'/'1' para BOOLEAN).
+    """
+    if val is None:
+        return None
+
+    t = type_name.upper()
+
+    if "BOOL" in t:
+        if isinstance(val, bool):
+            return val
+        if isinstance(val, int):
+            return bool(val)
+        if isinstance(val, str):
+            stripped = val.strip()
+            if not stripped or stripped.upper() in ("NULL", "NONE"):
+                return None
+            return stripped not in ("0", "false", "False", "no", "No")
+        return bool(val)
+
+    if "INT" in t:
+        if isinstance(val, int):
+            return val
+        try:
+            return int(float(str(val)))
+        except (ValueError, TypeError):
+            return None
+
+    if any(x in t for x in ("FLOAT", "DOUBLE", "DECIMAL", "NUMERIC", "REAL")):
+        if isinstance(val, (int, float)):
+            return float(val)
+        try:
+            return float(str(val))
+        except (ValueError, TypeError):
+            return None
+
+    if "UUID" in t:
+        return str(val) if val else None
+
+    if "DATETIME" in t or "TIMESTAMP" in t:
+        # Keep as string — SQLAlchemy handles ISO string → datetime
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+        return None
+
+    return val
+
+
+def _coerce_batch_for_table(
+    batch: list[dict[str, Any]],
+    sa_table: Any,
+) -> list[dict[str, Any]]:
+    """
+    Auto-coerce todos os valores do batch para os tipos Python corretos,
+    baseado nos tipos das colunas da tabela SQLAlchemy alvo.
+    Isso evita erros de driver como 'Not a boolean value: "0"'.
+    """
+    col_types: dict[str, str] = {}
+    try:
+        for col in sa_table.columns:
+            col_types[col.name] = type(col.type).__name__
+    except Exception:
+        return batch  # se não conseguir introspectar, retorna sem coerção
+
+    if not col_types:
+        return batch
+
+    result = []
+    for row in batch:
+        coerced: dict[str, Any] = {}
+        for key, val in row.items():
+            type_name = col_types.get(key, "")
+            coerced[key] = _coerce_value_for_sa_type(val, type_name) if type_name else val
+        result.append(coerced)
+    return result
+
+
 async def _insert_batch(
     sa_table: Any,
     batch: list[dict[str, Any]],
     on_conflict: str,
-) -> tuple[int, int, int]:
+) -> tuple[int, int, int, str | None]:
     """
     Insere um batch de linhas usando SQLAlchemy Core (sem ORM).
-    Retorna (inserted, skipped, errors).
+    Retorna (inserted, skipped, errors, first_error_message).
 
+    Auto-coerce tipos antes de inserir para evitar erros de driver.
     Usa insert direto por dialeto:
     - PostgreSQL: ON CONFLICT DO NOTHING
     - MySQL: INSERT IGNORE
     - SQLite: INSERT OR IGNORE
     """
     if not batch:
-        return 0, 0, 0
+        return 0, 0, 0, None
+
+    # Auto-coerce tipos para evitar erros de driver (ex: bool, int, float)
+    coerced = _coerce_batch_for_table(batch, sa_table)
 
     try:
         from strider.models import get_session
@@ -620,27 +722,30 @@ async def _insert_batch(
         db = await get_session()
         async with db:
             async with db.begin():
-                stmt = _build_insert_stmt(sa_table, batch, on_conflict)
+                stmt = _build_insert_stmt(sa_table, coerced, on_conflict)
                 result = await db.execute(stmt)
-                inserted = result.rowcount if result.rowcount >= 0 else len(batch)
-                return inserted, 0, 0
+                inserted = result.rowcount if result.rowcount >= 0 else len(coerced)
+                return inserted, 0, 0, None
 
     except Exception as e:
+        err_msg = _humanize_db_error(e)
         logger.warning("Batch insert error (falling back to row-by-row): %s", e)
-        return await _insert_row_by_row(sa_table, batch, on_conflict)
+        ins, skip, errs, first_err = await _insert_row_by_row(sa_table, coerced, on_conflict)
+        return ins, skip, errs, first_err or err_msg
 
 
 async def _insert_row_by_row(
     sa_table: Any,
     batch: list[dict[str, Any]],
     on_conflict: str,
-) -> tuple[int, int, int]:
-    """Fallback: insere linha por linha quando o batch falha."""
+) -> tuple[int, int, int, str | None]:
+    """Fallback: insere linha por linha quando o batch falha. Retorna primeiro erro."""
     from strider.models import get_session
 
     inserted = 0
     skipped = 0
     errors = 0
+    first_error: str | None = None
 
     for row in batch:
         try:
@@ -656,5 +761,55 @@ async def _insert_row_by_row(
         except Exception as e:
             logger.debug("Row insert error: %s", e)
             errors += 1
+            if first_error is None:
+                first_error = _humanize_db_error(e)
 
-    return inserted, skipped, errors
+    return inserted, skipped, errors, first_error
+
+
+def _humanize_db_error(exc: Exception) -> str:
+    """Converte uma exceção de banco em mensagem legível para o usuário."""
+    msg = str(exc)
+
+    # asyncpg boolean
+    if "Not a boolean value" in msg:
+        import re
+        m = re.search(r"Not a boolean value: '(.+?)'", msg)
+        val = m.group(1) if m else "?"
+        return (
+            f"Tipo incompatível: valor '{val}' não é um boolean válido. "
+            "Use a transformação 'to_bool' para campos BOOLEAN."
+        )
+    # asyncpg UUID
+    if "badly formed hexadecimal UUID" in msg or "invalid input syntax for type uuid" in msg.lower():
+        return (
+            "Tipo incompatível: valor não é um UUID válido. "
+            "Verifique o campo ou use a transformação 'uuid_str'."
+        )
+    # asyncpg timestamp
+    if "invalid input syntax for type timestamp" in msg.lower():
+        return (
+            "Tipo incompatível: data/hora em formato inválido. "
+            "Use a transformação 'to_datetime'."
+        )
+    # unique constraint
+    if "unique constraint" in msg.lower() or "duplicate key" in msg.lower():
+        return (
+            "Violação de unique constraint: registro duplicado. "
+            "Configure 'Conflito → Ignorar' ou remova dados existentes."
+        )
+    # foreign key
+    if "foreign key constraint" in msg.lower():
+        return (
+            "Violação de chave estrangeira: a linha referencia um ID que não existe. "
+            "Importe as tabelas relacionadas primeiro."
+        )
+    # not null
+    if "null value in column" in msg.lower() or "not null constraint" in msg.lower():
+        import re
+        m = re.search(r'column "([^"]+)"', msg)
+        col = m.group(1) if m else "?"
+        return f"Campo obrigatório vazio: coluna '{col}' não pode ser NULL. Configure um valor padrão."
+
+    # Generic — truncate at 200 chars
+    return msg[:200] if len(msg) > 200 else msg
