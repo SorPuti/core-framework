@@ -133,22 +133,51 @@ class AnalyzeDepsRequest(BaseModel):
 # Helper: introspect model fields
 # ---------------------------------------------------------------------------
 
+def _json_safe(value: Any) -> Any:
+    """Recursively converts non-JSON-serializable values (StructSchema instances,
+    lists/dicts containing them, callables) into JSON-safe representations."""
+    if value is None:
+        return None
+    if callable(value) and not isinstance(value, type):
+        return "__auto__"
+    # StructSchema instance → convert via to_dict() or asdict
+    try:
+        from strider.schema import StructSchema as _StructSchema
+        if isinstance(value, _StructSchema):
+            return _json_safe(value.to_dict() if hasattr(value, "to_dict") else {})
+    except ImportError:
+        pass
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    # Attempt standard JSON encoding test; if it fails, stringify
+    try:
+        import json as _json
+        _json.dumps(value)
+        return value
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _serialize_struct_schema(schema_class: type) -> list[dict[str, Any]]:
     """Serializes a StructSchema subclass into a flat list of field descriptors."""
     fields = []
     try:
         all_fields: dict[str, Any] = getattr(schema_class, "_fields", {})
         for name, field in all_fields.items():
-            default = getattr(field, "default", None)
-            if callable(default):
-                default = "__auto__"
+            raw_default = getattr(field, "default", None)
+            if callable(raw_default) and not isinstance(raw_default, type):
+                default: Any = "__auto__"
+            else:
+                default = _json_safe(raw_default)
             entry: dict[str, Any] = {
                 "name": name,
                 "type": type(field).__name__.replace("Field", "").lower() or "str",
                 "default": default,
                 "nullable": getattr(field, "nullable", True),
                 "aliases": getattr(field, "aliases", None) or [],
-                "choices": getattr(field, "choices", None),
+                "choices": _json_safe(getattr(field, "choices", None)),
             }
             # NestedField → recurse inline fields
             inline = getattr(field, "_inline_fields", None)
@@ -167,16 +196,18 @@ def _serialize_struct_schema_dict(fields_dict: dict[str, Any]) -> list[dict[str,
     """Serializes an inline dict of Field objects (used by NestedField)."""
     result = []
     for name, field in fields_dict.items():
-        default = getattr(field, "default", None)
-        if callable(default):
-            default = "__auto__"
+        raw_default = getattr(field, "default", None)
+        if callable(raw_default) and not isinstance(raw_default, type):
+            default: Any = "__auto__"
+        else:
+            default = _json_safe(raw_default)
         result.append({
             "name": name,
             "type": type(field).__name__.replace("Field", "").lower() or "str",
             "default": default,
             "nullable": getattr(field, "nullable", True),
             "aliases": getattr(field, "aliases", None) or [],
-            "choices": getattr(field, "choices", None),
+            "choices": _json_safe(getattr(field, "choices", None)),
         })
     return result
 
@@ -193,7 +224,7 @@ def _get_model_fields(model_class: type) -> list[dict[str, Any]]:
             if col.default is not None:
                 arg = getattr(col.default, "arg", None)
                 if arg is not None and not callable(arg):
-                    default_val = arg  # scalar default
+                    default_val = _json_safe(arg)  # scalar default (may be StructSchema instance)
                 else:
                     default_val = "__auto__"  # callable / server-side default
             elif col.server_default is not None:
