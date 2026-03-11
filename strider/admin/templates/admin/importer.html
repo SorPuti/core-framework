@@ -292,14 +292,13 @@
                             <svg class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
 
                             <!-- Model selector -->
-                            <select x-model="tableMap.target_model"
-                                    @click.stop
-                                    @change="onModelSelect(tableMap)"
+                            <select @click.stop
+                                    @change="tableMap.target_model = $event.target.value; onModelSelect(tableMap)"
                                     :disabled="!tableMap.enabled"
                                     class="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 min-w-[200px] disabled:opacity-50">
-                                <option value="">— Selecionar model —</option>
+                                <option value="" :selected="!tableMap.target_model">— Selecionar model —</option>
                                 <template x-for="m in availableModels" :key="m.key">
-                                    <option :value="m.key" x-text="m.key + ' (' + m.table_name + ')'"></option>
+                                    <option :value="m.key" :selected="m.key === tableMap.target_model" x-text="m.key + ' (' + m.table_name + ')'"></option>
                                 </template>
                             </select>
 
@@ -351,12 +350,12 @@
                                         <!-- Target field -->
                                         <div class="col-span-3">
                                             <div class="space-y-1">
-                                                <select x-model="colMap.target"
+                                                <select @change="colMap.target = $event.target.value"
                                                         :disabled="colMap.target === null || !tableMap.target_model"
                                                         class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-40">
-                                                    <option value="">— ignorar coluna —</option>
+                                                    <option value="" :selected="!colMap.target">— ignorar coluna —</option>
                                                     <template x-for="f in getModelFields(tableMap.target_model)" :key="f.name">
-                                                        <option :value="f.name" x-text="f.name + ' (' + f.type + ')'"></option>
+                                                        <option :value="f.name" :selected="f.name === colMap.target" x-text="f.name + ' (' + f.type + ')'"></option>
                                                     </template>
                                                 </select>
                                                 <!-- FK / Struct badges -->
@@ -381,11 +380,11 @@
                                         <!-- Transform -->
                                         <div class="col-span-3">
                                             <div class="space-y-1">
-                                                <select x-model="colMap.transform"
+                                                <select @change="colMap.transform = $event.target.value"
                                                         :disabled="!colMap.target || !tableMap.target_model"
                                                         class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-40">
                                                     <template x-for="t in availableTransforms" :key="t.id">
-                                                        <option :value="t.id" x-text="t.label"></option>
+                                                        <option :value="t.id" :selected="t.id === colMap.transform" x-text="t.label"></option>
                                                     </template>
                                                 </select>
                                                 <!-- Datetime config gear button -->
@@ -399,25 +398,85 @@
                                             </div>
                                         </div>
 
-                                        <!-- Default value from model -->
+                                        <!-- Default value setter (smart by target field type) -->
                                         <div class="col-span-2">
                                             <template x-if="colMap.target && getTargetField(tableMap.target_model, colMap.target)">
-                                                <div class="flex flex-wrap gap-1 items-center">
-                                                    <template x-if="getTargetField(tableMap.target_model, colMap.target)?.default !== null && getTargetField(tableMap.target_model, colMap.target)?.default !== undefined">
-                                                        <span class="text-[10px] font-mono px-1.5 py-0.5 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 rounded"
-                                                              :title="'Default: ' + String(getTargetField(tableMap.target_model, colMap.target)?.default)"
-                                                              x-text="formatDefault(getTargetField(tableMap.target_model, colMap.target)?.default)"></span>
-                                                    </template>
-                                                    <template x-if="getTargetField(tableMap.target_model, colMap.target)?.choices?.length > 0">
-                                                        <span class="text-[10px] font-medium px-1.5 py-0.5 bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 rounded"
-                                                              :title="'Choices: ' + getTargetField(tableMap.target_model, colMap.target)?.choices?.map(c => c.value).join(', ')">
-                                                            choices
-                                                        </span>
-                                                    </template>
+                                                <div class="space-y-1">
+                                                    <!-- auto_now: cannot set default -->
                                                     <template x-if="getTargetField(tableMap.target_model, colMap.target)?.auto_now">
-                                                        <span class="text-[10px] font-medium px-1.5 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 rounded">auto_now</span>
+                                                        <span class="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 rounded">auto_now</span>
+                                                    </template>
+
+                                                    <!-- Choices dropdown -->
+                                                    <template x-if="!getTargetField(tableMap.target_model, colMap.target)?.auto_now && getDefaultInputType(tableMap.target_model, colMap.target) === 'choices'">
+                                                        <div>
+                                                            <select @change="colMap.default = $event.target.value === '' ? null : $event.target.value"
+                                                                    class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                                                <option value="" :selected="colMap.default === null || colMap.default === ''">— da fonte —</option>
+                                                                <template x-for="c in (getTargetField(tableMap.target_model, colMap.target)?.choices || [])" :key="c.value">
+                                                                    <option :value="c.value" :selected="String(c.value) === String(colMap.default)" x-text="c.value + (c.label && c.label !== c.value ? ' — ' + c.label : '')"></option>
+                                                                </template>
+                                                            </select>
+                                                        </div>
+                                                    </template>
+
+                                                    <!-- Bool select -->
+                                                    <template x-if="!getTargetField(tableMap.target_model, colMap.target)?.auto_now && getDefaultInputType(tableMap.target_model, colMap.target) === 'bool'">
+                                                        <select @change="colMap.default = $event.target.value === '' ? null : $event.target.value === 'true'"
+                                                                class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                                            <option value="" :selected="colMap.default === null || colMap.default === ''">— da fonte —</option>
+                                                            <option value="true" :selected="colMap.default === true">true</option>
+                                                            <option value="false" :selected="colMap.default === false">false</option>
+                                                        </select>
+                                                    </template>
+
+                                                    <!-- Int input -->
+                                                    <template x-if="!getTargetField(tableMap.target_model, colMap.target)?.auto_now && getDefaultInputType(tableMap.target_model, colMap.target) === 'int'">
+                                                        <input type="number" step="1"
+                                                               :value="colMap.default ?? ''"
+                                                               @change="colMap.default = $event.target.value !== '' ? parseInt($event.target.value) : null"
+                                                               placeholder="null (da fonte)"
+                                                               class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400">
+                                                    </template>
+
+                                                    <!-- Float input -->
+                                                    <template x-if="!getTargetField(tableMap.target_model, colMap.target)?.auto_now && getDefaultInputType(tableMap.target_model, colMap.target) === 'float'">
+                                                        <input type="number" step="any"
+                                                               :value="colMap.default ?? ''"
+                                                               @change="colMap.default = $event.target.value !== '' ? parseFloat($event.target.value) : null"
+                                                               placeholder="null (da fonte)"
+                                                               class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400">
+                                                    </template>
+
+                                                    <!-- Datetime input -->
+                                                    <template x-if="!getTargetField(tableMap.target_model, colMap.target)?.auto_now && getDefaultInputType(tableMap.target_model, colMap.target) === 'datetime'">
+                                                        <input type="text"
+                                                               :value="colMap.default ?? ''"
+                                                               @input="colMap.default = $event.target.value || null"
+                                                               placeholder="2024-01-01 00:00:00"
+                                                               class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono placeholder-gray-400">
+                                                    </template>
+
+                                                    <!-- Text / varchar / uuid / default -->
+                                                    <template x-if="!getTargetField(tableMap.target_model, colMap.target)?.auto_now && getDefaultInputType(tableMap.target_model, colMap.target) === 'text'">
+                                                        <input type="text"
+                                                               :value="colMap.default ?? ''"
+                                                               @input="colMap.default = $event.target.value || null"
+                                                               placeholder="— da fonte —"
+                                                               class="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400">
+                                                    </template>
+
+                                                    <!-- Model default hint -->
+                                                    <template x-if="getTargetField(tableMap.target_model, colMap.target)?.default !== null && getTargetField(tableMap.target_model, colMap.target)?.default !== undefined">
+                                                        <div class="text-[10px] text-gray-400 dark:text-gray-500 truncate"
+                                                             :title="'Padrão do model: ' + String(getTargetField(tableMap.target_model, colMap.target)?.default)">
+                                                            model: <span class="font-mono" x-text="formatDefault(getTargetField(tableMap.target_model, colMap.target)?.default)"></span>
+                                                        </div>
                                                     </template>
                                                 </div>
+                                            </template>
+                                            <template x-if="!colMap.target">
+                                                <span class="text-[10px] text-gray-300 dark:text-gray-600">—</span>
                                             </template>
                                         </div>
 
@@ -566,7 +625,33 @@
                 </div>
             </template>
 
-            <template x-if="!previewLoading">
+            <template x-if="previewError">
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-5 flex items-start gap-3">
+                    <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-amber-800 dark:text-amber-300" x-text="previewError"></p>
+                        <button @click="goToMapping(4)"
+                                class="mt-2 text-xs text-amber-700 dark:text-amber-400 underline hover:no-underline">
+                            ← Voltar ao mapeamento
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="!previewLoading && !previewError && Object.keys(previewData).length === 0">
+                <div class="flex flex-col items-center justify-center py-16 text-center">
+                    <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-3">
+                        <svg class="w-6 h-6 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                    </div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Nenhuma tabela habilitada para preview</p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Volte ao mapeamento, ative o toggle de pelo menos uma tabela e selecione o model de destino.</p>
+                    <button @click="goToMapping(4)" class="mt-4 px-4 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        ← Voltar ao mapeamento
+                    </button>
+                </div>
+            </template>
+
+            <template x-if="!previewLoading && !previewError && Object.keys(previewData).length > 0">
                 <div class="space-y-6">
                     <template x-for="(tablePreview, tableName) in previewData" :key="tableName">
                         <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -659,7 +744,7 @@
                         <div class="flex-1">
                             <p class="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">Erro de inserção detectado</p>
                             <p class="text-sm text-red-700 dark:text-red-400" x-text="dbErrorMessage"></p>
-                            <div class="mt-3 flex gap-2">
+                            <div class="mt-3 flex gap-2 flex-wrap">
                                 <button @click="goToMapping(5)"
                                         class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
@@ -669,6 +754,10 @@
                                         class="px-4 py-2 text-sm font-medium border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                                     Tentar novamente
                                 </button>
+                                <button @click="reuploadKeepMappings()"
+                                        class="px-4 py-2 text-sm font-medium border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                                    Re-upload (sessão expirou)
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -676,95 +765,152 @@
             </template>
 
             <!-- Overall progress -->
-            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 mb-5">
-                <div class="flex items-center justify-between mb-3">
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 mb-4">
+                <div class="flex items-center justify-between mb-2">
                     <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Progresso geral</span>
-                    <div class="flex gap-4 text-sm">
-                        <span class="text-green-600 dark:text-green-400 font-medium" x-text="totalInserted.toLocaleString() + ' inseridos'"></span>
-                        <span class="text-amber-500 font-medium" x-text="totalSkipped.toLocaleString() + ' ignorados'"></span>
-                        <span class="text-red-500 font-medium" x-text="totalErrors.toLocaleString() + ' erros'"></span>
-                    </div>
+                    <span class="text-xs text-gray-400" x-text="completedTables + ' de ' + totalTables + ' tabelas · ' + overallProgress.toFixed(1) + '%'"></span>
                 </div>
-                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-300"
-                         :class="executionDone ? 'bg-green-500' : 'bg-primary-500'"
+                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-500"
+                         :class="executionDone && totalErrors === 0 ? 'bg-green-500' : executionDone && totalErrors > 0 ? 'bg-amber-500' : 'bg-primary-500'"
                          :style="'width: ' + overallProgress + '%'"></div>
                 </div>
-                <div class="flex justify-between text-xs text-gray-400 mt-1">
-                    <span x-text="completedTables + ' de ' + totalTables + ' tabelas'"></span>
-                    <span x-text="overallProgress.toFixed(1) + '%'"></span>
+                <div class="flex justify-between text-xs mt-2">
+                    <div class="flex gap-4">
+                        <span class="text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span x-text="totalInserted.toLocaleString() + ' inseridos'"></span>
+                        </span>
+                        <span x-show="totalSkipped > 0" class="text-amber-500 font-medium flex items-center gap-1">
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/></svg>
+                            <span x-text="totalSkipped.toLocaleString() + ' ignorados'"></span>
+                        </span>
+                        <span x-show="totalErrors > 0" class="text-red-500 font-medium flex items-center gap-1">
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            <span x-text="totalErrors.toLocaleString() + ' erros'"></span>
+                        </span>
+                    </div>
                 </div>
             </div>
 
             <!-- Per-table progress -->
-            <div class="space-y-3 mb-5">
+            <div class="space-y-2 mb-4">
                 <template x-for="(tableStatus, tableName) in executionStatus" :key="tableName">
-                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                        <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-2">
-                                <!-- Status icon -->
+                    <div class="bg-white dark:bg-gray-800 rounded-xl border overflow-hidden transition-all"
+                         :class="{
+                            'border-green-200 dark:border-green-800/60': tableStatus.status === 'done' && tableStatus.errors === 0,
+                            'border-amber-200 dark:border-amber-800/60': tableStatus.status === 'done' && tableStatus.errors > 0,
+                            'border-primary-200 dark:border-primary-800/60': tableStatus.status === 'running',
+                            'border-red-200 dark:border-red-800/60': tableStatus.status === 'error',
+                            'border-gray-200 dark:border-gray-700': tableStatus.status === 'waiting',
+                         }">
+                        <!-- Top stripe: colored left border accent -->
+                        <div class="flex items-center gap-3 px-4 py-3">
+                            <!-- Status icon -->
+                            <div class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
+                                 :class="{
+                                    'bg-green-100 dark:bg-green-900/30': tableStatus.status === 'done' && tableStatus.errors === 0,
+                                    'bg-amber-100 dark:bg-amber-900/30': tableStatus.status === 'done' && tableStatus.errors > 0,
+                                    'bg-blue-100 dark:bg-blue-900/30': tableStatus.status === 'running',
+                                    'bg-red-100 dark:bg-red-900/30': tableStatus.status === 'error',
+                                    'bg-gray-100 dark:bg-gray-700': tableStatus.status === 'waiting',
+                                 }">
                                 <template x-if="tableStatus.status === 'waiting'">
-                                    <div class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                                        <div class="w-2 h-2 rounded-full bg-gray-400"></div>
-                                    </div>
+                                    <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                                 </template>
                                 <template x-if="tableStatus.status === 'running'">
-                                    <div class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                                        <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                                    </div>
+                                    <div class="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                                 </template>
-                                <template x-if="tableStatus.status === 'done'">
-                                    <div class="w-5 h-5 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                                        <svg class="w-3 h-3 text-green-600 dark:text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                                    </div>
+                                <template x-if="tableStatus.status === 'done' && tableStatus.errors === 0">
+                                    <svg class="w-4 h-4 text-green-600 dark:text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                </template>
+                                <template x-if="tableStatus.status === 'done' && tableStatus.errors > 0">
+                                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                                 </template>
                                 <template x-if="tableStatus.status === 'error'">
-                                    <div class="w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                                        <svg class="w-3 h-3 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                    </div>
+                                    <svg class="w-4 h-4 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                 </template>
-
-                                <span class="text-sm font-medium text-gray-800 dark:text-gray-200" x-text="tableName"></span>
-                                <span class="text-xs text-gray-400" x-text="'→ ' + (tableStatus.target || '?')"></span>
                             </div>
-                            <div class="flex gap-3 text-xs">
-                                <span class="text-green-600 dark:text-green-400" x-text="(tableStatus.inserted || 0).toLocaleString() + ' inseridos'"></span>
-                                <span x-show="(tableStatus.skipped || 0) > 0" class="text-amber-500" x-text="(tableStatus.skipped || 0).toLocaleString() + ' ignorados'"></span>
-                                <span x-show="(tableStatus.errors || 0) > 0" class="text-red-500" x-text="(tableStatus.errors || 0).toLocaleString() + ' erros'"></span>
+
+                            <!-- Table name + target -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-semibold text-gray-900 dark:text-white" x-text="tableName"></span>
+                                    <svg class="w-3 h-3 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="tableStatus.target || '?'"></span>
+                                </div>
+                                <!-- Progress bar -->
+                                <div class="mt-1.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                                    <div class="h-full rounded-full transition-all duration-300"
+                                         :class="{
+                                            'bg-green-500': tableStatus.status === 'done' && tableStatus.errors === 0,
+                                            'bg-amber-500': tableStatus.status === 'done' && tableStatus.errors > 0,
+                                            'bg-primary-500': tableStatus.status === 'running',
+                                            'bg-red-500': tableStatus.status === 'error',
+                                            'bg-gray-300 dark:bg-gray-600': tableStatus.status === 'waiting',
+                                         }"
+                                         :style="tableStatus.total > 0
+                                            ? 'width: ' + Math.min(100, ((tableStatus.row || 0) / tableStatus.total) * 100) + '%'
+                                            : (tableStatus.status === 'done' ? 'width: 100%' : 'width: 0%')">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Stats -->
+                            <div class="flex-shrink-0 text-right">
+                                <div class="flex items-center justify-end gap-3 text-xs">
+                                    <span class="font-medium"
+                                          :class="tableStatus.status === 'done' && tableStatus.errors === 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'"
+                                          x-text="(tableStatus.inserted || 0).toLocaleString() + ' inseridos'"></span>
+                                    <template x-if="(tableStatus.skipped || 0) > 0">
+                                        <span class="text-amber-500 font-medium" x-text="(tableStatus.skipped || 0).toLocaleString() + ' ignorados'"></span>
+                                    </template>
+                                    <template x-if="(tableStatus.errors || 0) > 0">
+                                        <span class="text-red-500 font-medium" x-text="(tableStatus.errors || 0).toLocaleString() + ' erros'"></span>
+                                    </template>
+                                </div>
+                                <div class="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5"
+                                     x-text="tableStatus.total > 0
+                                        ? (tableStatus.row || 0).toLocaleString() + ' / ' + tableStatus.total.toLocaleString() + ' linhas'
+                                        : (tableStatus.status === 'waiting' ? 'aguardando...' : '')">
+                                </div>
                             </div>
                         </div>
-
-                        <template x-if="tableStatus.total > 0">
-                            <div>
-                                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
-                                    <div class="h-full rounded-full transition-all duration-200"
-                                         :class="tableStatus.status === 'done' ? 'bg-green-500' : tableStatus.status === 'error' ? 'bg-red-500' : 'bg-primary-500'"
-                                         :style="'width: ' + Math.min(100, ((tableStatus.row || 0) / tableStatus.total) * 100) + '%'"></div>
-                                </div>
-                                <div class="text-right text-xs text-gray-400 mt-0.5"
-                                     x-text="(tableStatus.row || 0).toLocaleString() + ' / ' + tableStatus.total.toLocaleString()"></div>
-                            </div>
-                        </template>
                     </div>
                 </template>
             </div>
 
             <!-- Event log -->
-            <div class="bg-gray-900 rounded-xl border border-gray-700 p-4">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Log de eventos</span>
-                    <button @click="eventLog = []" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">Limpar</button>
+            <div class="bg-gray-950 dark:bg-gray-900 rounded-xl border border-gray-800 dark:border-gray-700 overflow-hidden">
+                <div class="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                        <div class="flex gap-1">
+                            <div class="w-2.5 h-2.5 rounded-full bg-red-500/70"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-yellow-500/70"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-green-500/70"></div>
+                        </div>
+                        <span class="text-xs font-medium text-gray-500 ml-1">log de eventos</span>
+                    </div>
+                    <button @click="eventLog = []" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">limpar</button>
                 </div>
-                <div class="max-h-48 overflow-y-auto space-y-1 font-mono text-xs" x-ref="logContainer">
+                <div class="max-h-52 overflow-y-auto p-4 space-y-0.5 font-mono text-xs" x-ref="logContainer">
                     <template x-for="(entry, idx) in eventLog" :key="idx">
-                        <div :class="{
-                            'text-green-400': entry.type === 'done' || entry.type === 'complete',
-                            'text-blue-400': entry.type === 'start' || entry.type === 'progress',
-                            'text-red-400': entry.type === 'error' || entry.type === 'fatal',
-                            'text-gray-400': entry.type === 'info',
-                        }" x-text="entry.text"></div>
+                        <div class="flex items-start gap-2 leading-5"
+                             :class="{
+                                'text-green-400': entry.type === 'done' || entry.type === 'complete',
+                                'text-blue-400': entry.type === 'start',
+                                'text-gray-400': entry.type === 'progress',
+                                'text-red-400': entry.type === 'error' || entry.type === 'fatal',
+                                'text-gray-500': entry.type === 'info',
+                             }">
+                            <span class="text-gray-700 select-none flex-shrink-0" x-text="String(idx + 1).padStart(3, '0')"></span>
+                            <span x-text="entry.text"></span>
+                        </div>
                     </template>
-                    <div x-show="!executionDone" class="text-gray-500 animate-pulse">▊</div>
+                    <template x-if="eventLog.length === 0">
+                        <div class="text-gray-700 italic">aguardando eventos...</div>
+                    </template>
+                    <div x-show="!executionDone" class="text-gray-600 animate-pulse select-none">▊</div>
                 </div>
             </div>
         </div>
@@ -801,10 +947,12 @@ function importerWizard() {
         depsOrder: [],
         depsWarnings: [],
         depsLoading: false,
+        _pendingMappings: null,
 
         // Step 4
         previewData: {},
         previewLoading: false,
+        previewError: null,
 
         // Step 5
         executionStatus: {},
@@ -887,8 +1035,15 @@ function importerWizard() {
                 }
 
                 this.uploadResult = data;
-                this._buildMappings();
-                this.step = 2;
+                if (this._pendingMappings && this._pendingMappings.length > 0) {
+                    // Re-upload after session expiry: restore previous mapping config
+                    this.mappings = this._pendingMappings;
+                    this._pendingMappings = null;
+                    this.goToMapping(5); // go straight to mapping with accordions open
+                } else {
+                    this._buildMappings();
+                    this.step = 2;
+                }
             } catch (e) {
                 this.uploadError = 'Erro de conexão: ' + e.message;
             } finally {
@@ -910,6 +1065,19 @@ function importerWizard() {
                 });
             }
             this.step = 3;
+        },
+
+        // Re-upload keeping all mapping config (for session expiry)
+        reuploadKeepMappings() {
+            // Preserve mapping config before going back to step 1
+            const savedMappings = this.mappings;
+            this.step = 1;
+            this.uploadResult = null;
+            this.selectedFile = null;
+            this.uploadError = null;
+            this.executionDone = false;
+            this.dbErrorMessage = null;
+            this._pendingMappings = savedMappings;
         },
 
         // ----------------------------------------------------------------
@@ -1024,6 +1192,20 @@ function importerWizard() {
             return fields.find(f => f.name === fieldName) || null;
         },
 
+        getDefaultInputType(modelKey, fieldName) {
+            const field = this.getTargetField(modelKey, fieldName);
+            if (!field) return 'text';
+            // Choices always win
+            if (field.choices && field.choices.length > 0) return 'choices';
+            const t = (field.type || '').toLowerCase();
+            if (t === 'boolean') return 'bool';
+            if (t === 'datetime' || t === 'timestamp' || t === 'date') return 'datetime';
+            if (t === 'integer' || t === 'biginteger' || t === 'smallinteger') return 'int';
+            if (t === 'float' || t === 'numeric' || t === 'decimal') return 'float';
+            // text, varchar, uuid, string, char, json, struct → free text or leave
+            return 'text';
+        },
+
         formatDefault(val) {
             if (val === null || val === undefined) return null;
             if (val === '__auto__') return 'auto';
@@ -1039,8 +1221,15 @@ function importerWizard() {
             this.step = 4;
             this.previewLoading = true;
             this.previewData = {};
+            this.previewError = null;
 
             const enabledTables = this.mappings.filter(m => m.enabled && m.target_model);
+
+            if (enabledTables.length === 0) {
+                this.previewLoading = false;
+                this.previewError = 'Nenhuma tabela habilitada. Ative o toggle de pelo menos uma tabela e selecione o model de destino antes de fazer o preview.';
+                return;
+            }
 
             for (const tableMap of enabledTables) {
                 try {
@@ -1062,10 +1251,20 @@ function importerWizard() {
                                 })),
                         }),
                     });
+                    if (res.status === 404 || res.status === 410) {
+                        const err = await res.json();
+                        this.previewError = (err.detail || 'Sessão expirada') + ' — Faça o upload novamente.';
+                        this.previewLoading = false;
+                        return;
+                    }
                     const data = await res.json();
-                    this.previewData[tableMap.source_table] = data;
+                    if (data.detail) {
+                        this.previewData[tableMap.source_table] = { error: data.detail, rows: [] };
+                    } else {
+                        this.previewData[tableMap.source_table] = data;
+                    }
                 } catch (e) {
-                    console.error('Preview error for', tableMap.source_table, e);
+                    this.previewData[tableMap.source_table] = { error: e.message, rows: [] };
                 }
             }
 
@@ -1154,8 +1353,14 @@ function importerWizard() {
                 });
 
                 if (!res.ok) {
-                    const data = await res.json();
-                    this._logEvent({ type: 'fatal', text: '✗ ' + (data.detail || 'Erro fatal') });
+                    const data = await res.json().catch(() => ({}));
+                    const detail = data.detail || 'Erro fatal';
+                    this._logEvent({ type: 'fatal', text: '✗ ' + detail });
+                    // Session expired / not found → offer re-upload
+                    if (res.status === 404 || res.status === 410 ||
+                        detail.toLowerCase().includes('session') || detail.toLowerCase().includes('sessão')) {
+                        this.dbErrorMessage = detail + ' O servidor pode ter reiniciado. Faça o upload do arquivo novamente — suas configurações de mapeamento serão preservadas.';
+                    }
                     this.executionDone = true;
                     return;
                 }
@@ -1211,7 +1416,8 @@ function importerWizard() {
                         status[table].inserted = event.inserted || 0;
                         status[table].skipped = event.skipped || 0;
                         status[table].errors = event.errors || 0;
-                        status[table].row = event.row || 0;
+                        // SSE sends 'batch' not 'row'; derive processed count from totals
+                        status[table].row = (event.inserted || 0) + (event.skipped || 0) + (event.errors || 0);
                     }
                     this._updateTotals();
                     break;
@@ -1222,6 +1428,8 @@ function importerWizard() {
                         status[table].inserted = event.inserted || 0;
                         status[table].skipped = event.skipped || 0;
                         status[table].errors = event.errors || 0;
+                        // Fill bar to 100% on completion
+                        status[table].row = status[table].total || (event.inserted || 0) + (event.skipped || 0) + (event.errors || 0);
                     }
                     this.completedTables++;
                     this._updateTotals();
