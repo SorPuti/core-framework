@@ -19,7 +19,7 @@ import inspect
 import logging
 import os
 
-from fastapi import APIRouter, Request, Depends, Body
+from fastapi import APIRouter, Request, Depends, Body, File, UploadFile
 from pydantic import BaseModel, ValidationError as PydanticValidationError, create_model
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1138,14 +1138,62 @@ class Router(APIRouter):
                 method_has_body = http_method.upper() in ("POST", "PUT", "PATCH")
                 
                 # Captura method em closure para evitar late binding
+                def _method_accepts_upload_file(method: Callable) -> bool:
+                    """Verifica se o método aceita UploadFile como parâmetro."""
+                    sig = inspect.signature(method)
+                    for param in sig.parameters.values():
+                        if param.annotation is UploadFile or (
+                            isinstance(param.annotation, type) and 
+                            issubclass(param.annotation, UploadFile)
+                        ):
+                            return True
+                        # Verificar também em unions (Optional[UploadFile])
+                        origin = get_origin(param.annotation)
+                        if origin is not None:
+                            args = get_args(param.annotation)
+                            for arg in args:
+                                if arg is UploadFile or (
+                                    isinstance(arg, type) and 
+                                    issubclass(arg, UploadFile)
+                                ):
+                                    return True
+                    return False
+                
                 def make_action_endpoint(
                     action_method: Callable,
                     perm_classes: list | None = None,
                     a_input_schema: type | None = None,
                     with_body: bool = True,
                 ) -> Callable:
-                    if with_body:
-                        # Endpoint COM body (POST, PUT, PATCH)
+                    accepts_file = _method_accepts_upload_file(action_method)
+                    
+                    if accepts_file:
+                        # Endpoint COM upload de arquivo (multipart/form-data)
+                        async def action_endpoint(
+                            request,
+                            db=Depends(get_db),
+                            _user=Depends(get_optional_user),
+                            file: UploadFile = File(...),
+                        ):
+                            vs = viewset_class()
+                            
+                            if perm_classes:
+                                from strider.permissions import check_permissions
+                                perms = [p() if isinstance(p, type) else p for p in perm_classes]
+                                await check_permissions(perms, request, vs)
+                            
+                            path_params = request.path_params
+                            path_params["file"] = file
+                            return await action_method(vs, request, db, **path_params)
+                        
+                        action_endpoint.__annotations__ = {
+                            "request": Request,
+                            "db": AsyncSession,
+                            "_user": Any,
+                            "file": UploadFile,
+                        }
+                    elif with_body:
+                        # Endpoint COM body JSON (POST, PUT, PATCH)
                         async def action_endpoint(
                             request,
                             db=Depends(get_db),
