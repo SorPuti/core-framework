@@ -123,6 +123,7 @@ def action(
     permission_classes: list[type[Permission]] | None = None,
     input_schema: type[InputSchema] | None = None,
     output_schema: type[OutputSchema] | None = None,
+    upload: bool = False,
     **kwargs: Any,
 ):
     """
@@ -136,6 +137,7 @@ def action(
         permission_classes: Permissões específicas para esta action
         input_schema: Schema Pydantic para o request body (aparece no OpenAPI/Postman)
         output_schema: Schema Pydantic para o response body (aparece no OpenAPI/Postman)
+        upload: Se True, action aceita upload de arquivo (multipart/form-data)
     
     Exemplo:
         class UserViewSet(ModelViewSet):
@@ -156,6 +158,15 @@ def action(
             )
             async def bulk_delete(self, request, db, data=None, **kwargs):
                 ...
+                
+            @action(
+                methods=["POST"],
+                detail=False,
+                url_path="upload-avatar",
+                upload=True,
+            )
+            async def upload_avatar(self, request, db, file: UploadFile = File(...), **kwargs):
+                ...
     """
     def decorator(func):
         func.is_action = True
@@ -163,6 +174,7 @@ def action(
         func.detail = detail
         func.url_path = url_path or func.__name__
         func.url_name = url_name or func.__name__
+        func.accepts_upload = upload
         func.permission_classes = permission_classes
         func.action_input_schema = input_schema
         func.action_output_schema = output_schema

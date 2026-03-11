@@ -1142,21 +1142,33 @@ class Router(APIRouter):
                     """Verifica se o método aceita UploadFile como parâmetro."""
                     sig = inspect.signature(method)
                     for param in sig.parameters.values():
-                        if param.annotation is UploadFile or (
-                            isinstance(param.annotation, type) and 
-                            issubclass(param.annotation, UploadFile)
-                        ):
+                        anno = param.annotation
+                        # Verificar se é UploadFile diretamente
+                        if anno is UploadFile:
                             return True
-                        # Verificar também em unions (Optional[UploadFile])
-                        origin = get_origin(param.annotation)
+                        # Verificar por nome da classe
+                        if hasattr(anno, "__name__") and anno.__name__ == "UploadFile":
+                            return True
+                        # Verificar se é uma classe que herda de UploadFile
+                        try:
+                            if isinstance(anno, type) and issubclass(anno, UploadFile):
+                                return True
+                        except TypeError:
+                            pass
+                        # Verificar em unions (Optional[UploadFile], Union[UploadFile, None])
+                        origin = get_origin(anno)
                         if origin is not None:
-                            args = get_args(param.annotation)
+                            args = get_args(anno)
                             for arg in args:
-                                if arg is UploadFile or (
-                                    isinstance(arg, type) and 
-                                    issubclass(arg, UploadFile)
-                                ):
+                                if arg is UploadFile:
                                     return True
+                                if hasattr(arg, "__name__") and arg.__name__ == "UploadFile":
+                                    return True
+                                try:
+                                    if isinstance(arg, type) and issubclass(arg, UploadFile):
+                                        return True
+                                except TypeError:
+                                    pass
                     return False
                 
                 def make_action_endpoint(
@@ -1165,7 +1177,7 @@ class Router(APIRouter):
                     a_input_schema: type | None = None,
                     with_body: bool = True,
                 ) -> Callable:
-                    accepts_file = _method_accepts_upload_file(action_method)
+                    accepts_file = _method_accepts_upload_file(action_method) or getattr(action_method, "accepts_upload", False)
                     
                     if accepts_file:
                         # Endpoint COM upload de arquivo (multipart/form-data)
