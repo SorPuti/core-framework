@@ -551,6 +551,7 @@ class StrideApp:
             MultipleValidationErrors,
             UniqueValidationError,
         )
+        from strider.exceptions import UniqueConstraintError
         
         # Handler para erros de validação Pydantic
         @self.app.exception_handler(ValidationError)
@@ -612,7 +613,7 @@ class StrideApp:
                 content=exc.to_dict(),
             )
         
-        # Handler para erros de unicidade
+        # Handler para erros de unicidade (validators.py — UniqueValidationError)
         @self.app.exception_handler(UniqueValidationError)
         async def unique_validation_handler(
             request: Request,
@@ -627,6 +628,22 @@ class StrideApp:
                     "value": exc.value,
                 },
             )
+
+        # Handler para UniqueConstraintError (exceptions.py — levantado em ModelAdmin.validate_unique)
+        @self.app.exception_handler(UniqueConstraintError)
+        async def unique_constraint_handler(
+            request: Request,
+            exc: UniqueConstraintError,
+        ) -> JSONResponse:
+            content: dict = {
+                "detail": exc.message,
+                "code": "unique_constraint",
+            }
+            if exc.field:
+                content["field"] = exc.field
+            if exc.value is not None:
+                content["value"] = str(exc.value)
+            return JSONResponse(status_code=409, content=content)
         
         # Handler para IntegrityError do SQLAlchemy (UNIQUE, FK, etc.)
         @self.app.exception_handler(IntegrityError)
@@ -674,14 +691,54 @@ class StrideApp:
                 )
             
             elif "duplicate key" in error_msg.lower():
-                # PostgreSQL
-                return JSONResponse(
-                    status_code=409,
-                    content={
-                        "detail": "A record with this value already exists.",
-                        "code": "unique_constraint",
-                    },
+                # PostgreSQL / asyncpg — extrai campo e valor do detalhe da exceção
+                import re as _re
+
+                orig = exc.orig
+                # asyncpg expõe o detalhe em .detail (ex: "Key (email)=(foo) already exists.")
+                pg_detail = (
+                    getattr(orig, "detail", None)
+                    or getattr(getattr(orig, "__cause__", None), "detail", None)
                 )
+                constraint_name: str | None = getattr(orig, "constraint_name", None)
+
+                field: str | None = None
+                value: str | None = None
+
+                if pg_detail:
+                    # Padrão: "Key (campo)=(valor) already exists."
+                    # Suporta múltiplos campos: "Key (a, b)=(x, y) already exists."
+                    m = _re.search(
+                        r"Key \(([^)]+)\)=\(([^)]*)\) already exists",
+                        str(pg_detail),
+                    )
+                    if m:
+                        field = m.group(1).strip()
+                        value = m.group(2).strip()
+
+                # Fallback: extrai campo do nome do constraint (ex: users_email_key → email)
+                if not field and constraint_name:
+                    # Convencão comum: {table}_{field(s)}_key
+                    parts = constraint_name.split("_")
+                    if len(parts) >= 3 and parts[-1] in ("key", "idx", "uniq", "unique"):
+                        field = "_".join(parts[1:-1])
+
+                content: dict = {
+                    "detail": (
+                        f"A record with this '{field}' already exists."
+                        if field
+                        else "A record with this value already exists."
+                    ),
+                    "code": "unique_constraint",
+                }
+                if field:
+                    content["field"] = field
+                if value:
+                    content["value"] = value
+                if constraint_name:
+                    content["constraint"] = constraint_name
+
+                return JSONResponse(status_code=409, content=content)
             
             # Erro genérico de integridade
             if self.settings.debug:

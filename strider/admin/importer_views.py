@@ -17,6 +17,7 @@ import logging
 import os
 import uuid
 from dataclasses import asdict
+import datetime as _dt
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, AsyncGenerator, TYPE_CHECKING
@@ -884,6 +885,45 @@ def _build_insert_stmt(sa_table: Any, batch: list[dict[str, Any]], on_conflict: 
         return insert(sa_table).prefix_with("OR IGNORE").values(batch)
 
 
+_DATETIME_FORMATS = [
+    "%Y-%m-%d %H:%M:%S.%f",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%f%z",
+    "%Y-%m-%dT%H:%M:%S%z",
+    "%Y-%m-%d",
+]
+
+
+def _parse_datetime_str(s: str) -> datetime | None:
+    """
+    Converte string para datetime.datetime real (necessário para asyncpg).
+    Tenta múltiplos formatos comuns de MySQL/ISO. Se o valor já for timezone-aware,
+    preserva. Se não, deixa naive (o SQLAlchemy/DB gerencia o timezone conforme
+    a configuração da coluna).
+    """
+    s = s.strip()
+    if not s or s.upper() in ("NULL", "NONE", "0000-00-00 00:00:00", "0000-00-00"):
+        return None
+
+    # Try ISO with timezone info via fromisoformat (Python 3.11+ handles all cases)
+    try:
+        return datetime.fromisoformat(s)
+    except (ValueError, AttributeError):
+        pass
+
+    # Normalize: replace 'T' separator and try strptime formats
+    s_norm = s.replace("T", " ")
+    for fmt in _DATETIME_FORMATS:
+        try:
+            return _dt.datetime.strptime(s_norm, fmt)
+        except (ValueError, TypeError):
+            continue
+
+    return None  # unparseable — let DB reject with a clear message
+
+
 def _coerce_value_for_sa_type(val: Any, type_name: str) -> Any:
     """
     Converte um valor para o tipo Python correto baseado no tipo SQLAlchemy.
@@ -926,9 +966,20 @@ def _coerce_value_for_sa_type(val: Any, type_name: str) -> Any:
         return str(val) if val else None
 
     if "DATETIME" in t or "TIMESTAMP" in t:
-        # Keep as string — SQLAlchemy handles ISO string → datetime
+        if isinstance(val, datetime):
+            return val
         if isinstance(val, str) and val.strip():
-            return val.strip()
+            return _parse_datetime_str(val.strip())
+        return None
+
+    if "DATE" in t:
+        if isinstance(val, datetime):
+            return val.date()
+        if isinstance(val, _dt.date):
+            return val
+        if isinstance(val, str) and val.strip():
+            dt = _parse_datetime_str(val.strip())
+            return dt.date() if dt else None
         return None
 
     return val

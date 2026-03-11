@@ -390,7 +390,21 @@ class ModelAdmin(Generic[ModelT]):
     #   {"widget": "email", "label": "E-mail", "help_text": "...",
     #    "required_on_create": True, "required_on_edit": False}
     widgets: dict[str, WidgetConfig] = {}
-    
+
+    # -- Unique field validation --
+    # Fields listed here are checked for uniqueness BEFORE the DB insert/update,
+    # returning a precise 409 with field + value instead of a generic IntegrityError.
+    #
+    # Basic — validate each field independently:
+    #   unique_fields: tuple[str, ...] = ("email", "username")
+    #
+    # With custom message per field:
+    #   unique_fields = (
+    #       UniqueFieldConfig(field="email", message="Este e-mail já está em uso."),
+    #       UniqueFieldConfig(field="slug"),
+    #   )
+    unique_fields: tuple = ()
+
     # -- Permissions --
     permissions: tuple[PermissionType | str, ...] = ("view", "add", "change", "delete")
     exclude_actions: tuple[str, ...] = ()
@@ -700,19 +714,97 @@ class ModelAdmin(Generic[ModelT]):
                         )
     
     # -- Hooks (override nos subclasses) --
-    
+
+    async def validate_unique(
+        self,
+        db: "AsyncSession",
+        obj: Any,
+        is_new: bool,
+    ) -> None:
+        """
+        Valida unicidade dos campos declarados em ``unique_fields`` antes do save.
+
+        Cada entrada pode ser uma ``str`` (nome do campo) ou um dict com:
+            - ``field``   (str, obrigatório)
+            - ``message`` (str, opcional)
+            - ``lookup``  (str, default "exact"; suporta "iexact", etc.)
+
+        O registro atual é automaticamente excluído da verificação em updates,
+        usando o ``pk`` do objeto.
+
+        Levanta ``UniqueConstraintError`` com ``field`` + ``value`` preenchidos,
+        gerando resposta 409 já com informação precisa do campo violado.
+        """
+        if not self.unique_fields or self.model is None:
+            return
+
+        from strider.exceptions import UniqueConstraintError
+
+        # Resolve pk para excluir o próprio registro em updates
+        pk_value: Any = None
+        if not is_new:
+            pk_attr = getattr(self.model, self._pk_field, None)
+            if pk_attr is not None:
+                pk_value = getattr(obj, self._pk_field, None)
+
+        for entry in self.unique_fields:
+            # Normaliza para dict
+            if isinstance(entry, str):
+                config: dict = {"field": entry}
+            elif isinstance(entry, dict):
+                config = entry
+            else:
+                # Suporta dataclasses / objetos com atributo .field
+                config = {
+                    "field": getattr(entry, "field", str(entry)),
+                    "message": getattr(entry, "message", None),
+                    "lookup": getattr(entry, "lookup", "exact"),
+                }
+
+            field_name: str = config["field"]
+            custom_msg: str | None = config.get("message")
+            lookup: str = config.get("lookup", "exact")
+
+            value = getattr(obj, field_name, None)
+            if value is None or value == "":
+                continue
+
+            # Monta queryset
+            filter_kw = {f"{field_name}__{lookup}" if lookup != "exact" else field_name: value}
+            qs = self.model.objects.using(db).filter(**filter_kw)
+
+            if pk_value is not None:
+                qs = qs.exclude(**{self._pk_field: pk_value})
+
+            exists = await qs.exists()
+            if exists:
+                msg = custom_msg or f"A record with this '{field_name}' already exists."
+                raise UniqueConstraintError(
+                    field=field_name,
+                    value=str(value),
+                    message=msg,
+                )
+
     async def before_save(self, db: "AsyncSession", obj: Any, is_new: bool) -> None:
-        """Hook executado antes de salvar (create ou update)."""
-        pass
-    
+        """
+        Hook executado antes de salvar (create ou update).
+
+        A implementação padrão roda ``validate_unique`` automaticamente quando
+        ``unique_fields`` estiver configurado. Subclasses que sobrescreverem
+        este método devem chamar ``await super().before_save(db, obj, is_new)``
+        para preservar essa validação, ou chamar ``await self.validate_unique(...)``
+        diretamente.
+        """
+        await self.validate_unique(db, obj, is_new)
+
     async def after_save(self, db: "AsyncSession", obj: Any, is_new: bool) -> None:
         """Hook executado após salvar."""
         pass
-    
+
     async def before_delete(self, db: "AsyncSession", obj: Any) -> None:
         """Hook executado antes de deletar."""
         pass
-    
+
     async def after_delete(self, db: "AsyncSession", obj: Any) -> None:
         """Hook executado após deletar."""
         pass
