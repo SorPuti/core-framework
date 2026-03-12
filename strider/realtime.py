@@ -344,17 +344,23 @@ class WebSocketView:
             await ws.close(code=1011)
             return
 
+        socket_connected = (
+            ws.client_state == WebSocketState.CONNECTED
+            and ws.application_state == WebSocketState.CONNECTED
+        )
+
         keepalive_task: asyncio.Task[None] | None = None
-        if self.keepalive > 0:
+        if self.keepalive > 0 and socket_connected:
             keepalive_task = asyncio.create_task(
                 self._keepalive_loop(ws), name="ws-keepalive"
             )
 
         code = 1000
         try:
-            while True:
-                data = await self._receive(ws)
-                await self.on_receive(ws, data)
+            if socket_connected:
+                while True:
+                    data = await self._receive(ws)
+                    await self.on_receive(ws, data)
         except WebSocketDisconnect as exc:
             code = exc.code
         except Exception:
