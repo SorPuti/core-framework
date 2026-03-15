@@ -93,12 +93,14 @@ class TaskWorker:
         self._running = True
         self._semaphore = asyncio.Semaphore(self._concurrency)
         
-        # Initialize database for persistence
+        # Initialize database for persistence (use app pool settings when available)
         if self._persist_enabled:
             try:
                 from strider.models import init_database
                 db_url = self._settings.database_url
-                await init_database(db_url)
+                pool_size = getattr(self._settings, "database_pool_size", 5)
+                max_overflow = getattr(self._settings, "database_max_overflow", 10)
+                await init_database(db_url, pool_size=pool_size, max_overflow=max_overflow)
                 logger.info("Database initialized for task persistence")
             except Exception as e:
                 logger.warning(f"Failed to initialize database: {e}. Task persistence disabled.")
