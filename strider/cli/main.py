@@ -3003,6 +3003,7 @@ def cmd_runrunner(args: argparse.Namespace) -> int:
     """Run a Runner (long-running session with resource limits)."""
     if not check_kafka_connection():
         return 1
+    config = load_config()
     print()
     print(bold("Starting Runner"))
     print("=" * 50)
@@ -3021,8 +3022,28 @@ def cmd_runrunner(args: argparse.Namespace) -> int:
     print(info(f"Runner: {runner_name}"))
     print(info(f"Input topic: {runner_class.input_topic}"))
     print()
+
+    async def _main() -> None:
+        db_url = config.get("database_url")
+        if db_url:
+            try:
+                from strider.config import get_settings
+                settings = get_settings()
+                if getattr(settings, "has_read_replica", False):
+                    from strider.database import init_replicas
+                    await init_replicas()
+                else:
+                    from strider.models import init_database
+                    pool_size = getattr(settings, "database_pool_size", 5)
+                    max_overflow = getattr(settings, "database_max_overflow", 10)
+                    await init_database(db_url, pool_size=pool_size, max_overflow=max_overflow)
+                print(info("Database initialized (single or replicas)."))
+            except Exception as e:
+                print(warning(f"Database init failed (runner may fail on first DB access): {e}"))
+        await run_runner_async(runner_name)
+
     try:
-        asyncio.run(run_runner_async(runner_name))
+        asyncio.run(_main())
     except KeyboardInterrupt:
         print()
         print(info("Runner stopped."))
