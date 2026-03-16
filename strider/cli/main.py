@@ -2965,6 +2965,93 @@ def _discover_and_import_workers() -> list[str]:
     return imported
 
 
+def _discover_and_import_runners() -> list[str]:
+    """
+    Auto-discover and import modules that may define Runner subclasses.
+    Reuses workers discovery and adds runners.py patterns.
+    """
+    imported = _discover_and_import_workers()
+    cwd = os.getcwd()
+    patterns = [
+        "runners.py",
+        "src/runners.py",
+        "src/*/runners.py",
+        "app/runners.py",
+    ]
+    for pattern in patterns:
+        for path in Path(cwd).glob(pattern):
+            if path.is_file():
+                relative = path.relative_to(cwd)
+                module_name = str(relative).replace("/", ".").replace("\\", ".").replace(".py", "")
+                if module_name not in imported:
+                    try:
+                        importlib.import_module(module_name)
+                        imported.append(module_name)
+                    except ImportError:
+                        pass
+    for module_name in ["runners", "src.runners", "app.runners"]:
+        if module_name not in imported:
+            try:
+                importlib.import_module(module_name)
+                imported.append(module_name)
+            except ImportError:
+                pass
+    return imported
+
+
+def cmd_runrunner(args: argparse.Namespace) -> int:
+    """Run a Runner (long-running session with resource limits)."""
+    if not check_kafka_connection():
+        return 1
+    print()
+    print(bold("Starting Runner"))
+    print("=" * 50)
+    runner_name = args.name
+    _discover_and_import_runners()
+    from strider.messaging.runner import get_runner, list_runners, run_runner_async
+    runner_class = get_runner(runner_name)
+    if runner_class is None:
+        available = list_runners()
+        print(error(f"Runner '{runner_name}' not found."))
+        if available:
+            print(info(f"Available runners: {', '.join(available)}"))
+        else:
+            print(info("No runners registered. Define a class MyRunner(Runner) in runners.py or workers_module."))
+        return 1
+    print(info(f"Runner: {runner_name}"))
+    print(info(f"Input topic: {runner_class.input_topic}"))
+    print()
+    try:
+        asyncio.run(run_runner_async(runner_name))
+    except KeyboardInterrupt:
+        print()
+        print(info("Runner stopped."))
+    return 0
+
+
+def cmd_runners_list(args: argparse.Namespace) -> int:
+    """List registered Runner classes."""
+    print()
+    print(bold("Registered Runners"))
+    print("=" * 50)
+    _discover_and_import_runners()
+    from strider.messaging.runner import list_runners
+    runners = list_runners()
+    if not runners:
+        print(info("No runners registered."))
+        print()
+        print("Define a Runner subclass, e.g. in src/runners.py:")
+        print("  from strider.messaging import Runner")
+        print("  class StrategySessionRunner(Runner):")
+        print("      async def run_session(self, payload): ...")
+        print()
+        return 0
+    for name in runners:
+        print(f"  - {name}")
+    print()
+    return 0
+
+
 def cmd_workers_list(args: argparse.Namespace) -> int:
     """List registered message workers."""
     print()
@@ -3946,6 +4033,24 @@ For more information, visit: https://github.com/SorPuti/strider
         help="Worker name (or 'all' to run all workers)"
     )
     runworker_parser.set_defaults(func=cmd_runworker)
+    
+    # runrunner (session runners with resource limits)
+    runrunner_parser = subparsers.add_parser(
+        "runrunner",
+        help="Run a Runner (long-running session with CPU/memory limits)"
+    )
+    runrunner_parser.add_argument(
+        "name",
+        help="Runner class name (e.g. StrategySessionRunner)"
+    )
+    runrunner_parser.set_defaults(func=cmd_runrunner)
+    
+    # runners (list runners)
+    runners_parser = subparsers.add_parser(
+        "runners",
+        help="List registered Runner classes"
+    )
+    runners_parser.set_defaults(func=cmd_runners_list)
     
     # workers (list workers)
     workers_parser = subparsers.add_parser(

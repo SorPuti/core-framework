@@ -107,6 +107,13 @@ from strider.messaging.workers import (
     run_worker,
     run_all_workers,
 )
+from strider.messaging.runner import (
+    Runner,
+    get_runner,
+    list_runners,
+    run_runner,
+    run_runner_async,
+)
 
 __all__ = [
     # Base classes
@@ -154,4 +161,10 @@ __all__ = [
     "list_workers",
     "run_worker",
     "run_all_workers",
+    # Runner
+    "Runner",
+    "get_runner",
+    "list_runners",
+    "run_runner",
+    "run_runner_async",
 ]

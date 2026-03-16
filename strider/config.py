@@ -830,7 +830,40 @@ class Settings(BaseSettings):
         default="none",
         description="Onde armazenar resultados de tasks",
     )
-    
+
+    # =========================================================================
+    # RUNNER (sessões longas com limites de recursos e lifecycle hooks)
+    # =========================================================================
+
+    runner_enabled: bool = PydanticField(
+        default=False,
+        description="Habilita sistema de Runner para sessões longas (Kafka commands + resource limits)",
+    )
+    runner_cpu_limit_percent: float = PydanticField(
+        default=0.0,
+        description="Limite de CPU em %% (0 = desativado). Ao exceder, on_resource_exceeded e shutdown.",
+    )
+    runner_memory_mb_limit: float = PydanticField(
+        default=0.0,
+        description="Limite de memória em MB (0 = desativado). Ao exceder, on_resource_exceeded e shutdown.",
+    )
+    runner_io_read_mb_limit: float = PydanticField(
+        default=0.0,
+        description="Limite de IO de leitura em MB (0 = desativado). Opcional, requer psutil.",
+    )
+    runner_check_interval_seconds: float = PydanticField(
+        default=5.0,
+        description="Intervalo em segundos entre verificações de recursos.",
+    )
+    runner_shutdown_grace_seconds: float = PydanticField(
+        default=5.0,
+        description="Tempo máximo para shutdown gracioso do runner (segundos).",
+    )
+    runner_default_topic: str = PydanticField(
+        default="runner.commands",
+        description="Tópico Kafka padrão para comandos start/stop do runner.",
+    )
+
     # =========================================================================
     # REDIS (para tasks, cache, etc)
     # =========================================================================
