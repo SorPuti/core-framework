@@ -6,9 +6,12 @@ Separates read queries to replica and write queries to primary.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Annotated, TYPE_CHECKING
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     AsyncEngine,
@@ -19,6 +22,8 @@ from fastapi import Depends
 
 if TYPE_CHECKING:
     pass
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -143,6 +148,16 @@ async def init_db(
             pool_size=pool_size or getattr(s, "database_pool_size", 5),
             max_overflow=max_overflow or getattr(s, "database_max_overflow", 10),
         )
+        if "sqlite" not in url.lower():
+            from strider.models import _engine as single_engine
+            if single_engine is not None:
+                ok = await _ping_engine(single_engine, "database")
+                if not ok:
+                    raise RuntimeError(
+                        "Database unreachable. Services will not start. "
+                        "Check DATABASE_URL and that PostgreSQL is running."
+                    )
+                logger.info("Database connectivity check: OK")
 
 
 async def init_replicas(
@@ -213,6 +228,16 @@ async def init_replicas(
             read_engine_kwargs["pool_size"] = pool_size * 2
             read_engine_kwargs["max_overflow"] = max_overflow * 2
 
+        try:
+            u = make_url(read_url)
+            logger.debug(
+                "Read replica engine: host=%s port=%s database=%s",
+                u.host,
+                u.port,
+                u.database,
+            )
+        except Exception:
+            logger.debug("Read replica engine: url configured (masked)")
         _read_engine = create_async_engine(read_url, **read_engine_kwargs)
         _read_session_factory = async_sessionmaker(
             _read_engine,
@@ -230,6 +255,62 @@ async def init_replicas(
             _cm._session_factory = _write_session_factory
     except Exception:
         pass
+
+    # Teste A/B: validar conectividade write e read antes de autorizar serviços
+    await _check_replicas_connectivity(
+        _write_engine,
+        _read_engine if (read_url and read_url != write_url) else None,
+        is_sqlite=is_sqlite,
+    )
+
+
+async def _check_replicas_connectivity(
+    write_engine: AsyncEngine,
+    read_engine: AsyncEngine | None,
+    *,
+    is_sqlite: bool = False,
+) -> None:
+    """
+    Testa conectividade do primary (write) e da réplica (read) antes de
+    autorizar os serviços. Write obrigatório; read opcional (fallback para write
+    se réplica inacessível).
+    """
+    # A: Primary (write) — obrigatório
+    ok_write = await _ping_engine(write_engine, "write")
+    if not ok_write:
+        raise RuntimeError(
+            "Database primary (write) unreachable. Services will not start. "
+            "Check DATABASE_URL and that PostgreSQL is running."
+        )
+    logger.info("Database A/B check: write (primary) OK")
+
+    # B: Réplica (read) — opcional; se falhar, usa write para leitura
+    if read_engine is not None and read_engine is not write_engine:
+        ok_read = await _ping_engine(read_engine, "read")
+        if not ok_read:
+            logger.warning(
+                "Database A/B check: read replica unreachable. "
+                "Using primary for reads until replica is available. "
+                "Check DATABASE_READ_URL (e.g. in Docker use host reachable from container)."
+            )
+            global _read_engine, _read_session_factory
+            _read_engine = write_engine
+            _read_session_factory = _write_session_factory
+        else:
+            logger.info("Database A/B check: read (replica) OK")
+    elif not is_sqlite:
+        logger.debug("Database A/B check: no separate replica configured")
+
+
+async def _ping_engine(engine: AsyncEngine, label: str) -> bool:
+    """Executa SELECT 1 no engine. Retorna True se OK."""
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return True
+    except Exception as e:
+        logger.debug("Database %s ping failed: %s", label, e)
+        return False
 
 
 async def close_replicas() -> None:

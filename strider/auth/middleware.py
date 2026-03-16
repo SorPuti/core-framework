@@ -250,38 +250,55 @@ class JWTAuthBackend(AuthenticationBackend):
                 "Set user_model in AuthenticationMiddleware or call configure_auth(user_model=...)"
             )
         
-        # Get database session
+        # Get database session (prefer read replica when configured)
         db = await self._get_db_session()
         if db is None:
             raise DatabaseException(
                 "Could not obtain database session. "
                 "Ensure database is initialized with init_replicas() or database_url is set in settings."
             )
-        
+        user_id_converted = self._convert_user_id(user_id, User)
+        logger.debug(
+            "Auth: resolving user (user_id=%s, session_source=read)",
+            user_id_converted,
+        )
         try:
-            # Convert user_id to correct type
-            user_id_converted = self._convert_user_id(user_id, User)
-            logger.debug(f"User ID converted: {user_id_converted} (type: {type(user_id_converted).__name__})")
-            
-            # Fetch user
             user = await User.objects.using(db).filter(id=user_id_converted).first()
-            
             if user is None:
                 raise UserNotFound(f"User with id={user_id} not found")
-            
-            # Check if user is active
             if hasattr(user, "is_active") and not user.is_active:
                 raise UserInactive(f"User {user_id} is inactive")
-            
-            logger.debug(f"User found: {getattr(user, 'email', user)}")
+            logger.debug("User found: %s", getattr(user, "email", user))
             return user
-            
         except (UserNotFound, UserInactive):
-            raise  # Re-raise our exceptions
+            raise
         except Exception as e:
+            if self._is_connection_error(e):
+                await db.close()
+                db = None
+                logger.warning(
+                    "Auth: read replica unreachable (%s). Falling back to primary for auth.",
+                    e,
+                    exc_info=logger.isEnabledFor(logging.DEBUG),
+                )
+                db_write = await self._get_write_fallback_session()
+                if db_write is not None:
+                    try:
+                        user = await User.objects.using(db_write).filter(
+                            id=user_id_converted
+                        ).first()
+                        if user is None:
+                            raise UserNotFound(f"User with id={user_id} not found")
+                        if hasattr(user, "is_active") and not user.is_active:
+                            raise UserInactive(f"User {user_id} is inactive")
+                        logger.debug("User found via primary: %s", getattr(user, "email", user))
+                        return user
+                    finally:
+                        await db_write.close()
             raise DatabaseException(f"Database query failed: {e}")
         finally:
-            await db.close()
+            if db is not None:
+                await db.close()
     
     async def _get_db_session(self) -> "AsyncSession | None":
         """
@@ -334,7 +351,41 @@ class JWTAuthBackend(AuthenticationBackend):
             "\n".join(f"  - {err}" for err in errors)
         )
         return None
-    
+
+    def _is_connection_error(self, e: Exception) -> bool:
+        """True if exception indicates replica/DB unreachable (e.g. Connection refused)."""
+        if e is None:
+            return False
+        msg = str(e).lower()
+        if "connection refused" in msg:
+            return True
+        if isinstance(e, (ConnectionRefusedError, ConnectionError)):
+            return True
+        if getattr(e, "__cause__", None) is not None:
+            if isinstance(e.__cause__, (ConnectionRefusedError, ConnectionError)):
+                return True
+        return False
+
+    async def _get_write_fallback_session(self) -> "AsyncSession | None":
+        """Return write (primary) session for auth fallback when read replica fails."""
+        try:
+            from strider.database import _write_session_factory
+            if _write_session_factory is not None:
+                logger.debug("Auth fallback: using write session factory")
+                return _write_session_factory()
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug("Auth fallback: write factory failed: %s", e)
+        try:
+            from strider.models import get_session
+            sess = await get_session()
+            logger.debug("Auth fallback: using get_session() (primary)")
+            return sess
+        except Exception as e:
+            logger.warning("Auth fallback: could not get write session: %s", e)
+        return None
+
     def _convert_user_id(self, user_id: str, User: type) -> Any:
         """
         Convert user_id string to the correct type based on model.
