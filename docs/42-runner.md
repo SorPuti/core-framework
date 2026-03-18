@@ -138,6 +138,54 @@ O comando `runrunner` faz auto-discovery de módulos (`workers_module`, `runners
 - Defina **requests/limits** de CPU e memória no deployment; use os mesmos (ou menores) em `runner_cpu_limit_percent` e `runner_memory_mb_limit` para encerrar antes do OOMKill. A instância faz shutdown limpo e pode emitir eventos em `after_stop`.
 - **HPA**: escale por CPU/memória ou por fila (ex.: mensagens "start" pendentes). O runner apenas consome da fila e respeita os limites configurados.
 
+## Banco de dados, Redis e recursos isolados em escala
+
+### Isolamento por processo (modo default)
+
+Com `runner_isolated_instances=True` (default), cada **instância** de sessão roda em um **processo filho**. Esse processo:
+
+- Chama `init_database()` sozinho → **pool de DB próprio** (tamanho `runner_session_pool_size`, ex.: 2). Nenhuma conexão é compartilhada com a API nem com o controlador.
+- Pode criar seu próprio cliente **Redis** (novo connection pool no processo). Não reutilize o cliente global da API.
+- Tem **logs** e **memória** isolados; stop é via SIGTERM, sem depender de loop reativo no mesmo processo.
+
+Assim a API e outras sessões não são afetadas por uma sessão pesada e não há vazamento de contexto entre sessões.
+
+### Uma AsyncSession não é thread-safe nem coroutine-safe
+
+A **mesma** `AsyncSession` do SQLAlchemy **não** pode ser usada por várias coroutines ao mesmo tempo. Erros comuns:
+
+- `This session is provisioning a new connection; concurrent operations are not permitted` — duas coroutines usando a mesma sessão.
+- `got multiple values for argument 'session_id'` — mesmo argumento passado por posição e em `**kwargs`.
+
+**Regras:**
+
+1. **Uma sessão por operação** (recomendado): para cada persistência (log, trade, atualização de estado), obtenha uma nova sessão do pool (`async with get_session() as db: ...`), use e feche. Não guarde uma única `db` e reuse em várias `create_task`.
+2. **Se precisar compartilhar uma sessão** (ex.: sessão longa da run_session): serialize o uso com um **`asyncio.Lock`**. Todas as operações que tocam nessa sessão (incluindo callbacks como `persist_runtime_state`, `persist_engine_log`, `persist_trade_result`) devem fazer `async with lock:` antes de usar `db`.
+3. **Fire-and-forget**: ao agendar `loop.create_task(persist_impl(...))`, ou use uma **nova sessão** dentro de `persist_impl` (ex.: receber `get_db` que retorna um context manager novo a cada chamada), ou use a **mesma sessão + lock** em todos os persist (incluindo o que atualiza runtime_state).
+
+### Padrão recomendado para persistência no Runner
+
+- **Opção A (escala e isolamento)**  
+  Passar um `get_db` que retorna um **novo** context manager a cada chamada (ex.: `get_db = lambda: get_session()`). Cada callback de persistência faz `async with (await get_db()) as db: ...`. Cada operação usa uma conexão do pool e libera ao final; não precisa de lock.
+
+- **Opção B (uma sessão longa + lock)**  
+  Usar uma única `db` para a run_session e para os callbacks, e um **`asyncio.Lock`** compartilhado. Todo uso de `db` (incluindo em callbacks agendados com `create_task`) deve estar dentro de `async with lock: ...`. Assim evita “concurrent operations” na mesma sessão.
+
+### Redis e outros recursos
+
+- **Redis**: no processo da instância (filho), crie um **novo** cliente/connection pool. Não importe/reuse o cliente usado pela API. Assim a instância tem seu próprio isolamento e a API não disputa conexões com as sessões.
+- **Caches e clientes externos**: mesmo princípio — por processo de instância, crie recursos próprios (ou use um factory que retorna recursos por contexto). Evite singletons compartilhados entre API e runners quando houver alta concorrência.
+
+### Resumo de boas práticas
+
+- Cada instância do runner (processo filho) = seu próprio DB pool + Redis (e outros recursos) quando possível.
+- Uma AsyncSession = uma coroutine por vez, ou serialize com `asyncio.Lock`.
+- Preferir **sessão nova por operação** (get_db que retorna novo context manager) para persistência em background; assim você escala sem bloquear e sem erro de concorrência na sessão.
+- Em callbacks que recebem `**kwargs`, não repassar em `**kwargs` argumentos que já foram passados por nome/posição (evita “multiple values for argument”).
+- Documentar no app onde se usa lock compartilhado e onde se usa sessão nova, para manutenção futura.
+
+---
+
 ## Resumo
 
 - **Framework**: recurso plug-and-play para sessões longas com limites e hooks (`on_start`, `on_stop`, `after_stop`, `on_resource_exceeded`), integrado ao Kafka e ao Settings.

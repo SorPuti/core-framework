@@ -537,6 +537,8 @@ def run_runner(runner_class: str | type[Runner]) -> None:
 
 # =============================================================================
 # RunnerController — interface simples para comandos (sem publish manual)
+# A framework registra RunnerInstance (Admin Ops) para controle e desempenho;
+# o app pode enviar user_id/contexto no payload para enriquecer a listagem.
 # =============================================================================
 
 async def send_start(
@@ -546,16 +548,54 @@ async def send_start(
 ) -> None:
     """
     Envia comando start para um runner (publica no tópico Kafka do runner).
-    Interface única: o desenvolvedor não precisa criar loops nem publicar manualmente.
+    A framework registra RunnerInstance para o Admin Ops (controle e desempenho).
+    O app pode passar user_id (e outros dados) no payload para enriquecer a listagem.
 
     Args:
         runner_name: Nome da classe do Runner (ex.: StrategySessionRunner)
         session_id: Identificador da sessão/instância (ex.: user_id ou composite)
-        payload: Dados extras enviados ao run_session(payload)
+        payload: Dados extras enviados ao run_session(payload); user_id aparece no Admin
     """
     runner_cls = get_runner(runner_name)
     if runner_cls is None:
         raise ValueError(f"Runner '{runner_name}' não encontrado. Disponíveis: {list_runners()}")
+    # Framework regista instância no Admin Ops (best-effort)
+    try:
+        from strider.models import get_session
+        from strider.admin.models import RunnerInstance
+        from strider.querysets import QuerySet
+        import json
+
+        payload = payload or {}
+        user_id = payload.get("user_id")
+        uid = str(user_id) if user_id is not None else None
+        payload_json = json.dumps(payload) if payload else None
+
+        async with get_session() as db:
+            qs = QuerySet(RunnerInstance, db)
+            existing = await qs.filter(
+                runner_name=runner_name,
+                session_id=session_id,
+            ).first()
+            if existing:
+                existing.status = "running"
+                existing.user_id = uid
+                existing.payload_json = payload_json
+                existing.stopped_at = None
+                await existing.save(db)
+            else:
+                inst = RunnerInstance(
+                    runner_name=runner_name,
+                    session_id=session_id,
+                    user_id=uid,
+                    status="running",
+                    payload_json=payload_json,
+                )
+                await inst.save(db)
+            await db.commit()
+    except Exception as exc:
+        logger.debug("RunnerInstance start register (best-effort): %s", exc)
+
     instance = runner_cls()
     config = instance._get_config()
     topic = config["input_topic"]
@@ -567,10 +607,32 @@ async def send_start(
 async def send_stop(runner_name: str, session_id: str) -> None:
     """
     Envia comando stop para uma instância do runner.
+    A framework atualiza RunnerInstance (status stopped) no Admin Ops.
     """
     runner_cls = get_runner(runner_name)
     if runner_cls is None:
         raise ValueError(f"Runner '{runner_name}' não encontrado. Disponíveis: {list_runners()}")
+
+    try:
+        from strider.models import get_session
+        from strider.admin.models import RunnerInstance
+        from strider.querysets import QuerySet
+        from strider.datetime import timezone
+
+        async with get_session() as db:
+            qs = QuerySet(RunnerInstance, db)
+            inst = await qs.filter(
+                runner_name=runner_name,
+                session_id=session_id,
+            ).first()
+            if inst:
+                inst.status = "stopped"
+                inst.stopped_at = timezone.now()
+                await inst.save(db)
+                await db.commit()
+    except Exception as exc:
+        logger.debug("RunnerInstance stop register (best-effort): %s", exc)
+
     instance = runner_cls()
     config = instance._get_config()
     topic = config["input_topic"]

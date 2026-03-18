@@ -725,47 +725,31 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         request: Request,
         user: Any = Depends(check_superuser_access),
     ) -> dict:
-        """Cria registro de instância e envia comando start (RunnerController)."""
+        """Envia comando start; a framework registra RunnerInstance no Admin Ops."""
         try:
             body = await request.json()
             runner_name = body.get("runner_name")
             session_id = body.get("session_id")
             user_id = body.get("user_id")
-            payload = body.get("payload")
+            payload = dict(body.get("payload") or {})
+            if user_id is not None:
+                payload["user_id"] = user_id
             if not runner_name or not session_id:
                 raise HTTPException(400, "runner_name e session_id são obrigatórios")
             from strider.messaging.runner import send_start
             from strider.models import get_session
             from strider.admin.models import RunnerInstance
             from strider.querysets import QuerySet
-            import json
 
-            await send_start(runner_name, session_id, payload=(payload or {}))
-            db = await get_session()
-            async with db:
+            await send_start(runner_name, session_id, payload=payload)
+            async with get_session() as db:
                 qs = QuerySet(RunnerInstance, db)
-                existing = await qs.filter(
+                inst = await qs.filter(
                     runner_name=runner_name,
                     session_id=session_id,
                 ).first()
-                if existing:
-                    existing.status = "running"
-                    existing.user_id = user_id
-                    existing.payload_json = json.dumps(payload) if payload else None
-                    existing.stopped_at = None
-                    await existing.save(db)
-                    await db.commit()
-                    return {"status": "started", "instance_id": existing.id}
-                inst = RunnerInstance(
-                    runner_name=runner_name,
-                    session_id=session_id,
-                    user_id=user_id,
-                    status="running",
-                    payload_json=json.dumps(payload) if payload else None,
-                )
-                await inst.save(db)
-                await db.commit()
-                return {"status": "started", "instance_id": inst.id}
+                instance_id = inst.id if inst else None
+            return {"status": "started", "instance_id": instance_id}
         except HTTPException:
             raise
         except ValueError as e:
@@ -781,27 +765,10 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         session_id: str,
         user: Any = Depends(check_superuser_access),
     ) -> dict:
-        """Envia comando stop e atualiza registro da instância."""
+        """Envia comando stop; a framework atualiza RunnerInstance no Admin Ops."""
         try:
             from strider.messaging.runner import send_stop
-            from strider.models import get_session
-            from strider.admin.models import RunnerInstance
-            from strider.querysets import QuerySet
-            from strider.datetime import timezone
-
             await send_stop(runner_name, session_id)
-            db = await get_session()
-            async with db:
-                qs = QuerySet(RunnerInstance, db)
-                inst = await qs.filter(
-                    runner_name=runner_name,
-                    session_id=session_id,
-                ).first()
-                if inst:
-                    inst.status = "stopped"
-                    inst.stopped_at = timezone.now()
-                    await inst.save(db)
-                    await db.commit()
             return {"status": "stopped", "runner_name": runner_name, "session_id": session_id}
         except ValueError as e:
             raise HTTPException(400, str(e))
