@@ -877,12 +877,47 @@ async def drop_tables() -> None:
         await conn.run_sync(Base.metadata.drop_all)
 
 
-async def get_session() -> AsyncSession:
-    """Retorna uma nova sessão do banco de dados."""
-    if _session_factory is None:
-        raise RuntimeError("Database não inicializado. Chame init_database() primeiro.")
-    
-    return _session_factory()
+class _SessionContextManager:
+    """
+    Suporta ambos os usos:
+    - db = await get_session(); async with db:
+    - async with get_session() as db:
+    """
+    __slots__ = ("_session",)
+
+    def __init__(self) -> None:
+        self._session: AsyncSession | None = None
+
+    async def _create(self) -> AsyncSession:
+        if _session_factory is None:
+            raise RuntimeError("Database não inicializado. Chame init_database() primeiro.")
+        return _session_factory()
+
+    def __await__(self) -> Any:
+        return self._create().__await__()
+
+    async def __aenter__(self) -> AsyncSession:
+        self._session = await self._create()
+        return self._session
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        if self._session is not None:
+            await self._session.close()
+            self._session = None
+
+
+def get_session() -> _SessionContextManager:
+    """
+    Retorna um gerenciador de sessão. Uso:
+
+    - async with get_session() as db:
+        ...
+
+    - db = await get_session()
+      async with db:
+        ...
+    """
+    return _SessionContextManager()
 
 
 async def close_database() -> None:
