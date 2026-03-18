@@ -4,9 +4,10 @@ Recurso plug-and-play para sessões longas: uma classe `Runner`, configuração 
 
 ## Conceito
 
-- **Runner**: processo (ou task assíncrona) que executa **uma sessão longa** (ex.: trading session). Recebe comando de início via mensagem Kafka (`action=start`, `session_id`, etc.) e roda até: comando de parada, limite de recursos excedido ou erro.
-- **Um runner por instância** (recomendado para auto-scale): cada instância (pod/container) executa um único runner; o orquestrador escala o número de instâncias.
-- **Limites**: CPU %, memória MB, opcionalmente IO leitura (MB). Verificação periódica; ao exceder, dispara shutdown controlado e hook `on_resource_exceeded`.
+- **Runner = controlador**: o processo que você inicia com `stride runrunner Nome` **só consome Kafka** e cria/encerra **instâncias** (uma por sessão). Cada instância roda em **processo separado** (default), com DB e Redis próprios, sem compartilhar recursos com a API nem com o controlador — evita vazamento de contexto, logs misturados e degradação.
+- **Instância isolada** (default `runner_isolated_instances=True`): ao receber `start`, o controlador espawana um processo filho que executa `run_session(payload)`; ao receber `stop`, envia SIGTERM ao processo. O filho tem seu próprio pool de DB (`runner_session_pool_size`) e recursos; a API continua estável.
+- **Um runner (controlador) por deploy**: cada instância (pod/container) executa um único processo controlador; ele pode ter várias sessões ativas (vários processos filho).
+- **Limites**: CPU %, memória MB, opcionalmente IO leitura (MB). Verificação periódica no controlador; ao exceder (modo legado in-process), dispara shutdown e hook `on_resource_exceeded`.
 - **Hooks**: `on_start`, `on_stop`, `after_stop`, `on_resource_exceeded` para o app customizar (persistir estado, emitir evento, fechar conexões).
 
 ## Fluxo
@@ -51,6 +52,8 @@ Em `src/settings.py` (ou via `.env`):
 | `runner_check_interval_seconds` | float | 5 | Intervalo entre verificações de recursos. |
 | `runner_shutdown_grace_seconds` | float | 5 | Tempo máximo para shutdown gracioso. |
 | `runner_default_topic` | str | "runner.commands" | Tópico Kafka para comandos start/stop. |
+| `runner_isolated_instances` | bool | true | Se true, cada sessão roda em processo filho (DB/Redis isolados; stop via SIGTERM). Se false, sessões rodam in-process (legado). |
+| `runner_session_pool_size` | int | 2 | Tamanho do pool de conexões do DB no processo da instância (cada instância = 1 processo). |
 
 Exemplo:
 

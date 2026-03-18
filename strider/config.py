@@ -863,6 +863,17 @@ class Settings(BaseSettings):
         default="runner.commands",
         description="Tópico Kafka padrão para comandos start/stop do runner.",
     )
+    runner_isolated_instances: bool = PydanticField(
+        default=True,
+        description=(
+            "Se True, cada instância de sessão roda em um processo separado (DB/Redis isolados, "
+            "logs separados, stop via SIGTERM). Se False, sessões rodam in-process (comportamento legado)."
+        ),
+    )
+    runner_session_pool_size: int = PydanticField(
+        default=2,
+        description="Tamanho do pool de conexões do DB no processo da instância (cada instância = 1 processo).",
+    )
 
     # =========================================================================
     # REDIS (para tasks, cache, etc)

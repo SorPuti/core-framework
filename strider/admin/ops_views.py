@@ -641,6 +641,261 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         except Exception as e:
             raise HTTPException(500, str(e))
 
+    # =====================================================================
+    # Runners (tipos + instâncias; start/stop via controller)
+    # =====================================================================
+
+    @router.get("/runners/registered")
+    async def runners_registered(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Lista tipos de Runner registrados (registry)."""
+        try:
+            from strider.messaging.runner import list_runners
+            names = list_runners()
+            items = []
+            for name in names:
+                from strider.messaging.runner import get_runner
+                cls = get_runner(name)
+                topic = getattr(cls, "input_topic", "runner.commands") if cls else "runner.commands"
+                items.append({"name": name, "input_topic": topic})
+            return {"items": items, "total": len(items)}
+        except Exception as e:
+            logger.warning("Failed to list runners: %s", e)
+            return {"items": [], "total": 0}
+
+    @router.get("/runners/instances")
+    async def runners_instances(
+        request: Request,
+        runner_name: str = Query("", description="Filtrar por runner"),
+        status: str = Query("", description="Filtrar por status"),
+        page: int = Query(1, ge=1),
+        per_page: int = Query(50, ge=1, le=200),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Lista instâncias de Runner (persistidas ao start/stop)."""
+        try:
+            from strider.models import get_session
+            from strider.admin.models import RunnerInstance
+            from strider.querysets import QuerySet
+
+            db = await get_session()
+            async with db:
+                qs = QuerySet(RunnerInstance, db)
+                if runner_name:
+                    qs = qs.filter(runner_name=runner_name)
+                if status:
+                    qs = qs.filter(status=status)
+                total = await qs.count()
+                items = await qs.order_by("-started_at").offset(
+                    (page - 1) * per_page
+                ).limit(per_page).all()
+                return {
+                    "items": [
+                        {
+                            "id": r.id,
+                            "runner_name": r.runner_name,
+                            "session_id": r.session_id,
+                            "user_id": r.user_id,
+                            "status": r.status,
+                            "payload_json": r.payload_json,
+                            "started_at": r.started_at.isoformat() if r.started_at else None,
+                            "stopped_at": r.stopped_at.isoformat() if r.stopped_at else None,
+                        }
+                        for r in items
+                    ],
+                    "total": total,
+                }
+        except Exception as e:
+            logger.warning("Failed to list runner instances: %s", e)
+            return {"items": [], "total": 0}
+
+    @router.post("/runners/instances/start")
+    async def runners_instance_start(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Cria registro de instância e envia comando start (RunnerController)."""
+        try:
+            body = await request.json()
+            runner_name = body.get("runner_name")
+            session_id = body.get("session_id")
+            user_id = body.get("user_id")
+            payload = body.get("payload")
+            if not runner_name or not session_id:
+                raise HTTPException(400, "runner_name e session_id são obrigatórios")
+            from strider.messaging.runner import send_start
+            from strider.models import get_session
+            from strider.admin.models import RunnerInstance
+            from strider.querysets import QuerySet
+            import json
+
+            await send_start(runner_name, session_id, payload=(payload or {}))
+            db = await get_session()
+            async with db:
+                qs = QuerySet(RunnerInstance, db)
+                existing = await qs.filter(
+                    runner_name=runner_name,
+                    session_id=session_id,
+                ).first()
+                if existing:
+                    existing.status = "running"
+                    existing.user_id = user_id
+                    existing.payload_json = json.dumps(payload) if payload else None
+                    existing.stopped_at = None
+                    await existing.save(db)
+                    await db.commit()
+                    return {"status": "started", "instance_id": existing.id}
+                inst = RunnerInstance(
+                    runner_name=runner_name,
+                    session_id=session_id,
+                    user_id=user_id,
+                    status="running",
+                    payload_json=json.dumps(payload) if payload else None,
+                )
+                await inst.save(db)
+                await db.commit()
+                return {"status": "started", "instance_id": inst.id}
+        except HTTPException:
+            raise
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except Exception as e:
+            logger.exception("runners_instance_start failed: %s", e)
+            raise HTTPException(500, str(e))
+
+    @router.post("/runners/{runner_name}/instances/{session_id}/stop")
+    async def runners_instance_stop(
+        request: Request,
+        runner_name: str,
+        session_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Envia comando stop e atualiza registro da instância."""
+        try:
+            from strider.messaging.runner import send_stop
+            from strider.models import get_session
+            from strider.admin.models import RunnerInstance
+            from strider.querysets import QuerySet
+            from strider.datetime import timezone
+
+            await send_stop(runner_name, session_id)
+            db = await get_session()
+            async with db:
+                qs = QuerySet(RunnerInstance, db)
+                inst = await qs.filter(
+                    runner_name=runner_name,
+                    session_id=session_id,
+                ).first()
+                if inst:
+                    inst.status = "stopped"
+                    inst.stopped_at = timezone.now()
+                    await inst.save(db)
+                    await db.commit()
+            return {"status": "stopped", "runner_name": runner_name, "session_id": session_id}
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except Exception as e:
+            logger.exception("runners_instance_stop failed: %s", e)
+            raise HTTPException(500, str(e))
+
+    @router.post("/runners/{runner_name}/instances/{session_id}/pause")
+    async def runners_instance_pause(
+        request: Request,
+        runner_name: str,
+        session_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Envia comando pause para a instância (modo isolado: best-effort)."""
+        try:
+            from strider.messaging.runner import send_pause
+            await send_pause(runner_name, session_id)
+            return {"status": "paused", "runner_name": runner_name, "session_id": session_id}
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except Exception as e:
+            logger.exception("runners_instance_pause failed: %s", e)
+            raise HTTPException(500, str(e))
+
+    @router.post("/runners/{runner_name}/instances/{session_id}/resume")
+    async def runners_instance_resume(
+        request: Request,
+        runner_name: str,
+        session_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Envia comando resume para a instância."""
+        try:
+            from strider.messaging.runner import send_resume
+            await send_resume(runner_name, session_id)
+            return {"status": "resumed", "runner_name": runner_name, "session_id": session_id}
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except Exception as e:
+            logger.exception("runners_instance_resume failed: %s", e)
+            raise HTTPException(500, str(e))
+
+    @router.delete("/runners/instances/{instance_id}")
+    async def runners_instance_delete(
+        request: Request,
+        instance_id: int,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Desliga a instância (se running) e remove o registro do Admin."""
+        try:
+            from strider.models import get_session
+            from strider.admin.models import RunnerInstance
+            from strider.querysets import QuerySet
+            from strider.messaging.runner import send_stop
+            from strider.datetime import timezone
+
+            db = await get_session()
+            async with db:
+                qs = QuerySet(RunnerInstance, db)
+                inst = await qs.filter(id=instance_id).first()
+                if not inst:
+                    raise HTTPException(404, "Instância não encontrada")
+                runner_name = inst.runner_name
+                session_id = inst.session_id
+                if inst.status == "running":
+                    try:
+                        await send_stop(runner_name, session_id)
+                    except Exception as e:
+                        logger.warning("runners_instance_delete: send_stop failed: %s", e)
+                    inst.status = "stopped"
+                    inst.stopped_at = timezone.now()
+                    await inst.save(db)
+                await db.delete(inst)
+                await db.commit()
+            return {"status": "deleted", "instance_id": instance_id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("runners_instance_delete failed: %s", e)
+            raise HTTPException(500, str(e))
+
+    @router.get("/runners/logs")
+    async def runners_logs(
+        request: Request,
+        session_id: str = Query(..., description="Session ID da instância"),
+        limit: int = Query(200, ge=1, le=1000),
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """Retorna entradas recentes do buffer de log filtradas por session_id (busca na mensagem)."""
+        from dataclasses import asdict
+        try:
+            from strider.admin.log_handler import get_log_buffer
+            buffer = get_log_buffer()
+            entries = buffer.get_recent(limit=limit, search=session_id)
+            return {
+                "entries": [asdict(e) for e in entries],
+                "session_id": session_id,
+            }
+        except Exception as e:
+            logger.warning("runners_logs failed: %s", e)
+            return {"entries": [], "session_id": session_id}
+
     @router.post("/workers/{worker_id}/drain")
     async def worker_drain(
         request: Request,

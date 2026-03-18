@@ -617,20 +617,41 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         raise NotImplementedError("Define serializer_class or override get_serializer")
     
     def get_input_schema(self) -> type[InputSchema]:
-        """Retorna o schema de input."""
+        """Retorna o schema de input. Preferência: serializer_class (input_cls/input_schema)."""
+        if self.serializer_class:
+            return (
+                getattr(self.serializer_class, "input_cls", None)
+                or self.serializer_class.input_schema
+            )
         if self.input_schema:
             return self.input_schema
-        if self.serializer_class:
-            return self.serializer_class.input_schema
-        raise NotImplementedError("Define input_schema or serializer_class")
+        raise NotImplementedError("Define serializer_class or input_schema")
     
     def get_output_schema(self) -> type[OutputSchema]:
-        """Retorna o schema de output."""
+        """Retorna o schema de output. Preferência: serializer_class (output_cls/output_schema)."""
+        if self.serializer_class:
+            return (
+                getattr(self.serializer_class, "output_cls", None)
+                or self.serializer_class.output_schema
+            )
         if self.output_schema:
             return self.output_schema
+        raise NotImplementedError("Define serializer_class or output_schema")
+
+    def _serialize_for_response(self, obj: ModelT) -> dict[str, Any]:
+        """Ponto único de serialização para um objeto (list/detail). Usa Serializer quando existir."""
         if self.serializer_class:
-            return self.serializer_class.output_schema
-        raise NotImplementedError("Define output_schema or serializer_class")
+            return self.get_serializer().to_representation(obj)
+        return self.get_output_schema().dump_for_list(obj)
+
+    def _serialize_many_for_response(
+        self, objects: Sequence[ModelT]
+    ) -> list[dict[str, Any]]:
+        """Ponto único de serialização para listagem."""
+        if self.serializer_class:
+            return self.get_serializer().to_representation_many(objects)
+        output_schema = self.get_output_schema()
+        return [output_schema.dump_for_list(o) for o in objects]
     
     def get_unique_fields(self) -> list[str]:
         """
@@ -828,8 +849,7 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         total = await queryset.count()
         objects = await queryset.offset(offset).limit(page_size).all()
         
-        output_schema = self.get_output_schema()
-        items = [output_schema.dump_for_list(obj) for obj in objects]
+        items = self._serialize_many_for_response(objects)
         
         return {
             "items": items,
@@ -851,23 +871,24 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         obj = await self.get_object(db, **kwargs)
         await self.check_object_permissions(request, obj, "retrieve")
         
-        output_schema = self.get_output_schema()
-        return output_schema.dump_for_list(obj)
+        return self._serialize_for_response(obj)
     
     async def create(
         self,
         request: Request,
         db: AsyncSession,
-        data: dict[str, Any],
+        data: InputT | dict[str, Any],
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Cria um novo objeto."""
         await self.check_permissions(request, "create")
         
-        # 1. Valida com Pydantic
+        # 1. Dados já validados (FastAPI) ou dict a validar (ex.: action sem schema)
         input_schema = self.get_input_schema()
-        pydantic_validated = input_schema.model_validate(data)
-        data_dict = pydantic_validated.model_dump()
+        if hasattr(data, "model_dump"):
+            data_dict = data.model_dump()
+        else:
+            data_dict = input_schema.model_validate(data).model_dump()
         
         # 2. Valida unicidade e regras de negócio
         validated_data = await self.validate_data(data_dict, db, instance=None)
@@ -882,9 +903,7 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         # 5. Hook após criar
         await self.after_create(obj, db)
         
-        output_schema = self.get_output_schema()
-        # Usar dump_for_list para incluir campos computados (incluindo @computed_orm_field)
-        return output_schema.dump_for_list(obj)
+        return self._serialize_for_response(obj)
     
     async def perform_create_validation(
         self,
@@ -910,7 +929,7 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         self,
         request: Request,
         db: AsyncSession,
-        data: dict[str, Any],
+        data: InputT | dict[str, Any],
         partial: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any]:
@@ -920,29 +939,23 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         obj = await self.get_object(db, **kwargs)
         await self.check_object_permissions(request, obj, "update")
         
-        # Body pode vir como dict (raw) ou modelo Pydantic (FastAPI injeta o schema parcial)
-        if hasattr(data, "model_dump"):
-            data = data.model_dump(exclude_unset=partial)
-        elif not isinstance(data, dict):
-            data = dict(data) if data else {}
-        
-        # 1. Valida com Pydantic
         input_schema = self.get_input_schema()
-        
-        # Para partial update, mescla com dados existentes
-        if partial:
-            # Pega dados atuais do objeto
-            current_data = {}
-            for field in input_schema.model_fields:
-                if hasattr(obj, field):
-                    current_data[field] = getattr(obj, field)
-            # Mescla com novos dados (data já é dict aqui)
-            merged_data = {**current_data, **data}
-            pydantic_validated = input_schema.model_validate(merged_data)
-            data_dict = {k: v for k, v in pydantic_validated.model_dump().items() if k in data}
+        # Dados já validados (FastAPI) ou dict a validar
+        if hasattr(data, "model_dump"):
+            data_dict = data.model_dump(exclude_unset=partial)
         else:
-            pydantic_validated = input_schema.model_validate(data)
-            data_dict = pydantic_validated.model_dump()
+            if not isinstance(data, dict):
+                data = dict(data) if data else {}
+            if partial:
+                current_data = {}
+                for field in input_schema.model_fields:
+                    if hasattr(obj, field):
+                        current_data[field] = getattr(obj, field)
+                merged_data = {**current_data, **data}
+                pydantic_validated = input_schema.model_validate(merged_data)
+                data_dict = {k: v for k, v in pydantic_validated.model_dump().items() if k in data}
+            else:
+                data_dict = input_schema.model_validate(data).model_dump()
         
         # 2. Valida unicidade e regras de negócio
         validated_data = await self.validate_data(data_dict, db, instance=obj)
@@ -969,9 +982,7 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         # 6. Hook após atualizar
         await self.after_update(obj, db)
         
-        output_schema = self.get_output_schema()
-        # Usar dump_for_list para incluir campos computados (incluindo @computed_orm_field)
-        return output_schema.dump_for_list(obj)
+        return self._serialize_for_response(obj)
     
     async def perform_update_validation(
         self,
@@ -998,7 +1009,7 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         self,
         request: Request,
         db: AsyncSession,
-        data: dict[str, Any],
+        data: InputT | dict[str, Any],
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Atualização parcial (PATCH)."""
@@ -1266,8 +1277,7 @@ class SearchModelViewSet(ModelViewSet[ModelT, InputT, OutputT]):
         total = await queryset.count()
         objects = await queryset.offset(offset).limit(page_size).all()
         
-        output_schema = self.get_output_schema()
-        items = [output_schema.dump_for_list(obj) for obj in objects]
+        items = self._serialize_many_for_response(objects)
         
         return {
             "items": items,

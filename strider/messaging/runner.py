@@ -1,15 +1,25 @@
 """
-Runner: base para sessões longas com limites de recursos e lifecycle hooks.
+Runner: controlador de sessões longas com limites de recursos e lifecycle hooks.
 
-Consome comandos start/stop via Kafka e executa run_session() até parada
-ou exceder limites de CPU/memória/IO. Integrado ao plug-and-play Kafka.
+O Runner é o CONTROLADOR: consome comandos start/stop via Kafka e cria/encerra
+INSTÂNCIAS isoladas (um processo por sessão). Cada instância tem:
+- Conexões de DB e Redis próprias (sem vazar com a API)
+- Logs separados (session_id no contexto)
+- Stop imediato via SIGTERM (sem depender de loop reativo no mesmo processo)
+
+Com runner_isolated_instances=False (legado), sessões rodam in-process.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import signal
+import subprocess
+import sys
+import tempfile
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -45,12 +55,16 @@ _runner_registry: dict[str, type["Runner"]] = {}
 
 class Runner(ABC):
     """
-    Base para sessões longas com limites de recursos e lifecycle hooks.
+    Controlador de sessões longas: consome start/stop via Kafka e cria/encerra
+    instâncias isoladas (um processo por sessão quando runner_isolated_instances=True).
 
-    Consome comandos start/stop (Kafka) e executa run_session() até
-    parada ou limite de CPU/memória/IO. Uma sessão por instância por vez
-    (concurrency=1). Subclasse e implemente run_session(); opcionalmente
-    on_start, on_stop, after_stop, on_resource_exceeded.
+    Cada instância (processo filho) tem seu próprio DB, Redis e recursos;
+    não compartilha conexões com a API nem com o controlador, evitando
+    vazamento de contexto e degradação. Stop é imediato via SIGTERM.
+
+    Subclasse e implemente run_session(payload); opcionalmente on_start, on_stop,
+    after_stop, on_resource_exceeded. Com isolated=True, run_session roda
+    no processo filho; o controlador apenas espawana e termina processos.
     """
 
     input_topic: str = "runner.commands"
@@ -68,8 +82,10 @@ class Runner(ABC):
 
     def __init__(self) -> None:
         self._stop_requested = False
+        self._paused = False
         self._current_session_id: str | None = None
         self._session_task: asyncio.Task | None = None
+        self._session_processes: dict[str, subprocess.Popen] = {}  # session_id -> Popen (modo isolado)
         self._consumer: Any = None
         self._resource_task: asyncio.Task | None = None
         self._running = False
@@ -83,6 +99,11 @@ class Runner(ABC):
     @property
     def is_stop_requested(self) -> bool:
         return self._stop_requested
+
+    @property
+    def is_paused(self) -> bool:
+        """Subclasse pode checar em run_session para pausar o loop."""
+        return self._paused
 
     @property
     def current_session_id(self) -> str | None:
@@ -124,6 +145,8 @@ class Runner(ABC):
     # Config from Settings
     # -------------------------------------------------------------------------
 
+    session_stop_timeout_seconds: float = 5.0
+
     def _get_config(self) -> dict[str, Any]:
         s = get_settings()
         return {
@@ -134,6 +157,9 @@ class Runner(ABC):
             "io_read_mb_limit": float(getattr(s, "runner_io_read_mb_limit", 0) or 0),
             "check_interval": float(getattr(s, "runner_check_interval_seconds", 5) or 5),
             "shutdown_grace": float(getattr(s, "runner_shutdown_grace_seconds", 5) or 5),
+            "session_stop_timeout": float(
+                getattr(s, "runner_session_stop_timeout_seconds", 15) or 15
+            ),
         }
 
     # -------------------------------------------------------------------------
@@ -178,6 +204,89 @@ class Runner(ABC):
     # Command handler (Kafka message)
     # -------------------------------------------------------------------------
 
+    def _spawn_isolated_session(self, session_id: str, message: dict[str, Any]) -> None:
+        """Cria processo filho isolado para esta sessão (DB/Redis próprios, stop via SIGTERM)."""
+        settings = get_settings()
+        runner_name = self.__class__.__name__
+        if session_id in self._session_processes:
+            proc = self._session_processes[session_id]
+            if proc.poll() is None:
+                logger.warning("Runner already has isolated process for session_id=%s, ignoring start", session_id)
+                return
+            del self._session_processes[session_id]
+
+        fd, payload_path = tempfile.mkstemp(suffix=".runner.json", prefix="strider_runner_")
+        try:
+            os.write(fd, json.dumps(message).encode("utf-8"))
+            os.close(fd)
+            fd = None
+        except Exception:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            os.remove(payload_path)
+            raise
+
+        cmd = [
+            sys.executable,
+            "-m",
+            "strider",
+            "runrunner-session",
+            runner_name,
+            session_id,
+            payload_path,
+        ]
+        env = os.environ.copy()
+        env["STRIDER_RUNNER_SESSION"] = "1"
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=os.getcwd(),
+                env=env,
+            )
+            self._session_processes[session_id] = proc
+            logger.info("Runner started isolated process for session_id=%s pid=%s", session_id, proc.pid)
+        except Exception as e:
+            logger.exception("Runner failed to spawn isolated process for session_id=%s: %s", session_id, e)
+            try:
+                os.remove(payload_path)
+            except OSError:
+                pass
+            raise
+
+        def _cleanup_payload() -> None:
+            try:
+                os.remove(payload_path)
+            except OSError:
+                pass
+
+        asyncio.get_event_loop().call_later(30.0, _cleanup_payload)
+
+    def _stop_isolated_session(self, session_id: str, config: dict[str, Any]) -> None:
+        """Envia SIGTERM ao processo da sessão e aguarda com timeout."""
+        proc = self._session_processes.get(session_id)
+        if proc is None:
+            logger.debug("Runner stop: no process for session_id=%s", session_id)
+            return
+        grace = max(1.0, config.get("shutdown_grace", self.shutdown_grace_seconds))
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=grace)
+            except subprocess.TimeoutExpired:
+                logger.warning("Runner isolated process session_id=%s did not exit in %.1fs, sending SIGKILL", session_id, grace)
+                proc.kill()
+                proc.wait(timeout=5.0)
+        except Exception as e:
+            logger.warning("Runner stop isolated session_id=%s: %s", session_id, e)
+        finally:
+            self._session_processes.pop(session_id, None)
+
     async def _handle_message(self, message: dict[str, Any], config: dict[str, Any]) -> None:
         action = (message.get("action") or "").strip().lower()
         session_id = message.get("session_id")
@@ -186,7 +295,17 @@ class Runner(ABC):
         elif session_id is not None:
             session_id = str(session_id).strip() or None
 
+        settings = get_settings()
+        isolated = getattr(settings, "runner_isolated_instances", True)
+
         if action == "start":
+            if isolated:
+                if session_id:
+                    self._spawn_isolated_session(session_id, message)
+                else:
+                    logger.warning("Runner isolated mode requires session_id for start")
+                return
+
             if self._session_task is not None and not self._session_task.done():
                 logger.warning("Runner already has active session, ignoring start session_id=%s", session_id)
                 return
@@ -197,8 +316,51 @@ class Runner(ABC):
             return
 
         if action == "stop":
+            if isolated:
+                if session_id:
+                    self._stop_isolated_session(session_id, config)
+                else:
+                    for sid in list(self._session_processes):
+                        self._stop_isolated_session(sid, config)
+                return
+
+            stop_timeout = max(1.0, config.get("session_stop_timeout", self.session_stop_timeout_seconds))
+            if self._session_task is not None and not self._session_task.done():
+                logger.info("Runner stop: cancelling stuck session task for session_id=%s", session_id)
+                self._session_task.cancel()
+                try:
+                    await asyncio.wait_for(self._session_task, timeout=2.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    pass
+                self._session_task = None
+                self._current_session_id = None
+            try:
+                await asyncio.wait_for(self.run_session(message), timeout=stop_timeout)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Runner run_session(stop) timed out after %.1fs (session_id=%s); DB may be updated later",
+                    stop_timeout, session_id,
+                )
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.exception("Runner run_session(stop) failed: %s", e)
             if session_id is None or session_id == self._current_session_id:
                 self.request_stop()
+            return
+
+        if action == "pause":
+            if not isolated and (session_id is None or session_id == self._current_session_id):
+                self._paused = True
+                logger.info("Runner paused for session_id=%s", session_id)
+            elif isolated:
+                logger.debug("Pause not sent to isolated process (session_id=%s); use stop to end", session_id)
+            return
+
+        if action == "resume":
+            if not isolated and (session_id is None or session_id == self._current_session_id):
+                self._paused = False
+                logger.info("Runner resumed for session_id=%s", session_id)
             return
 
     def _on_session_done(self, task: asyncio.Task) -> None:
@@ -273,6 +435,18 @@ class Runner(ABC):
             except asyncio.CancelledError:
                 pass
             self._resource_task = None
+
+        for sid, proc in list(self._session_processes.items()):
+            if proc.poll() is None:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=max(2.0, config.get("shutdown_grace", self.shutdown_grace_seconds)))
+                except (subprocess.TimeoutExpired, Exception):
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+            self._session_processes.pop(sid, None)
 
         if self._session_task and not self._session_task.done():
             self._session_task.cancel()
@@ -359,3 +533,70 @@ def run_runner(runner_class: str | type[Runner]) -> None:
     """
     import asyncio
     asyncio.run(run_runner_async(runner_class))
+
+
+# =============================================================================
+# RunnerController — interface simples para comandos (sem publish manual)
+# =============================================================================
+
+async def send_start(
+    runner_name: str,
+    session_id: str,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    """
+    Envia comando start para um runner (publica no tópico Kafka do runner).
+    Interface única: o desenvolvedor não precisa criar loops nem publicar manualmente.
+
+    Args:
+        runner_name: Nome da classe do Runner (ex.: StrategySessionRunner)
+        session_id: Identificador da sessão/instância (ex.: user_id ou composite)
+        payload: Dados extras enviados ao run_session(payload)
+    """
+    runner_cls = get_runner(runner_name)
+    if runner_cls is None:
+        raise ValueError(f"Runner '{runner_name}' não encontrado. Disponíveis: {list_runners()}")
+    instance = runner_cls()
+    config = instance._get_config()
+    topic = config["input_topic"]
+    from strider.messaging.registry import publish
+    msg = {"action": "start", "session_id": session_id, **(payload or {})}
+    await publish(topic, msg)
+
+
+async def send_stop(runner_name: str, session_id: str) -> None:
+    """
+    Envia comando stop para uma instância do runner.
+    """
+    runner_cls = get_runner(runner_name)
+    if runner_cls is None:
+        raise ValueError(f"Runner '{runner_name}' não encontrado. Disponíveis: {list_runners()}")
+    instance = runner_cls()
+    config = instance._get_config()
+    topic = config["input_topic"]
+    from strider.messaging.registry import publish
+    await publish(topic, {"action": "stop", "session_id": session_id})
+
+
+async def send_pause(runner_name: str, session_id: str) -> None:
+    """Envia comando pause (o Runner pode tratar em run_session)."""
+    runner_cls = get_runner(runner_name)
+    if runner_cls is None:
+        raise ValueError(f"Runner '{runner_name}' não encontrado.")
+    instance = runner_cls()
+    config = instance._get_config()
+    topic = config["input_topic"]
+    from strider.messaging.registry import publish
+    await publish(topic, {"action": "pause", "session_id": session_id})
+
+
+async def send_resume(runner_name: str, session_id: str) -> None:
+    """Envia comando resume (o Runner pode tratar em run_session)."""
+    runner_cls = get_runner(runner_name)
+    if runner_cls is None:
+        raise ValueError(f"Runner '{runner_name}' não encontrado.")
+    instance = runner_cls()
+    config = instance._get_config()
+    topic = config["input_topic"]
+    from strider.messaging.registry import publish
+    await publish(topic, {"action": "resume", "session_id": session_id})

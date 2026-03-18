@@ -400,7 +400,8 @@ class UniqueSlugValidator(AsyncValidator):
 }
 ```
 
-## Next
+## Próximos passos
 
-- [Serializers](13-serializers.md) — Input/Output schemas
-- [ViewSets](04-viewsets.md) — CRUD endpoints
+- [Criar uma aplicação](00-criar-aplicacao.md#9-validação-regras-de-negócio) — Validação no ViewSet
+- [Serializers](13-serializers.md) — Schemas de Input/Output
+- [ViewSets](04-viewsets.md) — CRUD e hooks

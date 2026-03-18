@@ -1,20 +1,20 @@
 # Serializers
 
-Input/Output schemas for request/response handling.
+Schemas de entrada/saída e ponto único de contrato (Serializer) para request/response. A validação ocorre **uma vez** na borda (FastAPI); o ViewSet não revalida quando recebe instância do schema.
 
 ## InputSchema vs OutputSchema
 
-**Important:** Use `InputSchema` and `OutputSchema`, not raw `BaseModel`.
+Use `InputSchema` e `OutputSchema`, não `BaseModel` puro.
 
-| Feature | `InputSchema` | `OutputSchema` |
-|---------|---------------|----------------|
-| Unknown fields | Rejects (422) | Allows |
-| Strip whitespace | Yes | No |
-| Purpose | Request validation | Response serialization |
+| Recurso | `InputSchema` | `OutputSchema` |
+|---------|---------------|-----------------|
+| Campos desconhecidos | Ignorados (`extra="ignore"`) | Permitidos |
+| Strip whitespace | Sim | — |
+| Uso | Validação do body | Serialização da response |
 
 ## InputSchema
 
-For request bodies.
+Para o body das requisições.
 
 ```python
 from strider.serializers import InputSchema
@@ -25,14 +25,25 @@ class ItemCreateInput(InputSchema):
     description: str | None = None
 ```
 
-Features:
-- `extra="forbid"` — Rejects unknown fields
-- `str_strip_whitespace=True` — Auto-strips strings
-- `from_attributes=True` — ORM compatibility
+Comportamento padrão:
+
+- `extra="ignore"` — campos não declarados no schema são ignorados (evita 422 por campos extras).
+- `str_strip_whitespace=True` — remove espaços em branco em strings.
+- `from_attributes=True` — compatível com ORM.
+
+Para rejeitar campos extras (opt-in):
+
+```python
+from pydantic import ConfigDict
+
+class StrictInput(InputSchema):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+```
 
 ## OutputSchema
 
-For responses.
+Para o corpo das respostas.
 
 ```python
 from strider.serializers import OutputSchema
@@ -45,32 +56,102 @@ class ItemOutput(OutputSchema):
     created_at: datetime
 ```
 
-Features:
-- `from_attributes=True` — ORM compatibility
-- `from_orm()` and `from_orm_list()` helpers
+Recursos:
+
+- `from_attributes=True` — criação a partir de instância ORM.
+- `dump_for_list(obj)` — serializa com `list_include`/`list_exclude` e `@computed_orm_field`.
+- `from_orm()` e `from_orm_list()` — helpers para criar instâncias a partir de ORM.
+
+## Contrato centralizado: UnifiedModelSerializer (sem InputSchema/OutputSchema)
+
+Para não definir InputSchema nem OutputSchema separados, use **UnifiedModelSerializer**: o contrato fica só no Serializer, com `fields` e `read_only_fields`. Os schemas de input e output são gerados a partir do model.
 
 ```python
-# Convert ORM object
-item_data = ItemOutput.from_orm(item)
+from strider import UnifiedModelSerializer, ModelViewSet
+from .models import Post
 
-# Convert list
-items_data = ItemOutput.from_orm_list(items)
+class PostSerializer(UnifiedModelSerializer):
+    model = Post
+    fields = ["id", "title", "content", "published", "created_at"]
+    read_only_fields = ["id", "created_at"]
+
+class PostViewSet(ModelViewSet):
+    model = Post
+    serializer_class = PostSerializer
 ```
 
-## Usage in ViewSets
+- **fields**: lista de nomes de colunas do model a expor.
+- **read_only_fields**: campos que só aparecem na saída (não aceitos no body de create/update). Geralmente `id` e timestamps.
+
+Quando há pelo menos um campo gravável, o framework gera automaticamente as classes de input e output (herdando de InputSchema/OutputSchema). Para validadores ou campos computados customizados, use [Serializer com input_schema/output_schema](#serializer-ponto-único-de-contrato).
+
+## Uso no ViewSet: Serializer como fonte única
+
+O recomendado é definir um **Serializer** e usá-lo no ViewSet via `serializer_class`. Os schemas de input/output vêm do Serializer (`input_cls`/`output_cls` ou `input_schema`/`output_schema`).
 
 ```python
 from strider import ModelViewSet
 from .models import Item
-from .schemas import ItemCreateInput, ItemOutput
+from .serializers import ItemSerializer
 
+class ItemViewSet(ModelViewSet):
+    model = Item
+    serializer_class = ItemSerializer
+```
+
+Sem Serializer, você pode definir direto no ViewSet:
+
+```python
 class ItemViewSet(ModelViewSet):
     model = Item
     input_schema = ItemCreateInput
     output_schema = ItemOutput
 ```
 
-## Field Validators
+## Serializer: ponto único de contrato
+
+O **Serializer** concentra input e output. O Router e o ViewSet usam `serializer_class` para obter os schemas (OpenAPI e validação).
+
+```python
+from strider.serializers import Serializer
+
+class ItemSerializer(Serializer[Item, ItemCreateInput, ItemOutput]):
+    input_schema = ItemCreateInput
+    output_schema = ItemOutput
+    # Opcional: input_cls / output_cls (aliases para Router/OpenAPI)
+```
+
+Métodos principais:
+
+| Método | Descrição |
+|--------|-----------|
+| `validate_input(data: dict)` | Valida e retorna instância do input schema. |
+| `serialize(obj)` | Retorna instância do output schema a partir do objeto. |
+| `to_representation(obj)` | Serializa para dict (list/detail), com list_include/list_exclude e @computed_orm_field. |
+| `to_representation_many(objects)` | Lista de dicts para listagem. |
+
+O ViewSet usa `_serialize_for_response(obj)` e `_serialize_many_for_response(objects)`, que chamam o Serializer quando `serializer_class` está definido.
+
+## ModelSerializer
+
+Serializer com create/update encapsulados.
+
+```python
+from strider.serializers import ModelSerializer
+
+class ItemSerializer(ModelSerializer[Item, ItemCreateInput, ItemOutput]):
+    model = Item
+    input_schema = ItemCreateInput
+    output_schema = ItemOutput
+
+    exclude_on_create = ["id", "created_at"]
+    exclude_on_update = ["id"]
+    read_only_fields = ["created_at", "updated_at"]
+```
+
+Não é obrigatório sobrescrever `create`/`update`; o ViewSet usa os dados validados e chama o model diretamente. O ModelSerializer serve quando você quer lógica de create/update em um único lugar.
+
+## Validadores de campo
 
 ```python
 from strider.serializers import InputSchema
@@ -80,14 +161,14 @@ class UserCreateInput(InputSchema):
     email: str
     name: str
     password: str
-    
+
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
         if len(v) < 2:
             raise ValueError("Name must be at least 2 characters")
         return v.strip()
-    
+
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
@@ -96,9 +177,7 @@ class UserCreateInput(InputSchema):
         return v
 ```
 
-## Model Validators
-
-Cross-field validation.
+## Validadores de modelo (cross-field)
 
 ```python
 from strider.serializers import InputSchema
@@ -107,7 +186,7 @@ from pydantic import model_validator
 class PasswordChangeInput(InputSchema):
     password: str
     password_confirm: str
-    
+
     @model_validator(mode="after")
     def passwords_match(self) -> "PasswordChangeInput":
         if self.password != self.password_confirm:
@@ -115,7 +194,7 @@ class PasswordChangeInput(InputSchema):
         return self
 ```
 
-## Computed Fields
+## Computed fields
 
 ```python
 from strider.serializers import OutputSchema
@@ -125,7 +204,7 @@ class PostOutput(OutputSchema):
     id: int
     title: str
     content: str
-    
+
     @computed_field
     @property
     def excerpt(self) -> str:
@@ -134,10 +213,42 @@ class PostOutput(OutputSchema):
         return self.content[:100] + "..."
 ```
 
-## Nested Schemas
+## list_include e list_exclude
+
+Para listagem, você pode restringir campos no output:
 
 ```python
-# Nested output
+class PostOutput(OutputSchema):
+    id: int
+    title: str
+    content: str
+    created_at: datetime
+
+    list_include = ("id", "title", "created_at")  # só estes na listagem
+    # ou list_exclude = ("content",)
+```
+
+`dump_for_list` (e portanto `to_representation`) respeitam esses atributos.
+
+## Campos computados com ORM (@computed_orm_field)
+
+Quando o valor depende do objeto ORM (relacionamentos, etc.):
+
+```python
+from strider.serializers import OutputSchema, computed_orm_field
+
+class StrategyOutput(OutputSchema):
+    id: int
+    name: str
+
+    @computed_orm_field
+    def user_email(self, orm_obj: Strategy) -> str | None:
+        return orm_obj.user.email if orm_obj.user else None
+```
+
+## Schemas aninhados
+
+```python
 class UserOutput(OutputSchema):
     id: int
     name: str
@@ -147,7 +258,7 @@ class PostOutput(OutputSchema):
     title: str
     author: UserOutput | None = None
 
-# Nested input
+# Input aninhado
 class AddressInput(InputSchema):
     street: str
     city: str
@@ -155,76 +266,17 @@ class AddressInput(InputSchema):
 class UserCreateInput(InputSchema):
     name: str
     address: AddressInput
-
-# List of nested
-class OrderOutput(OutputSchema):
-    id: int
-    items: list[OrderItemOutput]
 ```
 
-## Serializer Class
+## Atualização parcial (PATCH)
 
-For complex serialization logic.
+O ViewSet gera automaticamente um schema parcial para PATCH (todos os campos opcionais) a partir do `input_schema`. Não é necessário definir um schema de update separado só para PATCH.
 
-```python
-from strider.serializers import Serializer
+## Padrões comuns
 
-class ItemSerializer(Serializer[Item, ItemCreateInput, ItemOutput]):
-    input_schema = ItemCreateInput
-    output_schema = ItemOutput
-    
-    def validate_input(self, data: dict) -> ItemCreateInput:
-        return self.input_schema.model_validate(data)
-    
-    def serialize(self, obj: Item) -> ItemOutput:
-        return self.output_schema.model_validate(obj)
-```
+### Create vs Update
 
-## ModelSerializer
-
-With create/update methods.
-
-```python
-from strider.serializers import ModelSerializer
-
-class ItemSerializer(ModelSerializer[Item, ItemCreateInput, ItemOutput]):
-    model = Item
-    input_schema = ItemCreateInput
-    output_schema = ItemOutput
-    
-    exclude_on_create = ["id", "created_at"]
-    exclude_on_update = ["id"]
-    read_only_fields = ["created_at", "updated_at"]
-    
-    async def create(self, data: ItemCreateInput, session) -> Item:
-        item = Item(**data.model_dump(exclude=set(self.exclude_on_create)))
-        await item.save(session)
-        return item
-    
-    async def update(self, instance: Item, data: ItemCreateInput, session, partial=False) -> Item:
-        update_data = data.model_dump(
-            exclude=set(self.exclude_on_update + self.read_only_fields),
-            exclude_unset=partial
-        )
-        for field, value in update_data.items():
-            setattr(instance, field, value)
-        await instance.save(session)
-        return instance
-```
-
-## Partial Updates
-
-ViewSets auto-generate partial schemas for PATCH.
-
-```python
-# Full update (PUT) uses ItemCreateInput
-# Partial update (PATCH) uses auto-generated partial schema
-# where all fields are optional
-```
-
-## Common Patterns
-
-### Create vs Update Schemas
+Use o mesmo input_schema e deixe o PATCH usar o schema parcial, ou defina schemas separados:
 
 ```python
 class ItemCreateInput(InputSchema):
@@ -235,39 +287,9 @@ class ItemCreateInput(InputSchema):
 class ItemUpdateInput(InputSchema):
     name: str | None = None
     price: float | None = None
-    # category_id not updatable
-
-class ItemViewSet(ModelViewSet):
-    model = Item
-    input_schema = ItemCreateInput
-    # PATCH auto-generates partial from input_schema
 ```
 
-### Different Output Detail
-
-```python
-class ItemListOutput(OutputSchema):
-    id: int
-    name: str
-
-class ItemDetailOutput(OutputSchema):
-    id: int
-    name: str
-    description: str
-    created_at: datetime
-    author: UserOutput
-
-class ItemViewSet(ModelViewSet):
-    model = Item
-    output_schema = ItemListOutput  # For list
-    
-    def get_output_schema(self):
-        if self.action == "retrieve":
-            return ItemDetailOutput
-        return self.output_schema
-```
-
-### Password Handling
+### Password no input, não no output
 
 ```python
 class UserCreateInput(InputSchema):
@@ -277,10 +299,20 @@ class UserCreateInput(InputSchema):
 class UserOutput(OutputSchema):
     id: int
     email: str
-    # password NOT included in output
+    # password não incluído
 ```
 
-## Next
+## Fluxo de validação e serialização
 
-- [Validators](14-validators.md) — Data validation
-- [ViewSets](04-viewsets.md) — CRUD endpoints
+1. **Request**: FastAPI valida o body com o schema de input (do Serializer ou do ViewSet) → uma única validação Pydantic.
+2. **Handler**: O ViewSet recebe `data` já como instância do schema (ou dict em actions sem schema); não chama `model_validate` de novo.
+3. **Regras de negócio**: `validate_data`, `validate_*` por campo, `validate()` global.
+4. **Resposta**: `_serialize_for_response(obj)` → Serializer `to_representation` ou `output_schema.dump_for_list`.
+
+Ver também: [Criar uma aplicação](00-criar-aplicacao.md#6-serializers-e-validação).
+
+## Próximos passos
+
+- [Validators](14-validators.md) — Validação de dados e unicidade
+- [ViewSets](04-viewsets.md) — CRUD e actions
+- [FAQ](99-faq-troubleshooting.md) — Erros comuns (ex.: extra_forbidden)

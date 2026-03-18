@@ -28,6 +28,9 @@ from strider.serializers import (
     InputSchema,
     OutputSchema,
     Serializer,
+    ModelSerializer,
+    UnifiedModelSerializer,
+    build_schemas_from_model,
     PaginatedResponse,
     ErrorResponse,
     SuccessResponse,
@@ -335,7 +338,7 @@ from strider.exceptions import (
     MissingDependency,
 )
 
-__version__ = "0.18.32"
+__version__ = "0.18.33"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
@@ -351,6 +354,9 @@ __all__ = [
     "InputSchema",
     "OutputSchema",
     "Serializer",
+    "ModelSerializer",
+    "UnifiedModelSerializer",
+    "build_schemas_from_model",
     "PaginatedResponse",
     "ErrorResponse",
     "SuccessResponse",

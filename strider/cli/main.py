@@ -40,6 +40,7 @@ import getpass
 import importlib
 import importlib.util
 import os
+import signal
 import sys
 from pathlib import Path
 from typing import Any
@@ -3050,6 +3051,98 @@ def cmd_runrunner(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_runrunner_session(args: argparse.Namespace) -> int:
+    """
+    Entrypoint do processo filho de uma instância isolada do Runner.
+    Chamado pelo controlador (runrunner) com: runrunner-session <runner_name> <session_id> <payload_file>
+    Este processo tem DB e Redis próprios; não compartilha recursos com a API nem com o controlador.
+    """
+    import json as _json
+    import logging as _logging
+    runner_name = args.runner_name
+    session_id = args.session_id
+    payload_file = args.payload_file
+
+    class _SessionIdFilter(_logging.Filter):
+        def filter(self, record: _logging.LogRecord) -> bool:
+            setattr(record, "runner_session_id", session_id)
+            return True
+
+    class _SessionIdFormatter(_logging.Formatter):
+        """Prefixa a mensagem com [session_id] para busca no Admin."""
+        def format(self, record: _logging.LogRecord) -> str:
+            out = super().format(record)
+            sid = getattr(record, "runner_session_id", None)
+            return f"[{sid}] {out}" if sid else out
+
+    for h in _logging.root.handlers:
+        h.addFilter(_SessionIdFilter())
+        prev = h.formatter
+        h.setFormatter(_SessionIdFormatter(prev._fmt if prev else "%(message)s", prev.datefmt if prev else None))
+    _logging.getLogger().addFilter(_SessionIdFilter())
+
+    config = load_config()
+    db_url = config.get("database_url")
+    if not db_url:
+        print(error("runrunner-session requires database_url in config"), file=sys.stderr)
+        return 1
+
+    _discover_and_import_runners()
+    from strider.messaging.runner import get_runner
+    runner_class = get_runner(runner_name)
+    if runner_class is None:
+        print(error(f"Runner '{runner_name}' not found."), file=sys.stderr)
+        return 1
+
+    try:
+        with open(payload_file, "r", encoding="utf-8") as f:
+            payload = _json.load(f)
+    except Exception as e:
+        print(error(f"Failed to load payload from {payload_file}: {e}"), file=sys.stderr)
+        return 1
+    finally:
+        try:
+            os.remove(payload_file)
+        except OSError:
+            pass
+
+    from strider.config import get_settings
+    settings = get_settings()
+    pool_size = getattr(settings, "runner_session_pool_size", 2)
+    max_overflow = getattr(settings, "database_max_overflow", 2)
+
+    async def _run_session() -> None:
+        from strider.models import init_database
+        await init_database(db_url, pool_size=pool_size, max_overflow=max_overflow)
+        instance = runner_class()
+        instance._current_session_id = session_id
+
+        def _on_sigterm() -> None:
+            instance.request_stop()
+
+        try:
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, _on_sigterm)
+        except NotImplementedError:
+            pass
+
+        try:
+            await instance.run_session(payload)
+        finally:
+            try:
+                await instance.after_stop()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).exception("Runner after_stop failed: %s", e)
+
+    try:
+        asyncio.run(_run_session())
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
 def cmd_runners_list(args: argparse.Namespace) -> int:
     """List registered Runner classes."""
     print()
@@ -4065,7 +4158,17 @@ For more information, visit: https://github.com/SorPuti/strider
         help="Runner class name (e.g. StrategySessionRunner)"
     )
     runrunner_parser.set_defaults(func=cmd_runrunner)
-    
+
+    # runrunner-session (internal: processo filho isolado por sessão)
+    runrunner_session_parser = subparsers.add_parser(
+        "runrunner-session",
+        help=argparse.SUPPRESS,
+    )
+    runrunner_session_parser.add_argument("runner_name", help=argparse.SUPPRESS)
+    runrunner_session_parser.add_argument("session_id", help=argparse.SUPPRESS)
+    runrunner_session_parser.add_argument("payload_file", help=argparse.SUPPRESS)
+    runrunner_session_parser.set_defaults(func=cmd_runrunner_session)
+
     # runners (list runners)
     runners_parser = subparsers.add_parser(
         "runners",

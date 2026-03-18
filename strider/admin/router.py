@@ -354,6 +354,17 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
             return _templates.TemplateResponse("admin/ops/workers.html", ctx)
+
+        @router.get("/ops/runners/", response_class=HTMLResponse)
+        async def ops_runners(request: Request) -> Response:
+            """Runner Manager — tipos, instâncias e controle start/stop. SUPERUSER ONLY."""
+            result = _require_superuser(request)
+            if result is None:
+                return RedirectResponse(f"{prefix}/login", status_code=302)
+            if result is False:
+                return Response("Forbidden: Operations Center requires superuser access", status_code=403)
+            ctx = _base_context(request, user=result)
+            return _templates.TemplateResponse("admin/ops/runners.html", ctx)
         
         @router.get("/ops/logs/", response_class=HTMLResponse)
         async def ops_logs(request: Request) -> Response:

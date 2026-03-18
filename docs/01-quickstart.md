@@ -219,9 +219,11 @@ class AppSettings(Settings):
 settings = configure(settings_class=AppSettings)
 ```
 
-## Próximos Passos
+## Próximos passos
 
+- [Criar uma aplicação](00-criar-aplicacao.md) — Guia completo (config, DB, ViewSet, APIView, serializers, paginação, WebSocket, SSE, validação)
 - [Settings](02-settings.md) — Opções de configuração
 - [Models](03-models.md) — Tipos de campos, relacionamentos
-- [ViewSets](04-viewsets.md) — Actions customizadas, hooks
+- [ViewSets](04-viewsets.md) — Serializer, actions, hooks
+- [Serializers](13-serializers.md) — Input/Output e fluxo de validação única
 - [Auth](05-auth.md) — Autenticação JWT

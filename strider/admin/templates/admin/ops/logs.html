@@ -57,7 +57,7 @@
             <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Saída</span>
             <span class="text-xs text-gray-400 font-mono" x-text="entries.length + ' linhas'"></span>
         </div>
-        <div class="bg-[#0f172a] p-4 font-mono text-[13px] leading-relaxed max-h-[65vh] overflow-y-auto overflow-x-auto" id="logs-container">
+        <div class="bg-[#0f172a] p-4 font-mono text-[13px] leading-relaxed max-h-[65vh] overflow-y-auto overflow-x-auto" id="logs-container" x-ref="logsContainer">
             <template x-for="(entry, idx) in entries" :key="'log-' + idx">
                 <div>
                     <div class="group flex items-start gap-3 py-1.5 px-2 rounded hover:bg-white/5 border-l-2 border-transparent hover:border-primary-500/50 transition-colors" :class="entry.level === 'ERROR' || entry.level === 'CRITICAL' ? 'bg-red-500/5' : ''">
@@ -150,15 +150,20 @@ function logsView() {
             const url = this.buildStreamUrl();
             this.eventSource = new EventSource(url);
             this.eventSource.onopen = () => { this.streamConnected = true; };
+            const self = this;
             this.eventSource.onmessage = (e) => {
                 try {
                     const data = JSON.parse(e.data);
                     if (data.type === 'connected') {
-                        this.streamConnected = true;
+                        self.streamConnected = true;
                         return;
                     }
-                    this.entries.unshift(data);
-                    if (this.entries.length > this.limit) this.entries.pop();
+                    self.entries.push(data);
+                    if (self.entries.length > self.limit) self.entries.shift();
+                    self.$nextTick(() => {
+                        const el = self.$refs.logsContainer;
+                        if (el) el.scrollTop = el.scrollHeight;
+                    });
                 } catch (err) {}
             };
             this.eventSource.onerror = () => {

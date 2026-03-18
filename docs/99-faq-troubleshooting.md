@@ -623,16 +623,17 @@ class MyMiddleware(BaseMiddleware):
 
 ### ❌ `Extra inputs are not permitted`
 
-**Causa:** InputSchema com `extra="forbid"` (padrão) recebendo campos extras.
+**Causa:** Schema de input com `extra="forbid"` recebendo campos extras.
 
-**Solução:**
+**Comportamento:** Por padrão o InputSchema usa `extra="ignore"` (campos desconhecidos são ignorados). Para rejeitar campos extras, use `extra="forbid"` no schema:
+
 ```python
+from pydantic import ConfigDict
 from strider.serializers import InputSchema
 
-class MyInput(InputSchema):
+class MyStrictInput(InputSchema):
+    model_config = ConfigDict(extra="forbid")
     name: str
-    
-    model_config = {"extra": "ignore"}  # Ignora campos extras
 ```
 
 ---

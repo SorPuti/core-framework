@@ -14,17 +14,109 @@ Características:
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Generic, TypeVar, get_type_hints, Callable
+from typing import Any, ClassVar, Generic, TypeVar, get_type_hints, Callable, Optional
 from collections.abc import Sequence
 from functools import wraps
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator, computed_field
+from pydantic import BaseModel, ConfigDict, create_model, field_validator, model_validator, computed_field
 from pydantic.functional_validators import BeforeValidator, AfterValidator
 
 # Type vars para generics
 ModelT = TypeVar("ModelT")
 InputT = TypeVar("InputT", bound="InputSchema")
 OutputT = TypeVar("OutputT", bound="OutputSchema")
+
+# Mapa tipo SQLAlchemy -> tipo Python (para schemas gerados a partir do model)
+_SA_TYPE_MAP: dict[str, type] = {
+    "INTEGER": int, "BIGINT": int, "SMALLINT": int,
+    "VARCHAR": str, "STRING": str, "TEXT": str, "CHAR": str,
+    "BOOLEAN": bool, "FLOAT": float, "NUMERIC": float, "DECIMAL": float,
+    "JSON": dict, "JSONB": dict,
+}
+
+
+def _py_type_for_column(col: Any) -> type:
+    """Retorna tipo Python para uma coluna SQLAlchemy."""
+    type_str = str(col.type).upper()
+    for key, py_type in _SA_TYPE_MAP.items():
+        if key in type_str:
+            return py_type
+    if "UUID" in type_str:
+        from uuid import UUID
+        return UUID
+    if "DATETIME" in type_str or "TIMESTAMP" in type_str or "DATE" in type_str:
+        from datetime import datetime
+        return datetime
+    return str
+
+
+def build_schemas_from_model(
+    model: type,
+    fields: list[str] | None = None,
+    read_only_fields: list[str] | None = None,
+) -> tuple[type[InputSchema] | None, type[OutputSchema]]:
+    """
+    Gera InputSchema e OutputSchema a partir do model e listas de campos.
+    Único ponto de definição: não é necessário criar classes InputSchema/OutputSchema separadas.
+
+    Args:
+        model: Classe do model SQLAlchemy
+        fields: Nomes dos campos a expor. Se None, usa todas as colunas do model.
+        read_only_fields: Campos só na saída (ex.: id, created_at). Não entram no input.
+
+    Returns:
+        (input_schema_class ou None, output_schema_class). input_schema é None quando
+        não há campos graváveis (todos read_only ou só PK).
+    """
+    read_only = set(read_only_fields or [])
+    table = getattr(model, "__table__", None)
+    if table is None:
+        raise ValueError(f"Model {getattr(model, '__name__', model)} não possui __table__")
+
+    all_columns = {c.name: c for c in table.columns}
+    if fields is not None:
+        field_set = set(fields)
+        cols = [(name, all_columns[name]) for name in fields if name in all_columns]
+        if len(cols) < len(field_set):
+            missing = field_set - set(all_columns)
+            raise ValueError(f"Campos não encontrados no model {model.__name__}: {missing}")
+    else:
+        cols = list(all_columns.items())
+
+    name = getattr(model, "__name__", "Model")
+    out_fields: dict[str, tuple[Any, Any]] = {}
+    in_fields: dict[str, tuple[Any, Any]] = {}
+
+    for col_name, col in cols:
+        py_type = _py_type_for_column(col)
+        ann = py_type if not col.nullable else Optional[py_type]
+        default = None if col.nullable else ...
+        out_fields[col_name] = (ann, default)
+
+        if col_name in read_only:
+            continue
+        if getattr(col, "primary_key", False):
+            continue
+        autoinc = getattr(col, "autoincrement", False)
+        if autoinc is True:  # True = PK auto; "auto" = não aplicável, não pular
+            continue
+        in_ann = py_type if not col.nullable and col.default is None and col.server_default is None else Optional[py_type]
+        in_default = None if (col.nullable or col.default is not None or col.server_default is not None) else ...
+        in_fields[col_name] = (in_ann, in_default)
+
+    input_cls: type[InputSchema] | None = None
+    if in_fields:
+        input_cls = create_model(
+            f"{name}Input",
+            __base__=InputSchema,
+            **in_fields,
+        )
+    output_cls = create_model(
+        f"{name}Output",
+        __base__=OutputSchema,
+        **out_fields,
+    )
+    return input_cls, output_cls
 
 
 class InputSchema(BaseModel):
@@ -57,7 +149,7 @@ class InputSchema(BaseModel):
     model_config = ConfigDict(
         str_strip_whitespace=True,
         validate_default=True,
-        extra="forbid",
+        extra="ignore",
         from_attributes=True,
     )
     
@@ -312,54 +404,62 @@ class OutputSchema(BaseModel):
 class Serializer(Generic[ModelT, InputT, OutputT]):
     """
     Serializer completo que combina Input e Output schemas.
-    
+    Ponto único de verdade para contrato de entrada e saída (input_cls / output_cls).
     Inspirado no ModelSerializer do DRF, mas sem magia.
-    
+
     Exemplo:
         class UserSerializer(Serializer[User, UserCreateInput, UserOutput]):
             input_schema = UserCreateInput
             output_schema = UserOutput
-            
-            async def create(self, data: UserCreateInput, session: AsyncSession) -> User:
-                user = User(**data.model_dump())
-                await user.save(session)
-                return user
+            # input_cls/output_cls são aliases (opcional)
+            input_cls = UserCreateInput
+            output_cls = UserOutput
     """
-    
     input_schema: ClassVar[type[InputSchema]]
     output_schema: ClassVar[type[OutputSchema]]
+    # Aliases para Router/OpenAPI; quando não definidos, usam input_schema/output_schema
+    input_cls: ClassVar[type[InputSchema] | None] = None
+    output_cls: ClassVar[type[OutputSchema] | None] = None
     
     def __init__(self) -> None:
         self._validated_data: dict[str, Any] | None = None
     
+    def _get_input_schema(self) -> type[InputSchema]:
+        """Schema de input (input_cls ou input_schema)."""
+        return self.input_cls or self.input_schema
+
+    def _get_output_schema(self) -> type[OutputSchema]:
+        """Schema de output (output_cls ou output_schema)."""
+        return self.output_cls or self.output_schema
+
     def validate_input(self, data: dict[str, Any]) -> InputT:
         """
         Valida dados de entrada.
-        
+
         Args:
             data: Dicionário com dados a validar
-            
+
         Returns:
             Instância do input_schema validada
-            
+
         Raises:
             ValidationError: Se os dados forem inválidos
         """
-        validated = self.input_schema.model_validate(data)
+        validated = self._get_input_schema().model_validate(data)
         self._validated_data = validated.model_dump()
         return validated  # type: ignore
     
     def serialize(self, obj: ModelT) -> OutputT:
         """
         Serializa um objeto para o output_schema.
-        
+
         Args:
             obj: Objeto a serializar (geralmente um Model)
-            
+
         Returns:
             Instância do output_schema
         """
-        return self.output_schema.model_validate(obj)  # type: ignore
+        return self._get_output_schema().model_validate(obj)  # type: ignore
     
     def serialize_many(self, objects: Sequence[ModelT]) -> list[OutputT]:
         """
@@ -376,14 +476,28 @@ class Serializer(Generic[ModelT, InputT, OutputT]):
     def to_dict(self, obj: ModelT) -> dict[str, Any]:
         """
         Serializa um objeto para dicionário.
-        
+
         Args:
             obj: Objeto a serializar
-            
+
         Returns:
             Dicionário com dados serializados
         """
         return self.serialize(obj).model_dump()
+
+    def to_representation(self, obj: ModelT) -> dict[str, Any]:
+        """
+        Serializa um objeto para resposta (list/detail).
+        Usa dump_for_list do output_schema (list_include/list_exclude, @computed_orm_field).
+        Ponto único de serialização para ViewSet.
+        """
+        return self._get_output_schema().dump_for_list(obj)
+
+    def to_representation_many(
+        self, objects: Sequence[ModelT]
+    ) -> list[dict[str, Any]]:
+        """Serializa múltiplos objetos para resposta (ex.: listagem)."""
+        return [self.to_representation(obj) for obj in objects]
     
     def to_dict_many(self, objects: Sequence[ModelT]) -> list[dict[str, Any]]:
         """
@@ -466,6 +580,62 @@ class ModelSerializer(Serializer[ModelT, InputT, OutputT]):
         
         await instance.save(session)  # type: ignore
         return instance
+
+
+class UnifiedModelSerializer(ModelSerializer[ModelT, InputSchema, OutputSchema]):
+    """
+    Serializer com contrato centralizado: input e output derivados do model.
+    Não é necessário definir InputSchema nem OutputSchema; eles são gerados a partir
+    de `fields` e `read_only_fields`.
+
+    Exemplo:
+        class PostSerializer(UnifiedModelSerializer):
+            model = Post
+            fields = ["id", "title", "content", "published", "created_at"]
+            read_only_fields = ["id", "created_at"]
+
+        class PostViewSet(ModelViewSet):
+            model = Post
+            serializer_class = PostSerializer
+    """
+    model: ClassVar[type]
+    fields: ClassVar[list[str]] = []
+    read_only_fields: ClassVar[list[str]] = []
+    input_schema: ClassVar[type[InputSchema] | None] = None
+    output_schema: ClassVar[type[OutputSchema] | None] = None
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        model = getattr(cls, "model", None)
+        fields_list = getattr(cls, "fields", None) or []
+        if not model or not fields_list:
+            return
+        if getattr(cls, "input_schema", None) is not None and getattr(cls, "output_schema", None) is not None:
+            return
+        try:
+            input_cls, output_cls = build_schemas_from_model(
+                model,
+                fields=fields_list,
+                read_only_fields=list(getattr(cls, "read_only_fields", None) or []),
+            )
+            if input_cls is not None:
+                cls.input_schema = input_cls  # type: ignore[assignment]
+            cls.output_schema = output_cls  # type: ignore[assignment]
+        except Exception:
+            pass
+
+    def _get_input_schema(self) -> type[InputSchema]:
+        if self.input_schema is None:
+            raise RuntimeError(
+                f"{self.__class__.__name__}: defina 'fields' e 'model' com pelo menos um campo gravável, "
+                "ou atribua 'input_schema' explicitamente."
+            )
+        return self.input_schema
+
+    def _get_output_schema(self) -> type[OutputSchema]:
+        if self.output_schema is None:
+            raise RuntimeError(f"{self.__class__.__name__}: defina 'fields' e 'model' ou atribua 'output_schema'.")
+        return self.output_schema
 
 
 # =========================================================================
@@ -597,6 +767,8 @@ __all__ = [
     "OutputSchema",
     "Serializer",
     "ModelSerializer",
+    "UnifiedModelSerializer",
+    "build_schemas_from_model",
     "PaginatedResponse",
     "ErrorResponse",
     "ValidationErrorResponse",

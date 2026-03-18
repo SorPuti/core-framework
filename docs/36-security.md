@@ -227,8 +227,9 @@ from strider.serializers import InputSchema
 class UserInput(InputSchema):
     email: str
     name: str
-    # extra="forbid" rejects unknown fields
-    # str_strip_whitespace=True cleans strings
+    # Por padrão extra="ignore" (campos desconhecidos ignorados)
+    # str_strip_whitespace=True limpa strings
+    # Para rejeitar campos extras: model_config = ConfigDict(extra="forbid")
 ```
 
 ### Validate All Input

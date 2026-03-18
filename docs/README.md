@@ -95,6 +95,7 @@ stride run
 
 | Doc | Descrição |
 |-----|-----------|
+| [Criar uma aplicação](00-criar-aplicacao.md) | Guia completo: config, DB, ViewSet, APIView, serializers, paginação, WebSocket, SSE, validação |
 | [Quickstart](01-quickstart.md) | Primeira API em 5 minutos |
 | [Settings](02-settings.md) | Sistema de configuração plug-and-play |
 | [Models](03-models.md) | Modelos de banco de dados |

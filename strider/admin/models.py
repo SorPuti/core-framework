@@ -264,6 +264,29 @@ class WorkerHeartbeat(Model):
         return hashlib.sha256(identity.encode()).hexdigest()[:32]
 
 
+class RunnerInstance(Model):
+    """
+    Registro de instâncias de Runner para o Admin (start/stop via Operations Center).
+
+    Uma instância = uma sessão lógica (ex.: por usuário). O controle (start/stop)
+    é feito via send_start/send_stop; este modelo persiste o que foi solicitado
+    para listar no Admin e permitir desligar.
+    """
+    __tablename__ = "admin_runner_instances"
+
+    id: Mapped[int] = Field.pk()
+    runner_name: Mapped[str] = Field.string(max_length=255, index=True)
+    session_id: Mapped[str] = Field.string(max_length=255, index=True)
+    user_id: Mapped[str | None] = Field.string(max_length=255, nullable=True, index=True)
+    status: Mapped[str] = Field.string(max_length=20, index=True)  # running, stopping, stopped
+    payload_json: Mapped[str | None] = Field.string(max_length=5000, nullable=True)
+    started_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
+    stopped_at: Mapped[DateTime | None] = Field.datetime(nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<RunnerInstance {self.runner_name} {self.session_id} [{self.status}]>"
+
+
 class AdminSession(Model):
     """
     Sessão do admin panel (browser-based).

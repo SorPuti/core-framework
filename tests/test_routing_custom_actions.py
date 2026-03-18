@@ -62,3 +62,40 @@ class TestCustomActionConflictPolicy:
         router = Router()
         with pytest.raises(ValueError, match="Duplicate custom action route detected"):
             router.register_viewset("/conflicts", ConflictViewSet, basename="conflict")
+
+
+class TestViewSetRoutingSignatureHandling:
+    def test_build_viewset_call_kwargs_ignores_missing_db_param(self):
+        from strider.routing import _build_viewset_call_kwargs
+
+        async def create_without_db(self, request, body):
+            return body
+
+        kwargs = _build_viewset_call_kwargs(
+            create_without_db,
+            request=object(),
+            db=object(),
+            _user=object(),
+            extra_kwargs={"body": {"foo": "bar"}},
+        )
+
+        assert "db" not in kwargs
+        assert kwargs["body"] == {"foo": "bar"}
+
+    def test_build_viewset_call_kwargs_includes_db_when_accepted(self):
+        from strider.routing import _build_viewset_call_kwargs
+
+        async def create_with_db(self, request, db, body):
+            return body
+
+        db_obj = object()
+        kwargs = _build_viewset_call_kwargs(
+            create_with_db,
+            request=object(),
+            db=db_obj,
+            _user=object(),
+            extra_kwargs={"body": {"foo": "bar"}},
+        )
+
+        assert kwargs["db"] is db_obj
+        assert kwargs["body"] == {"foo": "bar"}

@@ -113,6 +113,10 @@ from strider.messaging.runner import (
     list_runners,
     run_runner,
     run_runner_async,
+    send_start,
+    send_stop,
+    send_pause,
+    send_resume,
 )
 
 __all__ = [
@@ -167,4 +171,8 @@ __all__ = [
     "list_runners",
     "run_runner",
     "run_runner_async",
+    "send_start",
+    "send_stop",
+    "send_pause",
+    "send_resume",
 ]

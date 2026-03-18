@@ -1,6 +1,6 @@
 # Routing
 
-URL routing and ViewSet registration.
+Roteamento de URLs e registro de ViewSets. Para um guia completo de criação de aplicação (incluindo rotas, ViewSet e serializers), veja [Criar uma aplicação](00-criar-aplicacao.md).
 
 ## Auto-Discovery (Plug-and-Play)
 
@@ -140,18 +140,18 @@ from strider import ModelViewSet, action
 class UserViewSet(ModelViewSet):
     model = User
 
-    @action(detail=False, methods=["GET"])
+    @action(methods=["GET"], detail=False)
     async def me(self, request, db):
         """GET /users/me"""
-        return await self.serialize(request.user)
+        return self._serialize_for_response(request.user)
 
-    @action(detail=True, methods=["POST"])
-    async def activate(self, request, db, id: int):
+    @action(methods=["POST"], detail=True)
+    async def activate(self, request, db, **kwargs):
         """POST /users/{id}/activate"""
-        user = await self.get_object(db, id=id)
+        user = await self.get_object(db, **kwargs)
         user.is_active = True
         await user.save(db)
-        return await self.serialize(user)
+        return self._serialize_for_response(user)
 ```
 
 ## Router Class

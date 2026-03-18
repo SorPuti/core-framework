@@ -1,0 +1,380 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Runners — {{ site_header }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="runnersView()" x-init="loadRegistered(); loadInstances()">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Runner Manager</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Tipos de runner e instâncias (start/stop sem publicar manualmente)</p>
+        </div>
+        <button @click="loadRegistered(); loadInstances()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+            <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+            Atualizar
+        </button>
+    </div>
+
+    <!-- Registered Runners -->
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tipos de Runner</h3>
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-8">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 dark:bg-gray-700/50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Nome</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Input Topic</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="r in registeredRunners" :key="r.name">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        <td class="px-4 py-3 font-medium text-gray-900 dark:text-white" x-text="r.name"></td>
+                        <td class="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-300" x-text="r.input_topic || '—'"></td>
+                    </tr>
+                </template>
+                <template x-if="!loading && registeredRunners.length === 0">
+                    <tr><td colspan="2" class="px-4 py-8 text-center text-gray-400">Nenhum runner registrado. Subclasses de Runner aparecem aqui.</td></tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Start instance -->
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Iniciar instância</h3>
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 mb-8">
+        <form @submit.prevent="startInstance()" class="flex flex-wrap items-end gap-4">
+            <div>
+                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Runner</label>
+                <select x-model="startForm.runner_name" class="w-48 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm" required>
+                    <option value="">—</option>
+                    <template x-for="r in registeredRunners" :key="r.name">
+                        <option :value="r.name" x-text="r.name"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Session ID <span class="text-red-500">*</span></label>
+                <input type="text" x-model="startForm.session_id" placeholder="ex: user-123" class="w-40 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm" required>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">User ID (opcional)</label>
+                <input type="text" x-model="startForm.user_id" placeholder="ex: 123" class="w-32 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Payload JSON (opcional)</label>
+                <input type="text" x-model="startForm.payload" placeholder='{"key": "value"}' class="w-56 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono text-xs">
+            </div>
+            <button type="submit" :disabled="startSending" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">
+                <span x-show="!startSending">Iniciar</span>
+                <span x-show="startSending">Enviando…</span>
+            </button>
+        </form>
+        <p class="text-xs text-gray-400 mt-3">O comando start é enviado ao runner via Kafka; o processo <code class="font-mono text-primary-500">core runrunner &lt;Nome&gt;</code> deve estar rodando.</p>
+    </div>
+
+    <!-- Instances list -->
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Instâncias</h3>
+    <div class="flex flex-wrap items-center gap-4 mb-4">
+        <select x-model="filterRunner" @change="loadInstances()" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm">
+            <option value="">Todos os runners</option>
+            <template x-for="r in registeredRunners" :key="r.name">
+                <option :value="r.name" x-text="r.name"></option>
+            </template>
+        </select>
+        <select x-model="filterStatus" @change="loadInstances()" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm">
+            <option value="">Todos os status</option>
+            <option value="running">running</option>
+            <option value="stopped">stopped</option>
+        </select>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 dark:bg-gray-700/50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Runner</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Session ID</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">User ID</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Início</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Fim</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Ações</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="i in instances" :key="i.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        <td class="px-4 py-3 font-medium text-gray-900 dark:text-white" x-text="i.runner_name"></td>
+                        <td class="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-300" x-text="i.session_id"></td>
+                        <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="i.user_id || '—'"></td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full"
+                                  :class="i.status === 'running' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'">
+                                <span x-text="i.status"></span>
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-500 text-xs" x-text="i.started_at ? new Date(i.started_at).toLocaleString() : '—'"></td>
+                        <td class="px-4 py-3 text-gray-500 text-xs" x-text="i.stopped_at ? new Date(i.stopped_at).toLocaleString() : '—'"></td>
+                        <td class="px-4 py-3 text-right">
+                            <div class="flex items-center justify-end gap-1 flex-wrap">
+                                <a :href="'{{ admin_prefix }}/ops/logs/?search=' + encodeURIComponent(i.session_id)" target="_blank" class="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="Abrir logs (filtro por session_id)">Logs</a>
+                                <button @click="showLogsModal(i)" class="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="Ver últimas linhas no buffer">Ver logs</button>
+                                <template x-if="i.status === 'running'">
+                                    <span class="flex items-center gap-1">
+                                        <button @click="pauseInstance(i)" class="px-2 py-1 text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded transition-colors">Pausar</button>
+                                        <button @click="resumeInstance(i)" class="px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors">Retomar</button>
+                                        <button @click="stopInstance(i)" class="px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors">Desligar</button>
+                                    </span>
+                                </template>
+                                <button @click="deleteInstance(i)" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Excluir registro e desligar se estiver rodando">Excluir</button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+                <template x-if="!loading && instances.length === 0">
+                    <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">Nenhuma instância. Use o formulário acima para iniciar.</td></tr>
+                </template>
+            </tbody>
+        </table>
+        <div class="px-4 py-2.5 bg-gray-50 dark:bg-gray-700/30 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+            <span class="text-xs text-gray-400" x-text="'Total: ' + instancesTotal + ' instância(s)'"></span>
+            <div class="flex gap-2">
+                <button @click="prevPage(); loadInstances()" :disabled="page <= 1" class="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-600 disabled:opacity-50">Anterior</button>
+                <span class="text-xs text-gray-500 py-1" x-text="'Pág. ' + page"></span>
+                <button @click="nextPage(); loadInstances()" :disabled="instances.length < perPage" class="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-600 disabled:opacity-50">Próxima</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Logs (tempo real por session_id) -->
+    <div x-show="logsModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="closeLogsModal()">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col" @click.outside="closeLogsModal()">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center gap-3">
+                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Logs — <span x-text="logsModalSessionId || ''"></span></h4>
+                    <span x-show="logsModalStreamConnected" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-full">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Tempo real
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a :href="'{{ admin_prefix }}/ops/logs/?search=' + encodeURIComponent(logsModalSessionId || '')" target="_blank" class="text-xs text-primary-500 hover:underline">Abrir em tela cheia</a>
+                    <button @click="closeLogsModal()" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded">✕</button>
+                </div>
+            </div>
+            <div class="p-4 overflow-auto flex-1 bg-[#0f172a] font-mono text-xs max-h-[60vh]" x-ref="logsModalContainer">
+                <template x-for="(entry, idx) in logsModalEntries" :key="'log-' + idx">
+                    <div class="py-0.5 flex items-start gap-2 text-slate-300">
+                        <span class="text-slate-500 flex-shrink-0" x-text="(entry.timestamp || '').substring(11, 23)"></span>
+                        <span class="flex-shrink-0 w-14 font-semibold" :class="entry.level === 'ERROR' ? 'text-red-400' : entry.level === 'WARNING' ? 'text-amber-400' : 'text-emerald-400'" x-text="entry.level"></span>
+                        <span class="break-words min-w-0" x-text="entry.message"></span>
+                    </div>
+                </template>
+                <template x-if="logsModalEntries.length === 0 && !logsModalLoading && !logsModalStreamConnected">
+                    <p class="text-slate-500">Aguardando logs... O stream está ativo para este session_id.</p>
+                </template>
+                <template x-if="logsModalEntries.length === 0 && !logsModalLoading && logsModalStreamConnected">
+                    <p class="text-slate-500">Nenhuma linha ainda. Logs desta instância aparecerão aqui em tempo real.</p>
+                </template>
+                <template x-if="logsModalLoading && logsModalEntries.length === 0">
+                    <p class="text-slate-500">Carregando buffer...</p>
+                </template>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function runnersView() {
+    return {
+        loading: false,
+        startSending: false,
+        registeredRunners: [],
+        instances: [],
+        instancesTotal: 0,
+        page: 1,
+        perPage: 50,
+        filterRunner: '',
+        filterStatus: '',
+        startForm: { runner_name: '', session_id: '', user_id: '', payload: '' },
+        logsModalOpen: false,
+        logsModalSessionId: '',
+        logsModalEntries: [],
+        logsModalLoading: false,
+        logsModalStreamConnected: false,
+        logsModalEventSource: null,
+        logsModalLimit: 2000,
+
+        async loadRegistered() {
+            this.loading = true;
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/runners/registered');
+                const data = await resp.json();
+                this.registeredRunners = data.items || [];
+            } catch (e) { console.error(e); } finally { this.loading = false; }
+        },
+
+        async loadInstances() {
+            this.loading = true;
+            try {
+                let url = '{{ admin_prefix }}/api/ops/runners/instances?page=' + this.page + '&per_page=' + this.perPage;
+                if (this.filterRunner) url += '&runner_name=' + encodeURIComponent(this.filterRunner);
+                if (this.filterStatus) url += '&status=' + encodeURIComponent(this.filterStatus);
+                const resp = await fetch(url);
+                const data = await resp.json();
+                this.instances = data.items || [];
+                this.instancesTotal = data.total || 0;
+            } catch (e) { console.error(e); } finally { this.loading = false; }
+        },
+
+        prevPage() { if (this.page > 1) this.page--; },
+        nextPage() { if (this.instances.length >= this.perPage) this.page++; },
+
+        async startInstance() {
+            if (!this.startForm.runner_name || !this.startForm.session_id) return;
+            this.startSending = true;
+            try {
+                const body = {
+                    runner_name: this.startForm.runner_name,
+                    session_id: this.startForm.session_id,
+                    user_id: this.startForm.user_id || null,
+                    payload: null
+                };
+                if (this.startForm.payload && this.startForm.payload.trim()) {
+                    try {
+                        body.payload = JSON.parse(this.startForm.payload);
+                    } catch (e) {
+                        alert('Payload inválido: use JSON válido');
+                        return;
+                    }
+                }
+                const resp = await fetch('{{ admin_prefix }}/api/ops/runners/instances/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.detail || resp.statusText);
+                }
+                this.startForm.session_id = '';
+                this.startForm.user_id = '';
+                this.startForm.payload = '';
+                this.loadInstances();
+            } catch (e) {
+                alert('Erro: ' + e.message);
+            } finally {
+                this.startSending = false;
+            }
+        },
+
+        async stopInstance(inst) {
+            if (!confirm('Desligar instância ' + inst.session_id + '?')) return;
+            try {
+                const resp = await fetch(
+                    '{{ admin_prefix }}/api/ops/runners/' + encodeURIComponent(inst.runner_name) + '/instances/' + encodeURIComponent(inst.session_id) + '/stop',
+                    { method: 'POST' }
+                );
+                if (!resp.ok) throw new Error(resp.statusText);
+                this.loadInstances();
+            } catch (e) {
+                alert('Erro: ' + e.message);
+            }
+        },
+
+        async pauseInstance(inst) {
+            try {
+                const resp = await fetch(
+                    '{{ admin_prefix }}/api/ops/runners/' + encodeURIComponent(inst.runner_name) + '/instances/' + encodeURIComponent(inst.session_id) + '/pause',
+                    { method: 'POST' }
+                );
+                if (!resp.ok) throw new Error(resp.statusText);
+                this.loadInstances();
+            } catch (e) {
+                alert('Erro: ' + e.message);
+            }
+        },
+
+        async resumeInstance(inst) {
+            try {
+                const resp = await fetch(
+                    '{{ admin_prefix }}/api/ops/runners/' + encodeURIComponent(inst.runner_name) + '/instances/' + encodeURIComponent(inst.session_id) + '/resume',
+                    { method: 'POST' }
+                );
+                if (!resp.ok) throw new Error(resp.statusText);
+                this.loadInstances();
+            } catch (e) {
+                alert('Erro: ' + e.message);
+            }
+        },
+
+        async deleteInstance(inst) {
+            if (!confirm('Excluir instância ' + inst.session_id + '? Será desligada se estiver rodando.')) return;
+            try {
+                const resp = await fetch(
+                    '{{ admin_prefix }}/api/ops/runners/instances/' + inst.id,
+                    { method: 'DELETE' }
+                );
+                if (!resp.ok) throw new Error(resp.statusText);
+                this.loadInstances();
+            } catch (e) {
+                alert('Erro: ' + e.message);
+            }
+        },
+
+        closeLogsModal() {
+            if (this.logsModalEventSource) {
+                this.logsModalEventSource.close();
+                this.logsModalEventSource = null;
+            }
+            this.logsModalStreamConnected = false;
+            this.logsModalOpen = false;
+        },
+
+        buildRunnerLogsStreamUrl(sessionId) {
+            const base = '{{ admin_prefix }}/api/ops/logs/stream';
+            const params = new URLSearchParams({ level: 'DEBUG', search: sessionId || '' });
+            return window.location.origin + base + '?' + params.toString();
+        },
+
+        async showLogsModal(inst) {
+            this.closeLogsModal();
+            this.logsModalSessionId = inst.session_id;
+            this.logsModalEntries = [];
+            this.logsModalOpen = true;
+            this.logsModalLoading = true;
+            this.logsModalStreamConnected = false;
+            try {
+                const resp = await fetch('{{ admin_prefix }}/api/ops/runners/logs?session_id=' + encodeURIComponent(inst.session_id) + '&limit=500');
+                const data = await resp.json();
+                this.logsModalEntries = data.entries || [];
+            } catch (e) {
+                this.logsModalEntries = [];
+            }
+            this.logsModalLoading = false;
+
+            const self = this;
+            const url = this.buildRunnerLogsStreamUrl(inst.session_id);
+            this.logsModalEventSource = new EventSource(url);
+            this.logsModalEventSource.onopen = () => { self.logsModalStreamConnected = true; };
+            this.logsModalEventSource.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.type === 'connected') {
+                        self.logsModalStreamConnected = true;
+                        return;
+                    }
+                    self.logsModalEntries.push(data);
+                    if (self.logsModalEntries.length > self.logsModalLimit) self.logsModalEntries.shift();
+                    self.$nextTick(() => {
+                        const el = self.$refs.logsModalContainer;
+                        if (el) el.scrollTop = el.scrollHeight;
+                    });
+                } catch (err) {}
+            };
+            this.logsModalEventSource.onerror = () => {
+                self.logsModalStreamConnected = false;
+            };
+        }
+    };
+}
+</script>
+{% endblock %}

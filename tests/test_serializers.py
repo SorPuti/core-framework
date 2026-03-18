@@ -3,7 +3,7 @@ Testes para o sistema de Serializers.
 """
 
 import pytest
-from pydantic import ValidationError, field_validator
+from pydantic import ConfigDict, ValidationError, field_validator
 
 from strider.serializers import InputSchema, OutputSchema
 
@@ -93,17 +93,29 @@ def test_input_schema_missing_field():
         UserInput.model_validate(data)
 
 
-def test_input_schema_extra_field_forbidden():
-    """Testa que campos extras são rejeitados."""
+def test_input_schema_extra_field_ignored():
+    """Por padrão InputSchema ignora campos extras (extra='ignore')."""
     data = {
         "email": "test@example.com",
         "name": "Test User",
         "age": 25,
-        "extra_field": "should fail",
+        "extra_field": "ignored",
     }
-    
+    result = UserInput.model_validate(data)
+    assert result.email == "test@example.com"
+    assert result.name == "Test User"
+    assert result.age == 25
+    assert not hasattr(result, "extra_field")
+
+
+def test_input_schema_extra_forbid_opt_in():
+    """Schema com extra='forbid' rejeita campos extras (opt-in)."""
+    class StrictInput(InputSchema):
+        model_config = ConfigDict(extra="forbid")
+        name: str
+
     with pytest.raises(ValidationError):
-        UserInput.model_validate(data)
+        StrictInput.model_validate({"name": "ok", "extra": "rejected"})
 
 
 def test_output_schema_from_dict():

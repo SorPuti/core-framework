@@ -13,29 +13,27 @@ Características:
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Optional, TYPE_CHECKING, get_args, get_origin
-from collections.abc import Callable
 import inspect
 import logging
 import os
+from collections.abc import Callable
+from typing import Any, Optional, TYPE_CHECKING, TypeVar as TypingTypeVar, get_args, get_origin
 
 from fastapi import APIRouter, Request, Depends, Body, File, UploadFile
 from pydantic import BaseModel, ValidationError as PydanticValidationError, create_model
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from strider.dependencies import get_db, get_optional_user
+from strider.openapi_examples import build_schema_example, build_response_example
 from strider.serializers import (
     InputSchema,
     OutputSchema,
     PaginatedResponse,
-    ErrorResponse,
-    SuccessResponse,
     DeleteResponse,
     ValidationErrorResponse,
     NotFoundResponse,
     ConflictResponse,
 )
-from strider.openapi_examples import build_schema_example, build_response_example
 
 if TYPE_CHECKING:
     from strider.views import ViewSet, APIView
@@ -253,18 +251,25 @@ def _resolve_schemas(
 ) -> tuple[type[InputSchema] | None, type[OutputSchema] | None]:
     """
     Resolve input and output schemas from a ViewSet class.
-    Uses serializer_class if set; falls back to model-based schemas for OpenAPI docs when missing.
+    Prefer serializer_class (input_cls/output_cls ou input_schema/output_schema) como fonte única.
     """
-    input_schema = getattr(viewset_class, "input_schema", None)
-    output_schema = getattr(viewset_class, "output_schema", None)
-
     serializer_class = getattr(viewset_class, "serializer_class", None)
-    if not input_schema and serializer_class:
-        input_schema = getattr(serializer_class, "input_schema", None)
-    if not output_schema and serializer_class:
-        output_schema = getattr(serializer_class, "output_schema", None)
+    if serializer_class:
+        input_schema = (
+            getattr(serializer_class, "input_cls", None)
+            or getattr(serializer_class, "input_schema", None)
+        )
+        output_schema = (
+            getattr(serializer_class, "output_cls", None)
+            or getattr(serializer_class, "output_schema", None)
+        )
+    else:
+        input_schema = getattr(viewset_class, "input_schema", None)
+        output_schema = getattr(viewset_class, "output_schema", None)
 
-    # Fallback for OpenAPI: when user did not set schemas, build from model so docs are not null
+    # Fallback for OpenAPI: when user did not set schemas, build from model so docs are not null.
+    # If we cannot build a proper schema (e.g. model without __table__), we fall back to a permissive
+    # schema to avoid 422 errors caused by `extra_forbidden`.
     model = getattr(viewset_class, "model", None)
     if model is not None:
         if input_schema is None or output_schema is None:
@@ -273,6 +278,12 @@ def _resolve_schemas(
                 input_schema = fallback_in
             if output_schema is None:
                 output_schema = fallback_out
+            logger.debug(
+                "Resolved schemas for %s using fallback: input=%s output=%s",
+                viewset_class.__name__,
+                getattr(input_schema, "__name__", repr(input_schema)),
+                getattr(output_schema, "__name__", repr(output_schema)),
+            )
 
     return input_schema, output_schema
 
@@ -479,6 +490,11 @@ def _annotation_contains_basemodel(annotation: Any) -> bool:
             return issubclass(annotation, BaseModel)
         except TypeError:
             return False
+    if isinstance(annotation, TypingTypeVar):
+        bound = getattr(annotation, "__bound__", None)
+        if bound is not None:
+            return _annotation_contains_basemodel(bound)
+        return False
     origin = get_origin(annotation)
     if origin is None:
         return False
@@ -596,6 +612,32 @@ def _build_body_call_kwargs(
         kwargs[target_param] = body_value
     elif has_var_kwargs:
         kwargs[default_name] = body_value
+    return kwargs
+
+
+def _build_viewset_call_kwargs(
+    fn: Callable[..., Any],
+    request: Request,
+    db: AsyncSession,
+    _user: Any,
+    extra_kwargs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build kwargs for a ViewSet method based on its signature.
+
+    This allows ViewSet handlers to omit optional dependencies like `db`
+    or `_user` without causing `got multiple values`/unexpected keyword argument
+    errors.
+    """
+    params = inspect.signature(fn).parameters
+    kwargs: dict[str, Any] = {}
+    if "request" in params:
+        kwargs["request"] = request
+    if "db" in params:
+        kwargs["db"] = db
+    if "_user" in params:
+        kwargs["_user"] = _user
+    if extra_kwargs:
+        kwargs.update(extra_kwargs)
     return kwargs
 
 
@@ -778,7 +820,15 @@ class Router(APIRouter):
             page=1, page_size=viewset_class.page_size,
         ):
             vs = viewset_class()
-            return await vs.list(request, db, page=page, page_size=page_size)
+            return await vs.list(
+                **_build_viewset_call_kwargs(
+                    vs.list,
+                    request=request,
+                    db=db,
+                    _user=_user,
+                    extra_kwargs={"page": page, "page_size": page_size},
+                )
+            )
         
         # Annotations programáticas (bypass de __future__.annotations)
         list_route.__annotations__ = {
@@ -827,7 +877,15 @@ class Router(APIRouter):
                 path_params={},
                 body=data,
             )
-            return await vs.create(request, db, **call_kwargs)
+            return await vs.create(
+                **_build_viewset_call_kwargs(
+                    vs.create,
+                    request=request,
+                    db=db,
+                    _user=_user,
+                    extra_kwargs=call_kwargs,
+                )
+            )
         
         create_route.__annotations__ = {
             "request": Request,
@@ -876,7 +934,15 @@ class Router(APIRouter):
         ):
             vs = viewset_class()
             path_params = request.path_params
-            return await vs.retrieve(request, db, **path_params)
+            return await vs.retrieve(
+                **_build_viewset_call_kwargs(
+                    vs.retrieve,
+                    request=request,
+                    db=db,
+                    _user=_user,
+                    extra_kwargs=path_params,
+                )
+            )
         
         retrieve_route.__annotations__ = {
             "request": Request,
@@ -919,7 +985,15 @@ class Router(APIRouter):
                 path_params=path_params,
                 body=data,
             )
-            return await vs.update(request, db, **call_kwargs)
+            return await vs.update(
+                **_build_viewset_call_kwargs(
+                    vs.update,
+                    request=request,
+                    db=db,
+                    _user=_user,
+                    extra_kwargs=call_kwargs,
+                )
+            )
         
         update_route.__annotations__ = {
             "request": Request,
@@ -970,7 +1044,15 @@ class Router(APIRouter):
                 body=data,
                 exclude_unset=True,
             )
-            return await vs.partial_update(request, db, **call_kwargs)
+            return await vs.partial_update(
+                **_build_viewset_call_kwargs(
+                    vs.partial_update,
+                    request=request,
+                    db=db,
+                    _user=_user,
+                    extra_kwargs=call_kwargs,
+                )
+            )
         
         partial_update_route.__annotations__ = {
             "request": Request,
@@ -1015,7 +1097,15 @@ class Router(APIRouter):
         ):
             vs = viewset_class()
             path_params = request.path_params
-            return await vs.destroy(request, db, **path_params)
+            return await vs.destroy(
+                **_build_viewset_call_kwargs(
+                    vs.destroy,
+                    request=request,
+                    db=db,
+                    _user=_user,
+                    extra_kwargs=path_params,
+                )
+            )
         
         destroy_route.__annotations__ = {
             "request": Request,
@@ -1256,7 +1346,16 @@ class Router(APIRouter):
                                 await check_permissions(perms, request, vs)
                             
                             path_params = request.path_params
-                            return await action_method(vs, request, db, **path_params)
+                            return await action_method(
+                                vs,
+                                **_build_viewset_call_kwargs(
+                                    action_method,
+                                    request=request,
+                                    db=db,
+                                    _user=_user,
+                                    extra_kwargs=path_params,
+                                ),
+                            )
                         
                         action_endpoint.__annotations__ = {
                             "request": Request,
@@ -1368,7 +1467,6 @@ class Router(APIRouter):
             path: URL path (may contain path parameters, e.g. ``/ws/{room}``)
             view_class: A ``WebSocketView`` subclass
         """
-        from strider.realtime import WebSocketView
         route = view_class.as_route(path)
         if not hasattr(self, "_ws_routes"):
             self._ws_routes: list = []
@@ -1389,7 +1487,6 @@ class Router(APIRouter):
             path: URL path (may contain path parameters)
             view_class: An ``SSEView`` subclass
         """
-        from strider.realtime import SSEView
         from starlette.responses import StreamingResponse as _SR
         from starlette.requests import Request as _Req
 

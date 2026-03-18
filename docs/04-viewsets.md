@@ -47,9 +47,21 @@ Generated endpoints:
 | PATCH | /posts/{id} | `partial_update` |
 | DELETE | /posts/{id} | `destroy` |
 
-## Schemas
+## Schemas e Serializer
 
-Control input/output data:
+Controle de entrada/saída: use **serializer_class** (recomendado) ou **input_schema**/**output_schema** direto no ViewSet. O Serializer é o ponto único de contrato; o Router obtém os schemas dele.
+
+```python
+from strider import ModelViewSet
+from .models import Post
+from .serializers import PostSerializer
+
+class PostViewSet(ModelViewSet):
+    model = Post
+    serializer_class = PostSerializer
+```
+
+Sem Serializer:
 
 ```python
 from strider import ModelViewSet, InputSchema, OutputSchema
@@ -73,6 +85,8 @@ class PostViewSet(ModelViewSet):
     output_schema = PostOutput
 ```
 
+Ver [Serializers](13-serializers.md).
+
 ## Permissions
 
 ```python
@@ -85,7 +99,7 @@ class PostViewSet(ModelViewSet):
     # Default for all actions
     permission_classes = [IsAuthenticated]
     
-    # Override per action
+    # Override por ação
     permission_classes_by_action = {
         "list": [AllowAny],
         "retrieve": [AllowAny],
@@ -104,29 +118,33 @@ from fastapi import Response
 class PostViewSet(ModelViewSet):
     model = Post
     
-    @action(detail=True, methods=["POST"])
-    async def publish(self, request, pk: int) -> dict:
-        """POST /posts/{pk}/publish/"""
-        post = await self.get_object(pk)
+    @action(methods=["POST"], detail=True)
+    async def publish(self, request, db, **kwargs) -> dict:
+        """POST /posts/{id}/publish/"""
+        post = await self.get_object(db, **kwargs)
         post.published = True
-        await post.save()
-        return {"status": "published"}
+        await post.save(db)
+        return self._serialize_for_response(post)
     
-    @action(detail=False, methods=["GET"])
-    async def recent(self, request) -> list[dict]:
+    @action(methods=["GET"], detail=False)
+    async def recent(self, request, db) -> list[dict]:
         """GET /posts/recent/"""
-        posts = await Post.objects.filter(published=True).order_by("-created_at").limit(5).all()
-        return [self.serialize(p) for p in posts]
+        qs = self.get_queryset(db)
+        posts = await qs.filter(published=True).order_by("-created_at").limit(5).all()
+        return self._serialize_many_for_response(posts)
 ```
 
-### Action Options
+### Opções do @action
 
 ```python
 @action(
-    detail=True,           # True: /posts/{pk}/action/, False: /posts/action/
-    methods=["POST"],      # HTTP methods
-    url_path="custom-path", # Override URL path
-    permission_classes=[IsAdminUser],  # Override permissions
+    methods=["POST"],
+    detail=True,            # True: /posts/{id}/action/, False: /posts/action/
+    url_path="custom-path", # Caminho customizado
+    url_name="custom_name", # Nome da rota
+    permission_classes=[IsAdminUser],
+    input_schema=MyInput,   # Schema do body (opcional)
+    output_schema=MyOutput, # Schema da response (opcional)
 )
 ```
 
@@ -157,27 +175,30 @@ class PostViewSet(ModelViewSet):
 
 ## Hooks
 
-Override lifecycle methods:
+Hooks do ciclo de vida:
+
+| Hook | Quando |
+|------|--------|
+| `perform_create_validation(data, db)` | Antes de criar; pode alterar `data`. |
+| `after_create(obj, db)` | Depois de criar e salvar. |
+| `perform_update_validation(data, instance, db)` | Antes de atualizar. |
+| `after_update(obj, db)` | Depois de atualizar e salvar. |
 
 ```python
 class PostViewSet(ModelViewSet):
     model = Post
-    
-    async def perform_create(self, instance, validated_data: dict) -> None:
-        """Called after create, before save."""
-        instance.author_id = self.request.user.id
-        await instance.save()
-    
-    async def perform_update(self, instance, validated_data: dict) -> None:
-        """Called after update, before save."""
-        instance.updated_by = self.request.user.id
-        await instance.save()
-    
-    async def perform_destroy(self, instance) -> None:
-        """Called before delete."""
-        # Soft delete instead
-        instance.deleted = True
-        await instance.save()
+    serializer_class = PostSerializer
+
+    async def perform_create_validation(self, data, db):
+        data["author_id"] = self.request.user.id
+        return data
+
+    async def after_create(self, obj, db):
+        await send_notification(f"Post {obj.id} criado")
+
+    async def perform_update_validation(self, data, instance, db):
+        data["updated_by_id"] = self.request.user.id
+        return data
 ```
 
 ## QuerySet Filtering
@@ -197,24 +218,25 @@ class PostViewSet(ModelViewSet):
         return qs
 ```
 
-## Pagination
+## Paginação
 
 ```python
 class PostViewSet(ModelViewSet):
     model = Post
-    page_size = 20  # Default: 25
+    page_size = 20   # padrão por página
+    max_page_size = 100  # teto para page_size
 ```
 
-Query params: `?page=1&per_page=20`
+Query params: `?page=1&page_size=20`
 
-Response:
+Resposta:
 
 ```json
 {
   "items": [...],
   "total": 100,
   "page": 1,
-  "per_page": 20,
+  "page_size": 20,
   "pages": 5
 }
 ```
@@ -229,29 +251,43 @@ class PostViewSet(ReadOnlyModelViewSet):
     # Only list and retrieve, no create/update/delete
 ```
 
-## Routes
+## Rotas
+
+Com auto-discovery (recomendado), crie `urls.py` em cada app:
 
 ```python
-# src/apps/posts/routes.py
-from strider import AutoRouter
+# src/apps/posts/urls.py
+from strider import path
 from .views import PostViewSet
 
-router = AutoRouter(prefix="/posts", tags=["Posts"])
-router.register("", PostViewSet)
+urlpatterns = [
+    path("posts", PostViewSet),
+]
 ```
 
 ```python
 # src/main.py
-from strider import StrideApp, AutoRouter
-from src.apps.posts.routes import router as posts_router
+from strider import StrideApp
 
-api = AutoRouter(prefix="/api/v1")
-api.include_router(posts_router)
-
-app = StrideApp(routers=[api])
+app = StrideApp()  # Carrega installed_apps e urls automaticamente
 ```
 
-## Next
+Com Router explícito:
 
-- [Auth](05-auth.md) — Authentication
-- [Permissions](08-permissions.md) — Access control
+```python
+# src/apps/posts/routes.py
+from strider import Router
+from .views import PostViewSet
+
+router = Router(prefix="/posts", tags=["Posts"])
+router.register_viewset("", PostViewSet)
+```
+
+Ver [Routing](23-routing.md).
+
+## Próximos passos
+
+- [Criar uma aplicação](00-criar-aplicacao.md) — Guia completo
+- [Serializers](13-serializers.md) — Input/Output e Serializer único
+- [Auth](05-auth.md) — Autenticação
+- [Permissions](08-permissions.md) — Controle de acesso
