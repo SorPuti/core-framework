@@ -652,6 +652,15 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     ) -> dict:
         """Lista tipos de Runner registrados (registry)."""
         try:
+            from strider.config import get_settings
+            settings = get_settings()
+            runners_module = getattr(settings, "runners_module", None)
+            if runners_module:
+                try:
+                    import importlib
+                    importlib.import_module(runners_module)
+                except ImportError as e:
+                    logger.debug("Could not import runners_module '%s': %s", runners_module, e)
             from strider.messaging.runner import list_runners
             names = list_runners()
             items = []

@@ -941,6 +941,10 @@ class Settings(BaseSettings):
         default=None,
         description="Módulo Python dos workers (None para auto-discovery)",
     )
+    runners_module: str | None = PydanticField(
+        default=None,
+        description="Módulo Python dos runners (ex: src.runners). Necessário para listar runners no Admin Ops.",
+    )
     tasks_module: str | None = PydanticField(
         default=None,
         description="Módulo Python das tasks (None para auto-discovery)",
