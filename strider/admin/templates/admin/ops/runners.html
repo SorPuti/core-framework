@@ -331,7 +331,8 @@ function runnersView() {
 
         buildRunnerLogsStreamUrl(sessionId) {
             const base = '{{ admin_prefix }}/api/ops/logs/stream';
-            const params = new URLSearchParams({ level: 'DEBUG', search: sessionId || '' });
+            const params = new URLSearchParams({ level: 'DEBUG' });
+            if (sessionId) params.set('session_id', sessionId);
             return window.location.origin + base + '?' + params.toString();
         },
 

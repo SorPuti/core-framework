@@ -54,6 +54,8 @@ Em `src/settings.py` (ou via `.env`):
 | `runner_default_topic` | str | "runner.commands" | Tópico Kafka para comandos start/stop. |
 | `runner_isolated_instances` | bool | true | Se true, cada sessão roda em processo filho (DB/Redis isolados; stop via SIGTERM). Se false, sessões rodam in-process (legado). |
 | `runner_session_pool_size` | int | 2 | Tamanho do pool de conexões do DB no processo da instância (cada instância = 1 processo). |
+| `runner_logs_redis_url` | str | "" | Redis para logs dedicados por instância (stream `runner_logs:{session_id}`). Vazio = usa `redis_url`. |
+| `runner_logs_stream_max_len` | int | 2000 | Máximo de entradas por stream de logs de instância (MAXLEN ~). |
 
 Exemplo:
 
@@ -183,6 +185,13 @@ A **mesma** `AsyncSession` do SQLAlchemy **não** pode ser usada por várias cor
 - Preferir **sessão nova por operação** (get_db que retorna novo context manager) para persistência em background; assim você escala sem bloquear e sem erro de concorrência na sessão.
 - Em callbacks que recebem `**kwargs`, não repassar em `**kwargs` argumentos que já foram passados por nome/posição (evita “multiple values for argument”).
 - Documentar no app onde se usa lock compartilhado e onde se usa sessão nova, para manutenção futura.
+
+### Logs dedicados por instância
+
+Para não misturar logs da API (ex.: uvicorn.access) com os da instância, cada processo filho envia seus logs para um **Redis Stream** `runner_logs:{session_id}`. No Admin Ops, ao abrir "Logs" numa instância (Runners), o painel lê apenas esse stream — logs dedicados àquela sessão.
+
+- **Configuração**: `runner_logs_redis_url` (opcional; se vazio, usa `redis_url`). `runner_logs_stream_max_len` (default 2000) limita o tamanho de cada stream.
+- **Comportamento**: o processo `runrunner-session` anexa um handler ao root logger que faz XADD para o stream. O endpoint `/api/ops/runners/logs?session_id=X` e o SSE `/api/ops/logs/stream?session_id=X` usam esse stream. Sem Redis configurado, faz fallback para o buffer global com busca por `session_id` (pode incluir ruído da API).
 
 ---
 

@@ -908,7 +908,15 @@ class Settings(BaseSettings):
         default=10000,
         description="Tamanho máximo de streams Redis (MAXLEN)",
     )
-    
+    runner_logs_redis_url: str = PydanticField(
+        default="",
+        description="Redis para logs dedicados por instância (stream runner_logs:{session_id}). Vazio = usa redis_url.",
+    )
+    runner_logs_stream_max_len: int = PydanticField(
+        default=2000,
+        description="Máximo de entradas por stream de logs de instância (MAXLEN ~).",
+    )
+
     # =========================================================================
     # CLI / PROJECT DISCOVERY
     # Campos usados pelo CLI e pelo sistema de discovery de módulos.

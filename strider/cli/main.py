@@ -3087,6 +3087,17 @@ def cmd_runrunner_session(args: argparse.Namespace) -> int:
         print(error("runrunner-session requires database_url in config"), file=sys.stderr)
         return 1
 
+    # Logs dedicados por instância: envia para Redis Stream runner_logs:{session_id}
+    redis_url = config.get("runner_logs_redis_url") or config.get("redis_url") or ""
+    if redis_url:
+        try:
+            from strider.admin.runner_logs import RunnerLogsRedisHandler
+            maxlen = int(config.get("runner_logs_stream_max_len", 2000))
+            rh = RunnerLogsRedisHandler(session_id, redis_url, stream_max_len=maxlen)
+            _logging.getLogger().addHandler(rh)
+        except Exception:
+            pass
+
     _discover_and_import_runners()
     from strider.messaging.runner import get_runner
     runner_class = get_runner(runner_name)

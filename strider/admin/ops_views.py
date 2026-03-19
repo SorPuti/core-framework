@@ -858,19 +858,24 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         limit: int = Query(200, ge=1, le=1000),
         user: Any = Depends(check_superuser_access),
     ) -> dict:
-        """Retorna entradas recentes do buffer de log filtradas por session_id (busca na mensagem)."""
+        """Logs dedicados à instância (Redis Stream runner_logs:{session_id}). Fallback: buffer global com busca."""
+        from strider.admin.runner_logs import get_runner_logs_from_redis
+        entries = await get_runner_logs_from_redis(session_id, limit=limit)
+        if entries:
+            return {"entries": entries, "session_id": session_id, "source": "redis"}
         from dataclasses import asdict
         try:
             from strider.admin.log_handler import get_log_buffer
             buffer = get_log_buffer()
-            entries = buffer.get_recent(limit=limit, search=session_id)
+            fallback = buffer.get_recent(limit=limit, search=session_id)
             return {
-                "entries": [asdict(e) for e in entries],
+                "entries": [asdict(e) for e in fallback],
                 "session_id": session_id,
+                "source": "buffer",
             }
         except Exception as e:
             logger.warning("runners_logs failed: %s", e)
-            return {"entries": [], "session_id": session_id}
+            return {"entries": [], "session_id": session_id, "source": "buffer"}
 
     @router.post("/workers/{worker_id}/drain")
     async def worker_drain(
@@ -966,9 +971,42 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         level: str = Query("INFO"),
         logger_name: str = Query("", alias="logger"),
         search: str = Query(""),
+        session_id: str = Query("", description="Se preenchido, stream dedicado da instância (Redis)"),
         user: Any = Depends(check_superuser_access),
     ):
-        """SSE endpoint for real-time log streaming."""
+        """SSE: stream em tempo real. Com session_id = logs dedicados da instância (Redis); sem = buffer global."""
+        if session_id and session_id.strip():
+            # Logs dedicados da instância (Redis Stream) — sem mistura com uvicorn.access etc.
+            from strider.admin.runner_logs import stream_runner_logs
+
+            async def event_generator_dedicated():
+                yield f"data: {json.dumps({'type': 'connected', 'message': 'Log stream da instância conectado'})}\n\n"
+                level_no = getattr(logging, level.upper(), logging.INFO) if level else logging.INFO
+                try:
+                    async for entry in stream_runner_logs(session_id.strip()):
+                        if await request.is_disconnected():
+                            break
+                        if entry.get("level_no", 0) < level_no:
+                            continue
+                        if logger_name and not (entry.get("logger") or "").startswith(logger_name):
+                            continue
+                        if search and search.lower() not in (entry.get("message") or "").lower():
+                            continue
+                        yield f"data: {json.dumps(entry, default=str)}\n\n"
+                except asyncio.CancelledError:
+                    pass
+
+            return StreamingResponse(
+                event_generator_dedicated(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+
+        # Buffer global (comportamento anterior)
         from strider.admin.log_handler import get_log_buffer
 
         buffer = get_log_buffer()
@@ -977,31 +1015,22 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         async def event_generator():
             queue = buffer.subscribe()
             try:
-                # Send initial connection event
                 yield f"data: {json.dumps({'type': 'connected', 'message': 'Log stream connected'})}\n\n"
-                
                 while True:
-                    # Check if client disconnected
                     if await request.is_disconnected():
                         break
-                    
                     try:
                         entry = await asyncio.wait_for(queue.get(), timeout=15.0)
                     except asyncio.TimeoutError:
-                        # Send keepalive to keep connection alive
                         yield ": keepalive\n\n"
                         continue
-
-                    # Apply filters
                     if entry.level_no < level_no:
                         continue
                     if logger_name and not entry.logger.startswith(logger_name):
                         continue
                     if search and search.lower() not in entry.message.lower():
                         continue
-
                     yield f"data: {entry.to_json()}\n\n"
-
             except (asyncio.CancelledError, GeneratorExit):
                 pass
             finally:
