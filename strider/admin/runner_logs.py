@@ -46,12 +46,8 @@ async def stream_runner_text_log(
     path: str,
     poll_interval: float = 0.5,
 ) -> AsyncIterator[dict[str, Any]]:
-    """Segue arquivo em crescimento (uma linha = uma entrada)."""
-    waited = 0.0
-    while not os.path.exists(path) and waited < 30.0:
-        await asyncio.sleep(poll_interval)
-        waited += poll_interval
-    if not os.path.exists(path):
+    """Segue arquivo em crescimento (uma linha = uma entrada). O arquivo deve existir; quem chama aguarda criação."""
+    if not os.path.isfile(path):
         return
     try:
         with open(path, encoding="utf-8", errors="replace") as f:

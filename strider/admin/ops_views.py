@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any, TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -859,6 +860,10 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         request: Request,
         session_id: str,
         tail: int = Query(200, ge=1, le=5000),
+        runner_name: str | None = Query(
+            None,
+            description="Se não houver linha em RunnerInstance, resolve o arquivo com este nome de classe",
+        ),
         user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Tail do arquivo de log texto da sessão (isolado)."""
@@ -873,19 +878,27 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             async with db:
                 qs = QuerySet(RunnerInstance, db)
                 inst = await qs.filter(session_id=session_id).first()
-            if not inst:
-                raise HTTPException(404, "Instância não encontrada para este session_id")
-            path = inst.log_path or get_runner_log_path(inst.runner_name, inst.session_id)
+            if inst:
+                rname = inst.runner_name
+                path = inst.log_path or get_runner_log_path(rname, inst.session_id)
+            elif runner_name and runner_name.strip():
+                rname = runner_name.strip()
+                path = get_runner_log_path(rname, session_id)
+            else:
+                raise HTTPException(
+                    404,
+                    "Instância não encontrada; passe runner_name na query para ler o arquivo mesmo sem registro no DB.",
+                )
             entries = await read_runner_log_tail(
-                inst.runner_name,
-                inst.session_id,
+                rname,
+                session_id,
                 log_path=path,
                 limit=tail,
             )
             return {
                 "entries": entries,
                 "session_id": session_id,
-                "runner_name": inst.runner_name,
+                "runner_name": rname,
                 "log_path": path,
                 "source": "file",
             }
@@ -990,6 +1003,10 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         logger_name: str = Query("", alias="logger"),
         search: str = Query(""),
         session_id: str = Query("", description="Se preenchido, stream dedicado da instância (arquivo local)"),
+        runner_name: str = Query(
+            "",
+            description="Obrigatório se não existir RunnerInstance para o session_id (resolve caminho do .log)",
+        ),
         user: Any = Depends(check_superuser_access),
     ):
         """SSE: stream em tempo real. Com session_id = logs dedicados da instância (arquivo); sem = buffer global."""
@@ -1005,14 +1022,33 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                 level_no = getattr(logging, level.upper(), logging.INFO) if level else logging.INFO
                 try:
                     sid = session_id.strip()
+                    rn_query = (runner_name or "").strip()
                     db = await get_session()
                     async with db:
                         qs = QuerySet(RunnerInstance, db)
                         inst = await qs.filter(session_id=sid).first()
-                    if not inst:
-                        yield f"data: {json.dumps({'type': 'error', 'message': 'Instância não encontrada para este session_id'})}\n\n"
+                    if inst:
+                        path = inst.log_path or get_runner_log_path(inst.runner_name, inst.session_id)
+                    elif rn_query:
+                        path = get_runner_log_path(rn_query, sid)
+                    else:
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'Sem RunnerInstance: informe runner_name na query'})}\n\n"
                         return
-                    path = inst.log_path or get_runner_log_path(inst.runner_name, inst.session_id)
+
+                    _wait_msg = (
+                        "Aguardando arquivo de log neste servidor. Se o runner roda noutro contêiner/host, "
+                        "o ficheiro não existe aqui — use o mesmo STRIDER_RUNNER_LOGS_DIR (volume partilhado) ou leia o log no host do runrunner."
+                    )
+                    ticks = 0
+                    while not os.path.isfile(path):
+                        if await request.is_disconnected():
+                            return
+                        await asyncio.sleep(2.0)
+                        ticks += 1
+                        yield ": keepalive\n\n"
+                        if ticks % 3 == 0:
+                            yield f"data: {json.dumps({'type': 'waiting', 'message': _wait_msg})}\n\n"
+
                     async for entry in stream_runner_text_log(path):
                         if await request.is_disconnected():
                             break

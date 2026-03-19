@@ -194,7 +194,7 @@ Para não misturar logs da API (ex.: uvicorn.access) com os da instância, o arq
 `<base>/<RunnerName>/<session_id>.log` — `base` = `STRIDER_RUNNER_LOGS_DIR` → `runner_logs_dir` → temp `strider-runner-logs`.
 
 - **Configuração**: `runner_logs_dir` (opcional) ou env `STRIDER_RUNNER_LOGS_DIR`.
-- **Ops**: `GET .../api/ops/runners/instances/by-session/{session_id}/logs?tail=N` (tail de linhas de texto) e SSE `/api/ops/logs/stream?session_id=X` (requer registro em `RunnerInstance` para resolver o caminho).
+- **Ops**: `GET .../api/ops/runners/instances/by-session/{session_id}/logs?tail=N&runner_name=ClasseRunner` (query `runner_name` evita 404 se não houver linha em `RunnerInstance`). SSE: `/api/ops/logs/stream?session_id=X&runner_name=ClasseRunner&level=DEBUG`. Tela cheia: `/admin/ops/logs/?session_id=...&runner_name=...&runner_logs=1`.
 
 ---
 

@@ -8,7 +8,11 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Logs</h1>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Stream em tempo real dos logs da aplicação</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-show="!runnerLogsMode">Stream em tempo real dos logs da aplicação (processo API)</p>
+            <p class="text-sm text-emerald-600 dark:text-emerald-400 mt-1" x-show="runnerLogsMode">
+                Arquivo de log do runner <span class="font-mono text-gray-800 dark:text-gray-200" x-text="runnerName"></span>
+                — sessão <span class="font-mono" x-text="sessionId"></span>
+            </p>
         </div>
         <div class="flex items-center gap-2">
             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-full" :class="{'opacity-50': !streamConnected}">
@@ -17,13 +21,13 @@
             </span>
             <button @click="loadRecent()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
                 <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
-                Recarregar buffer
+                <span x-text="runnerLogsMode ? 'Recarregar arquivo' : 'Recarregar buffer'"></span>
             </button>
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
+    <!-- Filters (buffer global; oculto no modo arquivo do runner) -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6" x-show="!runnerLogsMode">
         <div class="flex flex-wrap items-end gap-4">
             <div>
                 <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">Nível</label>
@@ -51,6 +55,11 @@
         </p>
     </div>
 
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6" x-show="runnerLogsMode">
+        <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">Filtrar linhas (mensagem)</label>
+        <input type="text" x-model="search" @input.debounce.400ms="reconnectStream()" placeholder="Texto na linha do log" class="w-full max-w-md rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm px-3 py-2">
+    </div>
+
     <!-- Log viewer -->
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
         <div class="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
@@ -70,7 +79,7 @@
                                   'text-red-400': entry.level === 'ERROR',
                                   'text-red-300 font-bold': entry.level === 'CRITICAL'
                               }" x-text="entry.level"></span>
-                        <span class="text-sky-400 flex-shrink-0 max-w-[200px] truncate text-[11px]" x-text="entry.logger" :title="entry.logger"></span>
+                        <span class="text-sky-400 flex-shrink-0 max-w-[200px] truncate text-[11px]" x-show="!runnerLogsMode || entry.logger" x-text="entry.logger || '—'" :title="entry.logger"></span>
                         <span class="text-slate-300 break-words min-w-0 flex-1" x-text="entry.message"></span>
                     </div>
                     <template x-if="entry.exc_text">
@@ -104,12 +113,21 @@ function logsView() {
         bufferSize: null,
         eventSource: null,
         limit: 1000,
+        runnerLogsMode: false,
+        sessionId: '',
+        runnerName: '',
 
         init() {
             const params = new URLSearchParams(window.location.search);
             this.search = params.get('search') || '';
             this.level = params.get('level') || 'INFO';
             this.logger = params.get('logger') || '';
+            this.sessionId = params.get('session_id') || '';
+            this.runnerName = params.get('runner_name') || '';
+            this.runnerLogsMode = !!(this.sessionId && this.runnerName);
+            if (this.runnerLogsMode && !params.get('level')) {
+                this.level = 'DEBUG';
+            }
             this.loadRecent();
             this.connectStream();
         },
@@ -122,7 +140,20 @@ function logsView() {
             return url;
         },
 
+        buildRunnerTailUrl() {
+            const q = new URLSearchParams({ tail: String(this.limit) });
+            if (this.runnerName) q.set('runner_name', this.runnerName);
+            return '{{ admin_prefix }}/api/ops/runners/instances/by-session/' + encodeURIComponent(this.sessionId) + '/logs?' + q.toString();
+        },
+
         buildStreamUrl() {
+            if (this.runnerLogsMode) {
+                let url = '{{ admin_prefix }}/api/ops/logs/stream?level=' + encodeURIComponent(this.level || 'DEBUG');
+                url += '&session_id=' + encodeURIComponent(this.sessionId);
+                url += '&runner_name=' + encodeURIComponent(this.runnerName);
+                if (this.search) url += '&search=' + encodeURIComponent(this.search);
+                return window.location.origin + url;
+            }
             let url = '{{ admin_prefix }}/api/ops/logs/stream?level=' + (this.level || 'DEBUG');
             if (this.logger) url += '&logger=' + encodeURIComponent(this.logger);
             if (this.search) url += '&search=' + encodeURIComponent(this.search);
@@ -132,12 +163,20 @@ function logsView() {
         async loadRecent() {
             this.loading = true;
             try {
-                const resp = await fetch(this.buildRecentUrl());
-                const data = await resp.json();
-                const list = (data.entries || []).map(e => typeof e === 'string' ? JSON.parse(e) : e);
-                this.entries = list;
-                this.totalCaptured = data.total_captured ?? null;
-                this.bufferSize = data.buffer_size ?? null;
+                if (this.runnerLogsMode) {
+                    const resp = await fetch(this.buildRunnerTailUrl(), { credentials: 'same-origin' });
+                    const data = await resp.json();
+                    this.entries = data.entries || [];
+                    this.totalCaptured = null;
+                    this.bufferSize = null;
+                } else {
+                    const resp = await fetch(this.buildRecentUrl());
+                    const data = await resp.json();
+                    const list = (data.entries || []).map(e => typeof e === 'string' ? JSON.parse(e) : e);
+                    this.entries = list;
+                    this.totalCaptured = data.total_captured ?? null;
+                    this.bufferSize = data.buffer_size ?? null;
+                }
             } catch (e) {
                 this.entries = [];
             }
@@ -156,6 +195,14 @@ function logsView() {
                     const data = JSON.parse(e.data);
                     if (data.type === 'connected') {
                         self.streamConnected = true;
+                        return;
+                    }
+                    if (data.type === 'error') {
+                        self.entries.push({ level: 'ERROR', message: data.message || 'Erro no stream', timestamp: '', logger: '' });
+                        return;
+                    }
+                    if (data.type === 'waiting') {
+                        self.entries.push({ level: 'INFO', message: data.message || 'Aguardando…', timestamp: '', logger: 'runner' });
                         return;
                     }
                     self.entries.push(data);

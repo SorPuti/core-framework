@@ -160,7 +160,7 @@
                     </span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <a :href="'{{ admin_prefix }}/ops/logs/?search=' + encodeURIComponent(logsModalSessionId || '')" target="_blank" class="text-xs text-primary-500 hover:underline">Abrir em tela cheia</a>
+                    <a :href="logsModalFullScreenHref()" target="_blank" class="text-xs text-primary-500 hover:underline">Abrir em tela cheia</a>
                     <button @click="closeLogsModal()" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded">✕</button>
                 </div>
             </div>
@@ -172,11 +172,14 @@
                         <span class="break-words min-w-0" x-text="entry.message"></span>
                     </div>
                 </template>
-                <template x-if="logsModalEntries.length === 0 && !logsModalLoading && !logsModalStreamConnected">
-                    <p class="text-slate-500">Aguardando logs... O stream está ativo para este session_id.</p>
+                <template x-if="logsModalError">
+                    <p class="text-amber-400" x-text="logsModalError"></p>
                 </template>
-                <template x-if="logsModalEntries.length === 0 && !logsModalLoading && logsModalStreamConnected">
-                    <p class="text-slate-500">Nenhuma linha ainda. Logs desta instância aparecerão aqui em tempo real.</p>
+                <template x-if="logsModalEntries.length === 0 && !logsModalLoading && !logsModalStreamConnected && !logsModalError">
+                    <p class="text-slate-500">Conectando ao stream do arquivo de log...</p>
+                </template>
+                <template x-if="logsModalEntries.length === 0 && !logsModalLoading && logsModalStreamConnected && !logsModalError">
+                    <p class="text-slate-500">Nenhuma linha ainda. O processo do runner grava em disco; novas linhas aparecem em tempo real.</p>
                 </template>
                 <template x-if="logsModalLoading && logsModalEntries.length === 0">
                     <p class="text-slate-500">Carregando buffer...</p>
@@ -201,11 +204,21 @@ function runnersView() {
         startForm: { runner_name: '', session_id: '', user_id: '', payload: '' },
         logsModalOpen: false,
         logsModalSessionId: '',
+        logsModalRunnerName: '',
         logsModalEntries: [],
         logsModalLoading: false,
         logsModalStreamConnected: false,
         logsModalEventSource: null,
         logsModalLimit: 2000,
+        logsModalError: '',
+
+        logsModalFullScreenHref() {
+            const sid = this.logsModalSessionId || '';
+            const rn = this.logsModalRunnerName || '';
+            if (!sid || !rn) return '{{ admin_prefix }}/ops/logs/';
+            const q = new URLSearchParams({ session_id: sid, runner_name: rn, runner_logs: '1' });
+            return '{{ admin_prefix }}/ops/logs/?' + q.toString();
+        },
 
         async loadRegistered() {
             this.loading = true;
@@ -330,34 +343,51 @@ function runnersView() {
                 this.logsModalEventSource = null;
             }
             this.logsModalStreamConnected = false;
+            this.logsModalError = '';
             this.logsModalOpen = false;
         },
 
-        buildRunnerLogsStreamUrl(sessionId) {
+        buildRunnerLogsStreamUrl(sessionId, runnerName) {
             const base = '{{ admin_prefix }}/api/ops/logs/stream';
             const params = new URLSearchParams({ level: 'DEBUG' });
             if (sessionId) params.set('session_id', sessionId);
+            if (runnerName) params.set('runner_name', runnerName);
             return window.location.origin + base + '?' + params.toString();
         },
 
         async showLogsModal(inst) {
             this.closeLogsModal();
             this.logsModalSessionId = inst.session_id;
+            this.logsModalRunnerName = inst.runner_name || '';
             this.logsModalEntries = [];
+            this.logsModalError = '';
             this.logsModalOpen = true;
             this.logsModalLoading = true;
             this.logsModalStreamConnected = false;
             try {
-                const resp = await fetch('{{ admin_prefix }}/api/ops/runners/instances/by-session/' + encodeURIComponent(inst.session_id) + '/logs?tail=500');
-                const data = await resp.json();
-                this.logsModalEntries = data.entries || [];
+                const q = new URLSearchParams({ tail: '500' });
+                if (this.logsModalRunnerName) q.set('runner_name', this.logsModalRunnerName);
+                const resp = await fetch(
+                    '{{ admin_prefix }}/api/ops/runners/instances/by-session/' + encodeURIComponent(inst.session_id) + '/logs?' + q.toString(),
+                    { credentials: 'same-origin' }
+                );
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    const det = data && data.detail;
+                    this.logsModalError = Array.isArray(det)
+                        ? det.map((d) => d.msg || d).join('; ')
+                        : (det ? String(det) : ('HTTP ' + resp.status));
+                } else {
+                    this.logsModalEntries = data.entries || [];
+                }
             } catch (e) {
+                this.logsModalError = e.message || 'Falha ao carregar logs';
                 this.logsModalEntries = [];
             }
             this.logsModalLoading = false;
 
             const self = this;
-            const url = this.buildRunnerLogsStreamUrl(inst.session_id);
+            const url = this.buildRunnerLogsStreamUrl(inst.session_id, this.logsModalRunnerName);
             this.logsModalEventSource = new EventSource(url);
             this.logsModalEventSource.onopen = () => { self.logsModalStreamConnected = true; };
             this.logsModalEventSource.onmessage = (e) => {
@@ -365,6 +395,19 @@ function runnersView() {
                     const data = JSON.parse(e.data);
                     if (data.type === 'connected') {
                         self.logsModalStreamConnected = true;
+                        return;
+                    }
+                    if (data.type === 'error') {
+                        self.logsModalError = data.message || 'Erro no stream';
+                        return;
+                    }
+                    if (data.type === 'waiting') {
+                        self.logsModalEntries.push({
+                            timestamp: '',
+                            level: 'INFO',
+                            message: data.message || 'Aguardando ficheiro de log…',
+                        });
+                        if (self.logsModalEntries.length > self.logsModalLimit) self.logsModalEntries.shift();
                         return;
                     }
                     self.logsModalEntries.push(data);
