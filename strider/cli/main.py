@@ -3087,14 +3087,16 @@ def cmd_runrunner_session(args: argparse.Namespace) -> int:
         print(error("runrunner-session requires database_url in config"), file=sys.stderr)
         return 1
 
-    # Logs dedicados por instância: arquivo local por session_id (JSONL).
+    # Mesmo arquivo texto que o processo isolado (-m strider.messaging.runner_session).
     try:
-        from strider.admin.runner_logs import RunnerLogsFileHandler
+        from strider.messaging.runner import get_runner_file_handler
 
-        fh = RunnerLogsFileHandler(session_id)
+        fh = get_runner_file_handler(runner_name, session_id)
+        fh.setLevel(_logging.DEBUG)
         _logging.getLogger().addHandler(fh)
         _logging.getLogger(__name__).info(
-            "Runner session log file attached: session_id=%s",
+            "Runner session log file: runner=%s session_id=%s",
+            runner_name,
             session_id,
         )
     except Exception:

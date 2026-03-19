@@ -348,7 +348,7 @@ function runnersView() {
             this.logsModalLoading = true;
             this.logsModalStreamConnected = false;
             try {
-                const resp = await fetch('{{ admin_prefix }}/api/ops/runners/logs?session_id=' + encodeURIComponent(inst.session_id) + '&limit=500');
+                const resp = await fetch('{{ admin_prefix }}/api/ops/runners/instances/by-session/' + encodeURIComponent(inst.session_id) + '/logs?tail=500');
                 const data = await resp.json();
                 this.logsModalEntries = data.entries || [];
             } catch (e) {

@@ -34,8 +34,7 @@ SEMÂNTICA DE EXIT (reap auditado)
 
 LOGS DEDICADOS
 ──────────────
-  {runner_log_dir}/{RunnerName}/{session_id}.log  — arquivo por sessão
-  Tabela RunnerLog (DB)                           — Admin Panel + streaming
+  resolve_runner_logs_base_dir / {RunnerName}/{session_id}.log  — arquivo por sessão
   log.propagate = False                           — não mistura com a API
 """
 
@@ -55,6 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from strider.config import get_settings
+from strider.runner_log_paths import get_isolated_session_log_path
 
 logger = logging.getLogger(__name__)
 
@@ -100,18 +100,10 @@ def check_stop_flag(session_id: str) -> bool:
 # Dedicated runner logging — isolated from API logs
 # =============================================================================
 
-def _runner_log_dir() -> str:
-    settings = get_settings()
-    return str(getattr(settings, "runner_log_dir", None) or "/var/log/strider/runners")
-
-
 def get_runner_file_handler(runner_name: str, session_id: str) -> logging.FileHandler:
-    """FileHandler → {runner_log_dir}/{runner_name}/{session_id}.log"""
-    log_dir = os.path.join(_runner_log_dir(), runner_name)
-    os.makedirs(log_dir, exist_ok=True)
-    safe = session_id.replace("/", "_").replace("..", "__")
+    """FileHandler → mesmo path que get_runner_log_path (arquivo por sessão)."""
     handler = logging.FileHandler(
-        os.path.join(log_dir, f"{safe}.log"), encoding="utf-8"
+        get_runner_log_path(runner_name, session_id), encoding="utf-8"
     )
     handler.setFormatter(logging.Formatter(
         "%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
@@ -149,95 +141,9 @@ def setup_isolated_session_logging(runner_name: str, session_id: str) -> logging
     return log
 
 
-class RunnerDBLogHandler(logging.Handler):
-    """
-    Batch log handler that persists records to RunnerLog table.
-    Use inside the isolated child process.
-
-    Usage:
-        handler = RunnerDBLogHandler(runner_name, session_id)
-        session_log.addHandler(handler)
-        await handler.start()
-        # ... session runs ...
-        await handler.stop()
-    """
-
-    def __init__(
-        self,
-        runner_name: str,
-        session_id: str,
-        batch_size: int = 20,
-        flush_interval: float = 5.0,
-    ) -> None:
-        super().__init__()
-        self.runner_name = runner_name
-        self.session_id = session_id
-        self.batch_size = batch_size
-        self.flush_interval = flush_interval
-        self._queue: list[dict[str, Any]] = []
-        self._task: asyncio.Task | None = None
-
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            self._queue.append({
-                "runner_name": self.runner_name,
-                "session_id": self.session_id,
-                "level": record.levelname,
-                "logger": record.name,
-                "message": self.format(record),
-            })
-            if len(self._queue) >= self.batch_size:
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        loop.create_task(self._flush())
-                except RuntimeError:
-                    pass
-        except Exception:
-            self.handleError(record)
-
-    async def _flush(self) -> None:
-        if not self._queue:
-            return
-        batch, self._queue = self._queue[:], []
-        try:
-            from strider.models import get_session
-            from strider.admin.models import RunnerLog
-            async with get_session() as db:
-                for e in batch:
-                    await RunnerLog(
-                        runner_name=e["runner_name"],
-                        session_id=e["session_id"],
-                        level=e["level"],
-                        logger=e["logger"],
-                        message=e["message"],
-                    ).save(db)
-                await db.commit()
-        except Exception as exc:
-            sys.stderr.write(f"[RunnerDBLogHandler] flush failed: {exc}\n")
-
-    async def start(self) -> None:
-        self._task = asyncio.create_task(self._flush_loop())
-
-    async def stop(self) -> None:
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        await self._flush()
-
-    async def _flush_loop(self) -> None:
-        while True:
-            await asyncio.sleep(self.flush_interval)
-            await self._flush()
-
-
 def get_runner_log_path(runner_name: str, session_id: str) -> str:
-    """Return the expected log file path for a session (Admin Panel use)."""
-    safe = session_id.replace("/", "_").replace("..", "__")
-    return os.path.join(_runner_log_dir(), runner_name, f"{safe}.log")
+    """Caminho do arquivo de log da sessão (mesmo que FileHandler + Ops)."""
+    return get_isolated_session_log_path(runner_name, session_id)
 
 
 # =============================================================================
@@ -687,12 +593,14 @@ class Runner(ABC):
         env["STRIDER_RUNNER_SESSION"] = "1"
         env["STRIDER_RUNNER_FLAG_DIR"] = _runner_flag_dir()
 
+        log_path = get_runner_log_path(runner_name, session_id)
+
         try:
             proc = subprocess.Popen(
                 cmd,
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=None,
+                stderr=None,
                 cwd=os.getcwd(),
                 env=env,
                 preexec_fn=os.setsid,
@@ -726,6 +634,7 @@ class Runner(ABC):
                 if inst:
                     inst.status = "running"
                     inst.pid = pid
+                    inst.log_path = log_path
                     inst.stop_reason = None
                     inst.exit_code = None
                     inst.stopped_at = None
@@ -737,6 +646,7 @@ class Runner(ABC):
                         user_id=str(user_id) if user_id is not None else None,
                         status="running",
                         pid=pid,
+                        log_path=log_path,
                         stop_reason=None,
                         exit_code=None,
                         payload_json=json.dumps(payload_copy) if payload_copy else None,
@@ -1381,6 +1291,7 @@ async def send_start(
 
         p = payload or {}
         user_id = p.get("user_id")
+        log_path = get_runner_log_path(runner_name, session_id)
         async with get_session() as db:
             qs = QuerySet(RunnerInstance, db)
             inst = await qs.filter(
@@ -1391,6 +1302,7 @@ async def send_start(
                 inst.user_id = str(user_id) if user_id is not None else None
                 inst.payload_json = json.dumps(p) if p else None
                 inst.pid = None
+                inst.log_path = log_path
                 inst.stop_reason = None
                 inst.exit_code = None
                 inst.stopped_at = None
@@ -1403,6 +1315,7 @@ async def send_start(
                     status="running",
                     payload_json=json.dumps(p) if p else None,
                     pid=None,
+                    log_path=log_path,
                     stop_reason=None,
                     exit_code=None,
                 ).save(db)

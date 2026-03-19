@@ -19,6 +19,7 @@ estiver ativa — use um loop interno em run_session que checa is_stop_flag().
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import logging
 import os
@@ -104,6 +105,23 @@ async def _run(runner_name: str, session_id: str, payload: dict[str, Any]) -> in
         log.error("Failed to initialize child resources: %s", exc, exc_info=True)
         return 1
 
+    # Registrar classes Runner (env ou settings.runners_module)
+    _raw = os.environ.get("STRIDER_RUNNER_MODULES", "").strip()
+    if _raw:
+        for part in _raw.split(","):
+            p = part.strip()
+            if p:
+                importlib.import_module(p)
+    else:
+        try:
+            from strider.config import get_settings
+
+            rm = getattr(get_settings(), "runners_module", None)
+            if rm:
+                importlib.import_module(rm)
+        except Exception:
+            pass
+
     # Resolve runner class
     try:
         from strider.messaging.runner import get_runner
@@ -117,19 +135,6 @@ async def _run(runner_name: str, session_id: str, payload: dict[str, Any]) -> in
 
     # Instantiate runner
     runner = runner_cls()
-
-    # Optional: start DB log handler for Admin Panel streaming
-    db_log_handler: Any = None
-    try:
-        from strider.messaging.runner import RunnerDBLogHandler
-        db_log_handler = RunnerDBLogHandler(runner_name, session_id)
-        db_log_handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
-        log.addHandler(db_log_handler)
-        await db_log_handler.start()
-        log.debug("RunnerDBLogHandler started")
-    except Exception as exc:
-        log.debug("RunnerDBLogHandler not started (non-fatal): %s", exc)
-        db_log_handler = None
 
     # Import flag helpers
     from strider.messaging.runner import check_stop_flag, clear_stop_flag
@@ -210,12 +215,6 @@ async def _run(runner_name: str, session_id: str, payload: dict[str, Any]) -> in
             runner_name, session_id, exit_code,
         )
         clear_stop_flag(session_id)
-
-        if db_log_handler is not None:
-            try:
-                await db_log_handler.stop()
-            except Exception:
-                pass
 
         # Close child DB/Redis connections
         try:

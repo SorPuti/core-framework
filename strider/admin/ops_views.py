@@ -708,6 +708,8 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                             "session_id": r.session_id,
                             "user_id": r.user_id,
                             "status": r.status,
+                            "pid": getattr(r, "pid", None),
+                            "log_path": getattr(r, "log_path", None),
                             "stop_reason": getattr(r, "stop_reason", None),
                             "exit_code": getattr(r, "exit_code", None),
                             "payload_json": r.payload_json,
@@ -827,7 +829,6 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             from strider.querysets import QuerySet
             from strider.messaging.runner import send_stop
 
-
             db = await get_session()
             async with db:
                 qs = QuerySet(RunnerInstance, db)
@@ -853,22 +854,46 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             logger.exception("runners_instance_delete failed: %s", e)
             raise HTTPException(500, str(e))
 
-    @router.get("/runners/logs")
-    async def runners_logs(
+    @router.get("/runners/instances/by-session/{session_id}/logs")
+    async def runners_instance_logs_by_session(
         request: Request,
-        session_id: str = Query(..., description="Session ID da instância"),
-        limit: int = Query(200, ge=1, le=1000),
+        session_id: str,
+        tail: int = Query(200, ge=1, le=5000),
         user: Any = Depends(check_superuser_access),
     ) -> dict:
-        """Logs dedicados à instância via arquivo local por session_id."""
+        """Tail do arquivo de log texto da sessão (isolado)."""
         try:
-            from strider.admin.runner_logs import get_runner_logs_from_file
+            from strider.models import get_session
+            from strider.admin.models import RunnerInstance
+            from strider.admin.runner_logs import read_runner_log_tail
+            from strider.messaging.runner import get_runner_log_path
+            from strider.querysets import QuerySet
 
-            entries = await get_runner_logs_from_file(session_id, limit=limit)
-            return {"entries": entries, "session_id": session_id, "source": "file"}
+            db = await get_session()
+            async with db:
+                qs = QuerySet(RunnerInstance, db)
+                inst = await qs.filter(session_id=session_id).first()
+            if not inst:
+                raise HTTPException(404, "Instância não encontrada para este session_id")
+            path = inst.log_path or get_runner_log_path(inst.runner_name, inst.session_id)
+            entries = await read_runner_log_tail(
+                inst.runner_name,
+                inst.session_id,
+                log_path=path,
+                limit=tail,
+            )
+            return {
+                "entries": entries,
+                "session_id": session_id,
+                "runner_name": inst.runner_name,
+                "log_path": path,
+                "source": "file",
+            }
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.warning("runners_logs failed: %s", e)
-            return {"entries": [], "session_id": session_id, "source": "file"}
+            logger.warning("runners_instance_logs_by_session failed: %s", e)
+            raise HTTPException(500, str(e))
 
     @router.post("/workers/{worker_id}/drain")
     async def worker_drain(
@@ -969,19 +994,32 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
     ):
         """SSE: stream em tempo real. Com session_id = logs dedicados da instância (arquivo); sem = buffer global."""
         if session_id and session_id.strip():
-            # Logs dedicados da instância (arquivo) — sem mistura com uvicorn.access etc.
-            from strider.admin.runner_logs import stream_runner_logs_from_file
+            from strider.admin.models import RunnerInstance
+            from strider.admin.runner_logs import stream_runner_text_log
+            from strider.messaging.runner import get_runner_log_path
+            from strider.models import get_session
+            from strider.querysets import QuerySet
 
             async def event_generator_dedicated():
                 yield f"data: {json.dumps({'type': 'connected', 'message': 'Log stream da instância conectado'})}\n\n"
                 level_no = getattr(logging, level.upper(), logging.INFO) if level else logging.INFO
                 try:
-                    async for entry in stream_runner_logs_from_file(session_id.strip()):
+                    sid = session_id.strip()
+                    db = await get_session()
+                    async with db:
+                        qs = QuerySet(RunnerInstance, db)
+                        inst = await qs.filter(session_id=sid).first()
+                    if not inst:
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'Instância não encontrada para este session_id'})}\n\n"
+                        return
+                    path = inst.log_path or get_runner_log_path(inst.runner_name, inst.session_id)
+                    async for entry in stream_runner_text_log(path):
                         if await request.is_disconnected():
                             break
                         if entry.get("level_no", 0) < level_no:
                             continue
-                        if logger_name and not (entry.get("logger") or "").startswith(logger_name):
+                        elog = entry.get("logger")
+                        if logger_name and elog and not str(elog).startswith(logger_name):
                             continue
                         if search and search.lower() not in (entry.get("message") or "").lower():
                             continue

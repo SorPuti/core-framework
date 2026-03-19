@@ -189,12 +189,12 @@ A **mesma** `AsyncSession` do SQLAlchemy **não** pode ser usada por várias cor
 
 ### Logs dedicados por instância
 
-Para não misturar logs da API (ex.: uvicorn.access) com os da instância, cada processo filho grava seus logs em um **arquivo JSONL** dedicado por sessão:
+Para não misturar logs da API (ex.: uvicorn.access) com os da instância, o arquivo por sessão segue o mesmo layout que o processo isolado (`python -m strider.messaging.runner_session`):
 
-`<runner_logs_dir>/<session_id>.log`
+`<base>/<RunnerName>/<session_id>.log` — `base` = `STRIDER_RUNNER_LOGS_DIR` → `runner_logs_dir` → temp `strider-runner-logs`.
 
-- **Configuração**: `runner_logs_dir` (opcional). Se vazio, usa `STRIDER_RUNNER_LOGS_DIR` e depois fallback para `/tmp/strider-runner-logs`.
-- **Comportamento**: o processo `runrunner-session` anexa um handler ao root logger que grava uma linha JSON por evento. O endpoint `/api/ops/runners/logs?session_id=X` lê esse arquivo, e o SSE `/api/ops/logs/stream?session_id=X` faz tail em tempo real do mesmo arquivo.
+- **Configuração**: `runner_logs_dir` (opcional) ou env `STRIDER_RUNNER_LOGS_DIR`.
+- **Ops**: `GET .../api/ops/runners/instances/by-session/{session_id}/logs?tail=N` (tail de linhas de texto) e SSE `/api/ops/logs/stream?session_id=X` (requer registro em `RunnerInstance` para resolver o caminho).
 
 ---
 

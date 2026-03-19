@@ -283,6 +283,7 @@ class RunnerInstance(Model):
     stop_reason: Mapped[str | None] = Field.string(max_length=64, nullable=True)
     exit_code: Mapped[int | None] = Field.integer(nullable=True)
     payload_json: Mapped[str | None] = Field.string(max_length=5000, nullable=True)
+    log_path: Mapped[str | None] = Field.string(max_length=500, nullable=True)
     started_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
     stopped_at: Mapped[DateTime | None] = Field.datetime(nullable=True)
 
