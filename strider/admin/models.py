@@ -279,6 +279,7 @@ class RunnerInstance(Model):
     session_id: Mapped[str] = Field.string(max_length=255, index=True)
     user_id: Mapped[str | None] = Field.string(max_length=255, nullable=True, index=True)
     status: Mapped[str] = Field.string(max_length=20, index=True)  # running, stopping, stopped
+    pid: Mapped[int | None] = Field.integer(nullable=True)
     payload_json: Mapped[str | None] = Field.string(max_length=5000, nullable=True)
     started_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
     stopped_at: Mapped[DateTime | None] = Field.datetime(nullable=True)

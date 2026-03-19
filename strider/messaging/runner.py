@@ -20,6 +20,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -51,6 +52,71 @@ def _get_process_metrics() -> dict[str, float]:
 
 
 _runner_registry: dict[str, type["Runner"]] = {}
+
+
+def kill_process_by_pid(pid: int, grace: float = 5.0) -> None:
+    """Terminate a process group by PID with SIGTERM then SIGKILL fallback."""
+    try:
+        # Envia SIGTERM para o grupo
+        os.killpg(os.getpgid(pid), signal.SIGTERM)
+    except ProcessLookupError:
+        return
+
+    # Aguarda encerramento
+    for _ in range(int(grace * 2)):
+        try:
+            os.kill(pid, 0)
+            time.sleep(0.5)
+        except ProcessLookupError:
+            return
+
+    # Se ainda estiver vivo, força kill
+    try:
+        os.killpg(os.getpgid(pid), signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def process_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+async def cleanup_orphan_processes() -> None:
+    """Mark running RunnerInstance rows as stopped when PID no longer exists."""
+    try:
+        from strider.models import get_session
+        from strider.admin.models import RunnerInstance
+        from strider.querysets import QuerySet
+        from strider.datetime import timezone
+
+        async with get_session() as db:
+            qs = QuerySet(RunnerInstance, db)
+            running = await qs.filter(status="running").all()
+            changed = False
+            for inst in running:
+                pid = getattr(inst, "pid", None)
+                if not isinstance(pid, int) or pid <= 0:
+                    inst.status = "stopped"
+                    inst.stopped_at = timezone.now()
+                    inst.pid = None
+                    await inst.save(db)
+                    changed = True
+                    continue
+                if process_exists(pid):
+                    continue
+                inst.status = "stopped"
+                inst.stopped_at = timezone.now()
+                inst.pid = None
+                await inst.save(db)
+                changed = True
+            if changed:
+                await db.commit()
+    except Exception as exc:
+        logger.debug("cleanup_orphan_processes failed: %s", exc)
 
 
 class Runner(ABC):
@@ -204,9 +270,8 @@ class Runner(ABC):
     # Command handler (Kafka message)
     # -------------------------------------------------------------------------
 
-    def _spawn_isolated_session(self, session_id: str, message: dict[str, Any]) -> None:
+    async def _spawn_isolated_session(self, session_id: str, message: dict[str, Any]) -> None:
         """Cria processo filho isolado para esta sessão (DB/Redis próprios, stop via SIGTERM)."""
-        settings = get_settings()
         runner_name = self.__class__.__name__
         if session_id in self._session_processes:
             proc = self._session_processes[session_id]
@@ -248,9 +313,11 @@ class Runner(ABC):
                 stderr=subprocess.PIPE,
                 cwd=os.getcwd(),
                 env=env,
+                preexec_fn=os.setsid,
             )
+            pid = proc.pid
             self._session_processes[session_id] = proc
-            logger.info("Runner started isolated process for session_id=%s pid=%s", session_id, proc.pid)
+            logger.info("Runner started isolated process for session_id=%s pid=%s", session_id, pid)
         except Exception as e:
             logger.exception("Runner failed to spawn isolated process for session_id=%s: %s", session_id, e)
             try:
@@ -258,6 +325,24 @@ class Runner(ABC):
             except OSError:
                 pass
             raise
+
+        try:
+            from strider.models import get_session
+            from strider.admin.models import RunnerInstance
+            from strider.querysets import QuerySet
+
+            async with get_session() as db:
+                qs = QuerySet(RunnerInstance, db)
+                inst = await qs.filter(
+                    runner_name=runner_name,
+                    session_id=session_id,
+                ).first()
+                if inst:
+                    inst.pid = pid
+                    await inst.save(db)
+                    await db.commit()
+        except Exception as exc:
+            logger.debug("Runner failed to persist pid for session_id=%s: %s", session_id, exc)
 
         def _cleanup_payload() -> None:
             try:
@@ -267,25 +352,106 @@ class Runner(ABC):
 
         asyncio.get_event_loop().call_later(30.0, _cleanup_payload)
 
-    def _stop_isolated_session(self, session_id: str, config: dict[str, Any]) -> None:
-        """Envia SIGTERM ao processo da sessão e aguarda com timeout."""
-        proc = self._session_processes.get(session_id)
-        if proc is None:
-            logger.debug("Runner stop: no process for session_id=%s", session_id)
-            return
+    async def _stop_isolated_session(self, session_id: str, config: dict[str, Any]) -> None:
+        """Stop isolated session by persisted PID (DB source of truth)."""
+        runner_name = self.__class__.__name__
         grace = max(1.0, config.get("shutdown_grace", self.shutdown_grace_seconds))
         try:
-            proc.terminate()
-            try:
-                proc.wait(timeout=grace)
-            except subprocess.TimeoutExpired:
-                logger.warning("Runner isolated process session_id=%s did not exit in %.1fs, sending SIGKILL", session_id, grace)
-                proc.kill()
-                proc.wait(timeout=5.0)
+            from strider.models import get_session
+            from strider.admin.models import RunnerInstance
+            from strider.querysets import QuerySet
+            from strider.datetime import timezone
+
+            async with get_session() as db:
+                qs = QuerySet(RunnerInstance, db)
+                inst = await qs.filter(
+                    runner_name=runner_name,
+                    session_id=session_id,
+                ).first()
+                if not inst:
+                    self._session_processes.pop(session_id, None)
+                    logger.debug("Runner stop: no RunnerInstance for session_id=%s", session_id)
+                    return
+
+                pid = getattr(inst, "pid", None)
+                if isinstance(pid, int) and pid > 0:
+                    kill_process_by_pid(pid, grace=grace)
+                inst.status = "stopped"
+                inst.pid = None
+                inst.stopped_at = timezone.now()
+                await inst.save(db)
+                await db.commit()
         except Exception as e:
             logger.warning("Runner stop isolated session_id=%s: %s", session_id, e)
         finally:
             self._session_processes.pop(session_id, None)
+
+    async def _stop_all_isolated_sessions(self, config: dict[str, Any]) -> None:
+        """Stop all running sessions for this runner using persisted PIDs."""
+        runner_name = self.__class__.__name__
+        grace = max(1.0, config.get("shutdown_grace", self.shutdown_grace_seconds))
+        try:
+            from strider.models import get_session
+            from strider.admin.models import RunnerInstance
+            from strider.querysets import QuerySet
+            from strider.datetime import timezone
+
+            async with get_session() as db:
+                qs = QuerySet(RunnerInstance, db)
+                running = await qs.filter(
+                    runner_name=runner_name,
+                    status="running",
+                ).all()
+                changed = False
+                for inst in running:
+                    pid = getattr(inst, "pid", None)
+                    if isinstance(pid, int) and pid > 0:
+                        kill_process_by_pid(pid, grace=grace)
+                    inst.status = "stopped"
+                    inst.pid = None
+                    inst.stopped_at = timezone.now()
+                    await inst.save(db)
+                    changed = True
+                    self._session_processes.pop(inst.session_id, None)
+                if changed:
+                    await db.commit()
+        except Exception as exc:
+            logger.warning("Runner stop all isolated sessions failed: %s", exc)
+
+    async def _reap_dead_processes(self, runner_name: str) -> None:
+        """
+        Remove processos que já terminaram de _session_processes e atualiza
+        RunnerInstance para stopped (vínculo forte: processo morto = status stopped).
+        """
+        dead = []
+        for sid, proc in list(self._session_processes.items()):
+            if proc.poll() is not None:
+                dead.append(sid)
+                self._session_processes.pop(sid, None)
+                logger.info("Runner reaped dead process session_id=%s exitcode=%s", sid, proc.returncode)
+        for session_id in dead:
+            try:
+                from strider.models import get_session
+                from strider.admin.models import RunnerInstance
+                from strider.querysets import QuerySet
+                from strider.datetime import timezone
+                async with get_session() as db:
+                    qs = QuerySet(RunnerInstance, db)
+                    inst = await qs.filter(
+                        runner_name=runner_name,
+                        session_id=session_id,
+                    ).first()
+                    if inst and inst.status == "running":
+                        inst.status = "stopped"
+                        inst.pid = None
+                        inst.stopped_at = timezone.now()
+                        await inst.save(db)
+                        await db.commit()
+                        logger.debug("RunnerInstance session_id=%s marked stopped after process exit", session_id)
+            except Exception as exc:
+                logger.debug("reap: update RunnerInstance for session_id=%s failed: %s", session_id, exc)
+
+        await cleanup_orphan_processes()
 
     async def _handle_message(self, message: dict[str, Any], config: dict[str, Any]) -> None:
         action = (message.get("action") or "").strip().lower()
@@ -301,7 +467,7 @@ class Runner(ABC):
         if action == "start":
             if isolated:
                 if session_id:
-                    self._spawn_isolated_session(session_id, message)
+                    await self._spawn_isolated_session(session_id, message)
                 else:
                     logger.warning("Runner isolated mode requires session_id for start")
                 return
@@ -318,10 +484,9 @@ class Runner(ABC):
         if action == "stop":
             if isolated:
                 if session_id:
-                    self._stop_isolated_session(session_id, config)
+                    await self._stop_isolated_session(session_id, config)
                 else:
-                    for sid in list(self._session_processes):
-                        self._stop_isolated_session(sid, config)
+                    await self._stop_all_isolated_sessions(config)
                 return
 
             stop_timeout = max(1.0, config.get("session_stop_timeout", self.session_stop_timeout_seconds))
@@ -420,9 +585,17 @@ class Runner(ABC):
 
         logger.info("Runner started: topic=%s group_id=%s", config["input_topic"], config["group_id"])
 
+        reap_interval = 5.0
+        last_reap = asyncio.get_event_loop().time()
+        runner_name = self.__class__.__name__
         try:
+            await cleanup_orphan_processes()
             while self._running and not self._stop_requested:
                 await asyncio.sleep(1)
+                now = asyncio.get_event_loop().time()
+                if now - last_reap >= reap_interval:
+                    last_reap = now
+                    await self._reap_dead_processes(runner_name)
         except asyncio.CancelledError:
             self._stop_requested = True
 
@@ -439,14 +612,15 @@ class Runner(ABC):
         for sid, proc in list(self._session_processes.items()):
             if proc.poll() is None:
                 try:
-                    proc.terminate()
-                    proc.wait(timeout=max(2.0, config.get("shutdown_grace", self.shutdown_grace_seconds)))
+                    kill_process_by_pid(proc.pid, grace=max(2.0, config.get("shutdown_grace", self.shutdown_grace_seconds)))
                 except (subprocess.TimeoutExpired, Exception):
                     try:
-                        proc.kill()
+                        kill_process_by_pid(proc.pid, grace=0.1)
                     except Exception:
                         pass
             self._session_processes.pop(sid, None)
+
+        await self._stop_all_isolated_sessions(config)
 
         if self._session_task and not self._session_task.done():
             self._session_task.cancel()
@@ -581,6 +755,7 @@ async def send_start(
                 existing.status = "running"
                 existing.user_id = uid
                 existing.payload_json = payload_json
+                existing.pid = None
                 existing.stopped_at = None
                 await existing.save(db)
             else:
@@ -590,6 +765,7 @@ async def send_start(
                     user_id=uid,
                     status="running",
                     payload_json=payload_json,
+                    pid=None,
                 )
                 await inst.save(db)
             await db.commit()
@@ -601,7 +777,7 @@ async def send_start(
     topic = config["input_topic"]
     from strider.messaging.registry import publish
     msg = {"action": "start", "session_id": session_id, **(payload or {})}
-    await publish(topic, msg)
+    await publish(topic, msg, key=session_id)
 
 
 async def send_stop(runner_name: str, session_id: str) -> None:
@@ -627,6 +803,7 @@ async def send_stop(runner_name: str, session_id: str) -> None:
             ).first()
             if inst:
                 inst.status = "stopped"
+                inst.pid = None
                 inst.stopped_at = timezone.now()
                 await inst.save(db)
                 await db.commit()
@@ -637,7 +814,7 @@ async def send_stop(runner_name: str, session_id: str) -> None:
     config = instance._get_config()
     topic = config["input_topic"]
     from strider.messaging.registry import publish
-    await publish(topic, {"action": "stop", "session_id": session_id})
+    await publish(topic, {"action": "stop", "session_id": session_id}, key=session_id)
 
 
 async def send_pause(runner_name: str, session_id: str) -> None:
@@ -649,7 +826,7 @@ async def send_pause(runner_name: str, session_id: str) -> None:
     config = instance._get_config()
     topic = config["input_topic"]
     from strider.messaging.registry import publish
-    await publish(topic, {"action": "pause", "session_id": session_id})
+    await publish(topic, {"action": "pause", "session_id": session_id}, key=session_id)
 
 
 async def send_resume(runner_name: str, session_id: str) -> None:
@@ -661,4 +838,4 @@ async def send_resume(runner_name: str, session_id: str) -> None:
     config = instance._get_config()
     topic = config["input_topic"]
     from strider.messaging.registry import publish
-    await publish(topic, {"action": "resume", "session_id": session_id})
+    await publish(topic, {"action": "resume", "session_id": session_id}, key=session_id)

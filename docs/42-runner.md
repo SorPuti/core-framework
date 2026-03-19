@@ -88,6 +88,8 @@ Mensagens no tópico:
 - `{"action": "start", "session_id": "...", ...}` — inicia sessão com o payload.
 - `{"action": "stop", "session_id": "..."}` ou `{"action": "stop"}` — solicita parada.
 
+As mensagens são publicadas com **Kafka key = session_id**, de modo que start e stop da mesma sessão vão para a mesma partição e o mesmo consumidor — assim o processo que criou o filho é o que recebe o stop e pode encerrá-lo (SIGTERM). Sem a key, com múltiplas partições/consumidores, o stop poderia ser consumido por outro nó que não tem o processo e o filho ficaria órfão.
+
 ## Exemplo: RunnerStrategy(Runner)
 
 ```python
