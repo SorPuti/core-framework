@@ -50,6 +50,7 @@ import sys
 import tempfile
 import time
 from abc import ABC, abstractmethod
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -114,18 +115,15 @@ def get_runner_file_handler(runner_name: str, session_id: str) -> logging.FileHa
 
 def setup_isolated_session_logging(runner_name: str, session_id: str) -> logging.Logger:
     """
-    Return a dedicated logger for an isolated session process.
+    Cria o logger `runner.{RunnerName}.{session_id}` com FileHandler + StreamHandler.
 
-    Key properties:
-      • propagate=False  → does NOT bubble up to root/API logger
-      • FileHandler      → one file per session in runner_log_dir
-      • StreamHandler    → stdout with [runner:Name:session] prefix (journald/docker)
-
-    Call this at the top of runner_session.py before importing anything else.
+    Em seguida `configure_isolated_process_logging` move esses handlers para o **root**
+    do processo filho, para que `logging.getLogger(__name__)` da app também escreva
+    no mesmo ficheiro (Admin Ops).
     """
     log = logging.getLogger(f"runner.{runner_name}.{session_id}")
     log.setLevel(logging.DEBUG)
-    log.propagate = False  # ← no mixing with the API logger
+    log.propagate = False
 
     try:
         log.addHandler(get_runner_file_handler(runner_name, session_id))
@@ -141,9 +139,95 @@ def setup_isolated_session_logging(runner_name: str, session_id: str) -> logging
     return log
 
 
+_isolated_runner_logging_configured: bool = False
+
+
+def configure_isolated_process_logging(runner_name: str, session_id: str) -> None:
+    """
+    Processo filho (`runner_session`) apenas: move handlers do logger da sessão para o
+    **root**, activando `propagate` no logger da sessão.
+
+    Assim, todo o código que usa `logging.getLogger(__name__)` (ex.: `src.apps...`)
+    passa a gravar no mesmo ficheiro e stdout que o Admin taila, sem duplicar linhas.
+    """
+    global _isolated_runner_logging_configured
+    if _isolated_runner_logging_configured:
+        return
+
+    session_log = logging.getLogger(f"runner.{runner_name}.{session_id}")
+    root = logging.getLogger()
+
+    while session_log.handlers:
+        root.addHandler(session_log.handlers.pop())
+
+    session_log.propagate = True
+
+    try:
+        from strider.config import get_settings
+
+        lv = str(getattr(get_settings(), "log_level", "INFO") or "INFO").upper()
+        root_lv = getattr(logging, lv, logging.INFO)
+    except Exception:
+        root_lv = logging.INFO
+
+    root.setLevel(root_lv)
+
+    if os.environ.get("STRIDER_RUNNER_LOG_REDIS", "").strip() in ("1", "true", "yes"):
+        try:
+            from strider.messaging.runner_redis_log import attach_runner_redis_handler_to_root
+
+            attach_runner_redis_handler_to_root(runner_name, session_id)
+        except Exception as exc:
+            sys.stderr.write(f"[runner] Redis log handler skipped: {exc}\n")
+
+    _isolated_runner_logging_configured = True
+
+
 def get_runner_log_path(runner_name: str, session_id: str) -> str:
     """Caminho do arquivo de log da sessão (mesmo que FileHandler + Ops)."""
     return get_isolated_session_log_path(runner_name, session_id)
+
+
+# ── Contexto da sessão isolada (processo filho runner_session) ──────────────
+
+_runner_session_ctx: ContextVar[tuple[str, str] | None] = ContextVar(
+    "strider_runner_session", default=None
+)
+
+# Logger usado quando get_runner_session_logger() é chamado fora do processo filho
+_unbound_session_logger: logging.Logger | None = None
+
+
+def bind_runner_session_context(runner_name: str, session_id: str) -> None:
+    """Define o contexto da sessão (chamado por runner_session após setup_isolated_session_logging)."""
+    _runner_session_ctx.set((runner_name, session_id))
+
+
+def clear_runner_session_context() -> None:
+    _runner_session_ctx.set(None)
+
+
+def get_runner_session_logger() -> logging.Logger:
+    """
+    Logger da instância isolada (propaga para o root após `configure_isolated_process_logging`).
+
+    Exemplo: ``log = get_runner_session_logger(); log.info("tick")`` ou ``self.session_log``
+    numa subclasse de ``Runner``. ``logging.getLogger(__name__)`` da app também grava no
+    mesmo destino (ficheiro + stdout [+ Redis opcional]).
+
+    Fora do processo filho (ex.: testes sem contexto), devolve um logger silencioso.
+    """
+    global _unbound_session_logger
+    ctx = _runner_session_ctx.get()
+    if ctx is not None:
+        rn, sid = ctx
+        return logging.getLogger(f"runner.{rn}.{sid}")
+    if _unbound_session_logger is None:
+        _unbound_session_logger = logging.getLogger("runner.session.unbound")
+        _unbound_session_logger.addHandler(logging.NullHandler())
+        _unbound_session_logger.propagate = False
+        _unbound_session_logger.setLevel(logging.DEBUG)
+    return _unbound_session_logger
 
 
 # =============================================================================
@@ -404,6 +488,15 @@ class Runner(ABC):
     @property
     def is_paused(self) -> bool:
         return self._paused
+
+    @property
+    def session_log(self) -> logging.Logger:
+        """
+        Logger da sessão isolada (ficheiro + docker logs / Ops).
+
+        Equivalente a `get_runner_session_logger()` — só tem handlers no processo filho.
+        """
+        return get_runner_session_logger()
 
     @property
     def current_session_id(self) -> str | None:

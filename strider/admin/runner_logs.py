@@ -14,6 +14,11 @@ from typing import Any, AsyncIterator
 from strider.runner_log_paths import get_isolated_session_log_path, tail_text_file_lines
 
 
+def _redis_log_fallback_enabled() -> bool:
+    v = os.environ.get("STRIDER_RUNNER_LOG_REDIS", "").strip().lower()
+    return v in ("1", "true", "yes")
+
+
 def _line_entries(lines: list[str]) -> list[dict[str, Any]]:
     return [
         {
@@ -39,6 +44,13 @@ async def read_runner_log_tail(
         return tail_text_file_lines(path, limit)
 
     lines = await asyncio.to_thread(_read)
+    if not lines and _redis_log_fallback_enabled():
+        from strider.messaging.runner_redis_log import read_tail_from_redis
+
+        def _from_redis() -> list[str]:
+            return read_tail_from_redis(session_id, limit)
+
+        lines = await asyncio.to_thread(_from_redis)
     return _line_entries(lines)
 
 

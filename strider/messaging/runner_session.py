@@ -83,6 +83,13 @@ async def _run(runner_name: str, session_id: str, payload: dict[str, Any]) -> in
 
     _stop_event = asyncio.Event()
     log = _setup_logging(runner_name, session_id)
+    from strider.messaging.runner import (
+        bind_runner_session_context,
+        configure_isolated_process_logging,
+    )
+
+    configure_isolated_process_logging(runner_name, session_id)
+    bind_runner_session_context(runner_name, session_id)
 
     log.info(
         "Session process started: runner=%s session_id=%s pid=%s",
@@ -136,8 +143,11 @@ async def _run(runner_name: str, session_id: str, payload: dict[str, Any]) -> in
     # Instantiate runner
     runner = runner_cls()
 
-    # Import flag helpers
-    from strider.messaging.runner import check_stop_flag, clear_stop_flag
+    from strider.messaging.runner import (
+        check_stop_flag,
+        clear_runner_session_context,
+        clear_stop_flag,
+    )
 
     exit_code = 0
     try:
@@ -215,6 +225,7 @@ async def _run(runner_name: str, session_id: str, payload: dict[str, Any]) -> in
             runner_name, session_id, exit_code,
         )
         clear_stop_flag(session_id)
+        clear_runner_session_context()
 
         # Close child DB/Redis connections
         try:

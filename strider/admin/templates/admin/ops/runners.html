@@ -120,8 +120,7 @@
                         <td class="px-4 py-3 text-gray-500 text-xs" x-text="i.stopped_at ? new Date(i.stopped_at).toLocaleString() : '—'"></td>
                         <td class="px-4 py-3 text-right">
                             <div class="flex items-center justify-end gap-1 flex-wrap">
-                                <a :href="'{{ admin_prefix }}/ops/logs/?search=' + encodeURIComponent(i.session_id)" target="_blank" class="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="Abrir logs (filtro por session_id)">Logs</a>
-                                <button @click="showLogsModal(i)" class="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="Ver últimas linhas no buffer">Ver logs</button>
+                                <button @click="showLogsModal(i)" class="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="Logs da instância (ficheiro / Redis)">Ver logs</button>
                                 <template x-if="i.status === 'running'">
                                     <span class="flex items-center gap-1">
                                         <button @click="pauseInstance(i)" class="px-2 py-1 text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded transition-colors">Pausar</button>
