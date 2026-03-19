@@ -394,8 +394,7 @@ class Runner(ABC):
         cmd = [
             sys.executable,
             "-m",
-            "strider",
-            "runrunner-session",
+            "strider.messaging.runner_session",
             runner_name,
             session_id,
             payload_path,
