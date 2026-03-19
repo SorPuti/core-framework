@@ -19,7 +19,11 @@ import asyncio
 import json
 import logging
 import os
+from collections import deque
 from typing import Any, TYPE_CHECKING
+
+# Rolling host metrics for Ops charts (last N samples per process; max 60).
+_RUNNER_HOST_METRIC_HISTORY: deque[dict[str, Any]] = deque(maxlen=60)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -674,6 +678,86 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         except Exception as e:
             logger.warning("Failed to list runners: %s", e)
             return {"items": [], "total": 0}
+
+    @router.get("/runners/dashboard")
+    async def runners_dashboard(
+        request: Request,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Aggregates runner instance counts, recent activity, and host CPU/RAM samples
+        (API host). Appends one sample to an in-memory ring buffer for charting.
+        """
+        from strider.admin.infrastructure import InfraDetector
+        from strider.models import get_session
+        from strider.admin.models import RunnerInstance
+        from strider.querysets import QuerySet
+
+        try:
+            infra = await InfraDetector.collect()
+        except Exception as e:
+            logger.warning("runners_dashboard: InfraDetector.collect failed: %s", e)
+            infra = {"system": {}, "collected_at": timezone.now().isoformat()}
+
+        sys_info = infra.get("system") or {}
+        collected = infra.get("collected_at") or timezone.now().isoformat()
+        sample = {
+            "t": collected,
+            "cpu_percent": round(float(sys_info.get("cpu_percent") or 0), 1),
+            "memory_used_mb": int(sys_info.get("memory_used_mb") or 0),
+            "memory_percent": round(float(sys_info.get("memory_percent") or 0), 1),
+            "memory_total_mb": int(sys_info.get("memory_total_mb") or 0),
+        }
+        _RUNNER_HOST_METRIC_HISTORY.append(sample)
+
+        counts = {
+            "total": 0,
+            "running": 0,
+            "paused": 0,
+            "stopping": 0,
+            "stopped": 0,
+        }
+        recent_instances: list[dict[str, Any]] = []
+        try:
+            db = await get_session()
+            async with db:
+                qs = QuerySet(RunnerInstance, db)
+                counts["total"] = await qs.count()
+                counts["running"] = await qs.filter(status="running").count()
+                counts["paused"] = await qs.filter(status="paused").count()
+                counts["stopping"] = await qs.filter(status="stopping").count()
+                counts["stopped"] = await qs.filter(status="stopped").count()
+                rq = QuerySet(RunnerInstance, db)
+                rows = await rq.order_by("-started_at").limit(20).all()
+                for r in rows:
+                    recent_instances.append(
+                        {
+                            "id": r.id,
+                            "runner_name": r.runner_name,
+                            "session_id": r.session_id,
+                            "status": r.status,
+                            "started_at": r.started_at.isoformat() if r.started_at else None,
+                            "stopped_at": r.stopped_at.isoformat() if r.stopped_at else None,
+                            "pid": getattr(r, "pid", None),
+                        }
+                    )
+        except Exception as e:
+            logger.warning("runners_dashboard: runner instances query failed: %s", e)
+
+        return {
+            "counts": counts,
+            "host": {
+                "hostname": sys_info.get("hostname"),
+                "cpu_percent": sample["cpu_percent"],
+                "memory_used_mb": sample["memory_used_mb"],
+                "memory_percent": sample["memory_percent"],
+                "memory_total_mb": sample["memory_total_mb"],
+                "disk_percent": round(float(sys_info.get("disk_percent") or 0), 1),
+            },
+            "metric_history": list(_RUNNER_HOST_METRIC_HISTORY),
+            "recent_instances": recent_instances,
+            "collected_at": collected,
+        }
 
     @router.get("/runners/instances")
     async def runners_instances(

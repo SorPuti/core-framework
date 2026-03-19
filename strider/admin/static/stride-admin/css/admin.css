@@ -43,3 +43,53 @@ table td {
 .htmx-request .htmx-indicator {
     display: inline-block;
 }
+
+/* ── Ops / Runner Sessions (DevOps-style scope) ─────────────────── */
+.ops-scope {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --ops-bg: #0a0a0f;
+    --ops-surface: #111118;
+    --ops-surface2: #18181f;
+    --ops-border: rgba(255, 255, 255, 0.08);
+    --ops-muted: #71717a;
+    --ops-accent: #3b82f6;
+}
+
+.dark .ops-scope .ops-card {
+    background: linear-gradient(145deg, var(--ops-surface) 0%, var(--ops-surface2) 100%);
+    border-color: var(--ops-border);
+}
+
+.ops-scope .ops-card {
+    border: 1px solid var(--ops-border);
+    border-radius: 0.75rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ops-scope .ops-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.45);
+}
+
+.ops-scope .ops-terminal {
+    background: linear-gradient(180deg, #0c1222 0%, #0a0e18 100%);
+    font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.ops-scope .ops-skeleton {
+    background: linear-gradient(90deg, #27272a 25%, #3f3f46 50%, #27272a 75%);
+    background-size: 200% 100%;
+    animation: ops-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes ops-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.light .ops-scope .ops-skeleton {
+    background: linear-gradient(90deg, #e4e4e7 25%, #f4f4f5 50%, #e4e4e7 75%);
+    background-size: 200% 100%;
+}

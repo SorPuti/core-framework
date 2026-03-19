@@ -197,6 +197,7 @@ Para não misturar logs da API (ex.: uvicorn.access) com os da instância, o arq
 - **Emitir logs no código da app** (ficheiro + stdout [+ Redis opcional], visível no Ops): no processo filho, após `configure_isolated_process_logging`, o **root** recebe os mesmos handlers — `logging.getLogger(__name__)` da app também grava no ficheiro. Opcionalmente: `get_runner_session_logger()` ou `self.session_log`.
 - **Redis** (sem FS partilhado entre API e worker): `STRIDER_RUNNER_LOG_REDIS=1` no filho e na API; listas `strider:runner_log:{session_id}`. O GET de tail no Ops usa Redis se o ficheiro estiver vazio na API.
 - **Ops**: `GET .../api/ops/runners/instances/by-session/{session_id}/logs?tail=N&runner_name=ClasseRunner` (query `runner_name` evita 404 se não houver linha em `RunnerInstance`). SSE: `/api/ops/logs/stream?session_id=X&runner_name=ClasseRunner&level=DEBUG`. Tela cheia: `/admin/ops/logs/?session_id=...&runner_name=...&runner_logs=1`.
+- **Dashboard (Admin)**: `GET /api/ops/runners/dashboard` — contagens por status, últimas instâncias, amostra de CPU/RAM do **host da API** e `metric_history` (buffer em memória, últimas 60 amostras) para gráficos no Operations Center.
 
 ---
 

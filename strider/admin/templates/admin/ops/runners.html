@@ -1,427 +1,849 @@
 {% extends "admin/base.html" %}
 
-{% block title %}Runners — {{ site_header }}{% endblock %}
+{% block title %}Runner Sessions — {{ site_header }}{% endblock %}
+
+{% block page_title %}Runner Sessions{% endblock %}
+
+{% block extra_head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+<style>
+  .ops-scope { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; }
+  .ops-scope .ops-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+  .dark .ops-scope .ops-card {
+    background: linear-gradient(145deg, #111118 0%, #18181f 100%);
+    border-color: rgba(255,255,255,0.08);
+  }
+  .ops-scope .ops-card:hover { transform: translateY(-2px); box-shadow: 0 16px 48px -16px rgba(0,0,0,0.5); }
+  .ops-terminal {
+    background: linear-gradient(180deg, #0c1222 0%, #0a0e18 100%);
+    font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  }
+  .ops-skeleton {
+    background: linear-gradient(90deg, #27272a 25%, #3f3f46 50%, #27272a 75%);
+    background-size: 200% 100%;
+    animation: ops-shimmer 1.2s ease-in-out infinite;
+  }
+  @keyframes ops-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .light .ops-skeleton {
+    background: linear-gradient(90deg, #e4e4e7 25%, #f4f4f5 50%, #e4e4e7 75%);
+    background-size: 200% 100%;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="p-6" x-data="runnersView()" x-init="loadRegistered(); loadInstances()">
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Runner Manager</h1>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Tipos de runner e instâncias (start/stop sem publicar manualmente)</p>
-        </div>
-        <button @click="loadRegistered(); loadInstances()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
-            <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
-            Atualizar
-        </button>
+<div
+  class="ops-scope -m-4 sm:-m-6 p-4 sm:p-6 min-h-[calc(100vh-4rem)] bg-gray-50/80 dark:bg-[#0a0a0f]"
+  x-data="runnersView()"
+  x-init="init()"
+>
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Runner Sessions</h1>
+      <p class="text-sm text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl">
+        Controlo e observabilidade de sessões isoladas: métricas do <span class="text-zinc-300 font-medium">host da API</span>, instâncias e logs em tempo real.
+      </p>
     </div>
-
-    <!-- Registered Runners -->
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tipos de Runner</h3>
-    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-8">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 dark:bg-gray-700/50">
-                <tr>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Nome</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Input Topic</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                <template x-for="r in registeredRunners" :key="r.name">
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                        <td class="px-4 py-3 font-medium text-gray-900 dark:text-white" x-text="r.name"></td>
-                        <td class="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-300" x-text="r.input_topic || '—'"></td>
-                    </tr>
-                </template>
-                <template x-if="!loading && registeredRunners.length === 0">
-                    <tr><td colspan="2" class="px-4 py-8 text-center text-gray-400">Nenhum runner registrado. Subclasses de Runner aparecem aqui.</td></tr>
-                </template>
-            </tbody>
-        </table>
+    <div class="flex items-center gap-2 shrink-0">
+      <button
+        type="button"
+        @click="refreshAll()"
+        class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-gray-800 dark:text-zinc-100 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
+      >
+        <svg class="w-4 h-4" :class="{'animate-spin': loading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+        Atualizar
+      </button>
     </div>
+  </div>
 
-    <!-- Start instance -->
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Iniciar instância</h3>
-    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 mb-8">
-        <form @submit.prevent="startInstance()" class="flex flex-wrap items-end gap-4">
-            <div>
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Runner</label>
-                <select x-model="startForm.runner_name" class="w-48 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm" required>
-                    <option value="">—</option>
-                    <template x-for="r in registeredRunners" :key="r.name">
-                        <option :value="r.name" x-text="r.name"></option>
+  <template x-if="pageError">
+    <div class="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200" x-text="pageError"></div>
+  </template>
+
+  <!-- Metrics row -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+    <div class="ops-card rounded-xl p-4 sm:p-5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10">
+      <p class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-500">Ativas</p>
+      <p class="text-2xl sm:text-3xl font-bold text-emerald-400 mt-1 tabular-nums" x-text="dashboard?.counts?.running ?? '—'"></p>
+    </div>
+    <div class="ops-card rounded-xl p-4 sm:p-5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10">
+      <p class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-500">Pausadas</p>
+      <p class="text-2xl sm:text-3xl font-bold text-amber-400 mt-1 tabular-nums" x-text="dashboard?.counts?.paused ?? '—'"></p>
+    </div>
+    <div class="ops-card rounded-xl p-4 sm:p-5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10">
+      <p class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-500">CPU (host)</p>
+      <p class="text-2xl sm:text-3xl font-bold text-sky-400 mt-1 tabular-nums"><span x-text="dashboard?.host?.cpu_percent != null ? dashboard.host.cpu_percent + '%' : '—'"></span></p>
+    </div>
+    <div class="ops-card rounded-xl p-4 sm:p-5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10">
+      <p class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-500">RAM (host)</p>
+      <p class="text-lg sm:text-2xl font-bold text-violet-300 mt-1 tabular-nums leading-tight">
+        <span x-text="dashboard?.host?.memory_used_mb != null ? dashboard.host.memory_used_mb + ' MB' : '—'"></span>
+        <span class="text-xs font-normal text-zinc-500 block" x-show="dashboard?.host?.memory_percent != null" x-text="dashboard?.host?.memory_percent + '% usado'"></span>
+      </p>
+    </div>
+  </div>
+
+  <!-- Chart + recent -->
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-8">
+    <div class="xl:col-span-2 ops-card rounded-xl p-4 sm:p-5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-zinc-200">Host — CPU &amp; memória (%)</h2>
+        <span class="text-[10px] text-zinc-500 font-mono" x-text="dashboard?.counts?.total != null ? 'Instâncias: ' + dashboard.counts.total : ''"></span>
+      </div>
+      <div class="h-48 sm:h-56 relative">
+        <canvas id="runnerOpsHostChart" class="max-h-full"></canvas>
+        <template x-if="!dashboard || !(dashboard.metric_history && dashboard.metric_history.length)">
+          <p class="absolute inset-0 flex items-center justify-center text-xs text-zinc-500">Atualize para acumular histórico (amostras ao abrir / refresh)</p>
+        </template>
+      </div>
+    </div>
+    <div class="ops-card rounded-xl p-4 sm:p-5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 flex flex-col min-h-[12rem]">
+      <h2 class="text-sm font-semibold text-zinc-200 mb-3">Atividade recente</h2>
+      <ul class="space-y-2 flex-1 overflow-y-auto max-h-56 text-xs">
+        <template x-for="row in (dashboard?.recent_instances || []).slice(0, 8)" :key="row.id + '-' + row.session_id">
+          <li class="flex items-center justify-between gap-2 py-1.5 border-b border-white/5 last:border-0">
+            <span class="font-mono text-zinc-400 truncate" x-text="(row.session_id || '').slice(0, 14) + '…'"></span>
+            <span class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase"
+                  :class="statusBadgeClass(row.status)" x-text="row.status"></span>
+          </li>
+        </template>
+        <template x-if="!dashboard || !(dashboard.recent_instances && dashboard.recent_instances.length)">
+          <li class="text-zinc-500">Sem eventos recentes.</li>
+        </template>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Start form -->
+  <div class="ops-card rounded-xl p-4 sm:p-6 mb-8 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10">
+    <h2 class="text-sm font-semibold text-zinc-200 mb-4">Iniciar instância</h2>
+    <form @submit.prevent="startInstance()" class="flex flex-col lg:flex-row flex-wrap items-stretch lg:items-end gap-4">
+      <div class="flex-1 min-w-[10rem]">
+        <label class="block text-xs font-medium text-zinc-500 mb-1">Runner</label>
+        <select x-model="startForm.runner_name" class="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white px-3 py-2 text-sm" required>
+          <option value="">—</option>
+          <template x-for="r in registeredRunners" :key="r.name">
+            <option :value="r.name" x-text="r.name"></option>
+          </template>
+        </select>
+      </div>
+      <div class="flex-1 min-w-[10rem]">
+        <label class="block text-xs font-medium text-zinc-500 mb-1">Session ID <span class="text-red-400">*</span></label>
+        <input type="text" x-model="startForm.session_id" placeholder="ex: uuid-…" class="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono" required>
+      </div>
+      <div class="w-full sm:w-40">
+        <label class="block text-xs font-medium text-zinc-500 mb-1">User ID</label>
+        <input type="text" x-model="startForm.user_id" placeholder="opcional" class="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white px-3 py-2 text-sm">
+      </div>
+      <div class="flex-1 min-w-[12rem]">
+        <label class="block text-xs font-medium text-zinc-500 mb-1">Payload JSON</label>
+        <input type="text" x-model="startForm.payload" placeholder='{"key": "value"}' class="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white px-3 py-2 text-xs font-mono">
+      </div>
+      <button type="submit" :disabled="startSending" class="px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl disabled:opacity-50 shadow-lg shadow-blue-900/20">
+        <span x-show="!startSending">▶ Start</span>
+        <span x-show="startSending">Enviando…</span>
+      </button>
+    </form>
+    <p class="text-[11px] text-zinc-500 mt-3">O comando é publicado via broker; o processo <code class="text-blue-400/90">runrunner</code> deve estar ativo.</p>
+  </div>
+
+  <!-- Filters -->
+  <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 mb-4">
+    <select x-model="filterRunner" @change="loadInstances()" class="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm px-3 py-2 text-gray-900 dark:text-zinc-100">
+      <option value="">Todos os runners</option>
+      <template x-for="r in registeredRunners" :key="r.name">
+        <option :value="r.name" x-text="r.name"></option>
+      </template>
+    </select>
+    <select x-model="filterStatus" @change="loadInstances()" class="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm px-3 py-2 text-gray-900 dark:text-zinc-100">
+      <option value="">Todos os status</option>
+      <option value="running">running</option>
+      <option value="paused">paused</option>
+      <option value="stopping">stopping</option>
+      <option value="stopped">stopped</option>
+    </select>
+  </div>
+
+  <!-- Desktop table -->
+  <div class="hidden md:block ops-card rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-zinc-900">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-zinc-950/50 border-b border-white/5">
+          <tr>
+            <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Runner</th>
+            <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Session</th>
+            <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Status</th>
+            <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500">PID</th>
+            <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500">CPU / Mem</th>
+            <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Uptime</th>
+            <th class="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Ações</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/5">
+          <template x-if="loading">
+            <tr>
+              <td colspan="7" class="px-4 py-8">
+                <div class="space-y-2">
+                  <template x-for="i in 4" :key="'sk-' + i">
+                    <div class="h-3 rounded ops-skeleton w-full opacity-80"></div>
+                  </template>
+                </div>
+              </td>
+            </tr>
+          </template>
+          <template x-if="!loading">
+            <template x-for="i in instances" :key="i.id">
+              <tr class="hover:bg-white/[0.03] transition-colors">
+                <td class="px-4 py-3 font-medium text-zinc-100" x-text="i.runner_name"></td>
+                <td class="px-4 py-3 font-mono text-xs text-zinc-400 max-w-[200px] truncate" x-text="i.session_id"></td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase rounded-full border"
+                        :class="statusBadgeClass(i.status)" x-text="i.status"></span>
+                </td>
+                <td class="px-4 py-3 font-mono text-xs text-zinc-500" x-text="i.pid ?? '—'"></td>
+                <td class="px-4 py-3 text-xs text-zinc-500" title="Métricas por processo: roadmap — não simulado">
+                  <span class="text-zinc-600">—</span>
+                </td>
+                <td class="px-4 py-3 text-xs text-zinc-500 font-mono" x-text="formatUptime(i)"></td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex justify-end gap-1 flex-wrap">
+                    <button type="button" @click="openDetail(i)" class="px-2 py-1 text-xs font-medium text-sky-400 hover:bg-sky-500/10 rounded-lg">Detalhe</button>
+                    <button type="button" @click="showLogsModal(i)" class="px-2 py-1 text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg">Logs</button>
+                    <template x-if="i.status === 'running'">
+                      <span class="inline-flex gap-1">
+                        <button type="button" @click="pauseInstance(i)" :disabled="actionBusy" class="px-2 py-1 text-xs text-amber-400 hover:bg-amber-500/10 rounded-lg disabled:opacity-40">⏸</button>
+                        <button type="button" @click="resumeInstance(i)" :disabled="actionBusy" class="px-2 py-1 text-xs text-blue-400 hover:bg-blue-500/10 rounded-lg disabled:opacity-40">▶</button>
+                        <button type="button" @click="stopInstance(i)" :disabled="actionBusy" class="px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 rounded-lg disabled:opacity-40">⏹</button>
+                      </span>
                     </template>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Session ID <span class="text-red-500">*</span></label>
-                <input type="text" x-model="startForm.session_id" placeholder="ex: user-123" class="w-40 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm" required>
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">User ID (opcional)</label>
-                <input type="text" x-model="startForm.user_id" placeholder="ex: 123" class="w-32 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Payload JSON (opcional)</label>
-                <input type="text" x-model="startForm.payload" placeholder='{"key": "value"}' class="w-56 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono text-xs">
-            </div>
-            <button type="submit" :disabled="startSending" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">
-                <span x-show="!startSending">Iniciar</span>
-                <span x-show="startSending">Enviando…</span>
-            </button>
-        </form>
-        <p class="text-xs text-gray-400 mt-3">O comando start é enviado ao runner via Kafka; o processo <code class="font-mono text-primary-500">core runrunner &lt;Nome&gt;</code> deve estar rodando.</p>
-    </div>
-
-    <!-- Instances list -->
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Instâncias</h3>
-    <div class="flex flex-wrap items-center gap-4 mb-4">
-        <select x-model="filterRunner" @change="loadInstances()" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm">
-            <option value="">Todos os runners</option>
-            <template x-for="r in registeredRunners" :key="r.name">
-                <option :value="r.name" x-text="r.name"></option>
+                    <template x-if="i.status === 'paused'">
+                      <span class="inline-flex gap-1">
+                        <button type="button" @click="resumeInstance(i)" :disabled="actionBusy" class="px-2 py-1 text-xs text-blue-400 hover:bg-blue-500/10 rounded-lg disabled:opacity-40">▶</button>
+                        <button type="button" @click="stopInstance(i)" :disabled="actionBusy" class="px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 rounded-lg disabled:opacity-40">⏹</button>
+                      </span>
+                    </template>
+                    <button type="button" @click="deleteInstance(i)" class="px-2 py-1 text-xs text-zinc-500 hover:text-red-400 rounded-lg">Excluir</button>
+                  </div>
+                </td>
+              </tr>
             </template>
-        </select>
-        <select x-model="filterStatus" @change="loadInstances()" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm">
-            <option value="">Todos os status</option>
-            <option value="running">running</option>
-            <option value="stopped">stopped</option>
-        </select>
+          </template>
+        </tbody>
+      </table>
     </div>
-    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 dark:bg-gray-700/50">
-                <tr>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Runner</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Session ID</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">User ID</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Motivo</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Exit</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Início</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Fim</th>
-                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Ações</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                <template x-for="i in instances" :key="i.id">
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                        <td class="px-4 py-3 font-medium text-gray-900 dark:text-white" x-text="i.runner_name"></td>
-                        <td class="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-300" x-text="i.session_id"></td>
-                        <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="i.user_id || '—'"></td>
-                        <td class="px-4 py-3">
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full"
-                                  :class="i.status === 'running' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'">
-                                <span x-text="i.status"></span>
-                            </span>
-                        </td>
-                        <td class="px-4 py-3 text-xs text-gray-500" x-text="i.stop_reason || '—'"></td>
-                        <td class="px-4 py-3 text-xs font-mono text-gray-500" x-text="(i.exit_code === null || i.exit_code === undefined) ? '—' : i.exit_code"></td>
-                        <td class="px-4 py-3 text-gray-500 text-xs" x-text="i.started_at ? new Date(i.started_at).toLocaleString() : '—'"></td>
-                        <td class="px-4 py-3 text-gray-500 text-xs" x-text="i.stopped_at ? new Date(i.stopped_at).toLocaleString() : '—'"></td>
-                        <td class="px-4 py-3 text-right">
-                            <div class="flex items-center justify-end gap-1 flex-wrap">
-                                <button @click="showLogsModal(i)" class="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="Logs da instância (ficheiro / Redis)">Ver logs</button>
-                                <template x-if="i.status === 'running'">
-                                    <span class="flex items-center gap-1">
-                                        <button @click="pauseInstance(i)" class="px-2 py-1 text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded transition-colors">Pausar</button>
-                                        <button @click="resumeInstance(i)" class="px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors">Retomar</button>
-                                        <button @click="stopInstance(i)" class="px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors">Desligar</button>
-                                    </span>
-                                </template>
-                                <button @click="deleteInstance(i)" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Excluir registro e desligar se estiver rodando">Excluir</button>
-                            </div>
-                        </td>
-                    </tr>
-                </template>
-                <template x-if="!loading && instances.length === 0">
-                    <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">Nenhuma instância. Use o formulário acima para iniciar.</td></tr>
-                </template>
-            </tbody>
-        </table>
-        <div class="px-4 py-2.5 bg-gray-50 dark:bg-gray-700/30 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
-            <span class="text-xs text-gray-400" x-text="'Total: ' + instancesTotal + ' instância(s)'"></span>
-            <div class="flex gap-2">
-                <button @click="prevPage(); loadInstances()" :disabled="page <= 1" class="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-600 disabled:opacity-50">Anterior</button>
-                <span class="text-xs text-gray-500 py-1" x-text="'Pág. ' + page"></span>
-                <button @click="nextPage(); loadInstances()" :disabled="instances.length < perPage" class="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-600 disabled:opacity-50">Próxima</button>
-            </div>
-        </div>
+    <div class="px-4 py-3 bg-zinc-950/30 border-t border-white/5 flex flex-wrap justify-between items-center gap-2">
+      <span class="text-xs text-zinc-500" x-text="'Total: ' + instancesTotal + ' instância(s)'"></span>
+      <div class="flex gap-2">
+        <button @click="prevPage(); loadInstances()" :disabled="page <= 1" class="px-3 py-1.5 text-xs rounded-lg border border-white/10 disabled:opacity-40">Anterior</button>
+        <span class="text-xs text-zinc-500 py-1.5" x-text="'Pág. ' + page"></span>
+        <button @click="nextPage(); loadInstances()" :disabled="instances.length < perPage" class="px-3 py-1.5 text-xs rounded-lg border border-white/10 disabled:opacity-40">Próxima</button>
+      </div>
     </div>
+    <template x-if="!loading && instances.length === 0">
+      <div class="px-6 py-16 text-center">
+        <p class="text-zinc-500 text-sm">Nenhuma instância nesta página.</p>
+        <p class="text-zinc-600 text-xs mt-2">Inicie uma sessão com o formulário acima.</p>
+      </div>
+    </template>
+  </div>
 
-    <!-- Modal Logs (tempo real por session_id) -->
-    <div x-show="logsModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="closeLogsModal()">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col" @click.outside="closeLogsModal()">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                <div class="flex items-center gap-3">
-                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Logs — <span x-text="logsModalSessionId || ''"></span></h4>
-                    <span x-show="logsModalStreamConnected" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-full">
-                        <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Tempo real
-                    </span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <a :href="logsModalFullScreenHref()" target="_blank" class="text-xs text-primary-500 hover:underline">Abrir em tela cheia</a>
-                    <button @click="closeLogsModal()" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded">✕</button>
-                </div>
-            </div>
-            <div class="p-4 overflow-auto flex-1 bg-[#0f172a] font-mono text-xs max-h-[60vh]" x-ref="logsModalContainer">
-                <template x-for="(entry, idx) in logsModalEntries" :key="'log-' + idx">
-                    <div class="py-0.5 flex items-start gap-2 text-slate-300">
-                        <span class="text-slate-500 flex-shrink-0" x-text="(entry.timestamp || '').substring(11, 23)"></span>
-                        <span class="flex-shrink-0 w-14 font-semibold" :class="entry.level === 'ERROR' ? 'text-red-400' : entry.level === 'WARNING' ? 'text-amber-400' : 'text-emerald-400'" x-text="entry.level"></span>
-                        <span class="break-words min-w-0" x-text="entry.message"></span>
-                    </div>
-                </template>
-                <template x-if="logsModalError">
-                    <p class="text-amber-400" x-text="logsModalError"></p>
-                </template>
-                <template x-if="logsModalEntries.length === 0 && !logsModalLoading && !logsModalStreamConnected && !logsModalError">
-                    <p class="text-slate-500">Conectando ao stream do arquivo de log...</p>
-                </template>
-                <template x-if="logsModalEntries.length === 0 && !logsModalLoading && logsModalStreamConnected && !logsModalError">
-                    <p class="text-slate-500">Nenhuma linha ainda. O processo do runner grava em disco; novas linhas aparecem em tempo real.</p>
-                </template>
-                <template x-if="logsModalLoading && logsModalEntries.length === 0">
-                    <p class="text-slate-500">Carregando buffer...</p>
-                </template>
-            </div>
+  <!-- Mobile cards -->
+  <div class="md:hidden space-y-3 mt-4">
+    <template x-if="loading">
+      <div class="ops-card rounded-xl p-4 ops-skeleton h-28"></div>
+    </template>
+    <template x-for="i in instances" :key="'m-' + i.id">
+      <div class="ops-card rounded-xl p-4 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10">
+        <div class="flex justify-between items-start gap-2 mb-2">
+          <span class="font-mono text-xs text-zinc-400 break-all" x-text="i.session_id"></span>
+          <span class="shrink-0 px-2 py-0.5 text-[10px] font-bold uppercase rounded-full border" :class="statusBadgeClass(i.status)" x-text="i.status"></span>
         </div>
+        <p class="text-xs text-zinc-500 mb-3" x-text="i.runner_name"></p>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" @click="openDetail(i)" class="px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10">Detalhe</button>
+          <button type="button" @click="showLogsModal(i)" class="px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10">Logs</button>
+          <div x-data="{ open: false }" class="relative">
+            <button type="button" @click="open = !open" class="px-3 py-1.5 text-xs rounded-lg bg-blue-600/20 text-blue-300 border border-blue-500/30">Ações ▾</button>
+            <div x-show="open" @click.outside="open = false" x-transition class="absolute right-0 mt-1 z-20 min-w-[10rem] rounded-lg border border-white/10 bg-zinc-900 shadow-xl py-1">
+              <template x-if="i.status === 'running'">
+                <div>
+                  <button class="w-full text-left px-3 py-2 text-xs hover:bg-white/5" @click="pauseInstance(i); open=false">⏸ Pausar</button>
+                  <button class="w-full text-left px-3 py-2 text-xs hover:bg-white/5" @click="resumeInstance(i); open=false">▶ Retomar</button>
+                  <button class="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-white/5" @click="stopInstance(i); open=false">⏹ Parar</button>
+                </div>
+              </template>
+              <template x-if="i.status === 'paused'">
+                <div>
+                  <button class="w-full text-left px-3 py-2 text-xs hover:bg-white/5" @click="resumeInstance(i); open=false">▶ Retomar</button>
+                  <button class="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-white/5" @click="stopInstance(i); open=false">⏹ Parar</button>
+                </div>
+              </template>
+              <button class="w-full text-left px-3 py-2 text-xs hover:bg-white/5 text-zinc-400" @click="deleteInstance(i); open=false">Excluir</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Detail drawer -->
+  <div
+    x-show="detailOpen"
+    x-cloak
+    class="fixed inset-0 z-[60] flex justify-end"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+  >
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="closeDetail()"></div>
+    <aside
+      class="relative w-full max-w-[min(100%,28rem)] h-full bg-[#0c0c12] border-l border-white/10 shadow-2xl flex flex-col"
+      x-transition:enter="transition transform ease-out duration-200"
+      x-transition:enter-start="translate-x-full"
+      x-transition:enter-end="translate-x-0"
+      x-transition:leave="transition transform ease-in duration-150"
+      x-transition:leave-start="translate-x-0"
+      x-transition:leave-end="translate-x-full"
+    >
+      <div class="flex items-center justify-between px-4 py-4 border-b border-white/10">
+        <div>
+          <p class="text-[10px] uppercase tracking-wider text-zinc-500">Sessão</p>
+          <p class="font-mono text-sm text-zinc-200 break-all" x-text="selectedInstance?.session_id"></p>
+        </div>
+        <button type="button" @click="closeDetail()" class="p-2 rounded-lg hover:bg-white/10 text-zinc-400">✕</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-6">
+        <template x-if="selectedInstance">
+          <div>
+            <span class="inline-flex px-2 py-1 text-[10px] font-bold uppercase rounded-full border mb-4"
+                  :class="statusBadgeClass(selectedInstance.status)" x-text="selectedInstance.status"></span>
+            <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Timeline</h3>
+            <div class="space-y-3 pl-3 border-l border-white/10">
+              <div>
+                <p class="text-[10px] text-zinc-500">Início</p>
+                <p class="text-sm font-mono text-zinc-300" x-text="selectedInstance.started_at ? new Date(selectedInstance.started_at).toLocaleString() : '—'"></p>
+              </div>
+              <div>
+                <p class="text-[10px] text-zinc-500">Fim</p>
+                <p class="text-sm font-mono text-zinc-300" x-text="selectedInstance.stopped_at ? new Date(selectedInstance.stopped_at).toLocaleString() : '—'"></p>
+              </div>
+              <div>
+                <p class="text-[10px] text-zinc-500">PID</p>
+                <p class="text-sm font-mono text-zinc-300" x-text="selectedInstance.pid ?? '—'"></p>
+              </div>
+            </div>
+            <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mt-6 mb-2">Recursos</h3>
+            <p class="text-xs text-zinc-500 mb-3">Métricas por processo não estão disponíveis neste host (roadmap). Referência do servidor:</p>
+            <div class="space-y-2">
+              <div>
+                <div class="flex justify-between text-[10px] text-zinc-500 mb-1"><span>CPU (host)</span><span x-text="(dashboard?.host?.cpu_percent ?? '—') + (dashboard?.host?.cpu_percent != null ? '%' : '')"></span></div>
+                <div class="h-2 rounded-full bg-zinc-800 overflow-hidden">
+                  <div class="h-full bg-sky-500/80 rounded-full transition-all duration-500" :style="'width:' + (dashboard?.host?.cpu_percent || 0) + '%'"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-[10px] text-zinc-500 mb-1"><span>RAM (host)</span><span x-text="dashboard?.host?.memory_percent != null ? dashboard.host.memory_percent + '%' : '—'"></span></div>
+                <div class="h-2 rounded-full bg-zinc-800 overflow-hidden">
+                  <div class="h-full bg-violet-500/80 rounded-full transition-all duration-500" :style="'width:' + (dashboard?.host?.memory_percent || 0) + '%'"></div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-6 flex flex-wrap gap-2">
+              <button type="button" @click="showLogsModal(selectedInstance)" class="px-4 py-2 text-sm rounded-xl bg-white/5 border border-white/10 hover:bg-white/10">Ver logs</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </aside>
+  </div>
+
+  <!-- FAB -->
+  <div
+    x-show="detailOpen && selectedInstance && (selectedInstance.status === 'running' || selectedInstance.status === 'paused')"
+    x-cloak
+    class="fixed bottom-6 right-6 z-[70] flex flex-col gap-2 sm:flex-row sm:items-center"
+  >
+    <template x-if="selectedInstance?.status === 'running'">
+      <div class="flex gap-2">
+        <button type="button" @click="pauseInstance(selectedInstance)" :disabled="actionBusy" class="px-4 py-3 rounded-full shadow-xl bg-amber-500 text-black font-semibold text-sm hover:bg-amber-400 disabled:opacity-50">⏸ Pausar</button>
+        <button type="button" @click="stopInstance(selectedInstance)" :disabled="actionBusy" class="px-4 py-3 rounded-full shadow-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-500 disabled:opacity-50">⏹ Parar</button>
+      </div>
+    </template>
+    <template x-if="selectedInstance?.status === 'paused'">
+      <div class="flex gap-2">
+        <button type="button" @click="resumeInstance(selectedInstance)" :disabled="actionBusy" class="px-4 py-3 rounded-full shadow-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-500 disabled:opacity-50">▶ Retomar</button>
+        <button type="button" @click="stopInstance(selectedInstance)" :disabled="actionBusy" class="px-4 py-3 rounded-full shadow-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-500 disabled:opacity-50">⏹ Parar</button>
+      </div>
+    </template>
+  </div>
+
+  <!-- Logs modal -->
+  <div x-show="logsModalOpen" x-cloak class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" @keydown.escape.window="closeLogsModal()">
+    <div class="bg-zinc-900 rounded-2xl border border-white/10 shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col" @click.outside="closeLogsModal()">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
+        <div>
+          <h4 class="text-sm font-semibold text-white">Logs — <span class="font-mono text-zinc-300" x-text="logsModalSessionId || ''"></span></h4>
+          <span x-show="logsModalStreamConnected" class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live
+          </span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <select x-model="logsLevelFilter" class="text-xs rounded-lg bg-zinc-800 border border-white/10 px-2 py-1.5 text-zinc-200">
+            <option value="ALL">Todos</option>
+            <option value="ERROR">ERROR</option>
+            <option value="WARNING">WARNING</option>
+            <option value="INFO">INFO</option>
+            <option value="DEBUG">DEBUG</option>
+          </select>
+          <input type="search" x-model="logsSearch" placeholder="Buscar…" class="text-xs rounded-lg bg-zinc-800 border border-white/10 px-2 py-1.5 text-zinc-200 w-40 sm:w-48">
+          <label class="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
+            <input type="checkbox" x-model="logsAutoScroll" class="rounded border-zinc-600">
+            Auto-scroll
+          </label>
+          <a :href="logsModalFullScreenHref()" target="_blank" class="text-xs text-sky-400 hover:underline">Tela cheia</a>
+          <button type="button" @click="closeLogsModal()" class="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400">✕</button>
+        </div>
+      </div>
+      <div class="ops-terminal p-4 overflow-auto flex-1 max-h-[min(65vh,520px)] text-zinc-300" x-ref="logsModalContainer">
+        <template x-for="(entry, idx) in visibleLogEntries" :key="'log-' + idx + '-' + (entry.timestamp || '') + (entry.message || '').slice(0, 24)">
+          <div class="py-0.5 flex items-start gap-2">
+            <span class="text-zinc-600 flex-shrink-0 w-[72px] font-mono text-[10px]" x-text="(entry.timestamp || '').substring(11, 23)"></span>
+            <span class="flex-shrink-0 w-16 font-semibold text-[10px]" :class="logLevelClass(entry.level)" x-text="entry.level || '—'"></span>
+            <span class="break-words min-w-0 text-[11px] leading-relaxed" x-text="entry.message"></span>
+          </div>
+        </template>
+        <template x-if="logsModalError">
+          <p class="text-amber-400 text-sm" x-text="logsModalError"></p>
+        </template>
+        <template x-if="visibleLogEntries.length === 0 && !logsModalLoading && !logsModalError">
+          <p class="text-zinc-500 text-sm">Nenhuma linha corresponde ao filtro.</p>
+        </template>
+        <template x-if="logsModalLoading && logsModalEntries.length === 0">
+          <p class="text-zinc-500">A carregar…</p>
+        </template>
+      </div>
     </div>
+  </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
 function runnersView() {
-    return {
-        loading: false,
-        startSending: false,
-        registeredRunners: [],
-        instances: [],
-        instancesTotal: 0,
-        page: 1,
-        perPage: 50,
-        filterRunner: '',
-        filterStatus: '',
-        startForm: { runner_name: '', session_id: '', user_id: '', payload: '' },
-        logsModalOpen: false,
-        logsModalSessionId: '',
-        logsModalRunnerName: '',
-        logsModalEntries: [],
-        logsModalLoading: false,
-        logsModalStreamConnected: false,
-        logsModalEventSource: null,
-        logsModalLimit: 2000,
-        logsModalError: '',
+  return {
+    loading: false,
+    actionBusy: false,
+    pageError: '',
+    dashboard: null,
+    runnerChart: null,
+    startSending: false,
+    registeredRunners: [],
+    instances: [],
+    instancesTotal: 0,
+    page: 1,
+    perPage: 50,
+    filterRunner: '',
+    filterStatus: '',
+    startForm: { runner_name: '', session_id: '', user_id: '', payload: '' },
+    detailOpen: false,
+    selectedInstance: null,
+    logsModalOpen: false,
+    logsModalSessionId: '',
+    logsModalRunnerName: '',
+    logsModalEntries: [],
+    logsModalLoading: false,
+    logsModalStreamConnected: false,
+    logsModalEventSource: null,
+    logsModalLimit: 2000,
+    logsModalError: '',
+    logsLevelFilter: 'ALL',
+    logsSearch: '',
+    logsAutoScroll: true,
 
-        logsModalFullScreenHref() {
-            const sid = this.logsModalSessionId || '';
-            const rn = this.logsModalRunnerName || '';
-            if (!sid || !rn) return '{{ admin_prefix }}/ops/logs/';
-            const q = new URLSearchParams({ session_id: sid, runner_name: rn, runner_logs: '1' });
-            return '{{ admin_prefix }}/ops/logs/?' + q.toString();
-        },
-
-        async loadRegistered() {
-            this.loading = true;
-            try {
-                const resp = await fetch('{{ admin_prefix }}/api/ops/runners/registered');
-                const data = await resp.json();
-                this.registeredRunners = data.items || [];
-            } catch (e) { console.error(e); } finally { this.loading = false; }
-        },
-
-        async loadInstances() {
-            this.loading = true;
-            try {
-                let url = '{{ admin_prefix }}/api/ops/runners/instances?page=' + this.page + '&per_page=' + this.perPage;
-                if (this.filterRunner) url += '&runner_name=' + encodeURIComponent(this.filterRunner);
-                if (this.filterStatus) url += '&status=' + encodeURIComponent(this.filterStatus);
-                const resp = await fetch(url);
-                const data = await resp.json();
-                this.instances = data.items || [];
-                this.instancesTotal = data.total || 0;
-            } catch (e) { console.error(e); } finally { this.loading = false; }
-        },
-
-        prevPage() { if (this.page > 1) this.page--; },
-        nextPage() { if (this.instances.length >= this.perPage) this.page++; },
-
-        async startInstance() {
-            if (!this.startForm.runner_name || !this.startForm.session_id) return;
-            this.startSending = true;
-            try {
-                const body = {
-                    runner_name: this.startForm.runner_name,
-                    session_id: this.startForm.session_id,
-                    user_id: this.startForm.user_id || null,
-                    payload: null
-                };
-                if (this.startForm.payload && this.startForm.payload.trim()) {
-                    try {
-                        body.payload = JSON.parse(this.startForm.payload);
-                    } catch (e) {
-                        alert('Payload inválido: use JSON válido');
-                        return;
-                    }
-                }
-                const resp = await fetch('{{ admin_prefix }}/api/ops/runners/instances/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                if (!resp.ok) {
-                    const err = await resp.json().catch(() => ({}));
-                    throw new Error(err.detail || resp.statusText);
-                }
-                this.startForm.session_id = '';
-                this.startForm.user_id = '';
-                this.startForm.payload = '';
-                this.loadInstances();
-            } catch (e) {
-                alert('Erro: ' + e.message);
-            } finally {
-                this.startSending = false;
-            }
-        },
-
-        async stopInstance(inst) {
-            if (!confirm('Desligar instância ' + inst.session_id + '?')) return;
-            try {
-                const resp = await fetch(
-                    '{{ admin_prefix }}/api/ops/runners/' + encodeURIComponent(inst.runner_name) + '/instances/' + encodeURIComponent(inst.session_id) + '/stop',
-                    { method: 'POST' }
-                );
-                if (!resp.ok) throw new Error(resp.statusText);
-                this.loadInstances();
-            } catch (e) {
-                alert('Erro: ' + e.message);
-            }
-        },
-
-        async pauseInstance(inst) {
-            try {
-                const resp = await fetch(
-                    '{{ admin_prefix }}/api/ops/runners/' + encodeURIComponent(inst.runner_name) + '/instances/' + encodeURIComponent(inst.session_id) + '/pause',
-                    { method: 'POST' }
-                );
-                if (!resp.ok) throw new Error(resp.statusText);
-                this.loadInstances();
-            } catch (e) {
-                alert('Erro: ' + e.message);
-            }
-        },
-
-        async resumeInstance(inst) {
-            try {
-                const resp = await fetch(
-                    '{{ admin_prefix }}/api/ops/runners/' + encodeURIComponent(inst.runner_name) + '/instances/' + encodeURIComponent(inst.session_id) + '/resume',
-                    { method: 'POST' }
-                );
-                if (!resp.ok) throw new Error(resp.statusText);
-                this.loadInstances();
-            } catch (e) {
-                alert('Erro: ' + e.message);
-            }
-        },
-
-        async deleteInstance(inst) {
-            if (!confirm('Excluir instância ' + inst.session_id + '? Será desligada se estiver rodando.')) return;
-            try {
-                const resp = await fetch(
-                    '{{ admin_prefix }}/api/ops/runners/instances/' + inst.id,
-                    { method: 'DELETE' }
-                );
-                if (!resp.ok) throw new Error(resp.statusText);
-                this.loadInstances();
-            } catch (e) {
-                alert('Erro: ' + e.message);
-            }
-        },
-
-        closeLogsModal() {
-            if (this.logsModalEventSource) {
-                this.logsModalEventSource.close();
-                this.logsModalEventSource = null;
-            }
-            this.logsModalStreamConnected = false;
-            this.logsModalError = '';
-            this.logsModalOpen = false;
-        },
-
-        buildRunnerLogsStreamUrl(sessionId, runnerName) {
-            const base = '{{ admin_prefix }}/api/ops/logs/stream';
-            const params = new URLSearchParams({ level: 'DEBUG' });
-            if (sessionId) params.set('session_id', sessionId);
-            if (runnerName) params.set('runner_name', runnerName);
-            return window.location.origin + base + '?' + params.toString();
-        },
-
-        async showLogsModal(inst) {
-            this.closeLogsModal();
-            this.logsModalSessionId = inst.session_id;
-            this.logsModalRunnerName = inst.runner_name || '';
-            this.logsModalEntries = [];
-            this.logsModalError = '';
-            this.logsModalOpen = true;
-            this.logsModalLoading = true;
-            this.logsModalStreamConnected = false;
-            try {
-                const q = new URLSearchParams({ tail: '500' });
-                if (this.logsModalRunnerName) q.set('runner_name', this.logsModalRunnerName);
-                const resp = await fetch(
-                    '{{ admin_prefix }}/api/ops/runners/instances/by-session/' + encodeURIComponent(inst.session_id) + '/logs?' + q.toString(),
-                    { credentials: 'same-origin' }
-                );
-                const data = await resp.json().catch(() => ({}));
-                if (!resp.ok) {
-                    const det = data && data.detail;
-                    this.logsModalError = Array.isArray(det)
-                        ? det.map((d) => d.msg || d).join('; ')
-                        : (det ? String(det) : ('HTTP ' + resp.status));
-                } else {
-                    this.logsModalEntries = data.entries || [];
-                }
-            } catch (e) {
-                this.logsModalError = e.message || 'Falha ao carregar logs';
-                this.logsModalEntries = [];
-            }
-            this.logsModalLoading = false;
-
-            const self = this;
-            const url = this.buildRunnerLogsStreamUrl(inst.session_id, this.logsModalRunnerName);
-            this.logsModalEventSource = new EventSource(url);
-            this.logsModalEventSource.onopen = () => { self.logsModalStreamConnected = true; };
-            this.logsModalEventSource.onmessage = (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.type === 'connected') {
-                        self.logsModalStreamConnected = true;
-                        return;
-                    }
-                    if (data.type === 'error') {
-                        self.logsModalError = data.message || 'Erro no stream';
-                        return;
-                    }
-                    if (data.type === 'waiting') {
-                        self.logsModalEntries.push({
-                            timestamp: '',
-                            level: 'INFO',
-                            message: data.message || 'Aguardando ficheiro de log…',
-                        });
-                        if (self.logsModalEntries.length > self.logsModalLimit) self.logsModalEntries.shift();
-                        return;
-                    }
-                    self.logsModalEntries.push(data);
-                    if (self.logsModalEntries.length > self.logsModalLimit) self.logsModalEntries.shift();
-                    self.$nextTick(() => {
-                        const el = self.$refs.logsModalContainer;
-                        if (el) el.scrollTop = el.scrollHeight;
-                    });
-                } catch (err) {}
-            };
-            this.logsModalEventSource.onerror = () => {
-                self.logsModalStreamConnected = false;
-            };
+    get visibleLogEntries() {
+      const lvl = this.logsLevelFilter;
+      const q = (this.logsSearch || '').trim().toLowerCase();
+      return this.logsModalEntries.filter((entry) => {
+        const lev = (entry.level || '').toUpperCase();
+        if (lvl && lvl !== 'ALL' && lev !== lvl) return false;
+        if (q) {
+          const blob = ((entry.message || '') + ' ' + (entry.timestamp || '')).toLowerCase();
+          if (!blob.includes(q)) return false;
         }
-    };
+        return true;
+      });
+    },
+
+    logLevelClass(level) {
+      const L = (level || '').toUpperCase();
+      if (L === 'ERROR') return 'text-red-400';
+      if (L === 'WARNING') return 'text-amber-400';
+      if (L === 'INFO') return 'text-emerald-400';
+      return 'text-zinc-400';
+    },
+
+    statusBadgeClass(status) {
+      const s = (status || '').toLowerCase();
+      if (s === 'running') return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+      if (s === 'paused') return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+      if (s === 'stopping') return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
+      if (s === 'stopped') return 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30';
+      return 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30';
+    },
+
+    formatUptime(inst) {
+      if (!inst || !inst.started_at) return '—';
+      const start = new Date(inst.started_at).getTime();
+      const end = inst.stopped_at ? new Date(inst.stopped_at).getTime() : Date.now();
+      if (end < start) return '—';
+      let sec = Math.floor((end - start) / 1000);
+      const h = Math.floor(sec / 3600);
+      sec -= h * 3600;
+      const m = Math.floor(sec / 60);
+      sec -= m * 60;
+      if (h > 0) return h + 'h ' + m + 'm';
+      if (m > 0) return m + 'm ' + sec + 's';
+      return sec + 's';
+    },
+
+    openDetail(inst) {
+      this.selectedInstance = inst;
+      this.detailOpen = true;
+    },
+    closeDetail() {
+      this.detailOpen = false;
+      this.selectedInstance = null;
+    },
+
+    async init() {
+      this.pageError = '';
+      try {
+        await Promise.all([this.loadRegistered(), this.loadInstances(), this.loadDashboard()]);
+      } catch (e) {
+        this.pageError = String(e && e.message ? e.message : e);
+      }
+      setInterval(() => { this.loadDashboard(); }, 12000);
+    },
+
+    async refreshAll() {
+      await Promise.all([this.loadRegistered(), this.loadInstances(), this.loadDashboard()]);
+    },
+
+    async loadDashboard() {
+      try {
+        const resp = await fetch('{{ admin_prefix }}/api/ops/runners/dashboard', { credentials: 'same-origin' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        this.dashboard = await resp.json();
+        this.$nextTick(() => this.renderRunnerChart());
+      } catch (e) {
+        console.warn('loadDashboard', e);
+      }
+    },
+
+    renderRunnerChart() {
+      if (typeof Chart === 'undefined') {
+        setTimeout(() => this.renderRunnerChart(), 200);
+        return;
+      }
+      const canvas = document.getElementById('runnerOpsHostChart');
+      if (!canvas) return;
+      const hist = (this.dashboard && this.dashboard.metric_history) || [];
+      if (hist.length === 0) {
+        if (this.runnerChart) {
+          this.runnerChart.destroy();
+          this.runnerChart = null;
+        }
+        return;
+      }
+      const labels = hist.map((h) => (h.t ? String(h.t).slice(11, 19) : ''));
+      const cpu = hist.map((h) => Number(h.cpu_percent) || 0);
+      const mem = hist.map((h) => Number(h.memory_percent) || 0);
+      const isDark = document.documentElement.classList.contains('dark');
+      const grid = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+      const tick = isDark ? '#71717a' : '#6b7280';
+      if (this.runnerChart) {
+        this.runnerChart.destroy();
+        this.runnerChart = null;
+      }
+      this.runnerChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'CPU %', data: cpu, borderColor: 'rgb(56, 189, 248)', backgroundColor: 'rgba(56,189,248,0.1)', fill: true, tension: 0.25, pointRadius: 0 },
+            { label: 'Mem %', data: mem, borderColor: 'rgb(167, 139, 250)', backgroundColor: 'rgba(167,139,250,0.08)', fill: true, tension: 0.25, pointRadius: 0 },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { intersect: false, mode: 'index' },
+          plugins: {
+            legend: { labels: { color: tick, font: { size: 11 } } },
+          },
+          scales: {
+            x: { grid: { color: grid }, ticks: { color: tick, maxTicksLimit: 8, font: { size: 10 } } },
+            y: { min: 0, max: 100, grid: { color: grid }, ticks: { color: tick } },
+          },
+        },
+      });
+    },
+
+    logsModalFullScreenHref() {
+      const sid = this.logsModalSessionId || '';
+      const rn = this.logsModalRunnerName || '';
+      if (!sid || !rn) return '{{ admin_prefix }}/ops/logs/';
+      const q = new URLSearchParams({ session_id: sid, runner_name: rn, runner_logs: '1' });
+      return '{{ admin_prefix }}/ops/logs/?' + q.toString();
+    },
+
+    async loadRegistered() {
+      this.loading = true;
+      try {
+        const resp = await fetch('{{ admin_prefix }}/api/ops/runners/registered');
+        const data = await resp.json();
+        this.registeredRunners = data.items || [];
+      } catch (e) {
+        console.error(e);
+        this.pageError = 'Falha ao carregar runners registrados.';
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async loadInstances() {
+      this.loading = true;
+      try {
+        let url = '{{ admin_prefix }}/api/ops/runners/instances?page=' + this.page + '&per_page=' + this.perPage;
+        if (this.filterRunner) url += '&runner_name=' + encodeURIComponent(this.filterRunner);
+        if (this.filterStatus) url += '&status=' + encodeURIComponent(this.filterStatus);
+        const resp = await fetch(url);
+        const data = await resp.json();
+        this.instances = data.items || [];
+        this.instancesTotal = data.total || 0;
+        if (this.selectedInstance) {
+          const id = this.selectedInstance.id;
+          const fresh = this.instances.find((x) => x.id === id);
+          if (fresh) this.selectedInstance = fresh;
+        }
+      } catch (e) {
+        console.error(e);
+        this.pageError = 'Falha ao carregar instâncias.';
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    prevPage() { if (this.page > 1) this.page--; },
+    nextPage() { if (this.instances.length >= this.perPage) this.page++; },
+
+    async startInstance() {
+      if (!this.startForm.runner_name || !this.startForm.session_id) return;
+      this.startSending = true;
+      try {
+        const body = {
+          runner_name: this.startForm.runner_name,
+          session_id: this.startForm.session_id,
+          user_id: this.startForm.user_id || null,
+          payload: null,
+        };
+        if (this.startForm.payload && this.startForm.payload.trim()) {
+          try {
+            body.payload = JSON.parse(this.startForm.payload);
+          } catch (e) {
+            alert('Payload inválido: use JSON válido');
+            return;
+          }
+        }
+        const resp = await fetch('{{ admin_prefix }}/api/ops/runners/instances/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || resp.statusText);
+        }
+        this.startForm.session_id = '';
+        this.startForm.user_id = '';
+        this.startForm.payload = '';
+        if (window.showToast) window.showToast('success', 'Instância', 'Start enviado.');
+        await this.refreshAll();
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      } finally {
+        this.startSending = false;
+      }
+    },
+
+    async stopInstance(inst) {
+      if (!inst || !confirm('Desligar instância ' + inst.session_id + '?')) return;
+      this.actionBusy = true;
+      try {
+        const resp = await fetch(
+          '{{ admin_prefix }}/api/ops/runners/' + encodeURIComponent(inst.runner_name) + '/instances/' + encodeURIComponent(inst.session_id) + '/stop',
+          { method: 'POST' },
+        );
+        if (!resp.ok) throw new Error(resp.statusText);
+        if (this.selectedInstance && this.selectedInstance.id === inst.id) await this.loadInstances();
+        await this.refreshAll();
+        if (this.detailOpen && this.selectedInstance && this.selectedInstance.id === inst.id) this.closeDetail();
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      } finally {
+        this.actionBusy = false;
+      }
+    },
+
+    async pauseInstance(inst) {
+      this.actionBusy = true;
+      try {
+        const resp = await fetch(
+          '{{ admin_prefix }}/api/ops/runners/' + encodeURIComponent(inst.runner_name) + '/instances/' + encodeURIComponent(inst.session_id) + '/pause',
+          { method: 'POST' },
+        );
+        if (!resp.ok) throw new Error(resp.statusText);
+        await this.refreshAll();
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      } finally {
+        this.actionBusy = false;
+      }
+    },
+
+    async resumeInstance(inst) {
+      this.actionBusy = true;
+      try {
+        const resp = await fetch(
+          '{{ admin_prefix }}/api/ops/runners/' + encodeURIComponent(inst.runner_name) + '/instances/' + encodeURIComponent(inst.session_id) + '/resume',
+          { method: 'POST' },
+        );
+        if (!resp.ok) throw new Error(resp.statusText);
+        await this.refreshAll();
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      } finally {
+        this.actionBusy = false;
+      }
+    },
+
+    async deleteInstance(inst) {
+      if (!confirm('Excluir instância ' + inst.session_id + '? Será desligada se estiver rodando.')) return;
+      try {
+        const resp = await fetch('{{ admin_prefix }}/api/ops/runners/instances/' + inst.id, { method: 'DELETE' });
+        if (!resp.ok) throw new Error(resp.statusText);
+        if (this.selectedInstance && this.selectedInstance.id === inst.id) this.closeDetail();
+        await this.refreshAll();
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      }
+    },
+
+    closeLogsModal() {
+      if (this.logsModalEventSource) {
+        this.logsModalEventSource.close();
+        this.logsModalEventSource = null;
+      }
+      this.logsModalStreamConnected = false;
+      this.logsModalError = '';
+      this.logsModalOpen = false;
+    },
+
+    buildRunnerLogsStreamUrl(sessionId, runnerName) {
+      const base = '{{ admin_prefix }}/api/ops/logs/stream';
+      const params = new URLSearchParams({ level: 'DEBUG' });
+      if (sessionId) params.set('session_id', sessionId);
+      if (runnerName) params.set('runner_name', runnerName);
+      return window.location.origin + base + '?' + params.toString();
+    },
+
+    scrollLogsIfNeeded() {
+      if (!this.logsAutoScroll) return;
+      this.$nextTick(() => {
+        const el = this.$refs.logsModalContainer;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    },
+
+    async showLogsModal(inst) {
+      this.closeLogsModal();
+      this.logsModalSessionId = inst.session_id;
+      this.logsModalRunnerName = inst.runner_name || '';
+      this.logsModalEntries = [];
+      this.logsModalError = '';
+      this.logsModalOpen = true;
+      this.logsModalLoading = true;
+      this.logsModalStreamConnected = false;
+      this.logsLevelFilter = 'ALL';
+      this.logsSearch = '';
+      try {
+        const q = new URLSearchParams({ tail: '500' });
+        if (this.logsModalRunnerName) q.set('runner_name', this.logsModalRunnerName);
+        const resp = await fetch(
+          '{{ admin_prefix }}/api/ops/runners/instances/by-session/' + encodeURIComponent(inst.session_id) + '/logs?' + q.toString(),
+          { credentials: 'same-origin' },
+        );
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          const det = data && data.detail;
+          this.logsModalError = Array.isArray(det)
+            ? det.map((d) => d.msg || d).join('; ')
+            : (det ? String(det) : ('HTTP ' + resp.status));
+        } else {
+          this.logsModalEntries = data.entries || [];
+        }
+      } catch (e) {
+        this.logsModalError = e.message || 'Falha ao carregar logs';
+        this.logsModalEntries = [];
+      }
+      this.logsModalLoading = false;
+      this.scrollLogsIfNeeded();
+
+      const self = this;
+      const url = this.buildRunnerLogsStreamUrl(inst.session_id, this.logsModalRunnerName);
+      this.logsModalEventSource = new EventSource(url);
+      this.logsModalEventSource.onopen = () => { self.logsModalStreamConnected = true; };
+      this.logsModalEventSource.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'connected') {
+            self.logsModalStreamConnected = true;
+            return;
+          }
+          if (data.type === 'error') {
+            self.logsModalError = data.message || 'Erro no stream';
+            return;
+          }
+          if (data.type === 'waiting') {
+            self.logsModalEntries.push({
+              timestamp: '',
+              level: 'INFO',
+              message: data.message || 'Aguardando ficheiro de log…',
+            });
+            if (self.logsModalEntries.length > self.logsModalLimit) self.logsModalEntries.shift();
+            self.scrollLogsIfNeeded();
+            return;
+          }
+          self.logsModalEntries.push(data);
+          if (self.logsModalEntries.length > self.logsModalLimit) self.logsModalEntries.shift();
+          self.scrollLogsIfNeeded();
+        } catch (err) {}
+      };
+      this.logsModalEventSource.onerror = () => {
+        self.logsModalStreamConnected = false;
+      };
+    },
+  };
 }
 </script>
 {% endblock %}
