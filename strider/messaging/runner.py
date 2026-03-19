@@ -88,6 +88,7 @@ def process_exists(pid: int) -> bool:
 async def cleanup_orphan_processes() -> None:
     """Mark running RunnerInstance rows as stopped when PID no longer exists."""
     try:
+        await ensure_runner_database_initialized()
         from strider.models import get_session
         from strider.admin.models import RunnerInstance
         from strider.querysets import QuerySet
@@ -103,6 +104,8 @@ async def cleanup_orphan_processes() -> None:
                     inst.status = "stopped"
                     inst.stopped_at = timezone.now()
                     inst.pid = None
+                    inst.stop_reason = "orphan_cleanup_missing_pid"
+                    inst.exit_code = None
                     await inst.save(db)
                     changed = True
                     continue
@@ -111,12 +114,58 @@ async def cleanup_orphan_processes() -> None:
                 inst.status = "stopped"
                 inst.stopped_at = timezone.now()
                 inst.pid = None
+                inst.stop_reason = "orphan_cleanup_process_missing"
+                inst.exit_code = None
                 await inst.save(db)
                 changed = True
             if changed:
                 await db.commit()
     except Exception as exc:
         logger.debug("cleanup_orphan_processes failed: %s", exc)
+
+
+async def ensure_runner_database_initialized() -> None:
+    """Ensure DB is initialized for controller-side metadata operations."""
+    try:
+        from strider.models import get_session
+
+        async with get_session() as db:
+            # Touch session context to validate engine/sessionmaker readiness.
+            _ = db
+            return
+    except Exception as exc:
+        msg = str(exc)
+        known_not_initialized = (
+            "Database não inicializado" in msg
+            or "init_database" in msg
+            or "not initialized" in msg.lower()
+        )
+        if not known_not_initialized:
+            logger.debug("Runner DB check failed with non-init error: %s", exc)
+            return
+
+    settings = get_settings()
+    try:
+        if getattr(settings, "has_read_replica", False):
+            from strider.database import init_replicas
+
+            await init_replicas()
+            logger.info("Runner DB reinitialized via replicas for controller metadata operations")
+            return
+
+        from strider.models import init_database
+
+        db_url = getattr(settings, "database_url", None)
+        if not db_url:
+            logger.warning("Runner DB reinit skipped: missing database_url in settings")
+            return
+
+        pool_size = int(getattr(settings, "database_pool_size", 5) or 5)
+        max_overflow = int(getattr(settings, "database_max_overflow", 10) or 10)
+        await init_database(db_url, pool_size=pool_size, max_overflow=max_overflow)
+        logger.info("Runner DB reinitialized for controller metadata operations")
+    except Exception as exc:
+        logger.warning("Runner DB reinit failed: %s", exc)
 
 
 class Runner(ABC):
@@ -157,6 +206,8 @@ class Runner(ABC):
         self._running = False
         self._shutdown_event = asyncio.Event()
         self._signal_count = 0
+        self._last_session_stop_reason: str | None = None
+        self._last_session_exit_code: int | None = None
 
     def request_stop(self) -> None:
         """Sinaliza parada; run_session deve checar _stop_requested e retornar."""
@@ -174,6 +225,16 @@ class Runner(ABC):
     @property
     def current_session_id(self) -> str | None:
         return self._current_session_id
+
+    @property
+    def last_session_stop_reason(self) -> str | None:
+        """Reason detected for the most recent isolated-session stop."""
+        return self._last_session_stop_reason
+
+    @property
+    def last_session_exit_code(self) -> int | None:
+        """Exit code detected for the most recent isolated-session stop, if any."""
+        return self._last_session_exit_code
 
     # -------------------------------------------------------------------------
     # Lifecycle hooks (override no app)
@@ -206,6 +267,42 @@ class Runner(ABC):
             metrics,
         )
         self.request_stop()
+
+    async def _trigger_isolated_stop_hooks(
+        self,
+        session_id: str,
+        reason: str,
+        exit_code: int | None = None,
+    ) -> None:
+        """Run lifecycle hooks in controller when an isolated child session ends."""
+        prev_session_id = self._current_session_id
+        prev_reason = self._last_session_stop_reason
+        prev_exit_code = self._last_session_exit_code
+        self._current_session_id = session_id
+        self._last_session_stop_reason = reason
+        self._last_session_exit_code = exit_code
+        try:
+            await self.on_stop()
+        except Exception as exc:
+            logger.exception(
+                "Runner on_stop failed for isolated session_id=%s reason=%s: %s",
+                session_id,
+                reason,
+                exc,
+            )
+        try:
+            await self.after_stop()
+        except Exception as exc:
+            logger.exception(
+                "Runner after_stop failed for isolated session_id=%s reason=%s: %s",
+                session_id,
+                reason,
+                exc,
+            )
+        finally:
+            self._current_session_id = prev_session_id
+            self._last_session_stop_reason = prev_reason
+            self._last_session_exit_code = prev_exit_code
 
     # -------------------------------------------------------------------------
     # Config from Settings
@@ -309,8 +406,10 @@ class Runner(ABC):
             proc = subprocess.Popen(
                 cmd,
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                # Child logs are captured by RunnerLogsFileHandler inside runrunner-session.
+                # Keeping PIPE here without continuous drain can block child processes.
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 cwd=os.getcwd(),
                 env=env,
                 preexec_fn=os.setsid,
@@ -327,6 +426,7 @@ class Runner(ABC):
             raise
 
         try:
+            await ensure_runner_database_initialized()
             from strider.models import get_session
             from strider.admin.models import RunnerInstance
             from strider.querysets import QuerySet
@@ -340,6 +440,8 @@ class Runner(ABC):
                 if inst:
                     inst.status = "running"
                     inst.pid = pid
+                    inst.stop_reason = None
+                    inst.exit_code = None
                     inst.stopped_at = None
                     await inst.save(db)
                 else:
@@ -353,6 +455,8 @@ class Runner(ABC):
                         user_id=str(user_id) if user_id is not None else None,
                         status="running",
                         pid=pid,
+                        stop_reason=None,
+                        exit_code=None,
                         payload_json=payload_json,
                         stopped_at=None,
                     )
@@ -375,6 +479,7 @@ class Runner(ABC):
         grace = max(1.0, config.get("shutdown_grace", self.shutdown_grace_seconds))
         proc = self._session_processes.get(session_id)
         try:
+            await ensure_runner_database_initialized()
             from strider.models import get_session
             from strider.admin.models import RunnerInstance
             from strider.querysets import QuerySet
@@ -391,6 +496,7 @@ class Runner(ABC):
                     if proc is not None and proc.poll() is None:
                         kill_process_by_pid(proc.pid, grace=grace)
                         logger.debug("Runner stop fallback by in-memory pid for session_id=%s pid=%s", session_id, proc.pid)
+                        await self._trigger_isolated_stop_hooks(session_id, reason="stop_fallback_pid")
                     else:
                         logger.debug("Runner stop: no RunnerInstance for session_id=%s", session_id)
                     return
@@ -403,9 +509,12 @@ class Runner(ABC):
                     kill_process_by_pid(proc.pid, grace=grace)
                 inst.status = "stopped"
                 inst.pid = None
+                inst.stop_reason = "stop_command"
+                inst.exit_code = None
                 inst.stopped_at = timezone.now()
                 await inst.save(db)
                 await db.commit()
+                await self._trigger_isolated_stop_hooks(session_id, reason="stop_command")
         except Exception as e:
             logger.warning("Runner stop isolated session_id=%s: %s", session_id, e)
         finally:
@@ -416,6 +525,7 @@ class Runner(ABC):
         runner_name = self.__class__.__name__
         grace = max(1.0, config.get("shutdown_grace", self.shutdown_grace_seconds))
         try:
+            await ensure_runner_database_initialized()
             from strider.models import get_session
             from strider.admin.models import RunnerInstance
             from strider.querysets import QuerySet
@@ -432,12 +542,16 @@ class Runner(ABC):
                     pid = getattr(inst, "pid", None)
                     if isinstance(pid, int) and pid > 0:
                         kill_process_by_pid(pid, grace=grace)
+                    session_id = str(inst.session_id)
                     inst.status = "stopped"
                     inst.pid = None
+                    inst.stop_reason = "stop_all"
+                    inst.exit_code = None
                     inst.stopped_at = timezone.now()
                     await inst.save(db)
                     changed = True
-                    self._session_processes.pop(inst.session_id, None)
+                    self._session_processes.pop(session_id, None)
+                    await self._trigger_isolated_stop_hooks(session_id, reason="stop_all")
                 if changed:
                     await db.commit()
 
@@ -445,6 +559,7 @@ class Runner(ABC):
             for sid, proc in list(self._session_processes.items()):
                 if proc.poll() is None:
                     kill_process_by_pid(proc.pid, grace=grace)
+                    await self._trigger_isolated_stop_hooks(sid, reason="stop_all_fallback_pid")
                 self._session_processes.pop(sid, None)
         except Exception as exc:
             logger.warning("Runner stop all isolated sessions failed: %s", exc)
@@ -454,14 +569,25 @@ class Runner(ABC):
         Remove processos que já terminaram de _session_processes e atualiza
         RunnerInstance para stopped (vínculo forte: processo morto = status stopped).
         """
-        dead = []
+        dead: list[tuple[str, int | None]] = []
         for sid, proc in list(self._session_processes.items()):
             if proc.poll() is not None:
-                dead.append(sid)
+                dead.append((sid, proc.returncode))
                 self._session_processes.pop(sid, None)
-                logger.info("Runner reaped dead process session_id=%s exitcode=%s", sid, proc.returncode)
-        for session_id in dead:
+                returncode = proc.returncode
+                if returncode == -9:
+                    logger.warning(
+                        "Runner reaped dead process session_id=%s exitcode=%s (SIGKILL/OOM/forced kill)",
+                        sid,
+                        returncode,
+                    )
+                else:
+                    logger.info("Runner reaped dead process session_id=%s exitcode=%s", sid, returncode)
+
+                # stdout/stderr usam DEVNULL para evitar bloqueio por pipe cheio.
+        for session_id, exit_code in dead:
             try:
+                await ensure_runner_database_initialized()
                 from strider.models import get_session
                 from strider.admin.models import RunnerInstance
                 from strider.querysets import QuerySet
@@ -475,12 +601,30 @@ class Runner(ABC):
                     if inst and inst.status == "running":
                         inst.status = "stopped"
                         inst.pid = None
+                        reason = "child_exit"
+                        if exit_code == -9:
+                            reason = "sigkill_or_oom"
+                        elif isinstance(exit_code, int) and exit_code < 0:
+                            reason = "signal_exit"
+                        inst.stop_reason = reason
+                        inst.exit_code = exit_code
                         inst.stopped_at = timezone.now()
                         await inst.save(db)
                         await db.commit()
                         logger.debug("RunnerInstance session_id=%s marked stopped after process exit", session_id)
             except Exception as exc:
                 logger.debug("reap: update RunnerInstance for session_id=%s failed: %s", session_id, exc)
+
+            reason = "child_exit"
+            if exit_code == -9:
+                reason = "sigkill_or_oom"
+            elif isinstance(exit_code, int) and exit_code < 0:
+                reason = "signal_exit"
+            await self._trigger_isolated_stop_hooks(
+                session_id,
+                reason=reason,
+                exit_code=exit_code,
+            )
 
         await cleanup_orphan_processes()
 
@@ -583,6 +727,10 @@ class Runner(ABC):
         settings = get_settings()
         if not getattr(settings, "kafka_enabled", False):
             raise RuntimeError("Runner requires kafka_enabled=True")
+        isolated = bool(getattr(settings, "runner_isolated_instances", True))
+        call_on_start_in_isolated = bool(
+            getattr(settings, "runner_call_on_start_when_isolated", False)
+        )
 
         config = self._get_config()
         self._running = True
@@ -599,7 +747,13 @@ class Runner(ABC):
         except NotImplementedError:
             pass
 
-        await self.on_start()
+        if isolated and not call_on_start_in_isolated:
+            logger.info(
+                "Runner isolated mode active: skipping on_start in controller process "
+                "(set runner_call_on_start_when_isolated=True to restore legacy behavior)"
+            )
+        else:
+            await self.on_start()
 
         async def message_handler(msg: dict[str, Any]) -> None:
             await self._handle_message(msg, config)
@@ -766,6 +920,7 @@ async def send_start(
         raise ValueError(f"Runner '{runner_name}' não encontrado. Disponíveis: {list_runners()}")
     # Framework regista instância no Admin Ops (best-effort)
     try:
+        await ensure_runner_database_initialized()
         from strider.models import get_session
         from strider.admin.models import RunnerInstance
         from strider.querysets import QuerySet
@@ -787,6 +942,8 @@ async def send_start(
                 existing.user_id = uid
                 existing.payload_json = payload_json
                 existing.pid = None
+                existing.stop_reason = None
+                existing.exit_code = None
                 existing.stopped_at = None
                 await existing.save(db)
             else:
@@ -797,6 +954,8 @@ async def send_start(
                     status="running",
                     payload_json=payload_json,
                     pid=None,
+                    stop_reason=None,
+                    exit_code=None,
                 )
                 await inst.save(db)
             await db.commit()
@@ -821,6 +980,7 @@ async def send_stop(runner_name: str, session_id: str) -> None:
         raise ValueError(f"Runner '{runner_name}' não encontrado. Disponíveis: {list_runners()}")
 
     try:
+        await ensure_runner_database_initialized()
         from strider.models import get_session
         from strider.admin.models import RunnerInstance
         from strider.querysets import QuerySet
@@ -835,6 +995,8 @@ async def send_stop(runner_name: str, session_id: str) -> None:
             if inst:
                 inst.status = "stopped"
                 inst.pid = None
+                inst.stop_reason = "stop_command_sent"
+                inst.exit_code = None
                 inst.stopped_at = timezone.now()
                 await inst.save(db)
                 await db.commit()

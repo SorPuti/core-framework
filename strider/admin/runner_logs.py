@@ -1,9 +1,10 @@
 """
-Logs dedicados por instância do Runner (Redis Stream).
+Logs dedicados por instância do Runner (arquivo local por sessão).
 
-Cada processo filho (runrunner-session) envia seus logs para o stream
-runner_logs:{session_id}. O Admin lê apenas esse stream, evitando mistura
-com logs da API (uvicorn.access, etc.).
+Cada processo filho (runrunner-session) envia seus logs para um arquivo JSONL:
+<runner_logs_dir>/<session_id>.log
+
+O Admin lê e faz stream apenas desse arquivo, evitando mistura com logs da API.
 """
 
 from __future__ import annotations
@@ -11,14 +12,40 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import tempfile
 from datetime import datetime
+from collections import deque
 from typing import Any, AsyncIterator
 
-STREAM_KEY_PREFIX = "runner_logs:"
+RUNNER_LOGS_DIR_ENV = "STRIDER_RUNNER_LOGS_DIR"
 
 
-def _stream_key(session_id: str) -> str:
-    return f"{STREAM_KEY_PREFIX}{session_id}"
+def _resolve_logs_dir() -> str:
+    """Resolve directory for per-session runner log files."""
+    env_dir = os.getenv(RUNNER_LOGS_DIR_ENV, "").strip()
+    if env_dir:
+        return env_dir
+    try:
+        from strider.config import get_settings
+
+        settings = get_settings()
+        cfg_dir = str(getattr(settings, "runner_logs_dir", "") or "").strip()
+        if cfg_dir:
+            return cfg_dir
+    except Exception:
+        pass
+    return os.path.join(tempfile.gettempdir(), "strider-runner-logs")
+
+
+def _safe_session_id(session_id: str) -> str:
+    return "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))[:128] or "unknown"
+
+
+def _session_log_path(session_id: str) -> str:
+    base_dir = _resolve_logs_dir()
+    os.makedirs(base_dir, exist_ok=True)
+    return os.path.join(base_dir, f"{_safe_session_id(session_id)}.log")
 
 
 def _record_to_entry(record: logging.LogRecord) -> dict[str, Any]:
@@ -35,152 +62,91 @@ def _record_to_entry(record: logging.LogRecord) -> dict[str, Any]:
     }
 
 
-class RunnerLogsRedisHandler(logging.Handler):
-    """
-    Envia cada log do processo da instância para Redis Stream runner_logs:{session_id}.
-    Usado apenas no processo filho (runrunner-session); não bloqueia com timeout curto.
-    """
+class RunnerLogsFileHandler(logging.Handler):
+    """Append each log record as JSONL to a dedicated per-session file."""
 
-    def __init__(
-        self,
-        session_id: str,
-        redis_url: str,
-        stream_max_len: int = 2000,
-    ) -> None:
+    def __init__(self, session_id: str) -> None:
         super().__init__(level=logging.DEBUG)
         self._session_id = session_id
-        self._redis_url = redis_url
-        self._stream_max_len = stream_max_len
-        self._client: Any = None
+        self._path = _session_log_path(session_id)
 
-    def _get_client(self) -> Any | None:
-        if self._client is not None:
-            return self._client
-        try:
-            import redis
-            self._client = redis.from_url(
-                self._redis_url,
-                socket_connect_timeout=2,
-                decode_responses=True,
-            )
-            return self._client
-        except Exception:
-            return None
+    @property
+    def path(self) -> str:
+        return self._path
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            client = self._get_client()
-            if not client:
-                return
             entry = _record_to_entry(record)
-            key = _stream_key(self._session_id)
-            # XADD com MAXLEN ~ para limitar tamanho do stream
-            client.xadd(
-                key,
-                {"payload": json.dumps(entry, default=str)},
-                maxlen=self._stream_max_len,
-                approximate=True,
-            )
+            with open(self._path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, default=str, ensure_ascii=False) + "\n")
         except Exception:
             self.handleError(record)
 
 
-async def get_runner_logs_from_redis(
+async def get_runner_logs_from_file(
     session_id: str,
     limit: int = 500,
-    redis_url: str | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    Lê entradas recentes do stream runner_logs:{session_id}.
-    Retorna lista vazia se Redis indisponível ou stream inexistente.
-    """
-    try:
-        from strider.config import get_settings
-        import redis.asyncio as aioredis
-    except ImportError:
+    """Read most recent JSONL entries for a runner session file."""
+    path = _session_log_path(session_id)
+    if not os.path.exists(path):
         return []
 
-    url = redis_url
-    if not url:
+    def _read_tail() -> list[dict[str, Any]]:
+        entries: deque[dict[str, Any]] = deque(maxlen=limit)
         try:
-            settings = get_settings()
-            url = getattr(settings, "runner_logs_redis_url", "") or getattr(settings, "redis_url", "")
-        except Exception:
-            url = ""
-    if not url:
-        return []
-
-    try:
-        client = aioredis.from_url(url, socket_connect_timeout=2, decode_responses=True)
-        try:
-            key = _stream_key(session_id)
-            # XREVRANGE + XRANGE order: mais recentes primeiro, depois invertemos para cronológico
-            raw = await client.xrevrange(key, count=limit)
-            entries = []
-            for _mid, data in reversed(raw):
-                payload = data.get("payload")
-                if payload:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
                     try:
-                        entries.append(json.loads(payload))
+                        parsed = json.loads(line)
                     except json.JSONDecodeError:
-                        pass
-            return entries
-        finally:
-            await client.aclose()
-    except Exception:
-        return []
+                        continue
+                    if isinstance(parsed, dict):
+                        entries.append(parsed)
+        except OSError:
+            return []
+        return list(entries)
+
+    return await asyncio.to_thread(_read_tail)
 
 
-async def stream_runner_logs(
+async def stream_runner_logs_from_file(
     session_id: str,
-    redis_url: str | None = None,
-    block_ms: int = 2000,
+    poll_interval: float = 0.5,
 ) -> AsyncIterator[dict[str, Any]]:
-    """
-    Gera entradas do stream runner_logs:{session_id} em tempo real (XREAD BLOCK).
-    """
-    try:
-        from strider.config import get_settings
-        import redis.asyncio as aioredis
-    except ImportError:
-        return
+    """Yield new JSONL entries appended to a runner session log file."""
+    path = _session_log_path(session_id)
 
-    url = redis_url
-    if not url:
-        try:
-            settings = get_settings()
-            url = getattr(settings, "runner_logs_redis_url", "") or getattr(settings, "redis_url", "")
-        except Exception:
-            url = ""
-    if not url:
+    # Espera arquivo aparecer por um tempo para sessões recém-iniciadas.
+    waited = 0.0
+    while not os.path.exists(path) and waited < 30.0:
+        await asyncio.sleep(poll_interval)
+        waited += poll_interval
+
+    if not os.path.exists(path):
         return
 
     try:
-        client = aioredis.from_url(url, socket_connect_timeout=2, decode_responses=True)
-    except Exception:
-        return
-
-    key = _stream_key(session_id)
-    last_id = "$"  # só mensagens novas
-
-    try:
-        while True:
-            try:
-                result = await client.xread(streams={key: last_id}, block=block_ms, count=50)
-                if not result:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            f.seek(0, os.SEEK_END)
+            while True:
+                line = f.readline()
+                if not line:
+                    await asyncio.sleep(poll_interval)
                     continue
-                for stream_name, messages in result:
-                    for msg_id, data in messages:
-                        last_id = msg_id
-                        payload = data.get("payload")
-                        if payload:
-                            try:
-                                yield json.loads(payload)
-                            except json.JSONDecodeError:
-                                pass
-            except asyncio.CancelledError:
-                break
-            except Exception:
-                break
-    finally:
-        await client.aclose()
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(entry, dict):
+                    yield entry
+    except asyncio.CancelledError:
+        return
+    except OSError:
+        return

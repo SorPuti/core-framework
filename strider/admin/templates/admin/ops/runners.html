@@ -95,6 +95,8 @@
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Session ID</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">User ID</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Motivo</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Exit</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Início</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Fim</th>
                     <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Ações</th>
@@ -112,6 +114,8 @@
                                 <span x-text="i.status"></span>
                             </span>
                         </td>
+                        <td class="px-4 py-3 text-xs text-gray-500" x-text="i.stop_reason || '—'"></td>
+                        <td class="px-4 py-3 text-xs font-mono text-gray-500" x-text="(i.exit_code === null || i.exit_code === undefined) ? '—' : i.exit_code"></td>
                         <td class="px-4 py-3 text-gray-500 text-xs" x-text="i.started_at ? new Date(i.started_at).toLocaleString() : '—'"></td>
                         <td class="px-4 py-3 text-gray-500 text-xs" x-text="i.stopped_at ? new Date(i.stopped_at).toLocaleString() : '—'"></td>
                         <td class="px-4 py-3 text-right">
@@ -131,7 +135,7 @@
                     </tr>
                 </template>
                 <template x-if="!loading && instances.length === 0">
-                    <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">Nenhuma instância. Use o formulário acima para iniciar.</td></tr>
+                    <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">Nenhuma instância. Use o formulário acima para iniciar.</td></tr>
                 </template>
             </tbody>
         </table>

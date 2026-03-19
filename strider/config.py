@@ -874,6 +874,13 @@ class Settings(BaseSettings):
         default=2,
         description="Tamanho do pool de conexões do DB no processo da instância (cada instância = 1 processo).",
     )
+    runner_logs_dir: str = PydanticField(
+        default="",
+        description=(
+            "Diretório para logs dedicados por instância (arquivo JSONL por session_id). "
+            "Vazio = usa STRIDER_RUNNER_LOGS_DIR ou /tmp/strider-runner-logs."
+        ),
+    )
 
     # =========================================================================
     # REDIS (para tasks, cache, etc)
@@ -910,11 +917,11 @@ class Settings(BaseSettings):
     )
     runner_logs_redis_url: str = PydanticField(
         default="",
-        description="Redis para logs dedicados por instância (stream runner_logs:{session_id}). Vazio = usa redis_url.",
+        description="[LEGADO] Mantido por compatibilidade; logs de runner usam arquivo local por session_id.",
     )
     runner_logs_stream_max_len: int = PydanticField(
         default=2000,
-        description="Máximo de entradas por stream de logs de instância (MAXLEN ~).",
+        description="[LEGADO] Mantido por compatibilidade; não usado no backend atual de logs por arquivo.",
     )
 
     # =========================================================================

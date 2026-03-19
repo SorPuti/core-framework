@@ -708,6 +708,8 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                             "session_id": r.session_id,
                             "user_id": r.user_id,
                             "status": r.status,
+                            "stop_reason": getattr(r, "stop_reason", None),
+                            "exit_code": getattr(r, "exit_code", None),
                             "payload_json": r.payload_json,
                             "started_at": r.started_at.isoformat() if r.started_at else None,
                             "stopped_at": r.stopped_at.isoformat() if r.stopped_at else None,
@@ -858,24 +860,15 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         limit: int = Query(200, ge=1, le=1000),
         user: Any = Depends(check_superuser_access),
     ) -> dict:
-        """Logs dedicados à instância (Redis Stream runner_logs:{session_id}). Fallback: buffer global com busca."""
-        from strider.admin.runner_logs import get_runner_logs_from_redis
-        entries = await get_runner_logs_from_redis(session_id, limit=limit)
-        if entries:
-            return {"entries": entries, "session_id": session_id, "source": "redis"}
-        from dataclasses import asdict
+        """Logs dedicados à instância via arquivo local por session_id."""
         try:
-            from strider.admin.log_handler import get_log_buffer
-            buffer = get_log_buffer()
-            fallback = buffer.get_recent(limit=limit, search=session_id)
-            return {
-                "entries": [asdict(e) for e in fallback],
-                "session_id": session_id,
-                "source": "buffer",
-            }
+            from strider.admin.runner_logs import get_runner_logs_from_file
+
+            entries = await get_runner_logs_from_file(session_id, limit=limit)
+            return {"entries": entries, "session_id": session_id, "source": "file"}
         except Exception as e:
             logger.warning("runners_logs failed: %s", e)
-            return {"entries": [], "session_id": session_id, "source": "buffer"}
+            return {"entries": [], "session_id": session_id, "source": "file"}
 
     @router.post("/workers/{worker_id}/drain")
     async def worker_drain(
@@ -971,19 +964,19 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         level: str = Query("INFO"),
         logger_name: str = Query("", alias="logger"),
         search: str = Query(""),
-        session_id: str = Query("", description="Se preenchido, stream dedicado da instância (Redis)"),
+        session_id: str = Query("", description="Se preenchido, stream dedicado da instância (arquivo local)"),
         user: Any = Depends(check_superuser_access),
     ):
-        """SSE: stream em tempo real. Com session_id = logs dedicados da instância (Redis); sem = buffer global."""
+        """SSE: stream em tempo real. Com session_id = logs dedicados da instância (arquivo); sem = buffer global."""
         if session_id and session_id.strip():
-            # Logs dedicados da instância (Redis Stream) — sem mistura com uvicorn.access etc.
-            from strider.admin.runner_logs import stream_runner_logs
+            # Logs dedicados da instância (arquivo) — sem mistura com uvicorn.access etc.
+            from strider.admin.runner_logs import stream_runner_logs_from_file
 
             async def event_generator_dedicated():
                 yield f"data: {json.dumps({'type': 'connected', 'message': 'Log stream da instância conectado'})}\n\n"
                 level_no = getattr(logging, level.upper(), logging.INFO) if level else logging.INFO
                 try:
-                    async for entry in stream_runner_logs(session_id.strip()):
+                    async for entry in stream_runner_logs_from_file(session_id.strip()):
                         if await request.is_disconnected():
                             break
                         if entry.get("level_no", 0) < level_no:
