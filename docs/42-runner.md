@@ -81,6 +81,7 @@ class AppSettings(Settings):
   - `on_stop()` — quando parada foi solicitada (stop ou limite).
   - `after_stop()` — após encerramento (cleanup, persistência, eventos).
   - `on_resource_exceeded(metrics)` — quando CPU/memory/IO excedem limite; default: log e `request_stop()`.
+- **Payload de start** (opcional): `start_payload_model` (classe Pydantic v2) ou `start_payload_schema` (dict JSON Schema). Descrevem o dict passado a `send_start` — o merge do **Payload JSON** e do **User ID** do Admin Ops (`user_id` no dict). `action` e `session_id` são acrescentados pelo broker e **não** entram neste contrato. Se `start_payload_model` estiver definido, tem precedência sobre `start_payload_schema`. A validação corre em `send_start` e no `POST /api/ops/runners/instances/start`. O `GET /api/ops/runners/registered` inclui `start_schema` (JSON Schema) por runner para o painel Ops mostrar campos obrigatórios e tipos.
 
 Mensagens no tópico:
 
@@ -88,6 +89,29 @@ Mensagens no tópico:
 - `{"action": "stop", "session_id": "..."}` ou `{"action": "stop"}` — solicita parada.
 
 As mensagens são publicadas com **Kafka key = session_id**, de modo que start e stop da mesma sessão vão para a mesma partição e o mesmo consumidor — assim o processo que criou o filho é o que recebe o stop e pode encerrá-lo (SIGTERM). Sem a key, com múltiplas partições/consumidores, o stop poderia ser consumido por outro nó que não tem o processo e o filho ficaria órfão.
+
+## Exemplo: contrato de payload (Pydantic)
+
+```python
+# src/runners.py
+from pydantic import BaseModel, Field
+from strider.messaging import Runner
+
+class StrategyStartPayload(BaseModel):
+    """Campos enviados pelo Admin (payload + user_id fundidos)."""
+    user_id: str | None = None
+    market: str = Field(..., description="Símbolo, ex.: 1HZ100V")
+
+class StrategySessionRunner(Runner):
+    input_topic = "strategy.session.commands"
+    start_payload_model = StrategyStartPayload
+
+    async def run_session(self, payload: dict) -> None:
+        data = StrategyStartPayload.model_validate(payload)
+        # ...
+```
+
+Para JSON Schema sem Pydantic na app: `start_payload_schema = {"type": "object", "properties": {...}, "required": [...]}`.
 
 ## Exemplo: RunnerStrategy(Runner)
 

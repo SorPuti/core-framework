@@ -25,6 +25,42 @@ from typing import Any, TYPE_CHECKING
 # Rolling host metrics for Ops charts (last N samples per process; max 60).
 _RUNNER_HOST_METRIC_HISTORY: deque[dict[str, Any]] = deque(maxlen=60)
 
+
+def _chart_metric_history(
+    raw: list[dict[str, Any]],
+    sample: dict[str, Any],
+    collected: str,
+) -> list[dict[str, Any]]:
+    """
+    Chart.js line charts need ≥2 points to render visibly. Also, with multiple API
+    workers each process has its own empty deque — always pad from the current sample.
+    """
+    series = [dict(x) for x in raw]
+    for p in series:
+        p.pop("_pad", None)
+    if len(series) >= 2:
+        return series
+    try:
+        from datetime import datetime, timedelta
+
+        ts = datetime.fromisoformat(collected.replace("Z", "+00:00"))
+        t_pad = (ts - timedelta(minutes=2)).isoformat()
+        if t_pad.endswith("+00:00"):
+            t_pad = t_pad[:-6] + "Z"
+    except Exception:
+        t_pad = collected
+    pad_point = {
+        "t": t_pad,
+        "cpu_percent": sample["cpu_percent"],
+        "memory_used_mb": sample["memory_used_mb"],
+        "memory_percent": sample["memory_percent"],
+        "memory_total_mb": sample["memory_total_mb"],
+        "_pad": True,
+    }
+    if len(series) == 1:
+        return [pad_point, series[0]]
+    return [pad_point, dict(sample)]
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from strider.datetime import timezone
@@ -666,14 +702,18 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                     importlib.import_module(runners_module)
                 except ImportError as e:
                     logger.debug("Could not import runners_module '%s': %s", runners_module, e)
-            from strider.messaging.runner import list_runners
+            from strider.messaging.runner import get_runner_start_schema, list_runners
             names = list_runners()
             items = []
             for name in names:
                 from strider.messaging.runner import get_runner
                 cls = get_runner(name)
                 topic = getattr(cls, "input_topic", "runner.commands") if cls else "runner.commands"
-                items.append({"name": name, "input_topic": topic})
+                start_schema = get_runner_start_schema(name)
+                item: dict[str, Any] = {"name": name, "input_topic": topic}
+                if start_schema is not None:
+                    item["start_schema"] = start_schema
+                items.append(item)
             return {"items": items, "total": len(items)}
         except Exception as e:
             logger.warning("Failed to list runners: %s", e)
@@ -744,6 +784,9 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         except Exception as e:
             logger.warning("runners_dashboard: runner instances query failed: %s", e)
 
+        raw_hist = list(_RUNNER_HOST_METRIC_HISTORY)
+        chart_series = _chart_metric_history(raw_hist, sample, collected)
+
         return {
             "counts": counts,
             "host": {
@@ -754,7 +797,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                 "memory_total_mb": sample["memory_total_mb"],
                 "disk_percent": round(float(sys_info.get("disk_percent") or 0), 1),
             },
-            "metric_history": list(_RUNNER_HOST_METRIC_HISTORY),
+            "metric_history": chart_series,
             "recent_instances": recent_instances,
             "collected_at": collected,
         }
@@ -815,6 +858,9 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         user: Any = Depends(check_superuser_access),
     ) -> dict:
         """Envia comando start; a framework registra RunnerInstance no Admin Ops."""
+        import jsonschema
+        from pydantic import ValidationError
+
         try:
             body = await request.json()
             runner_name = body.get("runner_name")
@@ -841,6 +887,19 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             return {"status": "started", "instance_id": instance_id}
         except HTTPException:
             raise
+        except ValidationError as e:
+            raise HTTPException(400, detail=e.errors())
+        except jsonschema.ValidationError as e:
+            raise HTTPException(
+                400,
+                detail=[
+                    {
+                        "type": "json_schema",
+                        "msg": e.message,
+                        "loc": [str(p) for p in e.absolute_path],
+                    }
+                ],
+            )
         except ValueError as e:
             raise HTTPException(400, str(e))
         except Exception as e:
@@ -900,6 +959,155 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         except Exception as e:
             logger.exception("runners_instance_resume failed: %s", e)
             raise HTTPException(500, str(e))
+
+    @router.post("/runners/{runner_name}/instances/{session_id}/restart")
+    async def runners_instance_restart(
+        request: Request,
+        runner_name: str,
+        session_id: str,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Envia stop e, após breve espera, start novamente com o mesmo payload
+        guardado em RunnerInstance (quando existir).
+        """
+        from strider.models import get_session
+        from strider.admin.models import RunnerInstance
+        from strider.querysets import QuerySet
+        from strider.messaging.runner import send_start, send_stop
+
+        payload: dict[str, Any] = {}
+        user_id_val: Any = None
+        db = await get_session()
+        async with db:
+            qs = QuerySet(RunnerInstance, db)
+            inst = await qs.filter(
+                runner_name=runner_name,
+                session_id=session_id,
+            ).first()
+            if inst and inst.payload_json:
+                try:
+                    payload = dict(json.loads(inst.payload_json))
+                except (json.JSONDecodeError, TypeError):
+                    payload = {}
+            if inst and inst.user_id:
+                user_id_val = inst.user_id
+        if user_id_val is not None:
+            payload["user_id"] = user_id_val
+        payload["session_id"] = session_id
+
+        try:
+            await send_stop(runner_name, session_id)
+        except Exception as e:
+            logger.warning("runners_instance_restart: send_stop: %s", e)
+        await asyncio.sleep(2.0)
+        try:
+            await send_start(runner_name, session_id, payload=payload or None)
+        except Exception as e:
+            logger.exception("runners_instance_restart: send_start failed: %s", e)
+            raise HTTPException(500, str(e))
+        return {
+            "status": "restarted",
+            "runner_name": runner_name,
+            "session_id": session_id,
+        }
+
+    @router.get("/runners/instances/{instance_id}/activity")
+    async def runners_instance_activity(
+        request: Request,
+        instance_id: int,
+        user: Any = Depends(check_superuser_access),
+    ) -> dict:
+        """
+        Metadados do ficheiro de log e última linha — para detetar instância possivelmente
+        bloqueada (sem novas linhas há muito tempo).
+        """
+        import re
+        import time
+        from datetime import datetime
+
+        from strider.models import get_session
+        from strider.admin.models import RunnerInstance
+        from strider.querysets import QuerySet
+        from strider.messaging.runner import get_runner_log_path
+        from strider.admin.runner_logs import read_runner_log_tail
+
+        db = await get_session()
+        async with db:
+            qs = QuerySet(RunnerInstance, db)
+            inst = await qs.filter(id=instance_id).first()
+        if not inst:
+            raise HTTPException(404, "Instância não encontrada")
+
+        rname = inst.runner_name
+        sid = inst.session_id
+        path = inst.log_path or get_runner_log_path(rname, sid)
+        status = inst.status or ""
+
+        def _mtime_only() -> dict[str, Any]:
+            o: dict[str, Any] = {
+                "log_path": path,
+                "log_file_exists": False,
+                "log_file_mtime_iso": None,
+            }
+            if os.path.isfile(path):
+                o["log_file_exists"] = True
+                mtime = os.path.getmtime(path)
+                o["log_file_mtime_iso"] = datetime.fromtimestamp(
+                    mtime, tz=timezone.utc
+                ).isoformat()
+                o["seconds_since_mtime"] = max(0.0, time.time() - mtime)
+            else:
+                o["seconds_since_mtime"] = None
+            return o
+
+        meta = await asyncio.to_thread(_mtime_only)
+        entries = await read_runner_log_tail(rname, sid, log_path=path, limit=80)
+        last_line = ""
+        if entries:
+            last_line = str((entries[-1] or {}).get("message") or "")[:800]
+        iso_in_line: str | None = None
+        m = re.search(
+            r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)",
+            last_line,
+        ) or re.search(
+            r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)",
+            last_line,
+        )
+        if m:
+            iso_in_line = m.group(1)
+        err_count = sum(
+            1
+            for e in entries
+            if "ERROR" in str((e or {}).get("message") or "").upper()
+            or "CRITICAL" in str((e or {}).get("message") or "").upper()
+        )
+        stale = False
+        stale_reason = ""
+        sec_m = meta.get("seconds_since_mtime")
+        if status in ("running", "paused") and sec_m is not None:
+            if sec_m > 120:
+                stale = True
+                stale_reason = (
+                    f"Ficheiro de log sem alteração há ~{int(sec_m)}s — possível bloqueio "
+                    "ou espera longa (ex.: rede/Deriv)."
+                )
+        return {
+            "instance_id": instance_id,
+            "runner_name": rname,
+            "session_id": sid,
+            "status": status,
+            "log_path": path,
+            "log_file_exists": meta.get("log_file_exists"),
+            "log_file_mtime_iso": meta.get("log_file_mtime_iso"),
+            "seconds_since_log_file_mtime": meta.get("seconds_since_mtime"),
+            "last_log_line_preview": last_line,
+            "last_log_timestamp_in_line": iso_in_line,
+            "error_or_critical_lines_in_tail": err_count,
+            "likely_stale": stale,
+            "stale_hint": stale_reason,
+            "checked_at": timezone.now().isoformat(),
+        }
 
     @router.delete("/runners/instances/{instance_id}")
     async def runners_instance_delete(

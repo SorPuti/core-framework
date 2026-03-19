@@ -163,7 +163,7 @@
             <div class="flex-1 min-h-[160px] relative">
                 <canvas id="opsDashRunnerChart"></canvas>
                 <template x-if="!runnerDash || !(runnerDash.metric_history && runnerDash.metric_history.length)">
-                    <p class="absolute inset-0 flex items-center justify-center text-xs text-gray-500" x-show="!loading">Open Runners page or refresh to accumulate samples.</p>
+                    <p class="absolute inset-0 flex items-center justify-center text-xs text-gray-500 pointer-events-none" x-show="!loading">Sem dados de host (métricas indisponíveis).</p>
                 </template>
             </div>
         </div>
@@ -321,6 +321,7 @@ function opsDashboard() {
                 }
                 return;
             }
+            const pointR = hist.length <= 4 ? 3 : 0;
             const labels = hist.map((h) => (h.t ? String(h.t).slice(11, 19) : ''));
             const cpu = hist.map((h) => Number(h.cpu_percent) || 0);
             const mem = hist.map((h) => Number(h.memory_percent) || 0);
@@ -336,8 +337,8 @@ function opsDashboard() {
                 data: {
                     labels,
                     datasets: [
-                        { label: 'CPU %', data: cpu, borderColor: 'rgb(56, 189, 248)', backgroundColor: 'rgba(56,189,248,0.1)', fill: true, tension: 0.25, pointRadius: 0 },
-                        { label: 'Mem %', data: mem, borderColor: 'rgb(167, 139, 250)', backgroundColor: 'rgba(167,139,250,0.08)', fill: true, tension: 0.25, pointRadius: 0 },
+                        { label: 'CPU %', data: cpu, borderColor: 'rgb(56, 189, 248)', backgroundColor: 'rgba(56,189,248,0.1)', fill: true, tension: 0.25, pointRadius: pointR, pointHoverRadius: 5 },
+                        { label: 'Mem %', data: mem, borderColor: 'rgb(167, 139, 250)', backgroundColor: 'rgba(167,139,250,0.08)', fill: true, tension: 0.25, pointRadius: pointR, pointHoverRadius: 5 },
                     ],
                 },
                 options: {

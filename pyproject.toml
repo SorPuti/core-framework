@@ -1,6 +1,6 @@
 [project]
 name = "strider-framework"
-version = "0.18.47"
+version = "0.18.48"
 description = "Strider - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.10,<4.0"
 readme = "README.md"
@@ -25,6 +25,7 @@ classifiers = [
 
 dependencies = [
     "fastapi>=0.109.0",
+    "jsonschema>=4.20.0",
     "pydantic[email]>=2.5.0",
     "pydantic-settings>=2.1.0",
     "sqlalchemy>=2.0.25",

@@ -52,7 +52,7 @@ import time
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from strider.config import get_settings
 from strider.runner_log_paths import get_isolated_session_log_path
@@ -445,6 +445,15 @@ class Runner(ABC):
       after_stop()           → controlador encerrando (shutdown total)
       on_resource_exceeded() → CPU/mem excedidos (default: request_stop)
       on_session_crash()     → processo filho morreu inesperadamente
+
+    PAYLOAD DE START (Admin Ops / send_start)
+    ─────────────────────────────────────────
+    Opcionalmente declare o contrato do dict passado a ``send_start`` (merge de
+    ``body.payload`` + ``user_id`` no endpoint). ``action`` e ``session_id`` são
+    acrescentados pelo broker, não entram neste contrato.
+
+    - ``start_payload_model``: modelo Pydantic v2 (tem precedência).
+    - ``start_payload_schema``: dict JSON Schema (validação + documentação no admin).
     """
 
     input_topic: str = "runner.commands"
@@ -455,6 +464,9 @@ class Runner(ABC):
     check_interval_seconds: float = 5.0
     shutdown_grace_seconds: float = 5.0
     session_stop_timeout_seconds: float = 5.0
+
+    start_payload_model: ClassVar[Any] = None
+    start_payload_schema: ClassVar[dict[str, Any] | None] = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -1346,6 +1358,55 @@ def list_runners() -> list[str]:
     return list(_runner_registry.keys())
 
 
+def get_runner_start_schema(runner_name: str) -> dict[str, Any] | None:
+    """
+    JSON Schema do payload de start (dict enviado a ``send_start``), ou None.
+
+    Preferência: ``start_payload_model.model_json_schema()``; senão
+    ``start_payload_schema`` copiado.
+    """
+    cls = get_runner(runner_name)
+    if cls is None:
+        return None
+    model = getattr(cls, "start_payload_model", None)
+    if model is not None:
+        try:
+            return model.model_json_schema()
+        except Exception as exc:
+            logger.warning("get_runner_start_schema: model_json_schema failed: %s", exc)
+            return None
+    schema = getattr(cls, "start_payload_schema", None)
+    if isinstance(schema, dict) and schema:
+        return dict(schema)
+    return None
+
+
+def validate_runner_start_payload(
+    runner_name: str,
+    payload: dict[str, Any],
+) -> None:
+    """
+    Valida ``payload`` contra ``start_payload_model`` ou ``start_payload_schema``.
+
+    Levanta ``pydantic.ValidationError`` ou ``jsonschema.ValidationError`` em falha.
+    Sem modelo/schema na classe, não faz nada.
+    """
+    cls = get_runner(runner_name)
+    if cls is None:
+        raise ValueError(
+            f"Runner '{runner_name}' not found. Available: {list_runners()}"
+        )
+    model = getattr(cls, "start_payload_model", None)
+    if model is not None:
+        model.model_validate(payload)
+        return
+    schema = getattr(cls, "start_payload_schema", None)
+    if isinstance(schema, dict) and schema:
+        import jsonschema
+
+        jsonschema.validate(instance=payload, schema=schema)
+
+
 async def run_runner_async(runner_class: str | type[Runner]) -> None:
     if isinstance(runner_class, str):
         resolved = get_runner(runner_class)
@@ -1376,6 +1437,7 @@ async def send_start(
         raise ValueError(
             f"Runner '{runner_name}' not found. Available: {list_runners()}"
         )
+    validate_runner_start_payload(runner_name, payload or {})
     try:
         await ensure_runner_database_initialized()
         from strider.models import get_session
