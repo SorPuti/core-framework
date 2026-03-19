@@ -23,146 +23,7 @@ With explicit model and view:
     # urlpatterns = [path("items", ItemViewSet)]
 """
 
-from strider.models import Model, Field, SoftDeleteMixin, SoftDeleteManager, TenantSoftDeleteManager
-from strider.serializers import (
-    InputSchema,
-    OutputSchema,
-    Serializer,
-    ModelSerializer,
-    UnifiedModelSerializer,
-    build_schemas_from_model,
-    PaginatedResponse,
-    ErrorResponse,
-    SuccessResponse,
-    DeleteResponse,
-    ValidationErrorResponse,
-    NotFoundResponse,
-    ConflictResponse,
-    computed_field,
-    computed_orm_field,
-)
-from strider.views import (
-    APIView,
-    ViewSet,
-    ModelViewSet,
-    ReadOnlyModelViewSet,
-    CreateModelViewSet,
-    ListModelViewSet,
-    ListCreateModelViewSet,
-    RetrieveUpdateModelViewSet,
-    RetrieveDestroyModelViewSet,
-    RetrieveUpdateDestroyModelViewSet,
-    SearchModelViewSet,
-    BulkModelViewSet,
-    action,
-)
-from strider.routing import Router, AutoRouter
-from strider.urls import path, include, URLPattern, URLInclude
-from strider.realtime import WebSocketView, SSEView, Channel, sse_response
-from strider.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
-from strider.dependencies import Depends, get_db, get_current_user, set_session_factory
-from strider.config import (
-    Settings,
-    get_settings,
-    configure,
-    apply_settings,
-    is_configured,
-    reset_settings,
-    auto_configure_auth,
-    is_auth_configured,
-)
 from strider.app import StrideApp, get_application
-from strider.logger import logger, get_logger, configure_logging
-
-# Validation
-from strider.validation import (
-    SchemaModelValidator,
-    SchemaModelMismatchError,
-    ValidationWarning,
-    validate_schema,
-    validate_all_viewsets,
-)
-
-# Advanced Fields (UUID7, JSON, FileField, etc.)
-from strider.fields import (
-    uuid7,
-    uuid7_str,
-    AdaptiveJSON,
-    AdvancedField,
-    FileField,
-    FieldFile,
-)
-
-# Multi-Tenancy
-from strider.tenancy import (
-    set_tenant,
-    get_tenant,
-    require_tenant,
-    clear_tenant,
-    TenantMixin,
-    FlexibleTenantMixin,
-    TenantMiddleware,
-    tenant_context,
-    get_tenant_dependency,
-)
-
-# Database Replicas
-from strider.database import (
-    DatabaseSession,
-    init_db,
-    init_replicas,
-    close_replicas,
-    get_db_replicas,
-    get_write_db,
-    get_read_db,
-    DBSession,
-    WriteSession,
-    ReadSession,
-)
-
-# Advanced QuerySets
-from strider.querysets import (
-    SoftDeleteQuerySet,
-    TenantQuerySet,
-    TenantSoftDeleteQuerySet,
-)
-
-# DateTime - SEMPRE use timezone.now() em vez de datetime.now()
-from strider.datetime import (
-    # Classe principal - USE ESTA
-    timezone,
-    # Classes de tipo
-    DateTime,
-    Date,
-    Time,
-    TimeDelta,
-    UTC,
-    # Configuração
-    configure_datetime,
-    get_datetime_config,
-    get_timezone,
-)
-
-# Middleware - Sistema Django-style
-from strider.middleware import (
-    ASGIMiddleware,
-    BaseMiddleware,
-    configure_middleware,
-    register_middleware,
-    apply_middlewares,
-    get_middleware_stack_info,
-    print_middleware_stack,
-    # Pre-built middlewares (Pure ASGI)
-    TimingMiddleware,
-    RequestIDMiddleware,
-    LoggingMiddleware,
-    MaintenanceModeMiddleware,
-    SecurityHeadersMiddleware,
-)
-
-# Auth - ViewSet
-from strider.auth.views import AuthViewSet
-
 # Auth - Sistema plugável de autenticação
 from strider.auth import (
     # Config
@@ -220,49 +81,8 @@ from strider.auth import (
     AuthenticationMiddleware,
     OptionalAuthenticationMiddleware,
 )
-
-# Migrations
-from strider.migrations import (
-    makemigrations,
-    migrate,
-    showmigrations,
-    rollback,
-    MigrationEngine,
-    Migration,
-)
-
-# Validators
-from strider.validators import (
-    ValidationError,
-    UniqueValidationError,
-    MultipleValidationErrors,
-    UniqueValidator,
-    UniqueTogetherValidator,
-    ExistsValidator,
-    RegexValidator,
-    EmailValidator,
-    URLValidator,
-    SlugValidator,
-    PhoneValidator,
-    CPFValidator,
-    CNPJValidator,
-    MinLengthValidator,
-    MaxLengthValidator,
-    MinValueValidator,
-    MaxValueValidator,
-    RangeValidator,
-    PasswordValidator,
-    ChoiceValidator,
-    FileExtensionValidator,
-    FileSizeValidator,
-)
-
-# Relations - Django-like relationship helpers
-from strider.relations import (
-    Rel,
-    AssociationTable,
-)
-
+# Auth - ViewSet
+from strider.auth.views import AuthViewSet
 # Choices - Django-style enums with value and label
 from strider.choices import (
     Choices,
@@ -280,19 +100,45 @@ from strider.choices import (
     Gender,
     Visibility,
 )
-
-# Storage - File storage (local or GCS with signed URLs)
-from strider.storage import (
-    save_file,
-    delete_file,
-    get_file_url,
-    file_exists,
-    get_storage_file_fields,
-    collect_file_paths,
-    StorageFile,
-    storage_file_property,
+from strider.config import (
+    Settings,
+    get_settings,
+    configure,
+    apply_settings,
+    is_configured,
+    reset_settings,
+    auto_configure_auth,
+    is_auth_configured,
 )
-
+# Database Replicas
+from strider.database import (
+    DatabaseSession,
+    init_db,
+    init_replicas,
+    close_replicas,
+    get_db_replicas,
+    get_write_db,
+    get_read_db,
+    DBSession,
+    WriteSession,
+    ReadSession,
+)
+# DateTime - SEMPRE use timezone.now() em vez de datetime.now()
+from strider.datetime import (
+    # Classe principal - USE ESTA
+    timezone,
+    # Classes de tipo
+    DateTime,
+    Date,
+    Time,
+    TimeDelta,
+    UTC,
+    # Configuração
+    configure_datetime,
+    get_datetime_config,
+    get_timezone,
+)
+from strider.dependencies import Depends, get_db, get_current_user, set_session_factory
 # Exceptions - Centralized exception classes
 from strider.exceptions import (
     # Base
@@ -337,8 +183,146 @@ from strider.exceptions import (
     ConfigurationError,
     MissingDependency,
 )
+# Advanced Fields (UUID7, JSON, FileField, etc.)
+from strider.fields import (
+    uuid7,
+    uuid7_str,
+    AdaptiveJSON,
+    AdvancedField,
+    FileField,
+    FieldFile,
+)
+from strider.logger import logger, get_logger, configure_logging
+# Middleware - Sistema Django-style
+from strider.middleware import (
+    ASGIMiddleware,
+    BaseMiddleware,
+    configure_middleware,
+    register_middleware,
+    apply_middlewares,
+    get_middleware_stack_info,
+    print_middleware_stack,
+    # Pre-built middlewares (Pure ASGI)
+    TimingMiddleware,
+    RequestIDMiddleware,
+    LoggingMiddleware,
+    MaintenanceModeMiddleware,
+    SecurityHeadersMiddleware,
+)
+# Migrations
+from strider.migrations import (
+    makemigrations,
+    migrate,
+    showmigrations,
+    rollback,
+    MigrationEngine,
+    Migration,
+)
+from strider.models import Model, Field, SoftDeleteMixin, SoftDeleteManager, TenantSoftDeleteManager
+from strider.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
+# Advanced QuerySets
+from strider.querysets import (
+    SoftDeleteQuerySet,
+    TenantQuerySet,
+    TenantSoftDeleteQuerySet,
+)
+from strider.realtime import WebSocketView, SSEView, Channel, sse_response
+# Relations - Django-like relationship helpers
+from strider.relations import (
+    Rel,
+    AssociationTable,
+)
+from strider.routing import Router, AutoRouter
+from strider.serializers import (
+    InputSchema,
+    OutputSchema,
+    Serializer,
+    ModelSerializer,
+    UnifiedModelSerializer,
+    build_schemas_from_model,
+    PaginatedResponse,
+    ErrorResponse,
+    SuccessResponse,
+    DeleteResponse,
+    ValidationErrorResponse,
+    NotFoundResponse,
+    ConflictResponse,
+    computed_orm_field,
+)
+# Storage - File storage (local or GCS with signed URLs)
+from strider.storage import (
+    save_file,
+    delete_file,
+    get_file_url,
+    file_exists,
+    get_storage_file_fields,
+    collect_file_paths,
+    StorageFile,
+    storage_file_property,
+)
+# Multi-Tenancy
+from strider.tenancy import (
+    set_tenant,
+    get_tenant,
+    require_tenant,
+    clear_tenant,
+    TenantMixin,
+    FlexibleTenantMixin,
+    TenantMiddleware,
+    tenant_context,
+    get_tenant_dependency,
+)
+from strider.urls import path, include, URLPattern, URLInclude
+# Validation
+from strider.validation import (
+    SchemaModelValidator,
+    SchemaModelMismatchError,
+    ValidationWarning,
+    validate_schema,
+    validate_all_viewsets,
+)
+# Validators
+from strider.validators import (
+    ValidationError,
+    UniqueValidationError,
+    MultipleValidationErrors,
+    UniqueValidator,
+    UniqueTogetherValidator,
+    ExistsValidator,
+    RegexValidator,
+    EmailValidator,
+    URLValidator,
+    SlugValidator,
+    PhoneValidator,
+    CPFValidator,
+    CNPJValidator,
+    MinLengthValidator,
+    MaxLengthValidator,
+    MinValueValidator,
+    MaxValueValidator,
+    RangeValidator,
+    PasswordValidator,
+    ChoiceValidator,
+    FileExtensionValidator,
+    FileSizeValidator,
+)
+from strider.views import (
+    APIView,
+    ViewSet,
+    ModelViewSet,
+    ReadOnlyModelViewSet,
+    CreateModelViewSet,
+    ListModelViewSet,
+    ListCreateModelViewSet,
+    RetrieveUpdateModelViewSet,
+    RetrieveDestroyModelViewSet,
+    RetrieveUpdateDestroyModelViewSet,
+    SearchModelViewSet,
+    BulkModelViewSet,
+    action,
+)
 
-__version__ = "0.18.42"
+__version__ = "0.18.43"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
@@ -617,14 +601,6 @@ __all__ = [
     # Exceptions - Configuration
     "ConfigurationError",
     "MissingDependency",
-    # Messaging (Enterprise)
-    "event",
-    "consumer",
-    "on_event",
-    "publish_event",
-    # Tasks (Enterprise)
-    "task",
-    "periodic_task",
 ]
 
 

@@ -21,8 +21,8 @@ import logging
 from typing import Any, TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-
+from fastapi.responses import StreamingResponse
+from strider.datetime import timezone
 from strider.admin.permissions import check_admin_access
 
 if TYPE_CHECKING:
@@ -320,7 +320,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         try:
             from strider.models import get_session
             from strider.admin.models import TaskExecution
-            from strider.datetime import timezone
+
             from datetime import timedelta
             from sqlalchemy import delete
 
@@ -507,7 +507,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             from strider.models import get_session
             from strider.admin.models import WorkerHeartbeat
             from strider.querysets import QuerySet
-            from strider.datetime import timezone
+
             from datetime import timedelta
 
             db = await get_session()
@@ -598,7 +598,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         try:
             from strider.models import get_session
             from strider.admin.models import WorkerHeartbeat
-            from strider.datetime import timezone
+
             from datetime import timedelta
             from sqlalchemy import select
 
@@ -826,7 +826,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             from strider.admin.models import RunnerInstance
             from strider.querysets import QuerySet
             from strider.messaging.runner import send_stop
-            from strider.datetime import timezone
+
 
             db = await get_session()
             async with db:
@@ -1231,7 +1231,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         try:
             from strider.models import get_session
             from strider.admin.models import EventLog
-            from strider.datetime import timezone
+
             from datetime import timedelta
             from sqlalchemy import select, func
             
@@ -1313,7 +1313,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
             if not detail:
                 raise HTTPException(404, f"Consumer group '{group_id}' not found")
             
-            from strider.datetime import timezone
+
             now = timezone.now()
             
             return {
@@ -1604,7 +1604,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         try:
             from strider.models import get_session
             from strider.admin.models import EventLog
-            from strider.datetime import timezone
+
             from datetime import timedelta
             from sqlalchemy import select, func
 
@@ -1702,7 +1702,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         try:
             from strider.models import get_session
             from strider.admin.models import EventLog
-            from strider.datetime import timezone
+
             from datetime import timedelta
             from sqlalchemy import select, func, and_
 
@@ -1930,7 +1930,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
                     )
 
                     # Update log with result
-                    from strider.datetime import timezone
+
                     new_log.status = "sent"
                     new_log.partition = result.partition if hasattr(result, "partition") else None
                     new_log.offset = result.offset if hasattr(result, "offset") else None
@@ -1965,7 +1965,7 @@ def create_ops_api(site: "AdminSite") -> APIRouter:
         try:
             from strider.models import get_session
             from strider.admin.models import EventLog
-            from strider.datetime import timezone
+
             from datetime import timedelta
             from sqlalchemy import delete
 

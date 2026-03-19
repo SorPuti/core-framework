@@ -1,186 +1,312 @@
-"""Lightweight entrypoint for isolated runner session processes."""
+"""
+runner_session.py — entrypoint do processo filho isolado.
+
+Invocado pelo controlador como:
+    python -m strider.messaging.runner_session <RunnerName> <session_id> <payload_path>
+
+Responsabilidades:
+1. Configura logger DEDICADO (não mistura com a API)
+2. Inicializa DB/Redis próprios (sem compartilhar com o controlador)
+3. Instancia o Runner e chama run_session(payload)
+4. Mantém o processo vivo enquanto run_session() não retornar
+5. Encerra limpo ao detectar .stop flag ou SIGTERM
+6. Remove flags de controle ao sair
+
+O processo filho NÃO deve encerrar espontaneamente enquanto a sessão
+estiver ativa — use um loop interno em run_session que checa is_stop_flag().
+"""
 
 from __future__ import annotations
 
 import asyncio
-import builtins
-import importlib
 import json
 import logging
 import os
 import signal
 import sys
-from pathlib import Path
+from typing import Any
 
-logger = logging.getLogger(__name__)
+# ---------------------------------------------------------------------------
+# Ensure the package is importable when invoked as -m
+# ---------------------------------------------------------------------------
+# (no sys.path manipulation needed if installed; add only as fallback)
 
-
-def _attach_session_logging(session_id: str) -> None:
-    class _SessionIdFilter(logging.Filter):
-        def filter(self, record: logging.LogRecord) -> bool:
-            setattr(record, "runner_session_id", session_id)
-            return True
-
-    class _SessionIdFormatter(logging.Formatter):
-        def format(self, record: logging.LogRecord) -> str:
-            out = super().format(record)
-            sid = getattr(record, "runner_session_id", None)
-            return f"[{sid}] {out}" if sid else out
-
-    for handler in logging.root.handlers:
-        handler.addFilter(_SessionIdFilter())
-        prev = handler.formatter
-        handler.setFormatter(
-            _SessionIdFormatter(
-                prev._fmt if prev else "%(message)s",
-                prev.datefmt if prev else None,
-            )
-        )
-    logging.getLogger().addFilter(_SessionIdFilter())
-
-    try:
-        from strider.admin.runner_logs import RunnerLogsFileHandler
-
-        logging.getLogger().addHandler(RunnerLogsFileHandler(session_id))
-    except Exception as exc:
-        logger.debug("Failed to attach RunnerLogsFileHandler: %s", exc)
+logger: logging.Logger  # will be reassigned after setup
 
 
-def _patch_print_to_logger() -> None:
-    """Route print() calls to logger so they appear in runner session logs."""
-    if getattr(builtins, "_strider_runner_print_patched", False):
-        return
-
-    original_print = builtins.print
-
-    def _logged_print(*args, **kwargs):
-        sep = kwargs.get("sep", " ")
-        end = kwargs.get("end", "\n")
-        text = sep.join(str(a) for a in args)
-        if end and end != "\n":
-            text = f"{text}{end}"
-        text = text.rstrip("\n")
-        if text:
-            logging.getLogger("runner.print").info(text)
-        # Do not write to stdout in isolated child; logs are persisted via handler.
-
-    builtins.print = _logged_print
-    builtins._strider_runner_print_patched = True  # type: ignore[attr-defined]
-    builtins._strider_runner_original_print = original_print  # type: ignore[attr-defined]
+def _setup_logging(runner_name: str, session_id: str) -> logging.Logger:
+    """
+    Configure a dedicated logger for this isolated session.
+    Deliberately does NOT propagate to the root logger to avoid mixing with API logs.
+    """
+    # Import here (after package is importable)
+    from strider.messaging.runner import setup_isolated_session_logging
+    return setup_isolated_session_logging(runner_name, session_id)
 
 
-def _discover_and_import_runners() -> None:
-    from strider.config import get_settings
+# ---------------------------------------------------------------------------
+# Signal handling
+# ---------------------------------------------------------------------------
 
-    settings = get_settings()
-    imported: set[str] = set()
+_stop_event: asyncio.Event | None = None
+_stop_flag_was_sigterm = False
 
-    for mod in (
-        getattr(settings, "workers_module", None),
-        getattr(settings, "runners_module", None),
-        "workers",
-        "src.workers",
-        "app.workers",
-        "runners",
-        "src.runners",
-        "app.runners",
-    ):
-        if not mod or mod in imported:
-            continue
+
+def _handle_sigterm(signum: int, frame: Any) -> None:
+    """SIGTERM: set stop event so run_loop can exit cleanly."""
+    global _stop_flag_was_sigterm
+    _stop_flag_was_sigterm = True
+    if _stop_event is not None:
         try:
-            importlib.import_module(mod)
-            imported.add(mod)
-        except Exception:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # noinspection PyTypeChecker
+                loop.call_soon_threadsafe(_stop_event.set)
+        except RuntimeError:
             pass
 
-    cwd = Path(os.getcwd())
-    for pattern in ("runners.py", "src/runners.py", "src/*/runners.py", "app/runners.py"):
-        for path in cwd.glob(pattern):
-            if not path.is_file():
-                continue
-            module_name = str(path.relative_to(cwd)).replace("/", ".").replace("\\", ".").replace(".py", "")
-            if module_name in imported:
-                continue
+
+# ---------------------------------------------------------------------------
+# Main async entrypoint
+# ---------------------------------------------------------------------------
+
+# noinspection PyTypeChecker
+async def _run(runner_name: str, session_id: str, payload: dict[str, Any]) -> int:
+    """
+    Returns the exit code:
+        0  → clean exit (stop flag, SIGTERM, or run_session completed normally after flag)
+        1  → error in run_session
+        2  → runner class not found
+    """
+    global _stop_event
+
+    _stop_event = asyncio.Event()
+    log = _setup_logging(runner_name, session_id)
+
+    log.info(
+        "Session process started: runner=%s session_id=%s pid=%s",
+        runner_name, session_id, os.getpid(),
+    )
+
+    # Register signal handler (use asyncio-safe approach)
+    loop = asyncio.get_event_loop()
+    try:
+        loop.add_signal_handler(signal.SIGTERM, lambda: _stop_event.set())
+        loop.add_signal_handler(signal.SIGINT, lambda: _stop_event.set())
+    except NotImplementedError:
+        # Windows fallback
+        signal.signal(signal.SIGTERM, _handle_sigterm)
+
+    # Initialize DB and Redis for this child process
+    try:
+        await _init_child_resources(log)
+    except Exception as exc:
+        log.error("Failed to initialize child resources: %s", exc, exc_info=True)
+        return 1
+
+    # Resolve runner class
+    try:
+        from strider.messaging.runner import get_runner
+        runner_cls = get_runner(runner_name)
+        if runner_cls is None:
+            log.error("Runner class not found: %s", runner_name)
+            return 2
+    except Exception as exc:
+        log.error("Failed to import runner: %s", exc, exc_info=True)
+        return 1
+
+    # Instantiate runner
+    runner = runner_cls()
+
+    # Optional: start DB log handler for Admin Panel streaming
+    db_log_handler: Any = None
+    try:
+        from strider.messaging.runner import RunnerDBLogHandler
+        db_log_handler = RunnerDBLogHandler(runner_name, session_id)
+        db_log_handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+        log.addHandler(db_log_handler)
+        await db_log_handler.start()
+        log.debug("RunnerDBLogHandler started")
+    except Exception as exc:
+        log.debug("RunnerDBLogHandler not started (non-fatal): %s", exc)
+        db_log_handler = None
+
+    # Import flag helpers
+    from strider.messaging.runner import check_stop_flag, clear_stop_flag
+
+    exit_code = 0
+    try:
+        log.info("Calling run_session for session_id=%s", session_id)
+
+        # Run session in a task so we can also wait on the stop event
+        session_task = asyncio.create_task(runner.run_session(payload))
+
+        # Wait for either: session completes, stop flag, or stop event (SIGTERM)
+        while not session_task.done():
+            # Check stop flag (set by controller via filesystem)
+            if check_stop_flag(session_id):
+                log.info(
+                    "Stop flag detected for session_id=%s — requesting stop", session_id
+                )
+                runner.request_stop()
+                # Give run_session time to exit cleanly
+                try:
+                    await asyncio.wait_for(asyncio.shield(session_task), timeout=10.0)
+                except asyncio.TimeoutError:
+                    log.warning(
+                        "run_session did not exit within 10s after stop flag; cancelling"
+                    )
+                    session_task.cancel()
+                    try:
+                        await session_task
+                    except asyncio.CancelledError:
+                        pass
+                break
+
+            # Check SIGTERM/asyncio stop event
+            if _stop_event.is_set():
+                log.info("Stop event set (SIGTERM) for session_id=%s — requesting stop", session_id)
+                runner.request_stop()
+                try:
+                    await asyncio.wait_for(asyncio.shield(session_task), timeout=10.0)
+                except asyncio.TimeoutError:
+                    log.warning(
+                        "run_session did not exit within 10s after SIGTERM; cancelling"
+                    )
+                    session_task.cancel()
+                    try:
+                        await session_task
+                    except asyncio.CancelledError:
+                        pass
+                break
+
+            # Poll every 0.5s to check flags without busy-looping
             try:
-                importlib.import_module(module_name)
-                imported.add(module_name)
+                await asyncio.wait_for(asyncio.shield(session_task), timeout=0.5)
+            except asyncio.TimeoutError:
+                pass  # session still running, loop again
+
+        # Retrieve exception if any
+        if not session_task.cancelled():
+            exc = session_task.exception()
+            if exc is not None:
+                log.error(
+                    "run_session raised exception for session_id=%s: %s",
+                    session_id, exc, exc_info=exc,
+                )
+                exit_code = 1
+
+    except asyncio.CancelledError:
+        log.info("Session task cancelled for session_id=%s", session_id)
+        exit_code = 0
+    except Exception as exc:
+        log.error(
+            "Unexpected error in session loop session_id=%s: %s", session_id, exc, exc_info=True
+        )
+        exit_code = 1
+    finally:
+        log.info(
+            "Session process exiting: runner=%s session_id=%s exit_code=%s",
+            runner_name, session_id, exit_code,
+        )
+        clear_stop_flag(session_id)
+
+        if db_log_handler is not None:
+            try:
+                await db_log_handler.stop()
             except Exception:
                 pass
 
-
-async def _run_session_process(runner_name: str, session_id: str, payload_file: str) -> int:
-    _attach_session_logging(session_id)
-    _patch_print_to_logger()
-
-    try:
-        with open(payload_file, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-    except Exception as exc:
-        print(f"Failed to load payload file {payload_file}: {exc}", file=sys.stderr)
-        return 1
-    finally:
+        # Close child DB/Redis connections
         try:
-            os.remove(payload_file)
-        except OSError:
-            pass
+            await _teardown_child_resources(log)
+        except Exception as exc:
+            log.debug("Child resource teardown failed: %s", exc)
 
+    return exit_code
+
+
+async def _init_child_resources(log: logging.Logger) -> None:
+    """Initialize DB and Redis connections for the child process."""
     from strider.config import get_settings
     settings = get_settings()
-    db_url = getattr(settings, "database_url", "")
-    if not db_url:
-        print("runrunner-session requires database_url in config", file=sys.stderr)
-        return 1
 
-    _discover_and_import_runners()
-    from strider.messaging.runner import get_runner
-
-    runner_class = get_runner(runner_name)
-    if runner_class is None:
-        print(f"Runner '{runner_name}' not found.", file=sys.stderr)
-        return 1
-
-    from strider.models import init_database
-
-    pool_size = int(getattr(settings, "runner_session_pool_size", 2) or 2)
-    max_overflow = int(getattr(settings, "database_max_overflow", 2) or 2)
-    await init_database(db_url, pool_size=pool_size, max_overflow=max_overflow)
-
-    instance = runner_class()
-    instance._current_session_id = session_id
-
-    def _on_sigterm() -> None:
-        instance.request_stop()
-
+    # DB
     try:
-        loop = asyncio.get_event_loop()
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, _on_sigterm)
-    except NotImplementedError:
+        if getattr(settings, "has_read_replica", False):
+            from strider.database import init_replicas
+            await init_replicas()
+        else:
+            from strider.models import init_database
+            db_url = getattr(settings, "database_url", None)
+            if db_url:
+                pool_size = int(getattr(settings, "database_pool_size", 5) or 5)
+                max_overflow = int(getattr(settings, "database_max_overflow", 10) or 10)
+                await init_database(db_url, pool_size=pool_size, max_overflow=max_overflow)
+        log.debug("Child DB initialized")
+    except Exception as exc:
+        log.warning("Child DB init failed (non-fatal): %s", exc)
+
+    # Redis (optional)
+    try:
+        from strider.cache import init_cache  # type: ignore[import]
+        await init_cache()
+        log.debug("Child Redis initialized")
+    except ImportError:
+        pass
+    except Exception as exc:
+        log.warning("Child Redis init failed (non-fatal): %s", exc)
+
+
+async def _teardown_child_resources(log: logging.Logger) -> None:
+    """Close DB and Redis connections for the child process."""
+    try:
+        from strider.models import close_database  # type: ignore[import]
+        await close_database()
+        log.debug("Child DB closed")
+    except Exception:
         pass
 
     try:
-        await instance.run_session(payload)
-    finally:
-        try:
-            await instance.after_stop()
-        except Exception as exc:
-            logger.exception("Runner after_stop failed in isolated session: %s", exc)
-
-    return 0
+        from strider.cache import close_cache  # type: ignore[import]
+        await close_cache()
+        log.debug("Child Redis closed")
+    except Exception:
+        pass
 
 
-def main() -> int:
+# ---------------------------------------------------------------------------
+# CLI entrypoint
+# ---------------------------------------------------------------------------
+
+def main() -> None:
     if len(sys.argv) != 4:
-        print("Usage: python -m strider.messaging.runner_session <runner_name> <session_id> <payload_file>", file=sys.stderr)
-        return 2
+        sys.stderr.write(
+            "Usage: python -m strider.messaging.runner_session "
+            "<RunnerName> <session_id> <payload_path>\n"
+        )
+        sys.exit(1)
 
-    runner_name, session_id, payload_file = sys.argv[1], sys.argv[2], sys.argv[3]
+    runner_name = sys.argv[1]
+    session_id = sys.argv[2]
+    payload_path = sys.argv[3]
 
     try:
-        return asyncio.run(_run_session_process(runner_name, session_id, payload_file))
-    except KeyboardInterrupt:
-        return 130
+        with open(payload_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except Exception as exc:
+        sys.stderr.write(f"[runner_session] Failed to read payload: {exc}\n")
+        sys.exit(1)
+    finally:
+        # Best-effort cleanup of payload file immediately
+        try:
+            os.remove(payload_path)
+        except OSError:
+            pass
+
+    exit_code = asyncio.run(_run(runner_name, session_id, payload))
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

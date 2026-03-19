@@ -2015,18 +2015,18 @@ def cmd_shell(args: argparse.Namespace) -> int:
     sys.path.insert(0, os.getcwd())
     
     # Prepara contexto
-    context = {
+    context: dict[str, Any] = {
         "asyncio": asyncio,
     }
     
     # Importa stride
     try:
         import strider
-        context["stride"] = stride
+        context["stride"] = strider
         context.update({
-            "Model": stride.Model,
-            "Field": stride.Field,
-            "StrideApp": stride.StrideApp,
+            "Model": strider.Model,
+            "Field": strider.Field,
+            "StrideApp": strider.StrideApp,
         })
     except ImportError:
         pass

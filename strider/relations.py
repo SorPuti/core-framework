@@ -940,5 +940,4 @@ __all__ = [
     "Rel",
     "AssociationTable",
     "clear_model_cache",
-    "validate_relationship_target_format",
 ]
