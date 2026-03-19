@@ -338,9 +338,26 @@ class Runner(ABC):
                     session_id=session_id,
                 ).first()
                 if inst:
+                    inst.status = "running"
                     inst.pid = pid
+                    inst.stopped_at = None
                     await inst.save(db)
-                    await db.commit()
+                else:
+                    payload = dict(message)
+                    payload.pop("action", None)
+                    user_id = payload.get("user_id")
+                    payload_json = json.dumps(payload) if payload else None
+                    inst = RunnerInstance(
+                        runner_name=runner_name,
+                        session_id=session_id,
+                        user_id=str(user_id) if user_id is not None else None,
+                        status="running",
+                        pid=pid,
+                        payload_json=payload_json,
+                        stopped_at=None,
+                    )
+                    await inst.save(db)
+                await db.commit()
         except Exception as exc:
             logger.debug("Runner failed to persist pid for session_id=%s: %s", session_id, exc)
 
@@ -356,6 +373,7 @@ class Runner(ABC):
         """Stop isolated session by persisted PID (DB source of truth)."""
         runner_name = self.__class__.__name__
         grace = max(1.0, config.get("shutdown_grace", self.shutdown_grace_seconds))
+        proc = self._session_processes.get(session_id)
         try:
             from strider.models import get_session
             from strider.admin.models import RunnerInstance
@@ -369,13 +387,20 @@ class Runner(ABC):
                     session_id=session_id,
                 ).first()
                 if not inst:
-                    self._session_processes.pop(session_id, None)
-                    logger.debug("Runner stop: no RunnerInstance for session_id=%s", session_id)
+                    # Compatibilidade: se não há linha no DB, tente matar pelo processo em memória.
+                    if proc is not None and proc.poll() is None:
+                        kill_process_by_pid(proc.pid, grace=grace)
+                        logger.debug("Runner stop fallback by in-memory pid for session_id=%s pid=%s", session_id, proc.pid)
+                    else:
+                        logger.debug("Runner stop: no RunnerInstance for session_id=%s", session_id)
                     return
 
                 pid = getattr(inst, "pid", None)
                 if isinstance(pid, int) and pid > 0:
                     kill_process_by_pid(pid, grace=grace)
+                elif proc is not None and proc.poll() is None:
+                    # Fallback para sessões antigas sem pid persistido.
+                    kill_process_by_pid(proc.pid, grace=grace)
                 inst.status = "stopped"
                 inst.pid = None
                 inst.stopped_at = timezone.now()
@@ -415,6 +440,12 @@ class Runner(ABC):
                     self._session_processes.pop(inst.session_id, None)
                 if changed:
                     await db.commit()
+
+            # Compatibilidade: encerra qualquer processo ainda vivo só no cache local.
+            for sid, proc in list(self._session_processes.items()):
+                if proc.poll() is None:
+                    kill_process_by_pid(proc.pid, grace=grace)
+                self._session_processes.pop(sid, None)
         except Exception as exc:
             logger.warning("Runner stop all isolated sessions failed: %s", exc)
 
