@@ -24,17 +24,29 @@ def _convert_value(value: Any) -> Any:
     Converte valores para tipos serializáveis.
     
     - StructSchema -> dict (via to_dict())
+    - dataclasses -> dict recursivo
     - datetime -> ISO string
     - UUID -> string
     - list/set -> lista serializada recursivamente
     - outros -> valor original
     """
+    import dataclasses
+
     if value is None:
         return None
-    
+
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {k: _convert_value(v) for k, v in dataclasses.asdict(value).items()}
+
+    if isinstance(value, BaseModel):
+        return {k: _convert_value(v) for k, v in value.model_dump().items()}
+
     # StructSchema (e classes similares com to_dict)
     if hasattr(value, "to_dict") and callable(value.to_dict):
-        return value.to_dict()
+        raw = value.to_dict()
+        if isinstance(raw, dict):
+            return {k: _convert_value(v) for k, v in raw.items()}
+        return raw
     
     # datetime
     if isinstance(value, datetime):

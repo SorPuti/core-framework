@@ -1125,39 +1125,78 @@ async def _log_action(
         if obj_repr is None and obj is not None:
             obj_repr = repr(obj)
         
-        await AuditLog.log_action(
-            db,
-            user=user,
-            action=action,
-            app_label=admin_instance._app_label,
-            model_name=admin_instance._model_name,
-            object_id=pk or "",
-            object_repr=obj_repr or "",
-            changes=changes,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-        )
+        async with db.begin_nested():
+            await AuditLog.log_action(
+                db,
+                user=user,
+                action=action,
+                app_label=admin_instance._app_label,
+                model_name=admin_instance._model_name,
+                object_id=pk or "",
+                object_repr=obj_repr or "",
+                changes=changes,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+            )
     except Exception as e:
-        # Audit log failure should not break the operation
-        try:
-            await db.rollback()
-        except Exception:
-            pass
+        # Audit log failure should not break the operation.
+        # Never call session.rollback() here: it expires ORM instances and breaks
+        # subsequent reads (e.g. serialize_instance) with async/greenlet errors.
+        # begin_nested() above rolls back only the savepoint on failure.
         logger.warning("Failed to write audit log: %s", e)
 
 
 def _safe_value(value: Any) -> Any:
-    """Converte valor para tipo serializável."""
-    from datetime import datetime
+    """Converte valor para JSON-serializável (audit log, diff de campos)."""
+    import dataclasses
+    from datetime import date, datetime, time
+    from decimal import Decimal
+    from enum import Enum
     from uuid import UUID
-    
+
+    if value is None:
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        return value
     if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, time):
         return value.isoformat()
     if isinstance(value, UUID):
         return str(value)
     if isinstance(value, bytes):
         return "<binary>"
-    return value
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, Enum):
+        return value.value
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {k: _safe_value(v) for k, v in dataclasses.asdict(value).items()}
+    try:
+        from pydantic import BaseModel
+
+        if isinstance(value, BaseModel):
+            dumped = value.model_dump(mode="json")
+            return {k: _safe_value(v) for k, v in dumped.items()}
+    except ImportError:
+        pass
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        try:
+            raw = value.to_dict()
+        except Exception:
+            raw = None
+        if isinstance(raw, dict):
+            return {k: _safe_value(v) for k, v in raw.items()}
+    if isinstance(value, dict):
+        return {str(k): _safe_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_safe_value(v) for v in value]
+    if getattr(value, "__mapper__", None) is not None:
+        pk = getattr(value, "id", None)
+        return str(pk) if pk is not None else repr(value)
+    return repr(value)
 
 
 def _find_display_field(model: Any) -> str:
