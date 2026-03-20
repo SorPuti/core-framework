@@ -29,7 +29,7 @@ SEMÂNTICA DE EXIT (reap auditado)
   exit 0  + stop_flag setada → stop_command     (limpo)
   exit 0  sem stop_flag      → spontaneous_exit (crash → on_session_crash)
   exit -15 (SIGTERM)         → sigterm          (limpo)
-  exit -9  (SIGKILL)         → sigkill_or_oom   (crash → on_session_crash)
+  exit -9  (SIGKILL)         → sigkill_or_oom   (crash → on_session_crash; no host, 137 = OOM comum)
   exit > 0                   → error_exit       (crash → on_session_crash)
 
 LOGS DEDICADOS
@@ -668,6 +668,23 @@ class Runner(ABC):
                 )
                 return
             del self._session_processes[session_id]
+
+        settings = get_settings()
+        max_isolated = int(getattr(settings, "runner_max_isolated_sessions", 0) or 0)
+        if max_isolated > 0:
+            active = sum(
+                1 for proc, _ in self._session_processes.values() if proc.poll() is None
+            )
+            if active >= max_isolated:
+                logger.error(
+                    "Runner max isolated sessions reached (%d/%d active); refusing start "
+                    "session_id=%s. Raise runner_max_isolated_sessions or container memory "
+                    "(Docker exit 137 is often OOM: each session is a full Python process).",
+                    active,
+                    max_isolated,
+                    session_id,
+                )
+                return
 
         # Clear any leftover stop flag from a previous run
         clear_stop_flag(session_id)

@@ -54,7 +54,14 @@ Em `src/settings.py` (ou via `.env`):
 | `runner_default_topic` | str | "runner.commands" | Tópico Kafka para comandos start/stop. |
 | `runner_isolated_instances` | bool | true | Se true, cada sessão roda em processo filho (DB/Redis isolados; stop via SIGTERM). Se false, sessões rodam in-process (legado). |
 | `runner_session_pool_size` | int | 2 | Tamanho do pool de conexões do DB no processo da instância (cada instância = 1 processo). |
+| `runner_max_isolated_sessions` | int | 0 | Máximo de sessões isoladas ativas no mesmo controlador; **0 = ilimitado**. Acima disso novos `start` são recusados (log de erro). Útil para evitar OOM: cada sessão = um processo Python extra. |
 | `runner_logs_dir` | str | "" | Diretório para logs dedicados por instância (arquivo JSONL `session_id.log`). Vazio = `STRIDER_RUNNER_LOGS_DIR` ou `/tmp/strider-runner-logs`. |
+
+### Várias sessões e memória (exit 137)
+
+Se o container do worker reinicia com **código 137**, em Linux/Docker isso costuma ser **SIGKILL por falta de memória** (OOM killer). Com `runner_isolated_instances=True`, cada `start` cria um **novo processo** que carrega a app (DB, Kafka no controlador, etc.). Duas ou três sessões podem estourar o limite de RAM do serviço.
+
+Mitigação: aumentar `mem_limit` / reserva no `docker-compose` ou Kubernetes; reduzir `runner_session_pool_size`; definir `runner_max_isolated_sessions` (ex.: `1` ou `2`) para recusar novos starts com log claro em vez de matar o container; ou escalar **réplicas** do worker (um controlador por réplica, particionando Kafka por chave se necessário).
 
 Exemplo:
 

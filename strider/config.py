@@ -874,6 +874,14 @@ class Settings(BaseSettings):
         default=2,
         description="Tamanho do pool de conexões do DB no processo da instância (cada instância = 1 processo).",
     )
+    runner_max_isolated_sessions: int = PydanticField(
+        default=0,
+        description=(
+            "Máximo de processos filhos (sessões) ativos ao mesmo tempo no controlador. "
+            "0 = sem limite. Use >0 em deploys com pouca RAM: cada sessão isolada é um "
+            "interprete Python extra (OOM → Docker encerra o container com código 137)."
+        ),
+    )
     runner_logs_dir: str = PydanticField(
         default="",
         description=(
