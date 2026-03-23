@@ -78,10 +78,15 @@ class KafkaConsumer(Consumer):
                 config["sasl_plain_username"] = self._settings.kafka_sasl_username
                 config["sasl_plain_password"] = self._settings.kafka_sasl_password
 
+        gid_inst = (getattr(self._settings, "kafka_group_instance_id", None) or "").strip()
+        if gid_inst:
+            config["group_instance_id"] = gid_inst
+
         config.update(self._extra_config)
         self._consumer = AIOKafkaConsumer(*self.topics, **config)
         await self._consumer.start()
         self._running = True
+        await self._log_partition_assignment_after_join()
         self._task = asyncio.create_task(self._consume_loop())
         logger.info(f"Consumer '{self.group_id}' started, topics: {self.topics}")
 
@@ -101,6 +106,44 @@ class KafkaConsumer(Consumer):
 
     def is_running(self) -> bool:
         return self._running
+
+    async def _log_partition_assignment_after_join(self, max_wait_s: float = 8.0) -> None:
+        """
+        Após o join no consumer group, regista as partições atribuídas.
+
+        Se a atribuição ficar vazia, o mais comum é o tópico ter **menos partições do que
+        consumidores** no mesmo `group.id`: esses membros ficam ociosos mas participam de
+        todos os rebalances (heartbeats falham durante rebalance — ruído e CPU).
+        """
+        if not self._consumer:
+            return
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + max_wait_s
+        assigned: frozenset = frozenset()
+        while loop.time() < deadline:
+            assigned = self._consumer.assignment()
+            if assigned:
+                break
+            await asyncio.sleep(0.25)
+
+        if not assigned:
+            logger.error(
+                "Kafka consumer '%s' has NO assigned partitions for topics %s after %.1fs. "
+                "Your consumer group likely has more members than the topic has partitions "
+                "(each partition is consumed by at most one member). Increase partitions on "
+                "the topic to >= max replicas, or reduce worker replicas. "
+                "Optional: set kafka_group_instance_id (e.g. hostname) to calm rebalances on deploy.",
+                self.group_id,
+                self.topics,
+                max_wait_s,
+            )
+        else:
+            logger.info(
+                "Consumer '%s' assigned partitions (%d): %s",
+                self.group_id,
+                len(assigned),
+                sorted(assigned),
+            )
 
     async def _consume_loop(self) -> None:
         try:

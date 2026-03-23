@@ -2,7 +2,15 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+.cursor/
+.cursor
+data/
+dist/
+node_modules/
+data
+.idea
+.pytest_cache/
+.vscode/
 test_project/
 
 # C extensions

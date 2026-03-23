@@ -1,0 +1,26 @@
+{
+  "name": "core-framework-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server independente para core-framework - indexa docs e responde semanticamente.",
+  "main": "dist/server.js",
+  "scripts": {
+    "clean": "rm -rf dist data",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node src/server.ts",
+    "index-docs": "ts-node src/indexer.ts",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "globby": "^13.2.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.12",
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.14.2",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.4.5"
+  }
+}

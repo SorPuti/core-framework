@@ -61,7 +61,17 @@ Em `src/settings.py` (ou via `.env`):
 
 Se o container do worker reinicia com **código 137**, em Linux/Docker isso costuma ser **SIGKILL por falta de memória** (OOM killer). Com `runner_isolated_instances=True`, cada `start` cria um **novo processo** que carrega a app (DB, Kafka no controlador, etc.). Duas ou três sessões podem estourar o limite de RAM do serviço.
 
-Mitigação: aumentar `mem_limit` / reserva no `docker-compose` ou Kubernetes; reduzir `runner_session_pool_size`; definir `runner_max_isolated_sessions` (ex.: `1` ou `2`) para recusar novos starts com log claro em vez de matar o container; ou escalar **réplicas** do worker (um controlador por réplica, particionando Kafka por chave se necessário).
+Mitigação: aumentar `mem_limit` / reserva no `docker-compose` ou Kubernetes; reduzir `runner_session_pool_size`; definir `runner_max_isolated_sessions` (ex.: `1` ou `2`) para recusar novos starts com log claro em vez de matar o container; ou escalar **réplicas** do worker **desde que o tópico Kafka tenha partições suficientes** (ver secção seguinte).
+
+### Várias réplicas e o mesmo consumer group
+
+Com **um único** `group.id`, o Kafka **não** envia cada mensagem a todos os consumidores: **cada partição é consumida por no máximo um** membro do grupo. Quem não recebe partição **não** processa comandos, mas **continua no grupo** e entra em **rebalance** sempre que outros membros entram/saem — daí `Heartbeat failed ... because it is rebalancing` e `Setting newly assigned partitions set()` **vazio** nos logs.
+
+Isso acontece quando há **mais réplicas** (pods `worker-strategy-*`) do que **partições** no tópico (ex.: tópico criado com o default de **1** partição e 20 réplicas: só **um** pod trabalha; os outros 19 ficam ociosos e ainda assim disputam rebalance).
+
+**Correção operacional:** aumentar o número de **partições** do tópico de comandos para **≥ número máximo de réplicas** do worker (e usar **key = session_id** nos produces, como já descrito abaixo). O Strider regista no arranque quantas partições foram atribuídas e, se for zero após o join, emite um **erro explícito** no log com esta explicação.
+
+**Opcional (menos rebalance em deploy):** em Settings, `kafka_group_instance_id` (env `KAFKA_GROUP_INSTANCE_ID`) com id estável por processo — por exemplo o hostname do container (`HOSTNAME` em Docker Swarm/Kubernetes). Isto activa **static membership** (KIP-345) no cliente Kafka.
 
 Exemplo:
 

@@ -77,6 +77,10 @@ class ConfluentConsumer(Consumer):
             if self._settings.kafka_ssl_cafile:
                 config["ssl.ca.location"] = self._settings.kafka_ssl_cafile
 
+        gid_inst = (getattr(self._settings, "kafka_group_instance_id", None) or "").strip()
+        if gid_inst:
+            config["group.instance.id"] = gid_inst
+
         config.update(self._extra_config)
         self._consumer = CKConsumer(config)
         self._consumer.subscribe(self.topics)

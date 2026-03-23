@@ -767,7 +767,14 @@ class Settings(BaseSettings):
         default=3000,
         description="Intervalo de heartbeat (ms)",
     )
-    
+    kafka_group_instance_id: str = PydanticField(
+        default="",
+        description=(
+            "Static membership (KIP-345): id estável desta instância (ex.: hostname do pod). "
+            "Reduz rebalances em deploys. Único por processo consumidor. Vazio = desativado."
+        ),
+    )
+
     # Messaging general
     messaging_default_topic: str = PydanticField(
         default="events",
