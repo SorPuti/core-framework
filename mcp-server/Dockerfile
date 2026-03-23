@@ -4,15 +4,15 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copia package e tsconfig do diretório raiz do repositório
-COPY ../package.json ./
-COPY ../package-lock.json* ./
-COPY ../tsconfig.json ./
+COPY package.json ./
+COPY package-lock.json* ./
+COPY tsconfig.json ./
 
 # Instala dependências
 RUN npm ci
 
 # Copia código fonte
-COPY ../src ./src
+COPY src ./src
 
 # Build TypeScript
 RUN npm run build
