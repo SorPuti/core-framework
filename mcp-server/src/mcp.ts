@@ -80,6 +80,7 @@ let indexData: IndexData | null = null;
 let inputBuffer = Buffer.alloc(0);
 let snapshotCache: FrameworkSnapshot | null = null;
 let snapshotCacheKey = "";
+let activeTransport: "stdio" | "http" = "stdio";
 
 async function initializeIndex(): Promise<void> {
   try {
@@ -619,6 +620,25 @@ function formatCommandResult(result: CommandResult): Record<string, unknown> {
   };
 }
 
+function executionMode(): "local-client" | "remote-server" {
+  return activeTransport === "http" ? "remote-server" : "local-client";
+}
+
+function blockRemoteExecution(toolName: string): { isError: true; content: Array<{ type: "text"; text: string }> } | null {
+  if (executionMode() === "local-client") return null;
+
+  return toolError("Execucao remota bloqueada por politica de seguranca", {
+    tool: toolName,
+    mode: executionMode(),
+    reason:
+      "Comandos devem ser executados apenas no computador local do desenvolvedor para refletir o codigo real em edicao.",
+    allowed: [
+      "Validar comandos e gerar instrucoes no MCP remoto",
+      "Executar comandos somente em MCP local (stdio)",
+    ],
+  });
+}
+
 function statusResult() {
   const total = indexData?.chunks.length ?? 0;
   const docsChunks = indexData?.chunks.filter((chunk) => chunk.source.startsWith("docs/")).length ?? 0;
@@ -904,6 +924,9 @@ function toolCliListCommands() {
 }
 
 function toolCliExecute(args: ToolCallArgs) {
+  const blocked = blockRemoteExecution("cli_execute");
+  if (blocked) return blocked;
+
   const command = asString(args.command);
   const commandArgs = asStringArray(args.args);
   const confirm = asString(args.confirm);
@@ -945,6 +968,9 @@ function toolCliExecute(args: ToolCallArgs) {
 }
 
 function toolCliRegistryHealth(args: ToolCallArgs) {
+  const blocked = blockRemoteExecution("cli_registry_health");
+  if (blocked) return blocked;
+
   const timeoutMs = Math.max(1_000, asNumber(args.timeout_ms, DEFAULT_TIMEOUT_MS));
   const checks: Array<Record<string, unknown>> = [];
 
@@ -997,6 +1023,9 @@ function toolCliRegistryHealth(args: ToolCallArgs) {
 }
 
 function toolCliRunTests(args: ToolCallArgs) {
+  const blocked = blockRemoteExecution("cli_run_tests");
+  if (blocked) return blocked;
+
   const target = asString(args.test_target);
   const withCoverage = asBoolean(args.with_coverage, false);
   const timeoutMs = Math.max(1_000, asNumber(args.timeout_ms, 180_000));
@@ -1282,6 +1311,7 @@ function handleRequest(req: JsonRpcRequest): unknown | null {
 }
 
 function runStdio(): void {
+  activeTransport = "stdio";
   console.error("Core Framework MCP server running via stdio");
 
   process.stdin.on("data", (chunk: Buffer) => {
@@ -1295,6 +1325,7 @@ function runStdio(): void {
 }
 
 function runHttp(port: number): void {
+  activeTransport = "http";
   const server = createServer((req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "content-type, accept");

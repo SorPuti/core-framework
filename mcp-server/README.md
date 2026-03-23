@@ -79,6 +79,10 @@ curl -X POST http://localhost:8080/mcp \
 
 ### CLI com execucao local e validacoes
 
+Politica obrigatoria:
+- MCP remoto (HTTP): apenas valida e instrui, sem executar comandos.
+- Execucao de comandos: somente em MCP local (stdio), no computador do desenvolvedor.
+
 - `cli_list_commands`
 : Lista comandos operacionais e classifica comandos criticos.
 - `cli_execute`
