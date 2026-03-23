@@ -42,6 +42,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: https://sorputi.github.io/core-framework/
     permissions:
       contents: write
 
@@ -59,10 +62,13 @@ jobs:
           pip install mkdocs mkdocs-material
 
       - name: Deploy to GitHub Pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCS_URL: https://sorputi.github.io/core-framework/
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           mkdocs gh-deploy --force --remote-name origin --remote-branch gh-pages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "### Deploy concluido" >> "$GITHUB_STEP_SUMMARY"
+          echo "URL: ${DOCS_URL}" >> "$GITHUB_STEP_SUMMARY"

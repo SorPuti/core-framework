@@ -1,6 +1,6 @@
 site_name: Stride Framework
 site_description: Documentação gerada a partir do código real de core-framework
-site_url: https://<your-org>.github.io/core-framework
+site_url: https://sorputi.github.io/core-framework/
 strict: false
 repo_url: https://github.com/SorPuti/core-framework
 nav:

@@ -2,6 +2,8 @@
 
 Framework Python para APIs REST de alta performance. Combina a produtividade do Django REST Framework com a velocidade do FastAPI.
 
+Documentação: https://sorputi.github.io/core-framework/
+
 ## Por que mais um framework?
 
 FastAPI e excelente para performance, mas exige muito codigo repetitivo para CRUD. Django REST Framework e produtivo, mas lento e sem async nativo. Stride resolve esse trade-off.

@@ -476,6 +476,15 @@ function dedupeByNameAndSource<T extends { name: string; source: string }>(items
   return result;
 }
 
+function commandExists(command: string): boolean {
+  const probe = spawnSync(command, ["--version"], {
+    encoding: "utf8",
+    timeout: 5_000,
+    env: process.env,
+  });
+  return !probe.error;
+}
+
 function resolvePythonExecutable(projectRoot: string): string {
   const candidates = [
     path.join(projectRoot, ".venv", "bin", "python"),
@@ -486,7 +495,15 @@ function resolvePythonExecutable(projectRoot: string): string {
     if (fs.existsSync(candidate)) return candidate;
   }
 
-  return asString(process.env.PYTHON_BIN) || "python3";
+  const envPython = asString(process.env.PYTHON_BIN);
+  if (envPython && commandExists(envPython)) {
+    return envPython;
+  }
+
+  if (commandExists("python3")) return "python3";
+  if (commandExists("python")) return "python";
+
+  return envPython || "python3";
 }
 
 function resolveStrideInvocation(projectRoot: string): { command: string; prefixArgs: string[] } {
@@ -549,6 +566,21 @@ function runCommand(command: string, args: string[], cwd: string, timeoutMs: num
 function runStride(args: string[], timeoutMs: number): CommandResult {
   const snapshot = buildFrameworkSnapshot();
   const invocation = resolveStrideInvocation(snapshot.projectRoot);
+
+  if (!commandExists(invocation.command)) {
+    return {
+      ok: false,
+      command: invocation.command,
+      args: [...invocation.prefixArgs, ...args],
+      cwd: snapshot.projectRoot,
+      exitCode: -1,
+      stdout: "",
+      stderr:
+        "Python/stride nao encontrado no runtime. Instale python3 no container ou defina PYTHON_BIN para um executavel valido.",
+      timedOut: false,
+    };
+  }
+
   const commandArgs = [...invocation.prefixArgs, ...args];
   return runCommand(invocation.command, commandArgs, snapshot.projectRoot, timeoutMs);
 }

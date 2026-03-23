@@ -60,6 +60,35 @@ curl -X POST http://localhost:8080/mcp \
 - `status`
 : Retorna status do indice (`indexed_chunks`, `docs_chunks`, `code_chunks`).
 
+### Core de seguranca e introspeccao
+
+- `introspect_framework`
+: Retorna inventario de models, views, permissoes, servicos e recursos operacionais.
+- `list_models`
+: Lista models disponiveis (com campos e relacionamentos, quando solicitado).
+- `describe_model`
+: Detalha campos, relacionamentos e regras de uso seguro de um model.
+- `list_capabilities`
+: Indica o que o sistema suporta (CRUD, workers, runners, tasks, camada de permissao).
+- `validate_action`
+: Valida uma acao antes da execucao (existencia de recurso e guardrails).
+- `generate_safe_query`
+: Gera padrao de query usando somente abstrações do framework (`Model.objects.*`).
+- `explain_usage`
+: Explica o fluxo recomendado para agentes consumidores e boas praticas obrigatorias.
+
+### CLI com execucao local e validacoes
+
+- `cli_list_commands`
+: Lista comandos operacionais e classifica comandos criticos.
+- `cli_execute`
+: Executa CLI no projeto local. Para comandos criticos, exige confirmacao explicita:
+`confirm=CONFIRMO_EXECUCAO_CRITICA`.
+- `cli_registry_health`
+: Roda checks de saude e valida registries de workers/runners/tasks.
+- `cli_run_tests`
+: Executa testes via CLI local (alvo e cobertura opcionais).
+
 ## Configurar no VS Code Copilot Chat
 
 Adicione no `settings.json`:
