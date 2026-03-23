@@ -42,4 +42,4 @@ EXPOSE 8001
 ENV NODE_ENV=production
 ENV DOCS_ROOT=/app/docs
 ENV DATA_DIR=/app/data
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/mcp.js"]

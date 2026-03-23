@@ -1,144 +1,90 @@
-# MCP Server para Core Framework (independente)
+# Core Framework MCP Server
 
-## Objetivo
+Servidor MCP (Model Context Protocol) via stdio para busca semantica em:
 
-Serviço independente para responder queries baseadas na documentação Markdown de `../docs`.
+- `docs/**/*.md`
+- `strider/**/*.py`
 
-## Estrutura do projeto
+Sem API REST. Este projeto e MCP puro para integrar com VS Code Copilot e Cursor.
 
-/mcp-server
-  /src
-    server.ts
-    indexer.ts
-    query.ts
-  package.json
-  tsconfig.json
-  .gitignore
-  README.md
+## Requisitos
 
-## Instalação
+- Node.js 20+
+- npm
+
+## Instalar e buildar
 
 ```bash
 cd /home/workstation/Projetos/core-framework/mcp-server
 npm install
-```
-
-## Gerar índice
-
-```bash
-npm run index-docs
-```
-
-Isso cria `data/index.json` (cache para consultas rápidas).
-
-## Executar local
-
-```bash
-npm run dev
-```
-
-No ambiente de produção:
-
-```bash
 npm run build
+```
+
+## Rodar local (stdio)
+
+```bash
 npm start
 ```
 
-A API expõe:
+## Tools MCP expostas
 
-- `GET /status` → status e contagem de chunks
-- `POST /query` → pergunta de texto
-  - body: `{ "question": "Seu texto" }`
-  - response:
-    - `answers`: lista ordenada de matches (sources, score, snippet)
+- `search_framework`
+: Busca semantica por pergunta em linguagem natural e retorna respostas com referencias de codigo.
+- `status`
+: Retorna status do indice (`indexed_chunks`, `docs_chunks`, `code_chunks`).
 
-## Deploy (example Vercel)
+## Configurar no VS Code Copilot Chat
 
-1. Criar projeto Vercel apontando para `mcp-server`.
-2. Adicionar `vercel.json` no root se necessário:
+Adicione no `settings.json`:
 
 ```json
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "mcp-server/src/server.ts",
-      "use": "@vercel/node"
+  "mcp": {
+    "servers": {
+      "core-framework": {
+        "command": "node",
+        "args": [
+          "/home/workstation/Projetos/core-framework/mcp-server/dist/mcp.js"
+        ],
+        "env": {
+          "DOCS_ROOT": "/home/workstation/Projetos/core-framework/docs",
+          "STRIDER_ROOT": "/home/workstation/Projetos/core-framework/strider",
+          "DATA_DIR": "/home/workstation/Projetos/core-framework/mcp-server/data"
+        }
+      }
     }
-  ],
-  "routes": [
-    {"src": "/(.*)", "dest": "/mcp-server/src/server.ts"}
-  ]
+  }
 }
 ```
 
-3. Configure `NPM Build Command` para:
+Depois, recarregue a janela do VS Code.
 
-- `cd mcp-server && npm install && npm run build && npm run index-docs`
-- `NPM Start Command`: `cd mcp-server && npm start`
+## Configurar no Cursor
 
-## Deploy no Railway
+No arquivo de MCP do Cursor (normalmente `.cursor/mcp.json` no projeto), use:
 
-### 1. Criar projeto
-
-- Acesse https://railway.app
-- New Project -> Deploy from GitHub repo
-
-### 2. Root Directory
-
-- Se seu repo contém o MCP em subpasta, informe:
-
-```
-Root Directory: mcp-server
-```
-
-### 3. Build & Start Variables
-
-- Build command:
-
-```
-npm install && npm run build && npm run index-docs
+```json
+{
+  "mcpServers": {
+    "core-framework": {
+      "command": "node",
+      "args": [
+        "/home/workstation/Projetos/core-framework/mcp-server/dist/mcp.js"
+      ],
+      "env": {
+        "DOCS_ROOT": "/home/workstation/Projetos/core-framework/docs",
+        "STRIDER_ROOT": "/home/workstation/Projetos/core-framework/strider",
+        "DATA_DIR": "/home/workstation/Projetos/core-framework/mcp-server/data"
+      }
+    }
+  }
+}
 ```
 
-- Start command:
+Reinicie o Cursor apos salvar.
 
-```
-npm start
-```
+## Notas de operacao
 
-- Environment variables:
-
-```
-NODE_ENV=production
-DOCS_ROOT=/app/docs   # opcional, se os docs estiverem disponíveis no container
-DATA_DIR=/app/data
-```
-
-(se usar embeddings, adicione `OPENAI_API_KEY` etc.)
-
-### 4. Docker (opcional)
-
-- Railway suporta Dockerfile no diretório raiz (`mcp-server/Dockerfile`).
-- Ao deploy, Railway detecta automaticamente.
-
-#### Docker build local (fallback)
-
-```bash
-# context no repo root
-docker build -t mcp-server --build-arg APP_DIR=mcp-server -f mcp-server/Dockerfile .
-
-# context direto em mcp-server
-docker build -t mcp-server --build-arg APP_DIR=. -f mcp-server/Dockerfile mcp-server
-```
-
-### 5. Teste
-
-```
-curl https://<YOUR_APP>.up.railway.app/status
-curl -X POST https://<YOUR_APP>.up.railway.app/query -H 'Content-Type: application/json' -d '{"question":"como funciona?"}'
-```
-
-### Observações
-
-- A indexação lê também `../strider/**/*.py` e `../docs/**/*.md`.
-- `/query` usa TF-IDF + cosine sem hardcoded.
+- O indice e carregado no startup.
+- Se `data/index.json` nao existir, ele e criado automaticamente.
+- Se `docs` e `strider` mudarem, reinicie o processo para reindexar.

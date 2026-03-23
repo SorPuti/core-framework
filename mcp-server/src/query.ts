@@ -11,6 +11,24 @@ export interface QueryOptions {
   excludeSources?: Set<string>;
 }
 
+export interface CodeReference {
+  score: number;
+  source: string;
+  text: string;
+}
+
+export interface AnswerItem {
+  score: number;
+  source: string;
+  text: string;
+  code_references: CodeReference[];
+}
+
+export interface AnswerPayload {
+  question: string;
+  answers: AnswerItem[];
+}
+
 export function queryIndex(index: IndexData, question: string, options: QueryOptions = {}): QueryResult[] {
   const topK = options.topK ?? 3;
   const queryVector = buildQueryVector(question, index.idf);
@@ -32,4 +50,26 @@ export function queryIndex(index: IndexData, question: string, options: QueryOpt
 
   hits.sort((a, b) => b.score - a.score);
   return hits.slice(0, topK);
+}
+
+export function buildAnswerPayload(index: IndexData, question: string, topK = 5): AnswerPayload {
+  const docResults = queryIndex(index, question, { topK, sourcePrefix: "docs/" });
+  const results = docResults.length > 0 ? docResults : queryIndex(index, question, { topK });
+
+  return {
+    question,
+    answers: results.map((hit) => ({
+      score: hit.score,
+      source: hit.chunk.source,
+      text: hit.chunk.text.slice(0, 1200),
+      code_references: queryIndex(index, `${question}\n${hit.chunk.text.slice(0, 800)}`, {
+        topK: 3,
+        sourcePrefix: "code/",
+      }).map((codeHit) => ({
+        score: codeHit.score,
+        source: codeHit.chunk.source,
+        text: codeHit.chunk.text.slice(0, 400),
+      })),
+    })),
+  };
 }
