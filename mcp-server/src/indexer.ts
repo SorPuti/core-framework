@@ -60,8 +60,32 @@ async function loadDocsAndCode(): Promise<SourceDoc[]> {
   const codePatterns = ["**/*.py"];
 
   const docFiles = await globby(docsPatterns, { cwd: DOCS_DIR, absolute: true });
-  const striderDir = path.resolve(__dirname, "..", "..", "strider");
-  const codeFiles = await globby(codePatterns, { cwd: striderDir, absolute: true });
+
+  const candidateStrider = process.env.STRIDER_ROOT || "";
+  const fallbackStriderPaths = [
+    candidateStrider,
+    "/app/strider",
+    "/strider",
+    path.resolve(__dirname, "..", "strider"),
+    path.resolve(__dirname, "..", "..", "strider"),
+  ].filter(Boolean);
+
+  let striderDir = "";
+  for (const candidate of fallbackStriderPaths) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      striderDir = candidate;
+      break;
+    }
+  }
+
+  if (!striderDir) {
+    console.error(`No valid strider directory found among: ${fallbackStriderPaths.join(", ")}`);
+  }
+
+  const codeFiles = striderDir
+    ? await globby(codePatterns, { cwd: striderDir, absolute: true })
+    : [];
+
 
   if (docFiles.length === 0) {
     console.warn(`No docs files found in ${DOCS_DIR}`);
@@ -69,7 +93,9 @@ async function loadDocsAndCode(): Promise<SourceDoc[]> {
     console.log(`Loaded ${docFiles.length} docs files from ${DOCS_DIR}`);
   }
 
-  if (codeFiles.length === 0) {
+  if (!striderDir) {
+    console.warn(`No strider path resolved; skipping code indexation`);
+  } else if (codeFiles.length === 0) {
     console.warn(`No code files found in ${striderDir}`);
   } else {
     console.log(`Loaded ${codeFiles.length} code files from ${striderDir}`);
