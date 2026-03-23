@@ -3,27 +3,134 @@ site_description: Documentação gerada a partir do código real de core-framewo
 site_url: https://sorputi.github.io/core-framework/
 strict: false
 repo_url: https://github.com/SorPuti/core-framework
+
 nav:
   - Home: README.md
-  - Introduction: introduction.md
-  - Architecture: architecture.md
-  - Core Concepts: core-concepts.md
-  - Modules:
-      - Overview: modules/README.md
-  - API:
-      - Overview: api/README.md
-  - Examples:
-      - Overview: examples/README.md
-  - Troubleshooting: troubleshooting.md
+  - Getting Started:
+      - Introduction: introduction.md
+      - Quick Start: 01-quickstart.md
+      - Setup: 02-settings.md
+  - Core:
+      - Architecture: architecture.md
+      - Core Concepts: core-concepts.md
+      - Models: 03-models.md
+      - Views: 04-viewsets.md
+      - Serializers: 13-serializers.md
+      - Validators: 14-validators.md
+      - QuerySets: 12-querysets.md
+  - Authentication & Permissions:
+      - Auth Overview: 05-auth.md
+      - Auth Backends: 06-auth-backends.md
+      - Permissions: 08-permissions.md
+  - Advanced:
+      - Fields: 10-fields.md
+      - Relations: 11-relations.md
+      - Middleware: 20-middleware.md
+      - Routing: 23-routing.md
+      - Dependencies: 24-dependencies.md
+      - Real-time: 25-realtime.md
+      - Choices: 33-choices.md
+      - DateTime: 35-datetime.md
+  - Operations:
+      - CLI: 07-cli.md
+      - Migrations: 41-migrations.md
+      - Workers: 31-workers.md
+      - Runner: 42-runner.md
+      - Messaging: 30-messaging.md
+  - Data & Storage:
+      - Soft Delete: 22-soft-delete.md
+      - Replicas: 21-replicas.md
+      - Storage: 37-storage.md
+      - Tenancy: 32-tenancy.md
+  - Admin & Security:
+      - Admin Panel: 40-admin.md
+      - Security: 36-security.md
+      - Exceptions: 34-exceptions.md
+  - Logging & Troubleshooting:
+      - Logging: logging.md
+      - Troubleshooting: troubleshooting.md
+      - FAQ: 99-faq-troubleshooting.md
+  - Extras:
+      - CHANGELOG: CHANGELOG.md
 
 markdown_extensions:
+  - attr_list
   - admonition
-  - codehilite
+  - pymdownx.highlight:
+      use_pygments: true
+  - pymdownx.superfences:
+      preserve_tabs: true
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
   - toc:
       permalink: true
+      toc_depth: "2-4"
 
 plugins:
-  - search
+  - search:
+      lang: pt
+      separator: '[\s\-\.]+'
+      prebuild_index: true
+      min_search_length: 2
 
 theme:
-  name: readthedocs
+  name: material
+  language: pt
+  custom_dir: overrides
+  
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.footer
+    - navigation.instant.loading
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.tabs.link
+    - content.code.copy
+    - content.tooltips
+    - announce.dismiss
+  
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: light
+      primary: purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Modo escuro
+    
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Modo claro
+  
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/SorPuti/core-framework
+      name: GitHub Repository
+
+copyright: "© 2026 Stride Framework. Todos os direitos reservados."

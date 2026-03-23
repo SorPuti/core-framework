@@ -872,18 +872,17 @@ function toolGenerateSafeQuery(args: ToolCallArgs) {
 function toolExplainUsage() {
   return textResult({
     flow: [
-      "1) introspect_framework",
-      "2) list_models / describe_model",
-      "3) list_capabilities",
-      "4) validate_action",
-      "5) generate_safe_query",
-      "6) cli_* (somente quando necessario)",
+      "1) MCP remoto analisa contexto e recomenda comandos (sem executar)",
+      "2) Agente local pede confirmacao explicita ao usuario",
+      "3) Agente local executa no computador do cliente",
+      "4) Agente local valida saida e reporta resultado",
     ],
     guardrails: [
       "Nunca use SQL manual.",
       "Nunca hardcode credenciais; use .env e settings.py.",
-      "Nunca rode comando critico de CLI sem confirmacao explicita.",
-      "Priorize execucao local no projeto do cliente para evitar divergencias.",
+      "MCP remoto nao executa comandos; apenas valida e instrui.",
+      "Toda execucao local exige confirmacao explicita.",
+      "Execucao sempre no projeto local do cliente para refletir o codigo em edicao.",
     ],
     scalability: {
       required_env: ["DB_HOST", "DB_REPLICA_HOST", "REDIS_URL", "KAFKA_BROKER"],
@@ -917,7 +916,7 @@ function toolCliListCommands() {
       ["reset_db", "--yes"],
     ],
     notes: [
-      `Comandos criticos exigem confirm='${CRITICAL_CONFIRMATION_TOKEN}'.`,
+      `Toda execucao local exige confirm='${CRITICAL_CONFIRMATION_TOKEN}'.`,
       "Priorize --dry-run quando suportado.",
     ],
   });
@@ -936,14 +935,16 @@ function toolCliExecute(args: ToolCallArgs) {
     return toolError("Parametro obrigatorio ausente: command");
   }
 
-  const critical = isCriticalCliRequest(command, commandArgs);
-  if (critical && confirm !== CRITICAL_CONFIRMATION_TOKEN) {
-    return toolError("Comando critico bloqueado sem confirmacao explicita", {
+  if (confirm !== CRITICAL_CONFIRMATION_TOKEN) {
+    return toolError("Execucao local bloqueada sem confirmacao explicita", {
       required_confirm: CRITICAL_CONFIRMATION_TOKEN,
       command,
       args: commandArgs,
+      reason: "Toda execucao local precisa de confirmacao do usuario.",
     });
   }
+
+  const critical = isCriticalCliRequest(command, commandArgs);
 
   let result: CommandResult;
 
@@ -970,6 +971,15 @@ function toolCliExecute(args: ToolCallArgs) {
 function toolCliRegistryHealth(args: ToolCallArgs) {
   const blocked = blockRemoteExecution("cli_registry_health");
   if (blocked) return blocked;
+
+  const confirm = asString(args.confirm);
+  if (confirm !== CRITICAL_CONFIRMATION_TOKEN) {
+    return toolError("Execucao local bloqueada sem confirmacao explicita", {
+      required_confirm: CRITICAL_CONFIRMATION_TOKEN,
+      tool: "cli_registry_health",
+      reason: "Toda execucao local precisa de confirmacao do usuario.",
+    });
+  }
 
   const timeoutMs = Math.max(1_000, asNumber(args.timeout_ms, DEFAULT_TIMEOUT_MS));
   const checks: Array<Record<string, unknown>> = [];
@@ -1025,6 +1035,15 @@ function toolCliRegistryHealth(args: ToolCallArgs) {
 function toolCliRunTests(args: ToolCallArgs) {
   const blocked = blockRemoteExecution("cli_run_tests");
   if (blocked) return blocked;
+
+  const confirm = asString(args.confirm);
+  if (confirm !== CRITICAL_CONFIRMATION_TOKEN) {
+    return toolError("Execucao local bloqueada sem confirmacao explicita", {
+      required_confirm: CRITICAL_CONFIRMATION_TOKEN,
+      tool: "cli_run_tests",
+      reason: "Toda execucao local precisa de confirmacao do usuario.",
+    });
+  }
 
   const target = asString(args.test_target);
   const withCoverage = asBoolean(args.with_coverage, false);
@@ -1161,7 +1180,7 @@ function toolsListResult() {
               items: { type: "string" },
               description: "Argumentos do comando.",
             },
-            confirm: { type: "string", description: `Use ${CRITICAL_CONFIRMATION_TOKEN} para comandos criticos.` },
+            confirm: { type: "string", description: `Use ${CRITICAL_CONFIRMATION_TOKEN} para liberar execucao local.` },
             timeout_ms: { type: "integer", minimum: 1000, maximum: 900000 },
           },
           required: ["command"],
@@ -1173,6 +1192,7 @@ function toolsListResult() {
         inputSchema: {
           type: "object",
           properties: {
+            confirm: { type: "string", description: `Use ${CRITICAL_CONFIRMATION_TOKEN} para liberar execucao local.` },
             timeout_ms: { type: "integer", minimum: 1000, maximum: 900000 },
           },
         },
@@ -1183,6 +1203,7 @@ function toolsListResult() {
         inputSchema: {
           type: "object",
           properties: {
+            confirm: { type: "string", description: `Use ${CRITICAL_CONFIRMATION_TOKEN} para liberar execucao local.` },
             test_target: { type: "string", description: "Arquivo/pasta alvo de teste." },
             with_coverage: { type: "boolean", description: "Executa com cobertura (--cov)." },
             timeout_ms: { type: "integer", minimum: 1000, maximum: 900000 },

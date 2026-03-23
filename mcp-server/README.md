@@ -83,11 +83,19 @@ Politica obrigatoria:
 - MCP remoto (HTTP): apenas valida e instrui, sem executar comandos.
 - Execucao de comandos: somente em MCP local (stdio), no computador do desenvolvedor.
 
+Fluxo operacional obrigatorio para agentes:
+1. MCP remoto analisa e recomenda comando.
+2. Agente local solicita confirmacao explicita do usuario.
+3. Agente local executa no projeto local do cliente.
+4. Agente local valida saida e reporta resultado.
+
 - `cli_list_commands`
 : Lista comandos operacionais e classifica comandos criticos.
 - `cli_execute`
 : Executa CLI no projeto local. Para comandos criticos, exige confirmacao explicita:
 `confirm=CONFIRMO_EXECUCAO_CRITICA`.
+- `cli_registry_health` e `cli_run_tests`
+: Tambem exigem `confirm=CONFIRMO_EXECUCAO_CRITICA` para qualquer execucao local.
 - `cli_registry_health`
 : Roda checks de saude e valida registries de workers/runners/tasks.
 - `cli_run_tests`
