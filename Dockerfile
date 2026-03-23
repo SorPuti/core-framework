@@ -1,18 +1,18 @@
-# Dockerfile para MCP Server independente
+# Dockerfile para MCP Server independente (root repo)
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copia package e tsconfig do diretório raiz do repositório
-COPY package.json ./
-COPY package-lock.json* ./
-COPY tsconfig.json ./
+# Copia package e tsconfig da pasta mcp-server
+COPY mcp-server/package.json ./
+COPY mcp-server/package-lock.json* ./
+COPY mcp-server/tsconfig.json ./
 
 # Instala dependências
 RUN npm ci
 
 # Copia código fonte
-COPY src ./src
+COPY mcp-server/src ./src
 
 # Build TypeScript
 RUN npm run build

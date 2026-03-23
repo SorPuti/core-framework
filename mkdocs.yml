@@ -1,26 +1,20 @@
 site_name: Stride Framework
 site_description: Documentação gerada a partir do código real de core-framework
 site_url: https://<your-org>.github.io/core-framework
-strict: true
+strict: false
 repo_url: https://github.com/SorPuti/core-framework
 nav:
   - Home: README.md
-  - Introduction: docs/introduction.md
-  - Architecture: docs/architecture.md
-  - Core Concepts: docs/core-concepts.md
+  - Introduction: introduction.md
+  - Architecture: architecture.md
+  - Core Concepts: core-concepts.md
   - Modules:
-      - Overview: docs/modules/README.md
+      - Overview: modules/README.md
   - API:
-      - Overview: docs/api/README.md
+      - Overview: api/README.md
   - Examples:
-      - Overview: docs/examples/README.md
-  - Troubleshooting: docs/troubleshooting.md
-  - Existing Docs:
-      - Quickstart: docs/01-quickstart.md
-      - Settings: docs/02-settings.md
-      - Models: docs/03-models.md
-      - ViewSets: docs/04-viewsets.md
-      - Auth: docs/05-auth.md
+      - Overview: examples/README.md
+  - Troubleshooting: troubleshooting.md
 
 markdown_extensions:
   - admonition
@@ -30,10 +24,6 @@ markdown_extensions:
 
 plugins:
   - search
-  - mkdocs-material
 
 theme:
-  name: material
-  features:
-    - navigation.instant
-    - navigation.sections
+  name: readthedocs
