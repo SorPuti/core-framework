@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/08-permissions/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Permissions - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Permissions";
+        var mkdocs_page_input_path = "08-permissions.md";
+        var mkdocs_page_url = "/core-framework/08-permissions/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Permissions</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/08-permissions.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="permissions">Permissions<a class="headerlink" href="#permissions" title="Permanent link">&para;</a></h1>
+<p>Access control for ViewSets and actions.</p>
+<h2 id="permission-check-flow">Permission Check Flow<a class="headerlink" href="#permission-check-flow" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">REQ</span><span class="o">[</span><span class="n">Request</span><span class="o">]</span><span class="w"> </span><span class="c1">--&gt; HP{has_permission?}</span>
+<span class="w">    </span><span class="n">HP</span><span class="w"> </span><span class="c1">--&gt;|No| DENY1[403 Forbidden]</span>
+<span class="w">    </span><span class="n">HP</span><span class="w"> </span><span class="c1">--&gt;|Yes| DETAIL{Detail View?}</span>
+
+<span class="w">    </span><span class="n">DETAIL</span><span class="w"> </span><span class="c1">--&gt;|No| ALLOW[✓ Allow]</span>
+<span class="w">    </span><span class="n">DETAIL</span><span class="w"> </span><span class="c1">--&gt;|Yes| HOP{has_object_permission?}</span>
+
+<span class="w">    </span><span class="n">HOP</span><span class="w"> </span><span class="c1">--&gt;|No| DENY2[403 Forbidden]</span>
+<span class="w">    </span><span class="n">HOP</span><span class="w"> </span><span class="c1">--&gt;|Yes| ALLOW</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">HP</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">HOP</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">ALLOW</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#c8e6c9</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">DENY1</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#ffcdd2</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">DENY2</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#ffcdd2</span>
+</code></pre></div>
+
+<h2 id="permission-hierarchy">Permission Hierarchy<a class="headerlink" href="#permission-hierarchy" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">LR</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Permission Classes&quot;</span>
+<span class="w">        </span><span class="n">AA</span><span class="p">[</span><span class="n">AllowAny</span><span class="p">]</span>
+<span class="w">        </span><span class="n">IA</span><span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">]</span>
+<span class="w">        </span><span class="n">IAU</span><span class="p">[</span><span class="n">IsAdminUser</span><span class="p">]</span>
+<span class="w">        </span><span class="n">ISU</span><span class="p">[</span><span class="n">IsSuperUser</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">AA</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="s">&quot;No auth&quot;</span><span class="o">|</span><span class="w"> </span><span class="n">PUBLIC</span><span class="p">[</span><span class="n">Public</span><span class="w"> </span><span class="n">Access</span><span class="p">]</span>
+<span class="w">    </span><span class="n">IA</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="s">&quot;Logged in&quot;</span><span class="o">|</span><span class="w"> </span><span class="n">USER</span><span class="p">[</span><span class="n">User</span><span class="w"> </span><span class="n">Access</span><span class="p">]</span>
+<span class="w">    </span><span class="n">IAU</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="s">&quot;is_staff&quot;</span><span class="o">|</span><span class="w"> </span><span class="n">STAFF</span><span class="p">[</span><span class="n">Staff</span><span class="w"> </span><span class="n">Access</span><span class="p">]</span>
+<span class="w">    </span><span class="n">ISU</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="s">&quot;is_superuser&quot;</span><span class="o">|</span><span class="w"> </span><span class="n">SUPER</span><span class="p">[</span><span class="n">Full</span><span class="w"> </span><span class="n">Access</span><span class="p">]</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">AA</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e8f5e9</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">IA</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">IAU</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">ISU</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">ffcdd2</span>
+</code></pre></div>
+
+<h2 id="built-in-permissions">Built-in Permissions<a class="headerlink" href="#built-in-permissions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AllowAny</code></td>
+<td>No authentication required</td>
+</tr>
+<tr>
+<td><code>IsAuthenticated</code></td>
+<td>User must be logged in</td>
+</tr>
+<tr>
+<td><code>IsAdminUser</code></td>
+<td>User must have <code>is_staff=True</code></td>
+</tr>
+<tr>
+<td><code>IsSuperUser</code></td>
+<td>User must have <code>is_superuser=True</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="usage-in-viewsets">Usage in ViewSets<a class="headerlink" href="#usage-in-viewsets" title="Permanent link">&para;</a></h2>
+<h3 id="default-permission">Default Permission<a class="headerlink" href="#default-permission" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsAuthenticated</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">]</span>
+</code></pre></div>
+
+<h3 id="per-action-permissions">Per-Action Permissions<a class="headerlink" href="#per-action-permissions" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AllowAny</span><span class="p">,</span> <span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsAdminUser</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+
+    <span class="n">permission_classes_by_action</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;list&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span>
+        <span class="s2">&quot;retrieve&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span>
+        <span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">],</span>
+        <span class="s2">&quot;update&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">],</span>
+        <span class="s2">&quot;destroy&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAdminUser</span><span class="p">],</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h3 id="action-decorator">Action Decorator<a class="headerlink" href="#action-decorator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">action</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsAdminUser</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+
+    <span class="nd">@action</span><span class="p">(</span><span class="n">detail</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;POST&quot;</span><span class="p">],</span> <span class="n">permission_classes</span><span class="o">=</span><span class="p">[</span><span class="n">IsAdminUser</span><span class="p">])</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="o">...</span>
+</code></pre></div>
+
+<h2 id="custom-permissions">Custom Permissions<a class="headerlink" href="#custom-permissions" title="Permanent link">&para;</a></h2>
+<h3 id="basic-permission">Basic Permission<a class="headerlink" href="#basic-permission" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Permission</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">IsOwner</span><span class="p">(</span><span class="n">Permission</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Only allow owners to access.&quot;&quot;&quot;</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_object_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">author_id</span> <span class="o">==</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+</code></pre></div>
+
+<h3 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsOwner</span><span class="p">]</span>
+</code></pre></div>
+
+<h2 id="role-based-permissions">Role-Based Permissions<a class="headerlink" href="#role-based-permissions" title="Permanent link">&para;</a></h2>
+<h3 id="hasrole">HasRole<a class="headerlink" href="#hasrole" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">HasRole</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">HasRole</span><span class="p">(</span><span class="s2">&quot;editor&quot;</span><span class="p">)]</span>
+</code></pre></div>
+
+<h3 id="multiple-roles">Multiple Roles<a class="headerlink" href="#multiple-roles" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">HasRole</span><span class="p">(</span><span class="s2">&quot;editor&quot;</span><span class="p">,</span> <span class="s2">&quot;admin&quot;</span><span class="p">)]</span>  <span class="c1"># OR logic</span>
+</code></pre></div>
+
+<h2 id="group-based-permissions">Group-Based Permissions<a class="headerlink" href="#group-based-permissions" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Permission</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">InGroup</span><span class="p">(</span><span class="n">Permission</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">groups</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="n">groups</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">user_groups</span> <span class="o">=</span> <span class="p">{</span><span class="n">g</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">groups</span><span class="p">}</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">user_groups</span> <span class="o">&amp;</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">))</span>
+
+<span class="c1"># Usage</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">InGroup</span><span class="p">(</span><span class="s2">&quot;editors&quot;</span><span class="p">,</span> <span class="s2">&quot;moderators&quot;</span><span class="p">)]</span>
+</code></pre></div>
+
+<h2 id="combining-permissions">Combining Permissions<a class="headerlink" href="#combining-permissions" title="Permanent link">&para;</a></h2>
+<p>Permissions are combined with AND logic:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># User must be authenticated AND owner</span>
+<span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsOwner</span><span class="p">]</span>
+</code></pre></div>
+
+<p>For OR logic, create a custom permission:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">IsOwnerOrAdmin</span><span class="p">(</span><span class="n">Permission</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_object_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">is_staff</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">author_id</span> <span class="o">==</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+</code></pre></div>
+
+<h2 id="model-level-permissions">Model-Level Permissions<a class="headerlink" href="#model-level-permissions" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HasModelPermission</span><span class="p">(</span><span class="n">Permission</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">permission</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">permission</span> <span class="o">=</span> <span class="n">permission</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">has_perm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">permission</span><span class="p">)</span>
+
+<span class="c1"># Usage</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+
+    <span class="n">permission_classes_by_action</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">HasModelPermission</span><span class="p">(</span><span class="s2">&quot;posts.add&quot;</span><span class="p">)],</span>
+        <span class="s2">&quot;update&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">HasModelPermission</span><span class="p">(</span><span class="s2">&quot;posts.change&quot;</span><span class="p">)],</span>
+        <span class="s2">&quot;destroy&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">HasModelPermission</span><span class="p">(</span><span class="s2">&quot;posts.delete&quot;</span><span class="p">)],</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h2 id="permission-check-flow_1">Permission Check Flow<a class="headerlink" href="#permission-check-flow_1" title="Permanent link">&para;</a></h2>
+<ol>
+<li><code>has_permission()</code> — Called for all requests</li>
+<li><code>has_object_permission()</code> — Called for detail views (retrieve, update, destroy)</li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">IsOwner</span><span class="p">(</span><span class="n">Permission</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="c1"># Called first, for all actions</span>
+        <span class="k">return</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_object_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="c1"># Called second, only for detail actions</span>
+        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">author_id</span> <span class="o">==</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+</code></pre></div>
+
+<h2 id="permission-denied-response">Permission Denied Response<a class="headerlink" href="#permission-denied-response" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;detail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Permission denied&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;permission_denied&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>Status: 403 Forbidden</p>
+<h2 id="collect-permissions">Collect Permissions<a class="headerlink" href="#collect-permissions" title="Permanent link">&para;</a></h2>
+<p>List all permissions in the system:</p>
+<div class="codehilite"><pre><span></span><code>core<span class="w"> </span>collectpermissions
+</code></pre></div>
+
+<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
+<h3 id="public-read-auth-write">Public Read, Auth Write<a class="headerlink" href="#public-read-auth-write" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+
+    <span class="n">permission_classes_by_action</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;list&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span>
+        <span class="s2">&quot;retrieve&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span>
+        <span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">],</span>
+        <span class="s2">&quot;update&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">],</span>
+        <span class="s2">&quot;destroy&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">],</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h3 id="owner-only">Owner Only<a class="headerlink" href="#owner-only" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">IsOwner</span><span class="p">(</span><span class="n">Permission</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_object_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">user_id</span> <span class="o">==</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ProfileViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Profile</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsOwner</span><span class="p">]</span>
+</code></pre></div>
+
+<h3 id="admin-or-owner">Admin or Owner<a class="headerlink" href="#admin-or-owner" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">IsAdminOrOwner</span><span class="p">(</span><span class="n">Permission</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_object_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">is_staff</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">author_id</span> <span class="o">==</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsAdminOrOwner</span><span class="p">]</span>
+</code></pre></div>
+
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../10-fields/">Fields</a> — Field types</li>
+<li><a href="../04-viewsets/">ViewSets</a> — CRUD endpoints</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

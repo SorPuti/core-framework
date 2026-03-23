@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/logging/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Sistema de Logger Global - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Sistema de Logger Global";
+        var mkdocs_page_input_path = "logging.md";
+        var mkdocs_page_url = "/core-framework/logging/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Sistema de Logger Global</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/logging.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="sistema-de-logger-global">Sistema de Logger Global<a class="headerlink" href="#sistema-de-logger-global" title="Permanent link">&para;</a></h1>
+<p>O Stride Framework possui um sistema de logging global simples e poderoso. Você nunca mais precisa usar <code>logging.getLogger()</code> diretamente.</p>
+<p><strong>Compatível com Uvicorn</strong>: O sistema preserva as logs do Uvicorn (incluindo logs de requests HTTP) e apenas ajusta os níveis conforme configurado.</p>
+<h2 id="uso-basico">Uso Básico<a class="headerlink" href="#uso-basico" title="Permanent link">&para;</a></h2>
+<h3 id="importe-e-use-diretamente">Importe e Use Diretamente<a class="headerlink" href="#importe-e-use-diretamente" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
+
+<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Debug message&quot;</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Info message&quot;</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Warning message&quot;</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Error message&quot;</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s2">&quot;Critical message&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="logger-com-nome-customizado">Logger com Nome Customizado<a class="headerlink" href="#logger-com-nome-customizado" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="s2">&quot;my_module&quot;</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Hello from my_module&quot;</span><span class="p">)</span>
+<span class="c1"># Saída: 2024-01-15 10:30:45 - my_module - INFO - Hello from my_module</span>
+</code></pre></div>
+
+<h2 id="configuracao">Configuração<a class="headerlink" href="#configuracao" title="Permanent link">&para;</a></h2>
+<h3 id="via-settings-recomendado">Via Settings (Recomendado)<a class="headerlink" href="#via-settings-recomendado" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">configure</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">log_level</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;DEBUG&quot;</span>  <span class="c1"># DEBUG, INFO, WARNING, ERROR, CRITICAL</span>
+    <span class="n">log_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%(asctime)s</span><span class="s2"> - </span><span class="si">%(name)s</span><span class="s2"> - </span><span class="si">%(levelname)s</span><span class="s2"> - </span><span class="si">%(message)s</span><span class="s2">&quot;</span>
+    <span class="n">log_json</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># True para formato JSON</span>
+
+<span class="n">configure</span><span class="p">(</span><span class="n">settings_class</span><span class="o">=</span><span class="n">AppSettings</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="via-variaveis-de-ambiente">Via Variáveis de Ambiente<a class="headerlink" href="#via-variaveis-de-ambiente" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env</span>
+<span class="nv">LOG_LEVEL</span><span class="o">=</span>DEBUG
+<span class="nv">LOG_FORMAT</span><span class="o">=</span><span class="s2">&quot;%(asctime)s - %(name)s - %(levelname)s - %(message)s&quot;</span>
+<span class="nv">LOG_JSON</span><span class="o">=</span><span class="nb">false</span>
+</code></pre></div>
+
+<h2 id="por-que-debug-nao-sume-mais">Por que DEBUG não sume mais?<a class="headerlink" href="#por-que-debug-nao-sume-mais" title="Permanent link">&para;</a></h2>
+<p>O problema com <code>logging.getLogger()</code> é que loggers filhos nem sempre herdam o nível do root logger. Nosso sistema garante que:</p>
+<ol>
+<li><strong>Configuração única</strong>: O logging é configurado UMA VEZ no startup</li>
+<li><strong>Nível global</strong>: Todos os loggers respeitam o nível configurado</li>
+<li><strong>Propagation</strong>: Loggers filhos automaticamente usam o nível do root</li>
+</ol>
+<h2 id="uso-em-projetos">Uso em Projetos<a class="headerlink" href="#uso-em-projetos" title="Permanent link">&para;</a></h2>
+<h3 id="exporte-para-uso-em-projetos-externos">Exporte para uso em projetos externos<a class="headerlink" href="#exporte-para-uso-em-projetos-externos" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># No __init__.py do seu projeto</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span><span class="p">,</span> <span class="n">get_logger</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;logger&quot;</span><span class="p">,</span> <span class="s2">&quot;get_logger&quot;</span><span class="p">]</span>
+</code></pre></div>
+
+<h3 id="em-qualquer-arquivo-do-seu-projeto">Em qualquer arquivo do seu projeto<a class="headerlink" href="#em-qualquer-arquivo-do-seu-projeto" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">minha_funcao</span><span class="p">():</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Entrando na função&quot;</span><span class="p">)</span>
+    <span class="c1"># ... código ...</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Processo concluído&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="formato-json">Formato JSON<a class="headerlink" href="#formato-json" title="Permanent link">&para;</a></h2>
+<p>Para logs estruturados (útil para ELK, Datadog, etc):</p>
+<div class="codehilite"><pre><span></span><code><span class="n">configure_logging</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">json_format</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Saída:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-01-15 10:30:45&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;level&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;strider&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hello&quot;</span><span class="p">}</span>
+</code></pre></div>
+
+<h2 id="api">API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h2>
+<h3 id="logger"><code>logger</code><a class="headerlink" href="#logger" title="Permanent link">&para;</a></h3>
+<p>Logger padrão exportado. Use: <code>from strider import logger</code></p>
+<h3 id="get_loggername-str-logger"><code>get_logger(name: str) -&gt; Logger</code><a class="headerlink" href="#get_loggername-str-logger" title="Permanent link">&para;</a></h3>
+<p>Retorna um logger com nome customizado.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="s2">&quot;myapp.models&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="configure_logging"><code>configure_logging()</code><a class="headerlink" href="#configure_logging" title="Permanent link">&para;</a></h3>
+<p>Configura o sistema de logging (normalmente chamado automaticamente).</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_logging</span>
+
+<span class="n">configure_logging</span><span class="p">(</span>
+    <span class="n">level</span><span class="o">=</span><span class="s2">&quot;DEBUG&quot;</span><span class="p">,</span>
+    <span class="n">log_format</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">%(asctime)s</span><span class="s2"> - </span><span class="si">%(levelname)s</span><span class="s2"> - </span><span class="si">%(message)s</span><span class="s2">&quot;</span><span class="p">,</span>
+    <span class="n">json_format</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">force</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># Reconfigurar se já estiver configurado</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="compatibilidade">Compatibilidade<a class="headerlink" href="#compatibilidade" title="Permanent link">&para;</a></h2>
+<h3 id="com-uvicorn">Com Uvicorn<a class="headerlink" href="#com-uvicorn" title="Permanent link">&para;</a></h3>
+<p>O sistema <strong>preserva</strong> a configuração de logging do Uvicorn. As logs de requests HTTP continuam funcionando normalmente:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">INFO</span><span class="o">:</span><span class="w">     </span><span class="mf">127.0</span><span class="o">.</span><span class="mf">0.1</span><span class="o">:</span><span class="mi">58234</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="s2">&quot;GET /api/users HTTP/1.1&quot;</span><span class="w"> </span><span class="mi">200</span><span class="w"> </span><span class="n">OK</span>
+<span class="n">DEBUG</span><span class="o">:</span><span class="w">    </span><span class="mf">127.0</span><span class="o">.</span><span class="mf">0.1</span><span class="o">:</span><span class="mi">58234</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="s2">&quot;GET /api/users HTTP/1.1&quot;</span><span class="w"> </span><span class="mi">200</span><span class="w"> </span><span class="n">OK</span><span class="w">  </span><span class="err">#</span><span class="w"> </span><span class="n">com</span><span class="w"> </span><span class="n">DEBUG</span><span class="o">=</span><span class="n">True</span>
+</code></pre></div>
+
+<p>Quando você define <code>LOG_LEVEL=DEBUG</code>, as logs do Uvicorn também mudam para DEBUG automaticamente.</p>
+<h3 id="com-codigo-existente">Com código existente<a class="headerlink" href="#com-codigo-existente" title="Permanent link">&para;</a></h3>
+<p>O sistema é compatível com código existente que usa <code>logging.getLogger()</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+
+<span class="c1"># Isso ainda funciona porque configuramos o root logger</span>
+<span class="n">old_logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;old_module&quot;</span><span class="p">)</span>
+<span class="n">old_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Funciona!&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="diferencas-do-logging-padrao">Diferenças do logging padrão<a class="headerlink" href="#diferencas-do-logging-padrao" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>logging padrão</th>
+<th>Stride Logger</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Configuração</td>
+<td>Cada módulo faz a própria</td>
+<td>Centralizada</td>
+</tr>
+<tr>
+<td>Nível DEBUG</td>
+<td>Frequentemente "some"</td>
+<td>Sempre visível quando configurado</td>
+</tr>
+<tr>
+<td>Setup</td>
+<td>Múltiplas chamadas</td>
+<td>Uma chamada no startup</td>
+</tr>
+<tr>
+<td>Uso</td>
+<td><code>logging.getLogger(__name__)</code></td>
+<td><code>from strider import logger</code></td>
+</tr>
+</tbody>
+</table>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

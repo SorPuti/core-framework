@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/42-runner/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Runner (sessões longas com limites de recursos) - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Runner (sess\u00f5es longas com limites de recursos)";
+        var mkdocs_page_input_path = "42-runner.md";
+        var mkdocs_page_url = "/core-framework/42-runner/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Runner (sessões longas com limites de recursos)</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/42-runner.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="runner-sessoes-longas-com-limites-de-recursos">Runner (sessões longas com limites de recursos)<a class="headerlink" href="#runner-sessoes-longas-com-limites-de-recursos" title="Permanent link">&para;</a></h1>
+<p>Recurso plug-and-play para sessões longas: uma classe <code>Runner</code>, configuração via Settings, limites de CPU/memória/IO e hooks de lifecycle. Escala com micro-instâncias (Cloud Run, K8s); cada instância executa um runner que consome comandos start/stop via Kafka.</p>
+<h2 id="conceito">Conceito<a class="headerlink" href="#conceito" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Runner = controlador</strong>: o processo que você inicia com <code>stride runrunner Nome</code> <strong>só consome Kafka</strong> e cria/encerra <strong>instâncias</strong> (uma por sessão). Cada instância roda em <strong>processo separado</strong> (default), com DB e Redis próprios, sem compartilhar recursos com a API nem com o controlador — evita vazamento de contexto, logs misturados e degradação.</li>
+<li><strong>Instância isolada</strong> (default <code>runner_isolated_instances=True</code>): ao receber <code>start</code>, o controlador espawana um processo filho que executa <code>run_session(payload)</code>; ao receber <code>stop</code>, envia SIGTERM ao processo. O filho tem seu próprio pool de DB (<code>runner_session_pool_size</code>) e recursos; a API continua estável.</li>
+<li><strong>Um runner (controlador) por deploy</strong>: cada instância (pod/container) executa um único processo controlador; ele pode ter várias sessões ativas (vários processos filho).</li>
+<li><strong>Limites</strong>: CPU %, memória MB, opcionalmente IO leitura (MB). Verificação periódica no controlador; ao exceder (modo legado in-process), dispara shutdown e hook <code>on_resource_exceeded</code>.</li>
+<li><strong>Hooks</strong>: <code>on_start</code>, <code>on_stop</code>, <code>after_stop</code>, <code>on_resource_exceeded</code> para o app customizar (persistir estado, emitir evento, fechar conexões).</li>
+</ul>
+<h2 id="fluxo">Fluxo<a class="headerlink" href="#fluxo" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="p">[</span><span class="n">Settings</span><span class="p">]</span>
+<span class="w">        </span><span class="n">CPU</span><span class="p">[</span><span class="n">cpu_limit_percent</span><span class="p">]</span>
+<span class="w">        </span><span class="n">MEM</span><span class="p">[</span><span class="n">memory_mb_limit</span><span class="p">]</span>
+<span class="w">        </span><span class="n">IO</span><span class="p">[</span><span class="n">io_read_mb_limit</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="n">runner</span><span class="w"> </span><span class="p">[</span><span class="n">Runner</span><span class="p">]</span>
+<span class="w">        </span><span class="n">Start</span><span class="p">[</span><span class="n">on_start</span><span class="p">]</span>
+<span class="w">        </span><span class="n">Consume</span><span class="p">[</span><span class="n">Consume</span><span class="w"> </span><span class="n">command</span><span class="p">]</span>
+<span class="w">        </span><span class="n">Run</span><span class="p">[</span><span class="n">run_session</span><span class="w"> </span><span class="n">payload</span><span class="p">]</span>
+<span class="w">        </span><span class="n">Check</span><span class="p">[</span><span class="n">Resource</span><span class="w"> </span><span class="n">check</span><span class="w"> </span><span class="n">loop</span><span class="p">]</span>
+<span class="w">        </span><span class="n">Stop</span><span class="p">[</span><span class="n">on_stop</span><span class="p">]</span>
+<span class="w">        </span><span class="n">After</span><span class="p">[</span><span class="n">after_stop</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">config</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">Check</span>
+<span class="w">    </span><span class="n">Consume</span><span class="w"> </span><span class="o">--&gt;|</span><span class="n">start</span><span class="o">|</span><span class="w"> </span><span class="n">Run</span>
+<span class="w">    </span><span class="n">Consume</span><span class="w"> </span><span class="o">--&gt;|</span><span class="n">stop</span><span class="o">|</span><span class="w"> </span><span class="n">Stop</span>
+<span class="w">    </span><span class="n">Check</span><span class="w"> </span><span class="o">--&gt;|</span><span class="n">exceeded</span><span class="o">|</span><span class="w"> </span><span class="n">on_res</span><span class="p">[</span><span class="n">on_resource_exceeded</span><span class="p">]</span>
+<span class="w">    </span><span class="n">on_res</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">Stop</span>
+<span class="w">    </span><span class="n">Run</span><span class="w"> </span><span class="o">--&gt;|</span><span class="n">done</span><span class="o">|</span><span class="w"> </span><span class="n">Stop</span>
+<span class="w">    </span><span class="n">Start</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">Consume</span>
+<span class="w">    </span><span class="n">Stop</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">After</span>
+</code></pre></div>
+
+<h2 id="settings-runner_">Settings (runner_*)<a class="headerlink" href="#settings-runner_" title="Permanent link">&para;</a></h2>
+<p>Em <code>src/settings.py</code> (ou via <code>.env</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Variável</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runner_enabled</code></td>
+<td>bool</td>
+<td>false</td>
+<td>Habilita o sistema de Runner.</td>
+</tr>
+<tr>
+<td><code>runner_cpu_limit_percent</code></td>
+<td>float</td>
+<td>0</td>
+<td>Limite de CPU em % (0 = desativado).</td>
+</tr>
+<tr>
+<td><code>runner_memory_mb_limit</code></td>
+<td>float</td>
+<td>0</td>
+<td>Limite de memória em MB (0 = desativado).</td>
+</tr>
+<tr>
+<td><code>runner_io_read_mb_limit</code></td>
+<td>float</td>
+<td>0</td>
+<td>Limite de IO leitura em MB (0 = desativado).</td>
+</tr>
+<tr>
+<td><code>runner_check_interval_seconds</code></td>
+<td>float</td>
+<td>5</td>
+<td>Intervalo entre verificações de recursos.</td>
+</tr>
+<tr>
+<td><code>runner_shutdown_grace_seconds</code></td>
+<td>float</td>
+<td>5</td>
+<td>Tempo máximo para shutdown gracioso.</td>
+</tr>
+<tr>
+<td><code>runner_default_topic</code></td>
+<td>str</td>
+<td>"runner.commands"</td>
+<td>Tópico Kafka para comandos start/stop.</td>
+</tr>
+<tr>
+<td><code>runner_isolated_instances</code></td>
+<td>bool</td>
+<td>true</td>
+<td>Se true, cada sessão roda em processo filho (DB/Redis isolados; stop via SIGTERM). Se false, sessões rodam in-process (legado).</td>
+</tr>
+<tr>
+<td><code>runner_session_pool_size</code></td>
+<td>int</td>
+<td>2</td>
+<td>Tamanho do pool de conexões do DB no processo da instância (cada instância = 1 processo).</td>
+</tr>
+<tr>
+<td><code>runner_max_isolated_sessions</code></td>
+<td>int</td>
+<td>0</td>
+<td>Máximo de sessões isoladas ativas no mesmo controlador; <strong>0 = ilimitado</strong>. Acima disso novos <code>start</code> são recusados (log de erro). Útil para evitar OOM: cada sessão = um processo Python extra.</td>
+</tr>
+<tr>
+<td><code>runner_logs_dir</code></td>
+<td>str</td>
+<td>""</td>
+<td>Diretório para logs dedicados por instância (arquivo JSONL <code>session_id.log</code>). Vazio = <code>STRIDER_RUNNER_LOGS_DIR</code> ou <code>/tmp/strider-runner-logs</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="varias-sessoes-e-memoria-exit-137">Várias sessões e memória (exit 137)<a class="headerlink" href="#varias-sessoes-e-memoria-exit-137" title="Permanent link">&para;</a></h3>
+<p>Se o container do worker reinicia com <strong>código 137</strong>, em Linux/Docker isso costuma ser <strong>SIGKILL por falta de memória</strong> (OOM killer). Com <code>runner_isolated_instances=True</code>, cada <code>start</code> cria um <strong>novo processo</strong> que carrega a app (DB, Kafka no controlador, etc.). Duas ou três sessões podem estourar o limite de RAM do serviço.</p>
+<p>Mitigação: aumentar <code>mem_limit</code> / reserva no <code>docker-compose</code> ou Kubernetes; reduzir <code>runner_session_pool_size</code>; definir <code>runner_max_isolated_sessions</code> (ex.: <code>1</code> ou <code>2</code>) para recusar novos starts com log claro em vez de matar o container; ou escalar <strong>réplicas</strong> do worker <strong>desde que o tópico Kafka tenha partições suficientes</strong> (ver secção seguinte).</p>
+<h3 id="varias-replicas-e-o-mesmo-consumer-group">Várias réplicas e o mesmo consumer group<a class="headerlink" href="#varias-replicas-e-o-mesmo-consumer-group" title="Permanent link">&para;</a></h3>
+<p>Com <strong>um único</strong> <code>group.id</code>, o Kafka <strong>não</strong> envia cada mensagem a todos os consumidores: <strong>cada partição é consumida por no máximo um</strong> membro do grupo. Quem não recebe partição <strong>não</strong> processa comandos, mas <strong>continua no grupo</strong> e entra em <strong>rebalance</strong> sempre que outros membros entram/saem — daí <code>Heartbeat failed ... because it is rebalancing</code> e <code>Setting newly assigned partitions set()</code> <strong>vazio</strong> nos logs.</p>
+<p>Isso acontece quando há <strong>mais réplicas</strong> (pods <code>worker-strategy-*</code>) do que <strong>partições</strong> no tópico (ex.: tópico criado com o default de <strong>1</strong> partição e 20 réplicas: só <strong>um</strong> pod trabalha; os outros 19 ficam ociosos e ainda assim disputam rebalance).</p>
+<p><strong>Correção operacional:</strong> aumentar o número de <strong>partições</strong> do tópico de comandos para <strong>≥ número máximo de réplicas</strong> do worker (e usar <strong>key = session_id</strong> nos produces, como já descrito abaixo). O Strider regista no arranque quantas partições foram atribuídas e, se for zero após o join, emite um <strong>erro explícito</strong> no log com esta explicação.</p>
+<p><strong>Opcional (menos rebalance em deploy):</strong> em Settings, <code>kafka_group_instance_id</code> (env <code>KAFKA_GROUP_INSTANCE_ID</code>) com id estável por processo — por exemplo o hostname do container (<code>HOSTNAME</code> em Docker Swarm/Kubernetes). Isto activa <strong>static membership</strong> (KIP-345) no cliente Kafka.</p>
+<p>Exemplo:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">runner_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">runner_cpu_limit_percent</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">80.0</span>
+    <span class="n">runner_memory_mb_limit</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">512.0</span>
+    <span class="n">runner_io_read_mb_limit</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">runner_check_interval_seconds</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span>
+    <span class="n">runner_shutdown_grace_seconds</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span>
+    <span class="n">runner_default_topic</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;strategy.session.commands&quot;</span>
+</code></pre></div>
+
+<h2 id="api-da-classe-base">API da classe base<a class="headerlink" href="#api-da-classe-base" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Atributos de configuração</strong> (override em subclasse ou via Settings):<br />
+<code>input_topic</code>, <code>group_id</code>, <code>cpu_limit_percent</code>, <code>memory_mb_limit</code>, <code>io_read_mb_limit</code>, <code>check_interval_seconds</code>, <code>shutdown_grace_seconds</code>.</li>
+<li><strong>Controle</strong>: <code>request_stop()</code>, <code>is_stop_requested</code>, <code>current_session_id</code>.</li>
+<li><strong>Hooks</strong> (override no app):</li>
+<li><code>on_start()</code> — antes de iniciar o loop de consumo.</li>
+<li><code>run_session(payload)</code> — <strong>obrigatório</strong>; executa a sessão; deve respeitar <code>_stop_requested</code>.</li>
+<li><code>on_stop()</code> — quando parada foi solicitada (stop ou limite).</li>
+<li><code>after_stop()</code> — após encerramento (cleanup, persistência, eventos).</li>
+<li><code>on_resource_exceeded(metrics)</code> — quando CPU/memory/IO excedem limite; default: log e <code>request_stop()</code>.</li>
+<li><strong>Payload de start</strong> (opcional): <code>start_payload_model</code> (classe Pydantic v2) ou <code>start_payload_schema</code> (dict JSON Schema). Descrevem o dict passado a <code>send_start</code> — o merge do <strong>Payload JSON</strong> e do <strong>User ID</strong> do Admin Ops (<code>user_id</code> no dict). <code>action</code> e <code>session_id</code> são acrescentados pelo broker e <strong>não</strong> entram neste contrato. Se <code>start_payload_model</code> estiver definido, tem precedência sobre <code>start_payload_schema</code>. A validação corre em <code>send_start</code> e no <code>POST /api/ops/runners/instances/start</code>. O <code>GET /api/ops/runners/registered</code> inclui <code>start_schema</code> (JSON Schema) por runner para o painel Ops mostrar campos obrigatórios e tipos.</li>
+</ul>
+<p>Mensagens no tópico:</p>
+<ul>
+<li><code>{"action": "start", "session_id": "...", ...}</code> — inicia sessão com o payload.</li>
+<li><code>{"action": "stop", "session_id": "..."}</code> ou <code>{"action": "stop"}</code> — solicita parada.</li>
+</ul>
+<p>As mensagens são publicadas com <strong>Kafka key = session_id</strong>, de modo que start e stop da mesma sessão vão para a mesma partição e o mesmo consumidor — assim o processo que criou o filho é o que recebe o stop e pode encerrá-lo (SIGTERM). Sem a key, com múltiplas partições/consumidores, o stop poderia ser consumido por outro nó que não tem o processo e o filho ficaria órfão.</p>
+<h2 id="exemplo-contrato-de-payload-pydantic">Exemplo: contrato de payload (Pydantic)<a class="headerlink" href="#exemplo-contrato-de-payload-pydantic" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/runners.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">StrategyStartPayload</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Campos enviados pelo Admin (payload + user_id fundidos).&quot;&quot;&quot;</span>
+    <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">market</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Símbolo, ex.: 1HZ100V&quot;</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">StrategySessionRunner</span><span class="p">(</span><span class="n">Runner</span><span class="p">):</span>
+    <span class="n">input_topic</span> <span class="o">=</span> <span class="s2">&quot;strategy.session.commands&quot;</span>
+    <span class="n">start_payload_model</span> <span class="o">=</span> <span class="n">StrategyStartPayload</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run_session</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">StrategyStartPayload</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+        <span class="c1"># ...</span>
+</code></pre></div>
+
+<p>Para JSON Schema sem Pydantic na app: <code>start_payload_schema = {"type": "object", "properties": {...}, "required": [...]}</code>.</p>
+<h2 id="exemplo-runnerstrategyrunner">Exemplo: RunnerStrategy(Runner)<a class="headerlink" href="#exemplo-runnerstrategyrunner" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/runners.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">RunnerStrategy</span><span class="p">(</span><span class="n">Runner</span><span class="p">):</span>
+    <span class="n">input_topic</span> <span class="o">=</span> <span class="s2">&quot;strategy.session.commands&quot;</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_start</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Conectar a DB, Redis, etc.</span>
+        <span class="k">pass</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run_session</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">session_id</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;session_id&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">session_id</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="c1"># Bootstrap: carregar conta, runtime, criar StrategyRobot</span>
+        <span class="c1"># Registrar listener de stop (Redis/Kafka)</span>
+        <span class="c1"># Executar robot.run() até self._stop_requested</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_requested</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># Cleanup interno</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Desregistrar listener, parar market data</span>
+        <span class="k">pass</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">after_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Fechar DB, emitir LOG_18 (sessão encerrada)</span>
+        <span class="k">pass</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_resource_exceeded</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">metrics</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Log e opcionalmente publicar &quot;session.stopped&quot; com motivo &quot;resource_limit&quot;</span>
+        <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">on_resource_exceeded</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Subir um runner:<br />
+<code>stride runrunner StrategySessionRunner</code><br />
+  (ou o nome da sua classe)</li>
+<li>Listar runners registrados:<br />
+<code>stride runners</code></li>
+</ul>
+<p>O comando <code>runrunner</code> faz auto-discovery de módulos (<code>workers_module</code>, <code>runners.py</code>, <code>src/runners.py</code>, etc.), registra as subclasses de <code>Runner</code> e executa a classe pelo nome.</p>
+<h2 id="integracao-com-auto-scale-cloud-run-k8s">Integração com auto-scale (Cloud Run / K8s)<a class="headerlink" href="#integracao-com-auto-scale-cloud-run-k8s" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Defina <strong>requests/limits</strong> de CPU e memória no deployment; use os mesmos (ou menores) em <code>runner_cpu_limit_percent</code> e <code>runner_memory_mb_limit</code> para encerrar antes do OOMKill. A instância faz shutdown limpo e pode emitir eventos em <code>after_stop</code>.</li>
+<li><strong>HPA</strong>: escale por CPU/memória ou por fila (ex.: mensagens "start" pendentes). O runner apenas consome da fila e respeita os limites configurados.</li>
+</ul>
+<h2 id="banco-de-dados-redis-e-recursos-isolados-em-escala">Banco de dados, Redis e recursos isolados em escala<a class="headerlink" href="#banco-de-dados-redis-e-recursos-isolados-em-escala" title="Permanent link">&para;</a></h2>
+<h3 id="isolamento-por-processo-modo-default">Isolamento por processo (modo default)<a class="headerlink" href="#isolamento-por-processo-modo-default" title="Permanent link">&para;</a></h3>
+<p>Com <code>runner_isolated_instances=True</code> (default), cada <strong>instância</strong> de sessão roda em um <strong>processo filho</strong>. Esse processo:</p>
+<ul>
+<li>Chama <code>init_database()</code> sozinho → <strong>pool de DB próprio</strong> (tamanho <code>runner_session_pool_size</code>, ex.: 2). Nenhuma conexão é compartilhada com a API nem com o controlador.</li>
+<li>Pode criar seu próprio cliente <strong>Redis</strong> (novo connection pool no processo). Não reutilize o cliente global da API.</li>
+<li>Tem <strong>logs</strong> e <strong>memória</strong> isolados; stop é via SIGTERM, sem depender de loop reativo no mesmo processo.</li>
+</ul>
+<p>Assim a API e outras sessões não são afetadas por uma sessão pesada e não há vazamento de contexto entre sessões.</p>
+<h3 id="uma-asyncsession-nao-e-thread-safe-nem-coroutine-safe">Uma AsyncSession não é thread-safe nem coroutine-safe<a class="headerlink" href="#uma-asyncsession-nao-e-thread-safe-nem-coroutine-safe" title="Permanent link">&para;</a></h3>
+<p>A <strong>mesma</strong> <code>AsyncSession</code> do SQLAlchemy <strong>não</strong> pode ser usada por várias coroutines ao mesmo tempo. Erros comuns:</p>
+<ul>
+<li><code>This session is provisioning a new connection; concurrent operations are not permitted</code> — duas coroutines usando a mesma sessão.</li>
+<li><code>got multiple values for argument 'session_id'</code> — mesmo argumento passado por posição e em <code>**kwargs</code>.</li>
+</ul>
+<p><strong>Regras:</strong></p>
+<ol>
+<li><strong>Uma sessão por operação</strong> (recomendado): para cada persistência (log, trade, atualização de estado), obtenha uma nova sessão do pool (<code>async with get_session() as db: ...</code>), use e feche. Não guarde uma única <code>db</code> e reuse em várias <code>create_task</code>.</li>
+<li><strong>Se precisar compartilhar uma sessão</strong> (ex.: sessão longa da run_session): serialize o uso com um <strong><code>asyncio.Lock</code></strong>. Todas as operações que tocam nessa sessão (incluindo callbacks como <code>persist_runtime_state</code>, <code>persist_engine_log</code>, <code>persist_trade_result</code>) devem fazer <code>async with lock:</code> antes de usar <code>db</code>.</li>
+<li><strong>Fire-and-forget</strong>: ao agendar <code>loop.create_task(persist_impl(...))</code>, ou use uma <strong>nova sessão</strong> dentro de <code>persist_impl</code> (ex.: receber <code>get_db</code> que retorna um context manager novo a cada chamada), ou use a <strong>mesma sessão + lock</strong> em todos os persist (incluindo o que atualiza runtime_state).</li>
+</ol>
+<h3 id="padrao-recomendado-para-persistencia-no-runner">Padrão recomendado para persistência no Runner<a class="headerlink" href="#padrao-recomendado-para-persistencia-no-runner" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Opção A (escala e isolamento)</strong><br />
+  Passar um <code>get_db</code> que retorna um <strong>novo</strong> context manager a cada chamada (ex.: <code>get_db = lambda: get_session()</code>). Cada callback de persistência faz <code>async with (await get_db()) as db: ...</code>. Cada operação usa uma conexão do pool e libera ao final; não precisa de lock.</p>
+</li>
+<li>
+<p><strong>Opção B (uma sessão longa + lock)</strong><br />
+  Usar uma única <code>db</code> para a run_session e para os callbacks, e um <strong><code>asyncio.Lock</code></strong> compartilhado. Todo uso de <code>db</code> (incluindo em callbacks agendados com <code>create_task</code>) deve estar dentro de <code>async with lock: ...</code>. Assim evita “concurrent operations” na mesma sessão.</p>
+</li>
+</ul>
+<h3 id="redis-e-outros-recursos">Redis e outros recursos<a class="headerlink" href="#redis-e-outros-recursos" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Redis</strong>: no processo da instância (filho), crie um <strong>novo</strong> cliente/connection pool. Não importe/reuse o cliente usado pela API. Assim a instância tem seu próprio isolamento e a API não disputa conexões com as sessões.</li>
+<li><strong>Caches e clientes externos</strong>: mesmo princípio — por processo de instância, crie recursos próprios (ou use um factory que retorna recursos por contexto). Evite singletons compartilhados entre API e runners quando houver alta concorrência.</li>
+</ul>
+<h3 id="resumo-de-boas-praticas">Resumo de boas práticas<a class="headerlink" href="#resumo-de-boas-praticas" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Cada instância do runner (processo filho) = seu próprio DB pool + Redis (e outros recursos) quando possível.</li>
+<li>Uma AsyncSession = uma coroutine por vez, ou serialize com <code>asyncio.Lock</code>.</li>
+<li>Preferir <strong>sessão nova por operação</strong> (get_db que retorna novo context manager) para persistência em background; assim você escala sem bloquear e sem erro de concorrência na sessão.</li>
+<li>Em callbacks que recebem <code>**kwargs</code>, não repassar em <code>**kwargs</code> argumentos que já foram passados por nome/posição (evita “multiple values for argument”).</li>
+<li>Documentar no app onde se usa lock compartilhado e onde se usa sessão nova, para manutenção futura.</li>
+</ul>
+<h3 id="logs-dedicados-por-instancia">Logs dedicados por instância<a class="headerlink" href="#logs-dedicados-por-instancia" title="Permanent link">&para;</a></h3>
+<p>Para não misturar logs da API (ex.: uvicorn.access) com os da instância, o arquivo por sessão segue o mesmo layout que o processo isolado (<code>python -m strider.messaging.runner_session</code>):</p>
+<p><code>&lt;base&gt;/&lt;RunnerName&gt;/&lt;session_id&gt;.log</code> — <code>base</code> = <code>STRIDER_RUNNER_LOGS_DIR</code> → <code>runner_logs_dir</code> → temp <code>strider-runner-logs</code>.</p>
+<ul>
+<li><strong>Configuração</strong>: <code>runner_logs_dir</code> (opcional) ou env <code>STRIDER_RUNNER_LOGS_DIR</code>.</li>
+<li><strong>Emitir logs no código da app</strong> (ficheiro + stdout [+ Redis opcional], visível no Ops): no processo filho, após <code>configure_isolated_process_logging</code>, o <strong>root</strong> recebe os mesmos handlers — <code>logging.getLogger(__name__)</code> da app também grava no ficheiro. Opcionalmente: <code>get_runner_session_logger()</code> ou <code>self.session_log</code>.</li>
+<li><strong>Redis</strong> (sem FS partilhado entre API e worker): <code>STRIDER_RUNNER_LOG_REDIS=1</code> no filho e na API; listas <code>strider:runner_log:{session_id}</code>. O GET de tail no Ops usa Redis se o ficheiro estiver vazio na API.</li>
+<li><strong>Ops</strong>: <code>GET .../api/ops/runners/instances/by-session/{session_id}/logs?tail=N&amp;runner_name=ClasseRunner</code> (query <code>runner_name</code> evita 404 se não houver linha em <code>RunnerInstance</code>). SSE: <code>/api/ops/logs/stream?session_id=X&amp;runner_name=ClasseRunner&amp;level=DEBUG</code>. Tela cheia: <code>/admin/ops/logs/?session_id=...&amp;runner_name=...&amp;runner_logs=1</code>.</li>
+<li><strong>Dashboard (Admin)</strong>: <code>GET /api/ops/runners/dashboard</code> — contagens por status, últimas instâncias, amostra de CPU/RAM do <strong>host da API</strong> e <code>metric_history</code> (buffer em memória, últimas 60 amostras) para gráficos no Operations Center.</li>
+</ul>
+<hr />
+<h2 id="resumo">Resumo<a class="headerlink" href="#resumo" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Framework</strong>: recurso plug-and-play para sessões longas com limites e hooks (<code>on_start</code>, <code>on_stop</code>, <code>after_stop</code>, <code>on_resource_exceeded</code>), integrado ao Kafka e ao Settings.</li>
+<li><strong>App</strong>: implementar uma classe <code>MyRunner(Runner)</code>, configurar <code>runner_*</code> e rodar com <code>stride runrunner MyRunner</code>; controle de recursos e escalabilidade ficam na framework.</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

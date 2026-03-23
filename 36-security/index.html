@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/36-security/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Security - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Security";
+        var mkdocs_page_input_path = "36-security.md";
+        var mkdocs_page_url = "/core-framework/36-security/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Security</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/36-security.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h1>
+<p>Security best practices and configuration.</p>
+<h2 id="security-layers">Security Layers<a class="headerlink" href="#security-layers" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Request&quot;</span>
+<span class="w">        </span><span class="n">REQ</span><span class="p">[</span><span class="n">HTTP</span><span class="w"> </span><span class="n">Request</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Security Stack&quot;</span>
+<span class="w">        </span><span class="n">CORS</span><span class="p">[</span><span class="n">CORS</span><span class="w"> </span><span class="n">Check</span><span class="p">]</span>
+<span class="w">        </span><span class="n">HEADERS</span><span class="p">[</span><span class="n">Security</span><span class="w"> </span><span class="n">Headers</span><span class="p">]</span>
+<span class="w">        </span><span class="n">AUTH</span><span class="p">[</span><span class="n">Authentication</span><span class="p">]</span>
+<span class="w">        </span><span class="n">PERM</span><span class="p">[</span><span class="n">Permissions</span><span class="p">]</span>
+<span class="w">        </span><span class="n">VALID</span><span class="p">[</span><span class="n">Input</span><span class="w"> </span><span class="n">Validation</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Protection&quot;</span>
+<span class="w">        </span><span class="n">XSS</span><span class="p">[</span><span class="n">XSS</span><span class="w"> </span><span class="n">Prevention</span><span class="p">]</span>
+<span class="w">        </span><span class="n">SQLI</span><span class="p">[</span><span class="n">SQL</span><span class="w"> </span><span class="n">Injection</span><span class="w"> </span><span class="n">Prevention</span><span class="p">]</span>
+<span class="w">        </span><span class="n">CSRF</span><span class="p">[</span><span class="n">CSRF</span><span class="w"> </span><span class="n">Protection</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">REQ</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">CORS</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">HEADERS</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">AUTH</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">PERM</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">VALID</span>
+<span class="w">    </span><span class="n">VALID</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">XSS</span>
+<span class="w">    </span><span class="n">VALID</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">SQLI</span>
+<span class="w">    </span><span class="n">VALID</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">CSRF</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">CORS</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">ffcdd2</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">AUTH</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">PERM</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">VALID</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">c8e6c9</span>
+</code></pre></div>
+
+<h2 id="security-checklist">Security Checklist<a class="headerlink" href="#security-checklist" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="nv">flowchart</span><span class="w"> </span><span class="nv">LR</span>
+<span class="w">    </span><span class="nv">subgraph</span><span class="w"> </span><span class="s2">&quot;Must Have&quot;</span>
+<span class="w">        </span><span class="nv">A</span>[✓<span class="w"> </span><span class="nv">HTTPS</span>]
+<span class="w">        </span><span class="nv">B</span>[✓<span class="w"> </span><span class="nv">JWT</span><span class="w"> </span><span class="nv">Auth</span>]
+<span class="w">        </span><span class="nv">C</span>[✓<span class="w"> </span><span class="nv">Input</span><span class="w"> </span><span class="nv">Validation</span>]
+<span class="w">        </span><span class="nv">D</span>[✓<span class="w"> </span><span class="nv">SQL</span><span class="w"> </span><span class="nv">Parameterization</span>]
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="nv">subgraph</span><span class="w"> </span><span class="s2">&quot;Recommended&quot;</span>
+<span class="w">        </span><span class="nv">E</span>[✓<span class="w"> </span><span class="nv">Security</span><span class="w"> </span><span class="nv">Headers</span>]
+<span class="w">        </span><span class="nv">F</span>[✓<span class="w"> </span><span class="nv">Rate</span><span class="w"> </span><span class="nv">Limiting</span>]
+<span class="w">        </span><span class="nv">G</span>[✓<span class="w"> </span><span class="nv">CORS</span><span class="w"> </span><span class="nv">Config</span>]
+<span class="w">        </span><span class="nv">H</span>[✓<span class="w"> </span><span class="nv">HSTS</span>]
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="nv">subgraph</span><span class="w"> </span><span class="s2">&quot;Advanced&quot;</span>
+<span class="w">        </span><span class="nv">I</span>[✓<span class="w"> </span><span class="nv">CSP</span>]
+<span class="w">        </span><span class="nv">J</span>[✓<span class="w"> </span><span class="nv">Audit</span><span class="w"> </span><span class="nv">Logs</span>]
+<span class="w">        </span><span class="nv">K</span>[✓<span class="w"> </span><span class="nv">IP</span><span class="w"> </span><span class="nv">Allowlist</span>]
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="nv">style</span><span class="w"> </span><span class="nv">A</span><span class="w"> </span><span class="nv">fill</span>:#<span class="nv">c8e6c9</span>
+<span class="w">    </span><span class="nv">style</span><span class="w"> </span><span class="nv">B</span><span class="w"> </span><span class="nv">fill</span>:#<span class="nv">c8e6c9</span>
+<span class="w">    </span><span class="nv">style</span><span class="w"> </span><span class="nv">C</span><span class="w"> </span><span class="nv">fill</span>:#<span class="nv">c8e6c9</span>
+<span class="w">    </span><span class="nv">style</span><span class="w"> </span><span class="nv">D</span><span class="w"> </span><span class="nv">fill</span>:#<span class="nv">c8e6c9</span>
+</code></pre></div>
+
+<h2 id="security-headers">Security Headers<a class="headerlink" href="#security-headers" title="Permanent link">&para;</a></h2>
+<p>Enable via middleware:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;security_headers&quot;</span><span class="p">,</span>
+        <span class="c1"># ...</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<p>Default headers:</p>
+<table>
+<thead>
+<tr>
+<th>Header</th>
+<th>Value</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>X-Content-Type-Options</code></td>
+<td><code>nosniff</code></td>
+<td>Prevent MIME sniffing</td>
+</tr>
+<tr>
+<td><code>X-Frame-Options</code></td>
+<td><code>DENY</code></td>
+<td>Prevent clickjacking</td>
+</tr>
+<tr>
+<td><code>X-XSS-Protection</code></td>
+<td><code>1; mode=block</code></td>
+<td>XSS filter</td>
+</tr>
+<tr>
+<td><code>Referrer-Policy</code></td>
+<td><code>strict-origin-when-cross-origin</code></td>
+<td>Control referrer</td>
+</tr>
+</tbody>
+</table>
+<h3 id="custom-headers">Custom Headers<a class="headerlink" href="#custom-headers" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">middleware</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">&quot;security_headers&quot;</span><span class="p">,</span> <span class="p">{</span>
+        <span class="s2">&quot;headers&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;X-Content-Type-Options&quot;</span><span class="p">:</span> <span class="s2">&quot;nosniff&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;X-Frame-Options&quot;</span><span class="p">:</span> <span class="s2">&quot;SAMEORIGIN&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Content-Security-Policy&quot;</span><span class="p">:</span> <span class="s2">&quot;default-src &#39;self&#39;&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="s2">&quot;enable_hsts&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;hsts_max_age&quot;</span><span class="p">:</span> <span class="mi">31536000</span><span class="p">,</span>
+    <span class="p">}),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h3 id="hsts">HSTS<a class="headerlink" href="#hsts" title="Permanent link">&para;</a></h3>
+<p>Enable for HTTPS:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">middleware</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">&quot;security_headers&quot;</span><span class="p">,</span> <span class="p">{</span>
+        <span class="s2">&quot;enable_hsts&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;hsts_max_age&quot;</span><span class="p">:</span> <span class="mi">31536000</span><span class="p">,</span>  <span class="c1"># 1 year</span>
+    <span class="p">}),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h2 id="cors">CORS<a class="headerlink" href="#cors" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Allowed origins (empty = none)</span>
+    <span class="n">cors_origins</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;https://app.example.com&quot;</span><span class="p">]</span>
+
+    <span class="c1"># Allow credentials (cookies, auth headers)</span>
+    <span class="n">cors_allow_credentials</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="c1"># Allowed methods</span>
+    <span class="n">cors_allow_methods</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="s2">&quot;POST&quot;</span><span class="p">,</span> <span class="s2">&quot;PUT&quot;</span><span class="p">,</span> <span class="s2">&quot;PATCH&quot;</span><span class="p">,</span> <span class="s2">&quot;DELETE&quot;</span><span class="p">]</span>
+
+    <span class="c1"># Allowed headers</span>
+    <span class="n">cors_allow_headers</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Authorization&quot;</span><span class="p">,</span> <span class="s2">&quot;Content-Type&quot;</span><span class="p">]</span>
+</code></pre></div>
+
+<h3 id="production-warning">Production Warning<a class="headerlink" href="#production-warning" title="Permanent link">&para;</a></h3>
+<p><strong>Never use <code>"*"</code> in production:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># BAD - allows any origin</span>
+<span class="n">cors_origins</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;*&quot;</span><span class="p">]</span>
+
+<span class="c1"># GOOD - explicit origins</span>
+<span class="n">cors_origins</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;https://app.example.com&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;https://admin.example.com&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
+<h3 id="jwt-configuration">JWT Configuration<a class="headerlink" href="#jwt-configuration" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">secret_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;your-256-bit-secret-key&quot;</span>
+    <span class="n">access_token_expire_minutes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>
+    <span class="n">refresh_token_expire_days</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">7</span>
+    <span class="n">jwt_algorithm</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;HS256&quot;</span>
+</code></pre></div>
+
+<h3 id="password-requirements">Password Requirements<a class="headerlink" href="#password-requirements" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">PasswordValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">PasswordValidator</span><span class="p">(</span>
+    <span class="n">min_length</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span>
+    <span class="n">require_uppercase</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">require_lowercase</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">require_digit</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">require_special</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="password-hashing">Password Hashing<a class="headerlink" href="#password-hashing" title="Permanent link">&para;</a></h3>
+<p>Use strong hashers:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Recommended: Argon2</span>
+    <span class="n">password_hasher</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;argon2&quot;</span>  <span class="c1"># pip install argon2-cffi</span>
+
+    <span class="c1"># Alternative: BCrypt</span>
+    <span class="c1"># password_hasher: str = &quot;bcrypt&quot;  # pip install bcrypt</span>
+</code></pre></div>
+
+<h2 id="sql-injection-prevention">SQL Injection Prevention<a class="headerlink" href="#sql-injection-prevention" title="Permanent link">&para;</a></h2>
+<p>The framework uses SQLAlchemy ORM with parameterized queries:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># SAFE - parameterized query</span>
+<span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">email</span><span class="o">=</span><span class="n">user_input</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># SAFE - QuerySet API</span>
+<span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">name__contains</span><span class="o">=</span><span class="n">search_term</span>
+<span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<p><strong>Never use raw SQL with user input:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># DANGEROUS - never do this</span>
+<span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SELECT * FROM users WHERE email = &#39;</span><span class="si">{</span><span class="n">user_input</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+
+<span class="c1"># SAFE - use parameters</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">text</span>
+<span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+    <span class="n">text</span><span class="p">(</span><span class="s2">&quot;SELECT * FROM users WHERE email = :email&quot;</span><span class="p">),</span>
+    <span class="p">{</span><span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">user_input</span><span class="p">}</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="input-validation">Input Validation<a class="headerlink" href="#input-validation" title="Permanent link">&para;</a></h2>
+<h3 id="use-inputschema">Use InputSchema<a class="headerlink" href="#use-inputschema" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSchema</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="c1"># Por padrão extra=&quot;ignore&quot; (campos desconhecidos ignorados)</span>
+    <span class="c1"># str_strip_whitespace=True limpa strings</span>
+    <span class="c1"># Para rejeitar campos extras: model_config = ConfigDict(extra=&quot;forbid&quot;)</span>
+</code></pre></div>
+
+<h3 id="validate-all-input">Validate All Input<a class="headerlink" href="#validate-all-input" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">EmailValidator</span><span class="p">,</span>
+    <span class="n">MinLengthValidator</span><span class="p">,</span>
+    <span class="n">MaxLengthValidator</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">User</span>
+
+    <span class="n">field_validators</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">EmailValidator</span><span class="p">()],</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">MinLengthValidator</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">MaxLengthValidator</span><span class="p">(</span><span class="mi">100</span><span class="p">)],</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h2 id="rate-limiting">Rate Limiting<a class="headerlink" href="#rate-limiting" title="Permanent link">&para;</a></h2>
+<p><strong>Not built-in.</strong> Implement with middleware:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.middleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASGIMiddleware</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">TooManyRequests</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">RateLimitMiddleware</span><span class="p">(</span><span class="n">ASGIMiddleware</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;RateLimitMiddleware&quot;</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">before_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">request</span><span class="p">):</span>
+        <span class="n">client_ip</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span>
+
+        <span class="k">if</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_rate_limited</span><span class="p">(</span><span class="n">client_ip</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">TooManyRequests</span><span class="p">(</span>
+                <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Too many requests&quot;</span><span class="p">,</span>
+                <span class="n">retry_after</span><span class="o">=</span><span class="mi">60</span>
+            <span class="p">)</span>
+
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">increment_counter</span><span class="p">(</span><span class="n">client_ip</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+</code></pre></div>
+
+<h2 id="csrf-protection">CSRF Protection<a class="headerlink" href="#csrf-protection" title="Permanent link">&para;</a></h2>
+<p>Admin panel uses <code>SameSite=Lax</code> cookies:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">response</span><span class="o">.</span><span class="n">set_cookie</span><span class="p">(</span>
+    <span class="n">key</span><span class="o">=</span><span class="s2">&quot;admin_session&quot;</span><span class="p">,</span>
+    <span class="n">value</span><span class="o">=</span><span class="n">session_key</span><span class="p">,</span>
+    <span class="n">httponly</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">samesite</span><span class="o">=</span><span class="s2">&quot;lax&quot;</span><span class="p">,</span>
+    <span class="n">secure</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># HTTPS only</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p>For API endpoints, use JWT tokens instead of cookies.</p>
+<h2 id="secrets-management">Secrets Management<a class="headerlink" href="#secrets-management" title="Permanent link">&para;</a></h2>
+<h3 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env (never commit)</span>
+<span class="nv">SECRET_KEY</span><span class="o">=</span>your-256-bit-secret-key
+<span class="nv">DATABASE_URL</span><span class="o">=</span>postgresql+asyncpg://user:pass@host/db
+</code></pre></div>
+
+<h3 id="never-commit-secrets">Never Commit Secrets<a class="headerlink" href="#never-commit-secrets" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .gitignore</span>
+<span class="na">.env</span>
+<span class="na">.env.local</span>
+<span class="na">.env.production</span>
+<span class="nf">credentials.json</span>
+<span class="err">*</span><span class="na">.pem</span>
+<span class="err">*</span><span class="na">.key</span>
+</code></pre></div>
+
+<h3 id="validate-in-production">Validate in Production<a class="headerlink" href="#validate-in-production" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_auth_configuration</span>
+
+<span class="n">issues</span> <span class="o">=</span> <span class="n">validate_auth_configuration</span><span class="p">()</span>
+<span class="k">if</span> <span class="n">issues</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">issue</span> <span class="ow">in</span> <span class="n">issues</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WARNING: </span><span class="si">{</span><span class="n">issue</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="sensitive-data">Sensitive Data<a class="headerlink" href="#sensitive-data" title="Permanent link">&para;</a></h2>
+<h3 id="exclude-from-responses">Exclude from Responses<a class="headerlink" href="#exclude-from-responses" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">UserOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="c1"># password NOT included</span>
+</code></pre></div>
+
+<h3 id="exclude-from-logs">Exclude from Logs<a class="headerlink" href="#exclude-from-logs" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">middleware</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">&quot;logging&quot;</span><span class="p">,</span> <span class="p">{</span>
+        <span class="s2">&quot;log_body&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>  <span class="c1"># Don&#39;t log request bodies</span>
+        <span class="s2">&quot;log_headers&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>  <span class="c1"># Don&#39;t log headers</span>
+    <span class="p">}),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h2 id="production-checklist">Production Checklist<a class="headerlink" href="#production-checklist" title="Permanent link">&para;</a></h2>
+<ul>
+<li>[ ] <code>SECRET_KEY</code> is unique and secure (256+ bits)</li>
+<li>[ ] <code>DEBUG</code> is <code>False</code></li>
+<li>[ ] <code>CORS_ORIGINS</code> is explicit (no <code>"*"</code>)</li>
+<li>[ ] HTTPS is enforced</li>
+<li>[ ] HSTS is enabled</li>
+<li>[ ] Password hasher is Argon2 or BCrypt</li>
+<li>[ ] Rate limiting is implemented</li>
+<li>[ ] Sensitive data excluded from logs</li>
+<li>[ ] <code>.env</code> files not committed</li>
+<li>[ ] Database credentials are secure</li>
+<li>[ ] Admin panel has strong authentication</li>
+</ul>
+<h2 id="security-headers-reference">Security Headers Reference<a class="headerlink" href="#security-headers-reference" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Recommended production headers</span>
+<span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;X-Content-Type-Options&quot;</span><span class="p">:</span> <span class="s2">&quot;nosniff&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;X-Frame-Options&quot;</span><span class="p">:</span> <span class="s2">&quot;DENY&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;X-XSS-Protection&quot;</span><span class="p">:</span> <span class="s2">&quot;1; mode=block&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Referrer-Policy&quot;</span><span class="p">:</span> <span class="s2">&quot;strict-origin-when-cross-origin&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Content-Security-Policy&quot;</span><span class="p">:</span> <span class="s2">&quot;default-src &#39;self&#39;&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Permissions-Policy&quot;</span><span class="p">:</span> <span class="s2">&quot;geolocation=(), microphone=()&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../20-middleware/">Middleware</a> — Request/response hooks</li>
+<li><a href="../05-auth/">Auth</a> — Authentication</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

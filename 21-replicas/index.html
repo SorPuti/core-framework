@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/21-replicas/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Database Replicas - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Database Replicas";
+        var mkdocs_page_input_path = "21-replicas.md";
+        var mkdocs_page_url = "/core-framework/21-replicas/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Database Replicas</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/21-replicas.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="database-replicas">Database Replicas<a class="headerlink" href="#database-replicas" title="Permanent link">&para;</a></h1>
+<p>Separação read/write para escalabilidade de banco de dados.</p>
+<h2 id="arquitetura">Arquitetura<a class="headerlink" href="#arquitetura" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">LR</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="n">App</span><span class="o">[</span><span class="n">&quot;Aplicação&quot;</span><span class="o">]</span>
+<span class="w">        </span><span class="n">VS</span><span class="o">[</span><span class="n">ViewSet</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="ss">&quot;Database Layer&quot;</span>
+<span class="w">        </span><span class="n">VS</span><span class="w"> </span><span class="c1">--&gt; |SELECT| READ[(Replica&lt;br/&gt;Read-only)]</span>
+<span class="w">        </span><span class="n">VS</span><span class="w"> </span><span class="c1">--&gt; |INSERT/UPDATE/DELETE| WRITE[(Primary&lt;br/&gt;Read-Write)]</span>
+<span class="w">        </span><span class="k">WRITE</span><span class="w"> </span><span class="c1">--&gt; |Replicação| READ</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="k">READ</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="k">WRITE</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#fff3e0</span>
+</code></pre></div>
+
+<h2 id="quando-usar">Quando Usar<a class="headerlink" href="#quando-usar" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Usar Replica (db.read)&quot;</span>
+<span class="w">        </span><span class="n">R1</span><span class="p">[</span><span class="n">Queries</span><span class="w"> </span><span class="n">de</span><span class="w"> </span><span class="n">listagem</span><span class="p">]</span>
+<span class="w">        </span><span class="n">R2</span><span class="p">[</span><span class="n">Busca</span><span class="o">/</span><span class="n">Filtro</span><span class="p">]</span>
+<span class="w">        </span><span class="n">R3</span><span class="p">[</span><span class="n">Relatórios</span><span class="p">]</span>
+<span class="w">        </span><span class="n">R4</span><span class="p">[</span><span class="n">Analytics</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Usar Primary (db.write)&quot;</span>
+<span class="w">        </span><span class="n">W1</span><span class="p">[</span><span class="n">Criar</span><span class="w"> </span><span class="n">registros</span><span class="p">]</span>
+<span class="w">        </span><span class="n">W2</span><span class="p">[</span><span class="n">Atualizar</span><span class="w"> </span><span class="n">registros</span><span class="p">]</span>
+<span class="w">        </span><span class="n">W3</span><span class="p">[</span><span class="n">Deletar</span><span class="w"> </span><span class="n">registros</span><span class="p">]</span>
+<span class="w">        </span><span class="n">W4</span><span class="p">[</span><span class="n">Transações</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">R1</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">R2</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">R3</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">R4</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">W1</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">W2</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">W3</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">W4</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+</code></pre></div>
+
+<h2 id="configuracao-via-settings">Configuração via Settings<a class="headerlink" href="#configuracao-via-settings" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Primary (write)</span>
+    <span class="n">database_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;postgresql+asyncpg://user:pass@primary:5432/db&quot;</span>
+
+    <span class="c1"># Replica (read)</span>
+    <span class="n">database_read_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;postgresql+asyncpg://user:pass@replica:5432/db&quot;</span>
+
+    <span class="c1"># Pool da replica (opcional, default: 2x do write)</span>
+    <span class="n">database_read_pool_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">database_read_max_overflow</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span>
+</code></pre></div>
+
+<p>Ou via ambiente:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env</span>
+<span class="nv">DATABASE_URL</span><span class="o">=</span>postgresql+asyncpg://user:pass@primary:5432/db
+<span class="nv">DATABASE_READ_URL</span><span class="o">=</span>postgresql+asyncpg://user:pass@replica:5432/db
+</code></pre></div>
+
+<h2 id="settings-de-replicas">Settings de Replicas<a class="headerlink" href="#settings-de-replicas" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>database_read_url</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>URL do banco de leitura (replica)</td>
+</tr>
+<tr>
+<td><code>database_read_pool_size</code></td>
+<td><code>int \| None</code></td>
+<td><code>None</code></td>
+<td>Pool size para replica (default: 2x write)</td>
+</tr>
+<tr>
+<td><code>database_read_max_overflow</code></td>
+<td><code>int \| None</code></td>
+<td><code>None</code></td>
+<td>Max overflow para replica (default: 2x write)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="como-funciona">Como Funciona<a class="headerlink" href="#como-funciona" title="Permanent link">&para;</a></h2>
+<p>Quando <code>database_read_url</code> está configurado:</p>
+<ol>
+<li>Operações de escrita → Banco Primary</li>
+<li>Operações de leitura → Banco Replica</li>
+<li>Você escolhe qual usar via dependencies</li>
+</ol>
+<h2 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">&para;</a></h2>
+<h3 id="get_db_replicas">get_db_replicas<a class="headerlink" href="#get_db_replicas" title="Permanent link">&para;</a></h3>
+<p>Retorna <code>DatabaseSession</code> com propriedades <code>.read</code> e <code>.write</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_db_replicas</span><span class="p">,</span> <span class="n">DatabaseSession</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Depends</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">db</span><span class="p">:</span> <span class="n">DatabaseSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db_replicas</span><span class="p">)):</span>
+    <span class="c1"># Lê da replica</span>
+    <span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">read</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+    <span class="c1"># Escreve no primary</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">user</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">write</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="get_write_db">get_write_db<a class="headerlink" href="#get_write_db" title="Permanent link">&para;</a></h3>
+<p>Sessão somente escrita.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_write_db</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.ext.asyncio</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncSession</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create_user</span><span class="p">(</span><span class="n">db</span><span class="p">:</span> <span class="n">AsyncSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_write_db</span><span class="p">)):</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">user</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="get_read_db">get_read_db<a class="headerlink" href="#get_read_db" title="Permanent link">&para;</a></h3>
+<p>Sessão somente leitura.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_read_db</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_users</span><span class="p">(</span><span class="n">db</span><span class="p">:</span> <span class="n">AsyncSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_read_db</span><span class="p">)):</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="type-aliases">Type Aliases<a class="headerlink" href="#type-aliases" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">DBSession</span><span class="p">,</span> <span class="n">WriteSession</span><span class="p">,</span> <span class="n">ReadSession</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">DBSession</span><span class="p">,</span>           <span class="c1"># DatabaseSession com .read/.write</span>
+    <span class="n">write_db</span><span class="p">:</span> <span class="n">WriteSession</span><span class="p">,</span>  <span class="c1"># AsyncSession para escrita</span>
+    <span class="n">read_db</span><span class="p">:</span> <span class="n">ReadSession</span><span class="p">,</span>    <span class="c1"># AsyncSession para leitura</span>
+<span class="p">):</span>
+    <span class="k">pass</span>
+</code></pre></div>
+
+<h2 id="uso-com-queryset">Uso com QuerySet<a class="headerlink" href="#uso-com-queryset" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Leitura explícita</span>
+<span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">read</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Escrita explícita</span>
+<span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">write</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Jane&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="configuracao-de-pool">Configuração de Pool<a class="headerlink" href="#configuracao-de-pool" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Pool de escrita</span>
+    <span class="n">database_pool_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="n">database_max_overflow</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">database_pool_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>
+    <span class="n">database_pool_recycle</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3600</span>
+
+    <span class="c1"># Pool de leitura (default: 2x escrita)</span>
+    <span class="n">database_read_pool_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># Default: 10</span>
+    <span class="n">database_read_max_overflow</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># Default: 20</span>
+</code></pre></div>
+
+<h2 id="verificar-status-da-replica">Verificar Status da Replica<a class="headerlink" href="#verificar-status-da-replica" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_replica_configured</span>
+
+<span class="k">if</span> <span class="n">is_replica_configured</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Usando replica de leitura separada&quot;</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Usando banco único&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="metodos-de-databasesession">Métodos de DatabaseSession<a class="headerlink" href="#metodos-de-databasesession" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">db</span><span class="p">:</span> <span class="n">DatabaseSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db_replicas</span><span class="p">)</span>
+
+<span class="c1"># Propriedades</span>
+<span class="n">db</span><span class="o">.</span><span class="n">write</span>    <span class="c1"># Sessão de escrita (primary)</span>
+<span class="n">db</span><span class="o">.</span><span class="n">read</span>     <span class="c1"># Sessão de leitura (replica)</span>
+<span class="n">db</span><span class="o">.</span><span class="n">primary</span>  <span class="c1"># Alias para write</span>
+<span class="n">db</span><span class="o">.</span><span class="n">replica</span>  <span class="c1"># Alias para read</span>
+
+<span class="c1"># Verificar se usa replica</span>
+<span class="n">db</span><span class="o">.</span><span class="n">is_using_replica</span><span class="p">()</span>  <span class="c1"># True se read != write</span>
+
+<span class="c1"># Controle de transação</span>
+<span class="k">await</span> <span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>    <span class="c1"># Commit da sessão de escrita</span>
+<span class="k">await</span> <span class="n">db</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>  <span class="c1"># Rollback da sessão de escrita</span>
+<span class="k">await</span> <span class="n">db</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>     <span class="c1"># Fecha ambas as sessões</span>
+</code></pre></div>
+
+<h2 id="consistencia-read-after-write">Consistência Read-After-Write<a class="headerlink" href="#consistencia-read-after-write" title="Permanent link">&para;</a></h2>
+<p><strong>Importante:</strong> Replicas podem ter lag de replicação.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create_and_read</span><span class="p">(</span><span class="n">db</span><span class="p">:</span> <span class="n">DatabaseSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db_replicas</span><span class="p">)):</span>
+    <span class="c1"># Cria no primary</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">user</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">write</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+    <span class="c1"># Lê do primary (não da replica) para consistência</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">write</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+
+    <span class="c1"># Ou aguarda replicação</span>
+    <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">read</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="comportamento-de-fallback">Comportamento de Fallback<a class="headerlink" href="#comportamento-de-fallback" title="Permanent link">&para;</a></h2>
+<p>Se <code>database_read_url</code> não está definido ou é igual a <code>database_url</code>:</p>
+<ul>
+<li><code>db.read</code> e <code>db.write</code> retornam a mesma sessão</li>
+<li><code>is_replica_configured()</code> retorna <code>False</code></li>
+<li>Nenhuma mudança de comportamento necessária no código</li>
+</ul>
+<h2 id="integracao-com-viewset">Integração com ViewSet<a class="headerlink" href="#integracao-com-viewset" title="Permanent link">&para;</a></h2>
+<p>ViewSets usam <code>get_db</code> por padrão (sessão única). Para replicas:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_db_replicas</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">User</span>
+
+    <span class="c1"># Sobrescreve para usar replicas</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_queryset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="c1"># db é de get_db, mas você pode usar replicas</span>
+        <span class="k">return</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Ou configure globalmente:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># No setup do StrideApp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_session_factory</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_db_replicas</span>
+
+<span class="n">set_session_factory</span><span class="p">(</span><span class="n">get_db_replicas</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="inicializacao">Inicialização<a class="headerlink" href="#inicializacao" title="Permanent link">&para;</a></h2>
+<p>Replicas são auto-inicializadas pelo StrideApp quando <code>database_read_url</code> está definido.</p>
+<p>Inicialização manual:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_replicas</span>
+
+<span class="k">await</span> <span class="n">init_replicas</span><span class="p">(</span>
+    <span class="n">write_url</span><span class="o">=</span><span class="s2">&quot;postgresql+asyncpg://...&quot;</span><span class="p">,</span>
+    <span class="n">read_url</span><span class="o">=</span><span class="s2">&quot;postgresql+asyncpg://...&quot;</span><span class="p">,</span>
+    <span class="n">pool_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">max_overflow</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../12-querysets/">QuerySets</a> — Consultas de dados</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

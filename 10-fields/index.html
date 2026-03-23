@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/10-fields/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Fields - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Fields";
+        var mkdocs_page_input_path = "10-fields.md";
+        var mkdocs_page_url = "/core-framework/10-fields/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Fields</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/10-fields.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="fields">Fields<a class="headerlink" href="#fields" title="Permanent link">&para;</a></h1>
+<p>All field types for models.</p>
+<h2 id="basic-fields-field">Basic Fields (<code>Field</code>)<a class="headerlink" href="#basic-fields-field" title="Permanent link">&para;</a></h2>
+<h3 id="fieldpk"><code>Field.pk()</code><a class="headerlink" href="#fieldpk" title="Permanent link">&para;</a></h3>
+<p>Auto-increment integer primary key.</p>
+<div class="codehilite"><pre><span></span><code><span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="fieldinteger"><code>Field.integer()</code><a class="headerlink" href="#fieldinteger" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">Field</span><span class="o">.</span><span class="n">integer</span><span class="p">(</span>
+    <span class="n">primary_key</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">autoincrement</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="n">age</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">integer</span><span class="p">()</span>
+<span class="n">score</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">integer</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">count</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">integer</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="fieldstring"><code>Field.string()</code><a class="headerlink" href="#fieldstring" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">255</span><span class="p">,</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="n">code</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">title</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="fieldtext"><code>Field.text()</code><a class="headerlink" href="#fieldtext" title="Permanent link">&para;</a></h3>
+<p>Unlimited text.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Field</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="n">content</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">text</span><span class="p">()</span>
+<span class="n">bio</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="fieldboolean"><code>Field.boolean()</code><a class="headerlink" href="#fieldboolean" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">Field</span><span class="o">.</span><span class="n">boolean</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="n">is_active</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">boolean</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">is_verified</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">boolean</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="fielddatetime"><code>Field.datetime()</code><a class="headerlink" href="#fielddatetime" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">auto_now</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>       <span class="c1"># Update on INSERT and UPDATE</span>
+    <span class="n">auto_now_add</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>   <span class="c1"># Set only on INSERT</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="n">created_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now_add</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">updated_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">expires_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="fieldfloat"><code>Field.float()</code><a class="headerlink" href="#fieldfloat" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">Field</span><span class="o">.</span><span class="n">float</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="n">price</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+<span class="n">rating</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">float</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="fieldforeign_key"><code>Field.foreign_key()</code><a class="headerlink" href="#fieldforeign_key" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">Field</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span>
+    <span class="n">target</span><span class="o">=</span><span class="s2">&quot;table.column&quot;</span><span class="p">,</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">ondelete</span><span class="o">=</span><span class="s2">&quot;CASCADE&quot;</span><span class="p">,</span>  <span class="c1"># CASCADE, SET NULL, RESTRICT, NO ACTION</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="n">user_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span><span class="s2">&quot;users.id&quot;</span><span class="p">)</span>
+<span class="n">category_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span>
+    <span class="s2">&quot;categories.id&quot;</span><span class="p">,</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">ondelete</span><span class="o">=</span><span class="s2">&quot;SET NULL&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="fieldchoice"><code>Field.choice()</code><a class="headerlink" href="#fieldchoice" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">Field</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span>
+    <span class="n">choices_class</span><span class="p">,</span>        <span class="c1"># TextChoices or IntegerChoices</span>
+    <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">use_native_enum</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>  <span class="c1"># PostgreSQL ENUM type</span>
+<span class="p">)</span>
+
+<span class="c1"># Example</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextChoices</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Status</span><span class="p">(</span><span class="n">TextChoices</span><span class="p">):</span>
+    <span class="n">DRAFT</span> <span class="o">=</span> <span class="s2">&quot;draft&quot;</span><span class="p">,</span> <span class="s2">&quot;Draft&quot;</span>
+    <span class="n">PUBLISHED</span> <span class="o">=</span> <span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;Published&quot;</span>
+
+<span class="n">status</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">Status</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">Status</span><span class="o">.</span><span class="n">DRAFT</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="advanced-fields-advancedfield">Advanced Fields (<code>AdvancedField</code>)<a class="headerlink" href="#advanced-fields-advancedfield" title="Permanent link">&para;</a></h2>
+<h3 id="advancedfielduuid_pk"><code>AdvancedField.uuid_pk()</code><a class="headerlink" href="#advancedfielduuid_pk" title="Permanent link">&para;</a></h3>
+<p>UUID primary key (uses UUID7 by default).</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.fields</span><span class="w"> </span><span class="kn">import</span> <span class="n">AdvancedField</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
+
+<span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">UUID</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">uuid_pk</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="advancedfielduuid"><code>AdvancedField.uuid()</code><a class="headerlink" href="#advancedfielduuid" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">AdvancedField</span><span class="o">.</span><span class="n">uuid</span><span class="p">(</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">use_uuid7</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># Time-sortable</span>
+<span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="n">public_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">UUID</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">uuid</span><span class="p">(</span><span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">reference</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">uuid</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="advancedfielduuid4"><code>AdvancedField.uuid4()</code><a class="headerlink" href="#advancedfielduuid4" title="Permanent link">&para;</a></h3>
+<p>Random UUID4 (no temporal ordering).</p>
+<div class="codehilite"><pre><span></span><code><span class="n">token</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">UUID</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">uuid4</span><span class="p">(</span><span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="advancedfieldjson_field"><code>AdvancedField.json_field()</code><a class="headerlink" href="#advancedfieldjson_field" title="Permanent link">&para;</a></h3>
+<p>JSON/JSONB field.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">AdvancedField</span><span class="o">.</span><span class="n">json_field</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="n">metadata</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">json_field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="p">{})</span>
+<span class="n">tags</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">json_field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="p">[])</span>
+<span class="n">config</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">json_field</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<p>PostgreSQL uses JSONB (supports indexing). SQLite/MySQL use JSON.</p>
+<h3 id="advancedfieldlong_text"><code>AdvancedField.long_text()</code><a class="headerlink" href="#advancedfieldlong_text" title="Permanent link">&para;</a></h3>
+<p>Alias for <code>Field.text()</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">description</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">long_text</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="advancedfieldslug"><code>AdvancedField.slug()</code><a class="headerlink" href="#advancedfieldslug" title="Permanent link">&para;</a></h3>
+<p>URL-friendly slug.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">AdvancedField</span><span class="o">.</span><span class="n">slug</span><span class="p">(</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">255</span><span class="p">,</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>   <span class="c1"># Default: True</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># Default: True</span>
+<span class="p">)</span>
+
+<span class="c1"># Example</span>
+<span class="n">slug</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">slug</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="advancedfieldemail"><code>AdvancedField.email()</code><a class="headerlink" href="#advancedfieldemail" title="Permanent link">&para;</a></h3>
+<p>Email field.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">AdvancedField</span><span class="o">.</span><span class="n">email</span><span class="p">(</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">255</span><span class="p">,</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>   <span class="c1"># Default: True</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># Default: True</span>
+<span class="p">)</span>
+
+<span class="c1"># Example</span>
+<span class="n">email</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">email</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="advancedfieldbigint_pk"><code>AdvancedField.bigint_pk()</code><a class="headerlink" href="#advancedfieldbigint_pk" title="Permanent link">&para;</a></h3>
+<p>BigInteger primary key.</p>
+<div class="codehilite"><pre><span></span><code><span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">bigint_pk</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="advancedfieldfile-filefield-django-style"><code>AdvancedField.file()</code> — FileField (Django-style)<a class="headerlink" href="#advancedfieldfile-filefield-django-style" title="Permanent link">&para;</a></h3>
+<p>Campo de arquivo com interface rica para upload, download e URLs assinadas.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">AdvancedField</span><span class="o">.</span><span class="n">file</span><span class="p">(</span>
+    <span class="n">db_column</span><span class="o">=</span><span class="s2">&quot;cover_url&quot;</span><span class="p">,</span>           <span class="c1"># Coluna do banco que armazena o path</span>
+    <span class="n">upload_to</span><span class="o">=</span><span class="s2">&quot;courses/covers/&quot;</span><span class="p">,</span>     <span class="c1"># Diretório de upload ou função</span>
+    <span class="n">url_expiration</span><span class="o">=</span><span class="mi">3600</span><span class="p">,</span>             <span class="c1"># Expiração da signed URL (segundos)</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Exemplo completo:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.fields</span><span class="w"> </span><span class="kn">import</span> <span class="n">AdvancedField</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Course</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;courses&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="mi">255</span><span class="p">)</span>
+
+    <span class="c1"># Coluna do banco (string que armazena o path)</span>
+    <span class="n">cover_url</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># FileField - interface rica para arquivos</span>
+    <span class="n">cover</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="s2">&quot;cover_url&quot;</span><span class="p">,</span> <span class="n">upload_to</span><span class="o">=</span><span class="s2">&quot;courses/covers/&quot;</span><span class="p">)</span>
+
+<span class="c1"># Uso:</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">name</span>     <span class="c1"># &quot;courses/covers/abc.jpg&quot;</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">url</span>      <span class="c1"># &quot;https://...?X-Goog-Signature=...&quot; (signed URL)</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;foto.jpg&quot;</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="s2">&quot;image/jpeg&quot;</span><span class="p">)</span>  <span class="c1"># Upload</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span> <span class="c1"># Remove do storage</span>
+<span class="nb">bool</span><span class="p">(</span><span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="p">)</span>    <span class="c1"># True se tem arquivo</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="c1"># Verifica se existe</span>
+</code></pre></div>
+
+<p><strong>Upload com path dinâmico:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">course_path</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;courses/</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&quot;</span>
+
+<span class="n">cover</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="s2">&quot;cover_url&quot;</span><span class="p">,</span> <span class="n">upload_to</span><span class="o">=</span><span class="n">course_path</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Ver também:</strong> <a href="../37-storage/">Storage</a> para configuração de GCS e signed URLs.</p>
+<h2 id="structschema-em-models">StructSchema em models<a class="headerlink" href="#structschema-em-models" title="Permanent link">&para;</a></h2>
+<p>Campos JSON estruturados com validação, defaults e acesso tipado. O banco armazena JSON/JSONB; em Python você usa um schema (classe herdando de <code>StructSchema</code>) para definir formato, validação e conversão.</p>
+<h3 id="definir-o-schema">Definir o schema<a class="headerlink" href="#definir-o-schema" title="Permanent link">&para;</a></h3>
+<p>Em <code>strider.schema</code> use os campos disponíveis: <code>StringField</code>, <code>IntegerField</code>, <code>FloatField</code>, <code>BooleanField</code>, <code>ListField</code>, <code>NestedField</code>, <code>DictField</code>, <code>ChoiceField</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.schema</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">StructSchema</span><span class="p">,</span>
+    <span class="n">StringField</span><span class="p">,</span>
+    <span class="n">BooleanField</span><span class="p">,</span>
+    <span class="n">IntegerField</span><span class="p">,</span>
+    <span class="n">NestedField</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserPreferences</span><span class="p">(</span><span class="n">StructSchema</span><span class="p">):</span>
+    <span class="n">theme</span> <span class="o">=</span> <span class="n">StringField</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;system&quot;</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;light&quot;</span><span class="p">,</span> <span class="s2">&quot;dark&quot;</span><span class="p">,</span> <span class="s2">&quot;system&quot;</span><span class="p">],</span>
+    <span class="p">)</span>
+    <span class="n">language</span> <span class="o">=</span> <span class="n">StringField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;pt-BR&quot;</span><span class="p">,</span> <span class="n">aliases</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;lang&quot;</span><span class="p">])</span>
+    <span class="n">notifications</span> <span class="o">=</span> <span class="n">NestedField</span><span class="p">({</span>
+        <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">BooleanField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+        <span class="s2">&quot;push&quot;</span><span class="p">:</span> <span class="n">BooleanField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="p">})</span>
+    <span class="n">items_per_page</span> <span class="o">=</span> <span class="n">IntegerField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">min_value</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">max_value</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+</code></pre></div>
+
+<ul>
+<li><strong>aliases</strong>: nomes alternativos ao ler do banco (ex.: <code>"lang"</code> → <code>language</code>). Útil para migrar dados antigos sem alterar o schema.</li>
+<li><strong>NestedField</strong>: objeto aninhado; pode ser um <code>dict</code> de campos ou outra classe <code>StructSchema</code>.</li>
+<li>Campos ausentes no JSON usam o <strong>default</strong> do campo; campos desconhecidos ficam em <code>_extra_data</code> e são preservados ao salvar.</li>
+</ul>
+<h3 id="usar-na-model-com-tipagem">Usar na model com tipagem<a class="headerlink" href="#usar-na-model-com-tipagem" title="Permanent link">&para;</a></h3>
+<p>Use <code>Field.struct(schema_class)</code> e anote com <code>Mapped[SeuSchema]</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">StructSchema</span><span class="p">,</span> <span class="n">StringField</span><span class="p">,</span> <span class="n">BooleanField</span><span class="p">,</span> <span class="n">NestedField</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserPreferences</span><span class="p">(</span><span class="n">StructSchema</span><span class="p">):</span>
+    <span class="n">theme</span> <span class="o">=</span> <span class="n">StringField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;light&quot;</span><span class="p">,</span> <span class="s2">&quot;dark&quot;</span><span class="p">,</span> <span class="s2">&quot;system&quot;</span><span class="p">])</span>
+    <span class="n">language</span> <span class="o">=</span> <span class="n">StringField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;pt-BR&quot;</span><span class="p">,</span> <span class="n">aliases</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;lang&quot;</span><span class="p">])</span>
+    <span class="n">notifications</span> <span class="o">=</span> <span class="n">NestedField</span><span class="p">({</span>
+        <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">BooleanField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+        <span class="s2">&quot;push&quot;</span><span class="p">:</span> <span class="n">BooleanField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="p">})</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="mi">255</span><span class="p">)</span>
+    <span class="n">preferences</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span>
+        <span class="n">UserPreferences</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>   <span class="c1"># opcional; se None, usa UserPreferences.default_dict()</span>
+        <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>    <span class="c1"># True = índice GIN no PostgreSQL</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<p>Parâmetros de <code>Field.struct()</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Parâmetro</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>schema_class</code></td>
+<td>Classe que herda de <code>StructSchema</code>.</td>
+</tr>
+<tr>
+<td><code>default</code></td>
+<td><code>None</code> (usa defaults do schema), <code>dict</code> ou instância do schema.</td>
+</tr>
+<tr>
+<td><code>nullable</code></td>
+<td>Se a coluna pode ser NULL.</td>
+</tr>
+<tr>
+<td><code>index</code></td>
+<td>Se deve criar índice GIN no PostgreSQL (útil para filtros em JSON).</td>
+</tr>
+</tbody>
+</table>
+<p>O tipo na coluna é <strong>AdaptiveJSON</strong>: no PostgreSQL vira <strong>JSONB</strong>, nos demais dialetos <strong>JSON</strong>. A anotação <code>Mapped[dict]</code> reflete o que o banco guarda; para tipo “schema” use <code>Mapped[dict]</code> e converta com o schema quando precisar de atributos tipados.</p>
+<h3 id="acesso-tipado-e-leituragravacao">Acesso tipado e leitura/gravação<a class="headerlink" href="#acesso-tipado-e-leituragravacao" title="Permanent link">&para;</a></h3>
+<p>O valor carregado do banco é um <strong>dict</strong>. Para acesso por atributos e validação, converta com o schema:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Carregar do banco (instance.preferences é um dict)</span>
+<span class="n">prefs</span> <span class="o">=</span> <span class="n">UserPreferences</span><span class="o">.</span><span class="n">from_dict_safe</span><span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">preferences</span><span class="p">)</span>
+<span class="n">prefs</span><span class="o">.</span><span class="n">theme</span>           <span class="c1"># &quot;system&quot;</span>
+<span class="n">prefs</span><span class="o">.</span><span class="n">notifications</span><span class="o">.</span><span class="n">email</span>  <span class="c1"># True</span>
+
+<span class="c1"># Atribuir: pode passar dict (será normalizado/validado pelo default_factory ao inserir)</span>
+<span class="n">user</span><span class="o">.</span><span class="n">preferences</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;theme&quot;</span><span class="p">:</span> <span class="s2">&quot;dark&quot;</span><span class="p">,</span> <span class="s2">&quot;language&quot;</span><span class="p">:</span> <span class="s2">&quot;en&quot;</span><span class="p">}</span>
+<span class="c1"># Ou construir e serializar</span>
+<span class="n">prefs</span> <span class="o">=</span> <span class="n">UserPreferences</span><span class="p">(</span><span class="n">theme</span><span class="o">=</span><span class="s2">&quot;dark&quot;</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="s2">&quot;en&quot;</span><span class="p">)</span>
+<span class="n">user</span><span class="o">.</span><span class="n">preferences</span> <span class="o">=</span> <span class="n">prefs</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+</code></pre></div>
+
+<ul>
+<li><strong>from_dict_safe</strong>: tolerante a dados faltando, aliases e campos extras; preenche com defaults e mapeia aliases.</li>
+<li><strong>to_dict</strong>: serializa para gravar no banco; usa sempre os nomes oficiais dos campos e inclui <code>_extra_data</code>.</li>
+</ul>
+<p>Validação ao atribuir em código pode ser feita com <code>prefs.validate()</code> ou <code>prefs.is_valid()</code>; ao definir via model, o default é montado com <code>schema_class.default_dict()</code> e, se você passar dict, pode normalizar com <code>schema_class.from_dict_safe(d).to_dict()</code> antes de setar.</p>
+<h3 id="migracoes">Migrações<a class="headerlink" href="#migracoes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A coluna gerada é <strong>JSON/JSONB</strong> (tipo interno <code>AdaptiveJSON</code>). O sistema de migrações trata esse tipo como equivalente a JSON/JSONB (<code>state.EQUIVALENT_TYPES</code>: <code>JSON</code>, <code>JSONB</code>, <code>ADAPTIVEJSON</code>).</li>
+<li><strong>makemigrations</strong> gera <code>CreateTable</code> / <code>AddColumn</code> com tipo mapeado para o dialeto (ex.: PostgreSQL → JSONB).</li>
+<li><strong>Não existe migração automática do “formato” do StructSchema</strong>: mudar campos ou defaults no Python não altera o banco. Só a coluna (JSON) existe no schema do BD.</li>
+<li><strong>Evolução de dados</strong>: ao adicionar um novo campo no StructSchema, registros antigos continuam com o JSON que tinham; ao serem lidos, <code>from_dict_safe</code> preenche o novo campo com o <strong>default</strong> definido no schema. Renomear campos pode ser tratado com <strong>aliases</strong> (ex.: alias <code>"lang"</code> para <code>language</code>) para compatibilidade com dados antigos.</li>
+</ul>
+<p>Resumo: migrações cuidam apenas da coluna JSON/JSONB; a “migração” dos dados dentro do JSON é feita em tempo de leitura pelo schema (defaults + aliases).</p>
+<h3 id="filtros-em-queryset-path-json">Filtros em QuerySet (path JSON)<a class="headerlink" href="#filtros-em-queryset-path-json" title="Permanent link">&para;</a></h3>
+<p>Colunas com <code>struct_schema</code> no <code>info</code> são tratadas como JSON para filtros por path:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Filtro por campo interno do struct</span>
+<span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">preferences__theme</span><span class="o">=</span><span class="s2">&quot;dark&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">preferences__language__exact</span><span class="o">=</span><span class="s2">&quot;pt-BR&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<p>O mesmo mecanismo de path JSON usado em <code>AdvancedField.json_field()</code> se aplica a campos definidos com <code>Field.struct()</code>.</p>
+<h3 id="admin">Admin<a class="headerlink" href="#admin" title="Permanent link">&para;</a></h3>
+<p>No admin, colunas que têm <code>info["struct_schema"]</code> usam o widget <strong>struct_editor</strong> para editar o JSON de acordo com os campos do schema (tipos e opções vêm de <code>_fields</code> do schema).</p>
+<h3 id="resumo">Resumo<a class="headerlink" href="#resumo" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>Comportamento</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tipo no banco</td>
+<td>JSON (SQLite/MySQL) ou JSONB (PostgreSQL).</td>
+</tr>
+<tr>
+<td>Tipo em Python</td>
+<td><code>dict</code> na coluna; use <code>Schema.from_dict_safe()</code> para acesso tipado.</td>
+</tr>
+<tr>
+<td>Default</td>
+<td><code>schema_class.default_dict()</code> ou o que você passar em <code>default</code>.</td>
+</tr>
+<tr>
+<td>Migrações</td>
+<td>Apenas coluna JSON/JSONB; evolução de “schema” via defaults e aliases ao ler.</td>
+</tr>
+<tr>
+<td>Filtros</td>
+<td>Suporte a path (<code>preferences__theme=...</code>).</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>Widget <code>struct_editor</code> para edição do struct.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="complete-model-example">Complete Model Example<a class="headerlink" href="#complete-model-example" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.fields</span><span class="w"> </span><span class="kn">import</span> <span class="n">AdvancedField</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextChoices</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">DateTime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Status</span><span class="p">(</span><span class="n">TextChoices</span><span class="p">):</span>
+    <span class="n">DRAFT</span> <span class="o">=</span> <span class="s2">&quot;draft&quot;</span><span class="p">,</span> <span class="s2">&quot;Draft&quot;</span>
+    <span class="n">PUBLISHED</span> <span class="o">=</span> <span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;Published&quot;</span>
+    <span class="n">ARCHIVED</span> <span class="o">=</span> <span class="s2">&quot;archived&quot;</span><span class="p">,</span> <span class="s2">&quot;Archived&quot;</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="c1"># Primary key</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+
+    <span class="c1"># Basic fields</span>
+    <span class="n">title</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+    <span class="n">slug</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">slug</span><span class="p">()</span>
+    <span class="n">content</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">text</span><span class="p">()</span>
+
+    <span class="c1"># Status with choices</span>
+    <span class="n">status</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">Status</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">Status</span><span class="o">.</span><span class="n">DRAFT</span><span class="p">)</span>
+
+    <span class="c1"># JSON metadata</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">json_field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="p">{})</span>
+
+    <span class="c1"># Foreign key</span>
+    <span class="n">author_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span><span class="s2">&quot;users.id&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Timestamps</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now_add</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">updated_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">published_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Flags</span>
+    <span class="n">is_featured</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">boolean</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="database-type-mapping">Database Type Mapping<a class="headerlink" href="#database-type-mapping" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>PostgreSQL</th>
+<th>SQLite</th>
+<th>MySQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Field.pk()</code></td>
+<td><code>SERIAL</code></td>
+<td><code>INTEGER</code></td>
+<td><code>INT AUTO_INCREMENT</code></td>
+</tr>
+<tr>
+<td><code>Field.integer()</code></td>
+<td><code>INTEGER</code></td>
+<td><code>INTEGER</code></td>
+<td><code>INT</code></td>
+</tr>
+<tr>
+<td><code>Field.string()</code></td>
+<td><code>VARCHAR(n)</code></td>
+<td><code>VARCHAR(n)</code></td>
+<td><code>VARCHAR(n)</code></td>
+</tr>
+<tr>
+<td><code>Field.text()</code></td>
+<td><code>TEXT</code></td>
+<td><code>TEXT</code></td>
+<td><code>TEXT</code></td>
+</tr>
+<tr>
+<td><code>Field.boolean()</code></td>
+<td><code>BOOLEAN</code></td>
+<td><code>INTEGER</code></td>
+<td><code>TINYINT(1)</code></td>
+</tr>
+<tr>
+<td><code>Field.datetime()</code></td>
+<td><code>TIMESTAMP WITH TIME ZONE</code></td>
+<td><code>DATETIME</code></td>
+<td><code>DATETIME</code></td>
+</tr>
+<tr>
+<td><code>Field.float()</code></td>
+<td><code>FLOAT</code></td>
+<td><code>REAL</code></td>
+<td><code>FLOAT</code></td>
+</tr>
+<tr>
+<td><code>AdvancedField.uuid_pk()</code></td>
+<td><code>UUID</code></td>
+<td><code>VARCHAR(36)</code></td>
+<td><code>VARCHAR(36)</code></td>
+</tr>
+<tr>
+<td><code>AdvancedField.json_field()</code></td>
+<td><code>JSONB</code></td>
+<td><code>JSON</code></td>
+<td><code>JSON</code></td>
+</tr>
+<tr>
+<td><code>Field.struct(StructSchema)</code></td>
+<td><code>JSONB</code></td>
+<td><code>JSON</code></td>
+<td><code>JSON</code></td>
+</tr>
+</tbody>
+</table>
+<p>(O campo struct usa internamente <code>AdaptiveJSON</code>; no PostgreSQL vira JSONB, nos demais JSON.)</p>
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../11-relations/">Relations</a> — Relationships</li>
+<li><a href="../03-models/">Models</a> — Model basics</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

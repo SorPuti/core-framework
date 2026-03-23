@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/30-messaging/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Messaging - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Messaging";
+        var mkdocs_page_input_path = "30-messaging.md";
+        var mkdocs_page_url = "/core-framework/30-messaging/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Messaging</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/30-messaging.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="messaging">Messaging<a class="headerlink" href="#messaging" title="Permanent link">&para;</a></h1>
+<p>Sistema de mensageria Kafka com configuração plug-and-play. Defina <code>kafka_enabled=True</code> no Settings e tudo é configurado automaticamente.</p>
+<h2 id="arquitetura">Arquitetura<a class="headerlink" href="#arquitetura" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">LR</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Service A&quot;</span>
+<span class="w">        </span><span class="n">API</span><span class="p">[</span><span class="n">API</span><span class="w"> </span><span class="n">Handler</span><span class="p">]</span>
+<span class="w">        </span><span class="n">PROD</span><span class="p">[</span><span class="n">Producer</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Message Broker&quot;</span>
+<span class="w">        </span><span class="n">KAFKA</span><span class="p">[</span><span class="n">Kafka</span><span class="w"> </span><span class="n">Topic</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Service B&quot;</span>
+<span class="w">        </span><span class="n">CONS</span><span class="p">[</span><span class="n">Consumer</span><span class="p">]</span>
+<span class="w">        </span><span class="n">WORKER</span><span class="p">[</span><span class="n">Worker</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">API</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">event</span><span class="o">|</span><span class="w"> </span><span class="n">PROD</span>
+<span class="w">    </span><span class="n">PROD</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">publish</span><span class="o">|</span><span class="w"> </span><span class="n">KAFKA</span>
+<span class="w">    </span><span class="n">KAFKA</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">subscribe</span><span class="o">|</span><span class="w"> </span><span class="n">CONS</span>
+<span class="w">    </span><span class="n">CONS</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">WORKER</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">KAFKA</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+</code></pre></div>
+
+<h2 id="configuracao-plug-and-play">Configuração Plug-and-Play<a class="headerlink" href="#configuracao-plug-and-play" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Habilita Kafka - auto-configura tudo</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">kafka_bootstrap_servers</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;kafka:9092&quot;</span>
+
+    <span class="c1"># Opcional: Schema Registry para Avro</span>
+    <span class="n">kafka_schema_registry_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;http://schema-registry:8081&quot;</span>
+    <span class="n">avro_default_namespace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;com.mycompany.events&quot;</span>
+</code></pre></div>
+
+<p><strong>Zero configuração explícita</strong>: Você NÃO precisa chamar <code>configure_kafka()</code>. Basta definir <code>kafka_enabled=True</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Verificar se Kafka foi configurado</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_kafka_configured</span>
+
+<span class="k">if</span> <span class="n">is_kafka_configured</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Kafka pronto!&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="multiplos-brokers-cluster">Múltiplos Brokers (Cluster)<a class="headerlink" href="#multiplos-brokers-cluster" title="Permanent link">&para;</a></h3>
+<p>Use vírgula para separar múltiplos servidores Kafka:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="c1"># Cluster com 3 brokers</span>
+    <span class="n">kafka_bootstrap_servers</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;kafka1:9092,kafka2:9092,kafka3:9092&quot;</span>
+
+    <span class="c1"># Schema Registry cluster</span>
+    <span class="n">kafka_schema_registry_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;http://sr1:8081,http://sr2:8081&quot;</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env</span>
+<span class="nv">KAFKA_BOOTSTRAP_SERVERS</span><span class="o">=</span>kafka1:9092,kafka2:9092,kafka3:9092
+<span class="nv">KAFKA_SCHEMA_REGISTRY_URL</span><span class="o">=</span>http://sr1:8081,http://sr2:8081
+</code></pre></div>
+
+<h2 id="backends">Backends<a class="headerlink" href="#backends" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Backend</th>
+<th>Package</th>
+<th>Uso</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"aiokafka"</code></td>
+<td><code>aiokafka</code></td>
+<td>Default, async puro</td>
+</tr>
+<tr>
+<td><code>"confluent"</code></td>
+<td><code>confluent-kafka</code></td>
+<td>Alta performance</td>
+</tr>
+</tbody>
+</table>
+<div class="codehilite"><pre><span></span><code><span class="c1"># aiokafka (default)</span>
+pip<span class="w"> </span>install<span class="w"> </span>aiokafka
+
+<span class="c1"># confluent (alta performance)</span>
+pip<span class="w"> </span>install<span class="w"> </span>confluent-kafka
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">kafka_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;confluent&quot;</span>  <span class="c1"># ou &quot;aiokafka&quot;</span>
+</code></pre></div>
+
+<h2 id="producer">Producer<a class="headerlink" href="#producer" title="Permanent link">&para;</a></h2>
+<h3 id="uso-basico">Uso Básico<a class="headerlink" href="#uso-basico" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_producer</span>
+
+<span class="n">producer</span> <span class="o">=</span> <span class="n">get_producer</span><span class="p">(</span><span class="s2">&quot;kafka&quot;</span><span class="p">)</span>
+
+<span class="c1"># Enviar mensagem</span>
+<span class="k">await</span> <span class="n">producer</span><span class="o">.</span><span class="n">send</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;events&quot;</span><span class="p">,</span>
+    <span class="n">message</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;action&quot;</span><span class="p">:</span> <span class="s2">&quot;login&quot;</span><span class="p">},</span>
+    <span class="n">key</span><span class="o">=</span><span class="s2">&quot;user-1&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Fire and forget (mais rápido, menos confiável)</span>
+<span class="k">await</span> <span class="n">producer</span><span class="o">.</span><span class="n">send_fire_and_forget</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;logs&quot;</span><span class="p">,</span>
+    <span class="n">message</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;level&quot;</span><span class="p">:</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="s2">&quot;msg&quot;</span><span class="p">:</span> <span class="s2">&quot;User logged in&quot;</span><span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># Batch send</span>
+<span class="k">await</span> <span class="n">producer</span><span class="o">.</span><span class="n">send_batch</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;events&quot;</span><span class="p">,</span>
+    <span class="n">messages</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;action&quot;</span><span class="p">:</span> <span class="s2">&quot;view&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;action&quot;</span><span class="p">:</span> <span class="s2">&quot;click&quot;</span><span class="p">},</span>
+    <span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="funcao-publish">Função publish<a class="headerlink" href="#funcao-publish" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">publish</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">publish_user_event</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Publica evento de usuário.&quot;&quot;&quot;</span>
+    <span class="k">await</span> <span class="n">publish</span><span class="p">(</span><span class="s2">&quot;user-events&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="n">user_id</span><span class="p">,</span> <span class="s2">&quot;action&quot;</span><span class="p">:</span> <span class="n">action</span><span class="p">})</span>
+
+<span class="c1"># Uso</span>
+<span class="k">await</span> <span class="n">publish_user_event</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;login&quot;</span><span class="p">)</span>
+
+<span class="c1"># Ou diretamente (1 linha!)</span>
+<span class="k">await</span> <span class="n">publish</span><span class="p">(</span><span class="s2">&quot;user-events&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;action&quot;</span><span class="p">:</span> <span class="s2">&quot;login&quot;</span><span class="p">})</span>
+</code></pre></div>
+
+<h2 id="consumer">Consumer<a class="headerlink" href="#consumer" title="Permanent link">&para;</a></h2>
+<h3 id="decorator">Decorator<a class="headerlink" href="#decorator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">consumer</span>
+
+<span class="nd">@consumer</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;user-events&quot;</span><span class="p">,</span>
+    <span class="n">group_id</span><span class="o">=</span><span class="s2">&quot;my-service&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle_user_event</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+    <span class="n">user_id</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;user_id&quot;</span><span class="p">]</span>
+    <span class="n">action</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;action&quot;</span><span class="p">]</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;User </span><span class="si">{</span><span class="n">user_id</span><span class="si">}</span><span class="s2"> performed </span><span class="si">{</span><span class="n">action</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="executar-consumer">Executar Consumer<a class="headerlink" href="#executar-consumer" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>core<span class="w"> </span>kafka<span class="w"> </span>consume<span class="w"> </span>user-events<span class="w"> </span>--group<span class="w"> </span>my-service
+</code></pre></div>
+
+<h2 id="topics">Topics<a class="headerlink" href="#topics" title="Permanent link">&para;</a></h2>
+<h3 id="definir-topics">Definir Topics<a class="headerlink" href="#definir-topics" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">Topic</span><span class="p">,</span> <span class="n">EventTopic</span><span class="p">,</span> <span class="n">CommandTopic</span><span class="p">,</span> <span class="n">StateTopic</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserEventSchema</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">action</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserEvents</span><span class="p">(</span><span class="n">EventTopic</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;user-events&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">UserEventSchema</span>
+    <span class="n">partitions</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">replication_factor</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">retention_ms</span> <span class="o">=</span> <span class="mi">604800000</span>  <span class="c1"># 7 dias</span>
+</code></pre></div>
+
+<h3 id="tipos-de-topic">Tipos de Topic<a class="headerlink" href="#tipos-de-topic" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Tipo</th>
+<th><code>cleanup_policy</code></th>
+<th>Uso</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>EventTopic</code></td>
+<td><code>"delete"</code></td>
+<td>Eventos, logs</td>
+</tr>
+<tr>
+<td><code>CommandTopic</code></td>
+<td><code>"delete"</code></td>
+<td>Comandos, tasks</td>
+</tr>
+<tr>
+<td><code>StateTopic</code></td>
+<td><code>"compact"</code></td>
+<td>Estado, snapshots</td>
+</tr>
+</tbody>
+</table>
+<h2 id="workers">Workers<a class="headerlink" href="#workers" title="Permanent link">&para;</a></h2>
+<h3 id="decorator_1">Decorator<a class="headerlink" href="#decorator_1" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">worker</span>
+
+<span class="nd">@worker</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;tasks&quot;</span><span class="p">,</span>
+    <span class="n">output_topic</span><span class="o">=</span><span class="s2">&quot;results&quot;</span><span class="p">,</span>
+    <span class="n">group_id</span><span class="o">=</span><span class="s2">&quot;task-processor&quot;</span><span class="p">,</span>
+    <span class="n">concurrency</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+    <span class="n">max_retries</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">retry_backoff</span><span class="o">=</span><span class="s2">&quot;exponential&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process_task</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">do_work</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;completed&quot;</span><span class="p">,</span> <span class="s2">&quot;result&quot;</span><span class="p">:</span> <span class="n">result</span><span class="p">}</span>
+</code></pre></div>
+
+<h3 id="worker-baseado-em-classe">Worker Baseado em Classe<a class="headerlink" href="#worker-baseado-em-classe" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">Worker</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TaskWorker</span><span class="p">(</span><span class="n">Worker</span><span class="p">):</span>
+    <span class="n">input_topic</span> <span class="o">=</span> <span class="s2">&quot;tasks&quot;</span>
+    <span class="n">output_topic</span> <span class="o">=</span> <span class="s2">&quot;results&quot;</span>
+    <span class="n">group_id</span> <span class="o">=</span> <span class="s2">&quot;task-processor&quot;</span>
+    <span class="n">concurrency</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">max_retries</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">10</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">do_work</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[</span><span class="k">await</span> <span class="n">do_work</span><span class="p">(</span><span class="n">m</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">messages</span><span class="p">]</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">error</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_success</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Completed: </span><span class="si">{</span><span class="n">result</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="executar-worker">Executar Worker<a class="headerlink" href="#executar-worker" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>TaskWorker
+core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>--all<span class="w">  </span><span class="c1"># Todos os workers</span>
+</code></pre></div>
+
+<h2 id="retry-policy">Retry Policy<a class="headerlink" href="#retry-policy" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="nd">@worker</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;tasks&quot;</span><span class="p">,</span>
+    <span class="n">max_retries</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">retry_backoff</span><span class="o">=</span><span class="s2">&quot;exponential&quot;</span><span class="p">,</span>  <span class="c1"># ou &quot;linear&quot;, &quot;fixed&quot;</span>
+    <span class="n">dlq_topic</span><span class="o">=</span><span class="s2">&quot;tasks-dlq&quot;</span><span class="p">,</span>  <span class="c1"># Dead letter queue</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process_task</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+    <span class="o">...</span>
+</code></pre></div>
+
+<p>Cálculo de backoff:
+- <code>"fixed"</code>: Sempre <code>initial_delay</code>
+- <code>"linear"</code>: <code>initial_delay * attempt</code>
+- <code>"exponential"</code>: <code>initial_delay * (2 ** attempt)</code></p>
+<h2 id="avro-serialization">Avro Serialization<a class="headerlink" href="#avro-serialization" title="Permanent link">&para;</a></h2>
+<h3 id="namespace-configuravel">Namespace Configurável<a class="headerlink" href="#namespace-configuravel" title="Permanent link">&para;</a></h3>
+<p>O namespace Avro é lido automaticamente do Settings:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">avro_default_namespace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;com.mycompany.events&quot;</span>
+</code></pre></div>
+
+<h3 id="definir-schema">Definir Schema<a class="headerlink" href="#definir-schema" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">AvroModel</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserEvent</span><span class="p">(</span><span class="n">AvroModel</span><span class="p">):</span>
+    <span class="c1"># Namespace herdado de avro_default_namespace</span>
+    <span class="c1"># ou defina explicitamente:</span>
+    <span class="n">__avro_namespace__</span> <span class="o">=</span> <span class="s2">&quot;com.mycompany.users&quot;</span>
+
+    <span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">action</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="c1"># Obter schema Avro</span>
+<span class="n">schema</span> <span class="o">=</span> <span class="n">UserEvent</span><span class="o">.</span><span class="n">__avro_schema__</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="decorator-para-schema">Decorator para Schema<a class="headerlink" href="#decorator-para-schema" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">avro_schema</span>
+
+<span class="nd">@avro_schema</span>  <span class="c1"># Usa avro_default_namespace do Settings</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrderEvent</span><span class="p">(</span><span class="n">AvroModel</span><span class="p">):</span>
+    <span class="n">order_id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">status</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="nd">@avro_schema</span><span class="p">(</span><span class="n">namespace</span><span class="o">=</span><span class="s2">&quot;com.mycompany.orders&quot;</span><span class="p">)</span>  <span class="c1"># Namespace explícito</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrderCreated</span><span class="p">(</span><span class="n">AvroModel</span><span class="p">):</span>
+    <span class="n">order_id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">customer_id</span><span class="p">:</span> <span class="nb">int</span>
+</code></pre></div>
+
+<h3 id="enviar-com-avro">Enviar com Avro<a class="headerlink" href="#enviar-com-avro" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging.confluent</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfluentProducer</span>
+
+<span class="n">producer</span> <span class="o">=</span> <span class="n">ConfluentProducer</span><span class="p">()</span>
+
+<span class="n">event</span> <span class="o">=</span> <span class="n">UserEvent</span><span class="p">(</span><span class="n">user_id</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;login&quot;</span><span class="p">,</span> <span class="n">timestamp</span><span class="o">=</span><span class="s2">&quot;2024-01-01T00:00:00Z&quot;</span><span class="p">)</span>
+<span class="k">await</span> <span class="n">producer</span><span class="o">.</span><span class="n">send_avro</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;user-events&quot;</span><span class="p">,</span>
+    <span class="n">message</span><span class="o">=</span><span class="n">event</span><span class="p">,</span>
+    <span class="n">schema</span><span class="o">=</span><span class="n">UserEvent</span><span class="o">.</span><span class="n">__avro_schema__</span><span class="p">()</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="schema-registry">Schema Registry<a class="headerlink" href="#schema-registry" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">kafka_schema_registry_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;http://localhost:8081&quot;</span>
+</code></pre></div>
+
+<h2 id="redis-streams">Redis Streams<a class="headerlink" href="#redis-streams" title="Permanent link">&para;</a></h2>
+<h3 id="producer_1">Producer<a class="headerlink" href="#producer_1" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging.redis</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedisProducer</span>
+
+<span class="n">producer</span> <span class="o">=</span> <span class="n">RedisProducer</span><span class="p">()</span>
+<span class="k">await</span> <span class="n">producer</span><span class="o">.</span><span class="n">send</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;events&quot;</span><span class="p">,</span>  <span class="c1"># Nome do stream</span>
+    <span class="n">message</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;action&quot;</span><span class="p">:</span> <span class="s2">&quot;login&quot;</span><span class="p">}</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="consumer_1">Consumer<a class="headerlink" href="#consumer_1" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging.redis</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedisConsumer</span>
+
+<span class="n">consumer</span> <span class="o">=</span> <span class="n">RedisConsumer</span><span class="p">(</span>
+    <span class="n">topics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;events&quot;</span><span class="p">],</span>
+    <span class="n">group_id</span><span class="o">=</span><span class="s2">&quot;my-service&quot;</span>
+<span class="p">)</span>
+
+<span class="k">async</span> <span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">consumer</span><span class="p">:</span>
+    <span class="k">await</span> <span class="n">process</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">consumer</span><span class="o">.</span><span class="n">ack</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="referencia-de-settings">Referência de Settings<a class="headerlink" href="#referencia-de-settings" title="Permanent link">&para;</a></h2>
+<h3 id="conexao">Conexão<a class="headerlink" href="#conexao" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td><strong>Habilita Kafka</strong></td>
+</tr>
+<tr>
+<td><code>kafka_backend</code></td>
+<td><code>Literal</code></td>
+<td><code>"aiokafka"</code></td>
+<td>Backend: aiokafka ou confluent</td>
+</tr>
+<tr>
+<td><code>kafka_bootstrap_servers</code></td>
+<td><code>str</code></td>
+<td><code>"localhost:9092"</code></td>
+<td>Servidores Kafka</td>
+</tr>
+<tr>
+<td><code>kafka_client_id</code></td>
+<td><code>str</code></td>
+<td><code>"stride"</code></td>
+<td>Client ID</td>
+</tr>
+<tr>
+<td><code>kafka_fire_and_forget</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Não aguardar ACK</td>
+</tr>
+</tbody>
+</table>
+<h3 id="seguranca">Segurança<a class="headerlink" href="#seguranca" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_security_protocol</code></td>
+<td><code>Literal</code></td>
+<td><code>"PLAINTEXT"</code></td>
+<td>PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL</td>
+</tr>
+<tr>
+<td><code>kafka_sasl_mechanism</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>PLAIN, SCRAM-SHA-256, SCRAM-SHA-512</td>
+</tr>
+<tr>
+<td><code>kafka_sasl_username</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Usuário SASL</td>
+</tr>
+<tr>
+<td><code>kafka_sasl_password</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Senha SASL</td>
+</tr>
+<tr>
+<td><code>kafka_ssl_cafile</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Certificado CA</td>
+</tr>
+<tr>
+<td><code>kafka_ssl_certfile</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Certificado cliente</td>
+</tr>
+<tr>
+<td><code>kafka_ssl_keyfile</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Chave privada</td>
+</tr>
+</tbody>
+</table>
+<h3 id="producer_2">Producer<a class="headerlink" href="#producer_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_compression_type</code></td>
+<td><code>Literal</code></td>
+<td><code>"none"</code></td>
+<td>none, gzip, snappy, lz4, zstd</td>
+</tr>
+<tr>
+<td><code>kafka_linger_ms</code></td>
+<td><code>int</code></td>
+<td><code>0</code></td>
+<td>Tempo para acumular batch (ms)</td>
+</tr>
+<tr>
+<td><code>kafka_max_batch_size</code></td>
+<td><code>int</code></td>
+<td><code>16384</code></td>
+<td>Tamanho máximo do batch (bytes)</td>
+</tr>
+<tr>
+<td><code>kafka_request_timeout_ms</code></td>
+<td><code>int</code></td>
+<td><code>30000</code></td>
+<td>Timeout de requisição (ms)</td>
+</tr>
+<tr>
+<td><code>kafka_retry_backoff_ms</code></td>
+<td><code>int</code></td>
+<td><code>100</code></td>
+<td>Backoff entre retries (ms)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="consumer_2">Consumer<a class="headerlink" href="#consumer_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_auto_offset_reset</code></td>
+<td><code>Literal</code></td>
+<td><code>"earliest"</code></td>
+<td>earliest, latest, none</td>
+</tr>
+<tr>
+<td><code>kafka_enable_auto_commit</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Auto-commit de offsets</td>
+</tr>
+<tr>
+<td><code>kafka_auto_commit_interval_ms</code></td>
+<td><code>int</code></td>
+<td><code>5000</code></td>
+<td>Intervalo de auto-commit (ms)</td>
+</tr>
+<tr>
+<td><code>kafka_max_poll_records</code></td>
+<td><code>int</code></td>
+<td><code>500</code></td>
+<td>Máximo de registros por poll</td>
+</tr>
+<tr>
+<td><code>kafka_session_timeout_ms</code></td>
+<td><code>int</code></td>
+<td><code>10000</code></td>
+<td>Timeout de sessão (ms)</td>
+</tr>
+<tr>
+<td><code>kafka_heartbeat_interval_ms</code></td>
+<td><code>int</code></td>
+<td><code>3000</code></td>
+<td>Intervalo de heartbeat (ms)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="avro-schema-registry">Avro / Schema Registry<a class="headerlink" href="#avro-schema-registry" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_schema_registry_url</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>URL do Schema Registry</td>
+</tr>
+<tr>
+<td><code>avro_default_namespace</code></td>
+<td><code>str</code></td>
+<td><code>"com.core.events"</code></td>
+<td>Namespace padrão Avro</td>
+</tr>
+</tbody>
+</table>
+<h3 id="messaging-geral">Messaging Geral<a class="headerlink" href="#messaging-geral" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>messaging_default_topic</code></td>
+<td><code>str</code></td>
+<td><code>"events"</code></td>
+<td>Tópico padrão</td>
+</tr>
+<tr>
+<td><code>messaging_event_source</code></td>
+<td><code>str</code></td>
+<td><code>""</code></td>
+<td>Identificador de origem</td>
+</tr>
+<tr>
+<td><code>messaging_dead_letter_topic</code></td>
+<td><code>str</code></td>
+<td><code>"dead-letter"</code></td>
+<td>Tópico para falhas</td>
+</tr>
+</tbody>
+</table>
+<h2 id="cli-commands">CLI Commands<a class="headerlink" href="#cli-commands" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Listar topics</span>
+core<span class="w"> </span>kafka<span class="w"> </span>topics
+
+<span class="c1"># Criar topic</span>
+core<span class="w"> </span>kafka<span class="w"> </span>create-topic<span class="w"> </span>user-events<span class="w"> </span>--partitions<span class="w"> </span><span class="m">3</span>
+
+<span class="c1"># Consumir mensagens</span>
+core<span class="w"> </span>kafka<span class="w"> </span>consume<span class="w"> </span>user-events<span class="w"> </span>--group<span class="w"> </span>my-service
+
+<span class="c1"># Executar worker</span>
+core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>MyWorker
+
+<span class="c1"># Executar todos os workers</span>
+core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>--all
+</code></pre></div>
+
+<h2 id="exemplo-completo">Exemplo Completo<a class="headerlink" href="#exemplo-completo" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Kafka auto-configurado</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">kafka_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;confluent&quot;</span>
+    <span class="n">kafka_bootstrap_servers</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;kafka:9092&quot;</span>
+    <span class="n">kafka_schema_registry_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;http://schema-registry:8081&quot;</span>
+    <span class="n">avro_default_namespace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;com.mycompany.events&quot;</span>
+
+    <span class="c1"># Segurança</span>
+    <span class="n">kafka_security_protocol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;SASL_SSL&quot;</span>
+    <span class="n">kafka_sasl_mechanism</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;SCRAM-SHA-256&quot;</span>
+    <span class="n">kafka_sasl_username</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;my-user&quot;</span>
+    <span class="n">kafka_sasl_password</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;my-password&quot;</span>
+
+    <span class="c1"># Performance</span>
+    <span class="n">kafka_compression_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;lz4&quot;</span>
+    <span class="n">kafka_linger_ms</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="n">kafka_max_batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">32768</span>
+
+<span class="c1"># src/events.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">AvroModel</span><span class="p">,</span> <span class="n">avro_schema</span>
+
+<span class="nd">@avro_schema</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">UserCreated</span><span class="p">(</span><span class="n">AvroModel</span><span class="p">):</span>
+    <span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="c1"># src/handlers.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">publish</span><span class="p">,</span> <span class="n">consumer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">publish_user_created</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Publica evento de usuário criado.&quot;&quot;&quot;</span>
+    <span class="k">await</span> <span class="n">publish</span><span class="p">(</span><span class="s2">&quot;user-events&quot;</span><span class="p">,</span> <span class="n">UserCreated</span><span class="p">(</span>
+        <span class="n">user_id</span><span class="o">=</span><span class="n">user_id</span><span class="p">,</span>
+        <span class="n">email</span><span class="o">=</span><span class="n">email</span><span class="p">,</span>
+        <span class="n">created_at</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">model_dump</span><span class="p">())</span>
+
+<span class="nd">@consumer</span><span class="p">(</span><span class="n">topic</span><span class="o">=</span><span class="s2">&quot;user-events&quot;</span><span class="p">,</span> <span class="n">group_id</span><span class="o">=</span><span class="s2">&quot;notification-service&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">send_welcome_email</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+    <span class="k">await</span> <span class="n">send_email</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;email&quot;</span><span class="p">],</span> <span class="s2">&quot;Welcome!&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../31-workers/">Workers</a> — Tasks em background</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

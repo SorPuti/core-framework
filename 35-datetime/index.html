@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/35-datetime/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>DateTime - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "DateTime";
+        var mkdocs_page_input_path = "35-datetime.md";
+        var mkdocs_page_url = "/core-framework/35-datetime/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">DateTime</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/35-datetime.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="datetime">DateTime<a class="headerlink" href="#datetime" title="Permanent link">&para;</a></h1>
+<p>Sistema de datetime timezone-aware com configuração plug-and-play. Defina timezone no Settings e tudo é configurado automaticamente.</p>
+<h2 id="configuracao-plug-and-play">Configuração Plug-and-Play<a class="headerlink" href="#configuracao-plug-and-play" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">timezone</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;America/Sao_Paulo&quot;</span>  <span class="c1"># Timezone padrão</span>
+    <span class="n">use_tz</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>                   <span class="c1"># Usar datetimes aware</span>
+    <span class="n">datetime_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">T%H:%M:%S%z&quot;</span>
+    <span class="n">date_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">&quot;</span>
+    <span class="n">time_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;%H:%M:%S&quot;</span>
+</code></pre></div>
+
+<p><strong>Zero configuração explícita</strong>: Você NÃO precisa chamar <code>configure_datetime()</code>. O sistema é auto-configurado no startup.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Verificar se DateTime foi configurado</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_datetime_configured</span>
+
+<span class="k">if</span> <span class="n">is_datetime_configured</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DateTime pronto!&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="settings-de-datetime">Settings de DateTime<a class="headerlink" href="#settings-de-datetime" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>timezone</code></td>
+<td><code>str</code></td>
+<td><code>"UTC"</code></td>
+<td>Timezone padrão da aplicação</td>
+</tr>
+<tr>
+<td><code>use_tz</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Usar datetimes aware (com timezone)</td>
+</tr>
+<tr>
+<td><code>datetime_format</code></td>
+<td><code>str</code></td>
+<td><code>"%Y-%m-%dT%H:%M:%S%z"</code></td>
+<td>Formato padrão de datetime</td>
+</tr>
+<tr>
+<td><code>date_format</code></td>
+<td><code>str</code></td>
+<td><code>"%Y-%m-%d"</code></td>
+<td>Formato padrão de data</td>
+</tr>
+<tr>
+<td><code>time_format</code></td>
+<td><code>str</code></td>
+<td><code>"%H:%M:%S"</code></td>
+<td>Formato padrão de hora</td>
+</tr>
+</tbody>
+</table>
+<h2 id="api-timezone-django-style">API timezone (Django-style)<a class="headerlink" href="#api-timezone-django-style" title="Permanent link">&para;</a></h2>
+<h3 id="tempo-atual">Tempo Atual<a class="headerlink" href="#tempo-atual" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="c1"># Datetime atual em UTC</span>
+<span class="n">now</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+
+<span class="c1"># Datetime atual em timezone específico</span>
+<span class="n">now_sp</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="s2">&quot;America/Sao_Paulo&quot;</span><span class="p">)</span>
+
+<span class="c1"># Datetime UTC (explícito)</span>
+<span class="n">utc_now</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+
+<span class="c1"># Data atual</span>
+<span class="n">today</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">today</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="conversao-de-timezone">Conversão de Timezone<a class="headerlink" href="#conversao-de-timezone" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="n">dt</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+
+<span class="c1"># Converter para timezone</span>
+<span class="n">local</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">localtime</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="s2">&quot;America/Sao_Paulo&quot;</span><span class="p">)</span>
+
+<span class="c1"># Converter para UTC</span>
+<span class="n">utc</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">make_aware</span><span class="p">(</span><span class="n">naive_dt</span><span class="p">,</span> <span class="s2">&quot;UTC&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="gerenciamento-de-timezone">Gerenciamento de Timezone<a class="headerlink" href="#gerenciamento-de-timezone" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="c1"># Definir timezone padrão (thread-local)</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">activate</span><span class="p">(</span><span class="s2">&quot;America/Sao_Paulo&quot;</span><span class="p">)</span>
+
+<span class="c1"># Resetar para UTC</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">deactivate</span><span class="p">()</span>
+
+<span class="c1"># Obter timezone atual</span>
+<span class="n">tz</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">get_current_timezone</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="verificar-awarenaive">Verificar Aware/Naive<a class="headerlink" href="#verificar-awarenaive" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="n">timezone</span><span class="o">.</span><span class="n">is_aware</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>   <span class="c1"># True se tem timezone</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">is_naive</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>   <span class="c1"># True se não tem timezone</span>
+
+<span class="c1"># Tornar aware</span>
+<span class="n">aware_dt</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">make_aware</span><span class="p">(</span><span class="n">naive_dt</span><span class="p">,</span> <span class="s2">&quot;UTC&quot;</span><span class="p">)</span>
+
+<span class="c1"># Tornar naive</span>
+<span class="n">naive_dt</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">make_naive</span><span class="p">(</span><span class="n">aware_dt</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="comparacoes">Comparações<a class="headerlink" href="#comparacoes" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="n">timezone</span><span class="o">.</span><span class="n">is_past</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>       <span class="c1"># True se antes de agora</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">is_future</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>     <span class="c1"># True se depois de agora</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">is_today</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>      <span class="c1"># True se mesmo dia</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">is_yesterday</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>  <span class="c1"># True se ontem</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">is_tomorrow</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>   <span class="c1"># True se amanhã</span>
+</code></pre></div>
+
+<h3 id="formatacao">Formatação<a class="headerlink" href="#formatacao" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="c1"># Formatar datetime</span>
+<span class="n">formatted</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">)</span>
+
+<span class="c1"># Parse de string</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="s2">&quot;2024-01-15 10:30:00&quot;</span><span class="p">,</span> <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="calculos">Cálculos<a class="headerlink" href="#calculos" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="c1"># Adicionar tempo</span>
+<span class="n">future</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">hours</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+<span class="c1"># Subtrair tempo</span>
+<span class="n">past</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">subtract</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+
+<span class="c1"># Diferença</span>
+<span class="n">seconds</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">dt1</span><span class="p">,</span> <span class="n">dt2</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;seconds&quot;</span><span class="p">)</span>
+<span class="n">minutes</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">dt1</span><span class="p">,</span> <span class="n">dt2</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;minutes&quot;</span><span class="p">)</span>
+<span class="n">hours</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">dt1</span><span class="p">,</span> <span class="n">dt2</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;hours&quot;</span><span class="p">)</span>
+<span class="n">days</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">dt1</span><span class="p">,</span> <span class="n">dt2</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;days&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="helpers-de-range">Helpers de Range<a class="headerlink" href="#helpers-de-range" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="c1"># Início/fim do dia</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">start_of_day</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">end_of_day</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+
+<span class="c1"># Início/fim do mês</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">start_of_month</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">end_of_month</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+
+<span class="c1"># Início/fim do ano</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">start_of_year</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">end_of_year</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="criar-datetime">Criar DateTime<a class="headerlink" href="#criar-datetime" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="c1"># Criar datetime</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span><span class="p">)</span>
+
+<span class="c1"># De timestamp</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">from_timestamp</span><span class="p">(</span><span class="mi">1705315800</span><span class="p">)</span>
+
+<span class="c1"># De string ISO</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">from_iso</span><span class="p">(</span><span class="s2">&quot;2024-01-15T10:30:00Z&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="classe-datetime">Classe DateTime<a class="headerlink" href="#classe-datetime" title="Permanent link">&para;</a></h2>
+<p>Subclasse customizada de datetime.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">DateTime</span>
+
+<span class="c1"># Criar</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">.</span><span class="n">from_timestamp</span><span class="p">(</span><span class="mi">1705315800</span><span class="p">)</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">.</span><span class="n">from_iso</span><span class="p">(</span><span class="s2">&quot;2024-01-15T10:30:00Z&quot;</span><span class="p">)</span>
+
+<span class="c1"># Converter</span>
+<span class="n">dt</span><span class="o">.</span><span class="n">to_timezone</span><span class="p">(</span><span class="s2">&quot;America/Sao_Paulo&quot;</span><span class="p">)</span>
+<span class="n">dt</span><span class="o">.</span><span class="n">to_utc</span><span class="p">()</span>
+<span class="n">dt</span><span class="o">.</span><span class="n">to_iso</span><span class="p">()</span>
+<span class="n">dt</span><span class="o">.</span><span class="n">to_timestamp</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="em-models">Em Models<a class="headerlink" href="#em-models" title="Permanent link">&para;</a></h2>
+<h3 id="auto-timestamps">Auto Timestamps<a class="headerlink" href="#auto-timestamps" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">DateTime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="c1"># Definido apenas no INSERT</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now_add</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Definido no INSERT e UPDATE</span>
+    <span class="n">updated_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Datetime opcional</span>
+    <span class="n">published_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="armazenamento">Armazenamento<a class="headerlink" href="#armazenamento" title="Permanent link">&para;</a></h3>
+<p>Todos os datetimes são armazenados em UTC:</p>
+<table>
+<thead>
+<tr>
+<th>Banco</th>
+<th>Tipo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PostgreSQL</td>
+<td><code>TIMESTAMP WITH TIME ZONE</code></td>
+</tr>
+<tr>
+<td>SQLite</td>
+<td><code>DATETIME</code></td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td><code>DATETIME</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="queries">Queries<a class="headerlink" href="#queries" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+
+<span class="c1"># Filtrar por data</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">created_at__gte</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">start_of_day</span><span class="p">(),</span>
+    <span class="n">created_at__lt</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">end_of_day</span><span class="p">(),</span>
+<span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Filtrar por range</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">)</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">created_at__range</span><span class="o">=</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span>
+<span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="funcoes-standalone">Funções Standalone<a class="headerlink" href="#funcoes-standalone" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">now</span><span class="p">,</span>
+    <span class="n">utcnow</span><span class="p">,</span>
+    <span class="n">today</span><span class="p">,</span>
+    <span class="n">make_aware</span><span class="p">,</span>
+    <span class="n">make_naive</span><span class="p">,</span>
+    <span class="n">is_aware</span><span class="p">,</span>
+    <span class="n">is_naive</span><span class="p">,</span>
+    <span class="n">format_datetime</span><span class="p">,</span>
+    <span class="n">parse_datetime</span><span class="p">,</span>
+    <span class="n">add_days</span><span class="p">,</span>
+    <span class="n">add_hours</span><span class="p">,</span>
+    <span class="n">diff_days</span><span class="p">,</span>
+    <span class="n">start_of_day</span><span class="p">,</span>
+    <span class="n">end_of_day</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Uso</span>
+<span class="n">current</span> <span class="o">=</span> <span class="n">now</span><span class="p">()</span>
+<span class="n">formatted</span> <span class="o">=</span> <span class="n">format_datetime</span><span class="p">(</span><span class="n">current</span><span class="p">,</span> <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="n">tomorrow</span> <span class="o">=</span> <span class="n">add_days</span><span class="p">(</span><span class="n">current</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="nomes-de-timezone">Nomes de Timezone<a class="headerlink" href="#nomes-de-timezone" title="Permanent link">&para;</a></h2>
+<p>Formatos suportados:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Nomes padrão</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="s2">&quot;UTC&quot;</span><span class="p">)</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="s2">&quot;America/Sao_Paulo&quot;</span><span class="p">)</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="s2">&quot;Europe/London&quot;</span><span class="p">)</span>
+
+<span class="c1"># Strings de offset</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="s2">&quot;+03:00&quot;</span><span class="p">)</span>
+<span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="s2">&quot;-05:00&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="boas-praticas">Boas Práticas<a class="headerlink" href="#boas-praticas" title="Permanent link">&para;</a></h2>
+<h3 id="1-sempre-use-utc-para-armazenamento">1. Sempre use UTC para armazenamento<a class="headerlink" href="#1-sempre-use-utc-para-armazenamento" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Bom</span>
+<span class="n">created_at</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>  <span class="c1"># UTC</span>
+
+<span class="c1"># Ruim</span>
+<span class="n">created_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>  <span class="c1"># Hora local</span>
+</code></pre></div>
+
+<h3 id="2-converta-apenas-para-exibicao">2. Converta apenas para exibição<a class="headerlink" href="#2-converta-apenas-para-exibicao" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Armazene em UTC</span>
+<span class="n">post</span><span class="o">.</span><span class="n">created_at</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+
+<span class="c1"># Converta para exibição ao usuário</span>
+<span class="n">local_time</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">localtime</span><span class="p">(</span><span class="n">post</span><span class="o">.</span><span class="n">created_at</span><span class="p">,</span> <span class="n">user</span><span class="o">.</span><span class="n">timezone</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="3-use-auto-timestamps">3. Use auto timestamps<a class="headerlink" href="#3-use-auto-timestamps" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Bom</span>
+<span class="n">created_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">DateTime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now_add</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Evite definição manual</span>
+</code></pre></div>
+
+<h3 id="4-sempre-use-datetimes-aware">4. Sempre use datetimes aware<a class="headerlink" href="#4-sempre-use-datetimes-aware" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Bom</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+
+<span class="c1"># Ruim</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>  <span class="c1"># Datetime naive</span>
+</code></pre></div>
+
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../10-fields/">Fields</a> — Tipos de campos</li>
+<li><a href="../03-models/">Models</a> — Básico de models</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

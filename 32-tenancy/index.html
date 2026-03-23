@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/32-tenancy/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Multi-Tenancy - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Multi-Tenancy";
+        var mkdocs_page_input_path = "32-tenancy.md";
+        var mkdocs_page_url = "/core-framework/32-tenancy/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Multi-Tenancy</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/32-tenancy.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="multi-tenancy">Multi-Tenancy<a class="headerlink" href="#multi-tenancy" title="Permanent link">&para;</a></h1>
+<p>Isolamento de dados para aplicações multi-tenant com configuração via Settings.</p>
+<h2 id="isolamento-de-dados">Isolamento de Dados<a class="headerlink" href="#isolamento-de-dados" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="ss">&quot;Request&quot;</span>
+<span class="w">        </span><span class="n">REQ</span><span class="o">[</span><span class="n">Request + X-Tenant-ID</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="ss">&quot;Middleware&quot;</span>
+<span class="w">        </span><span class="n">TM</span><span class="o">[</span><span class="n">TenantMiddleware</span><span class="o">]</span>
+<span class="w">        </span><span class="n">CTX</span><span class="o">[</span><span class="n">set_tenant_context</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="ss">&quot;Data Layer&quot;</span>
+<span class="w">        </span><span class="n">QS</span><span class="o">[</span><span class="n">QuerySet</span><span class="o">]</span>
+<span class="w">        </span><span class="k">FILTER</span><span class="o">[</span><span class="n">Auto-filter by tenant_id</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="ss">&quot;Database&quot;</span>
+<span class="w">        </span><span class="n">T1</span><span class="o">[</span><span class="n">(Tenant A Data)</span><span class="o">]</span>
+<span class="w">        </span><span class="n">T2</span><span class="o">[</span><span class="n">(Tenant B Data)</span><span class="o">]</span>
+<span class="w">        </span><span class="n">T3</span><span class="o">[</span><span class="n">(Tenant C Data)</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">REQ</span><span class="w"> </span><span class="c1">--&gt; TM</span>
+<span class="w">    </span><span class="n">TM</span><span class="w"> </span><span class="c1">--&gt; CTX</span>
+<span class="w">    </span><span class="n">CTX</span><span class="w"> </span><span class="c1">--&gt; QS</span>
+<span class="w">    </span><span class="n">QS</span><span class="w"> </span><span class="c1">--&gt; FILTER</span>
+<span class="w">    </span><span class="k">FILTER</span><span class="w"> </span><span class="c1">--&gt; |tenant_id=A| T1</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">TM</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="k">FILTER</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#e3f2fd</span>
+</code></pre></div>
+
+<h2 id="resolucao-de-tenant">Resolução de Tenant<a class="headerlink" href="#resolucao-de-tenant" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">LR</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Métodos de Resolução&quot;</span>
+<span class="w">        </span><span class="n">H</span><span class="p">[</span><span class="n">Header</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">X</span><span class="o">-</span><span class="n">Tenant</span><span class="o">-</span><span class="n">ID</span><span class="p">]</span>
+<span class="w">        </span><span class="n">S</span><span class="p">[</span><span class="n">Subdomínio</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">tenant</span><span class="p">.</span><span class="n">app</span><span class="p">.</span><span class="n">com</span><span class="p">]</span>
+<span class="w">        </span><span class="n">P</span><span class="p">[</span><span class="n">Path</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;/</span><span class="n">tenant</span><span class="o">/</span><span class="p">...]</span>
+<span class="w">        </span><span class="n">T</span><span class="p">[</span><span class="n">Token</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">JWT</span><span class="w"> </span><span class="n">claim</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">H</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">MW</span><span class="p">[</span><span class="n">TenantMiddleware</span><span class="p">]</span>
+<span class="w">    </span><span class="n">S</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">MW</span>
+<span class="w">    </span><span class="n">P</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">MW</span>
+<span class="w">    </span><span class="n">T</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">MW</span>
+
+<span class="w">    </span><span class="n">MW</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">CTX</span><span class="p">[</span><span class="n">Tenant</span><span class="w"> </span><span class="n">Context</span><span class="p">]</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">MW</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">CTX</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">c8e6c9</span>
+</code></pre></div>
+
+<h2 id="configuracao-via-settings">Configuração via Settings<a class="headerlink" href="#configuracao-via-settings" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Habilita multi-tenancy</span>
+    <span class="n">tenancy_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="c1"># Campo FK nos models</span>
+    <span class="n">tenancy_field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;workspace_id&quot;</span>
+
+    <span class="c1"># Atributo do usuário com tenant ID</span>
+    <span class="n">tenancy_user_attribute</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;workspace_id&quot;</span>
+
+    <span class="c1"># Header HTTP para tenant (fallback)</span>
+    <span class="n">tenancy_header</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;X-Tenant-ID&quot;</span>
+
+    <span class="c1"># Rejeitar requests sem tenant</span>
+    <span class="n">tenancy_require</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</code></pre></div>
+
+<h2 id="settings-de-tenancy">Settings de Tenancy<a class="headerlink" href="#settings-de-tenancy" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tenancy_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Habilita multi-tenancy automático</td>
+</tr>
+<tr>
+<td><code>tenancy_field</code></td>
+<td><code>str</code></td>
+<td><code>"workspace_id"</code></td>
+<td>Nome do campo de tenant nos models</td>
+</tr>
+<tr>
+<td><code>tenancy_user_attribute</code></td>
+<td><code>str</code></td>
+<td><code>"workspace_id"</code></td>
+<td>Atributo do usuário com tenant ID</td>
+</tr>
+<tr>
+<td><code>tenancy_header</code></td>
+<td><code>str</code></td>
+<td><code>"X-Tenant-ID"</code></td>
+<td>Header HTTP para tenant (fallback)</td>
+</tr>
+<tr>
+<td><code>tenancy_require</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Rejeitar requests sem tenant</td>
+</tr>
+</tbody>
+</table>
+<h2 id="model-de-tenant">Model de Tenant<a class="headerlink" href="#model-de-tenant" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Workspace</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;workspaces&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+    <span class="n">slug</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="tenantmixin">TenantMixin<a class="headerlink" href="#tenantmixin" title="Permanent link">&para;</a></h2>
+<p>Adicione aos models que pertencem a um tenant:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.tenancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">TenantMixin</span><span class="p">,</span> <span class="n">TenantManager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Project</span><span class="p">(</span><span class="n">Model</span><span class="p">,</span> <span class="n">TenantMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;projects&quot;</span>
+    <span class="n">objects</span> <span class="o">=</span> <span class="n">TenantManager</span><span class="p">[</span><span class="s2">&quot;Project&quot;</span><span class="p">]()</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+    <span class="c1"># workspace_id é adicionado pelo TenantMixin</span>
+</code></pre></div>
+
+<h2 id="queries">Queries<a class="headerlink" href="#queries" title="Permanent link">&para;</a></h2>
+<h3 id="filtrar-por-tenant">Filtrar por Tenant<a class="headerlink" href="#filtrar-por-tenant" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Tenant explícito</span>
+<span class="n">projects</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Project</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span><span class="n">workspace_id</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Do contexto (definido pelo middleware)</span>
+<span class="n">projects</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Project</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="query-cross-tenant">Query Cross-Tenant<a class="headerlink" href="#query-cross-tenant" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Todos os projetos (uso admin)</span>
+<span class="n">all_projects</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Project</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="tenantmiddleware">TenantMiddleware<a class="headerlink" href="#tenantmiddleware" title="Permanent link">&para;</a></h2>
+<p>Auto-define contexto de tenant a partir do request:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;tenant&quot;</span><span class="p">,</span>  <span class="c1"># ou &quot;tenancy&quot;</span>
+        <span class="s2">&quot;auth&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<p>O middleware extrai tenant de:
+1. Header <code>X-Tenant-ID</code>
+2. Tenant padrão do usuário
+3. Query parameter <code>?tenant_id=</code></p>
+<h2 id="definir-contexto-de-tenant">Definir Contexto de Tenant<a class="headerlink" href="#definir-contexto-de-tenant" title="Permanent link">&para;</a></h2>
+<h3 id="no-middleware">No Middleware<a class="headerlink" href="#no-middleware" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.tenancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_tenant_context</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CustomTenantMiddleware</span><span class="p">(</span><span class="n">ASGIMiddleware</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">before_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">request</span><span class="p">):</span>
+        <span class="n">tenant_id</span> <span class="o">=</span> <span class="n">extract_tenant</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+        <span class="n">set_tenant_context</span><span class="p">(</span><span class="n">tenant_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+</code></pre></div>
+
+<h3 id="na-view">Na View<a class="headerlink" href="#na-view" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.tenancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_tenant_context</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+    <span class="n">set_tenant_context</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">workspace_id</span><span class="p">)</span>
+
+    <span class="c1"># Agora for_tenant() usa este contexto</span>
+    <span class="n">projects</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Project</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="integracao-com-viewset">Integração com ViewSet<a class="headerlink" href="#integracao-com-viewset" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.tenancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">TenantMixin</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ProjectViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Project</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_queryset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="c1"># Auto-filtra por tenant</span>
+        <span class="k">return</span> <span class="n">Project</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">tenant_id</span>
+        <span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">perform_create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">validated_data</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">workspace_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">tenant_id</span>
+        <span class="k">await</span> <span class="n">instance</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="tenancy-por-subdominio">Tenancy por Subdomínio<a class="headerlink" href="#tenancy-por-subdominio" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">SubdomainTenantMiddleware</span><span class="p">(</span><span class="n">ASGIMiddleware</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">before_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">request</span><span class="p">):</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">subdomain</span> <span class="o">=</span> <span class="n">host</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">workspace</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Workspace</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">get_or_none</span><span class="p">(</span>
+            <span class="n">slug</span><span class="o">=</span><span class="n">subdomain</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">workspace</span><span class="p">:</span>
+            <span class="n">set_tenant_context</span><span class="p">(</span><span class="n">workspace</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+            <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">workspace</span> <span class="o">=</span> <span class="n">workspace</span>
+
+        <span class="k">return</span> <span class="kc">None</span>
+</code></pre></div>
+
+<h2 id="tenancy-por-path">Tenancy por Path<a class="headerlink" href="#tenancy-por-path" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Rotas: /workspaces/{workspace_id}/projects/</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ProjectViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Project</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_queryset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">workspace_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Project</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span><span class="n">workspace_id</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="flexibletenantmixin">FlexibleTenantMixin<a class="headerlink" href="#flexibletenantmixin" title="Permanent link">&para;</a></h2>
+<p>Para models que podem ser tenant-scoped ou globais:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.tenancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">FlexibleTenantMixin</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Template</span><span class="p">(</span><span class="n">Model</span><span class="p">,</span> <span class="n">FlexibleTenantMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;templates&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+    <span class="c1"># workspace_id é nullable</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Templates globais (workspace_id = NULL)</span>
+<span class="n">global_templates</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Template</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">workspace_id__isnull</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Templates do tenant</span>
+<span class="n">tenant_templates</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Template</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span><span class="n">workspace_id</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Ambos</span>
+<span class="n">all_templates</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Template</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">Q</span><span class="p">(</span><span class="n">workspace_id__isnull</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">|</span> <span class="n">Q</span><span class="p">(</span><span class="n">workspace_id</span><span class="o">=</span><span class="n">workspace_id</span><span class="p">)</span>
+<span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="com-soft-delete">Com Soft Delete<a class="headerlink" href="#com-soft-delete" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">TenantSoftDeleteManager</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Project</span><span class="p">(</span><span class="n">Model</span><span class="p">,</span> <span class="n">TenantMixin</span><span class="p">,</span> <span class="n">SoftDeleteMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;projects&quot;</span>
+    <span class="n">objects</span> <span class="o">=</span> <span class="n">TenantSoftDeleteManager</span><span class="p">[</span><span class="s2">&quot;Project&quot;</span><span class="p">]()</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Filtra por tenant + exclui deletados</span>
+<span class="n">projects</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Project</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span><span class="n">workspace_id</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Incluir deletados</span>
+<span class="n">projects</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Project</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span><span class="n">workspace_id</span><span class="p">)</span><span class="o">.</span><span class="n">with_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="campo-de-tenant-customizado">Campo de Tenant Customizado<a class="headerlink" href="#campo-de-tenant-customizado" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">Project</span><span class="p">(</span><span class="n">Model</span><span class="p">,</span> <span class="n">TenantMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;projects&quot;</span>
+
+    <span class="c1"># Sobrescreve nome do campo padrão</span>
+    <span class="n">tenant_field</span> <span class="o">=</span> <span class="s2">&quot;organization_id&quot;</span>
+
+    <span class="n">organization_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span><span class="s2">&quot;organizations.id&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="exemplo-completo">Exemplo Completo<a class="headerlink" href="#exemplo-completo" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">tenancy_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">tenancy_field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;workspace_id&quot;</span>
+    <span class="n">tenancy_user_attribute</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;workspace_id&quot;</span>
+    <span class="n">tenancy_require</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;timing&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;tenant&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;auth&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+<span class="c1"># src/apps/workspaces/models.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Workspace</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;workspaces&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+    <span class="n">slug</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># src/apps/projects/models.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.tenancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">TenantMixin</span><span class="p">,</span> <span class="n">TenantManager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Project</span><span class="p">(</span><span class="n">Model</span><span class="p">,</span> <span class="n">TenantMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;projects&quot;</span>
+    <span class="n">objects</span> <span class="o">=</span> <span class="n">TenantManager</span><span class="p">[</span><span class="s2">&quot;Project&quot;</span><span class="p">]()</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+
+<span class="c1"># src/apps/projects/views.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ProjectViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Project</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_queryset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Project</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">tenant_id</span>
+        <span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">perform_create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">validated_data</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">workspace_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">tenant_id</span>
+        <span class="k">await</span> <span class="n">instance</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../22-soft-delete/">Soft Delete</a> — Deleção lógica</li>
+<li><a href="../12-querysets/">QuerySets</a> — Consultas de dados</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/architecture/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Architecture - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Architecture";
+        var mkdocs_page_input_path = "architecture.md";
+        var mkdocs_page_url = "/core-framework/architecture/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul class="current">
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">Architecture</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#visao-geral">Visão geral</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#componentes-principais">Componentes principais</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#strideapp">StrideApp</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#roteamento">Roteamento</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#viewset">ViewSet</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#models">Models</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#permissoes">Permissões</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#configuracoes">Configurações</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#fluxos-principais">Fluxos principais</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#startup">Startup</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#request-http">Request HTTP</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#websocket">WebSocket</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#pontos-de-entrada">Pontos de entrada</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#observacoes-de-confiabilidade">Observações de confiabilidade</a>
+    </li>
+    </ul>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Architecture</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/architecture.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="arquitetura">Arquitetura<a class="headerlink" href="#arquitetura" title="Permanent link">&para;</a></h1>
+<h2 id="visao-geral">Visão geral<a class="headerlink" href="#visao-geral" title="Permanent link">&para;</a></h2>
+<p>Stride é um framework API-first, construído sobre FastAPI, com camadas:</p>
+<ol>
+<li><strong>Camada de Configuração</strong> (<code>strider.config.Settings</code>, <code>strider.config.configure</code>)</li>
+<li><strong>Camada de inicialização</strong> (<code>strider.app.StrideApp</code>, <code>create_app</code>, <code>get_application</code>)</li>
+<li><strong>Roteamento</strong> (<code>strider.urls</code>, <code>strider.routing.Router</code>, <code>AutoRouter</code>)</li>
+<li><strong>Camada de regras de negócio</strong> (<code>strider.views.ViewSet</code>, <code>ModelViewSet</code>, <code>APIView</code>)</li>
+<li><strong>Data layer</strong> (<code>strider.models.Model</code>, <code>Field</code>, <code>Manager</code>, <code>QuerySet</code>)</li>
+<li><strong>Autenticação/Permissões</strong> (<code>strider.auth</code>, <code>strider.permissions</code>)</li>
+<li><strong>Extras</strong> (<code>strider.messaging</code>, <code>strider.tenancy</code>, <code>strider.realtime</code>, <code>strider.admin</code>)</li>
+</ol>
+<h2 id="componentes-principais">Componentes principais<a class="headerlink" href="#componentes-principais" title="Permanent link">&para;</a></h2>
+<h3 id="strideapp">StrideApp<a class="headerlink" href="#strideapp" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Cria FastAPI com <code>docs_url</code>, <code>openapi_url</code>, <code>redoc_url</code> do settings.</li>
+<li>Registra middleware (CORS, tenancy, custom).</li>
+<li>Garante validação de schemas e auto-collect permissions no startup.</li>
+<li>Inicializa DB via <code>strider.database.init_db</code>.</li>
+<li>Monta rota WebSocket fora do stack HTTP para compatibilidade.</li>
+<li>Exponibiliza <code>app</code> e <code>__call__</code> para ASGI.</li>
+</ul>
+<h3 id="roteamento">Roteamento<a class="headerlink" href="#roteamento" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>strider.urls.autodiscover(settings)</code> carrega apps em <code>installed_apps</code> ou <code>root_urlconf</code>.</li>
+<li><code>path()</code> e <code>include()</code> criam objetos <code>URLPattern</code>/<code>URLInclude</code>.</li>
+<li>Permite ViewSets, APIViews, callables e WebSocketView.</li>
+<li><code>Router.register_viewset()</code> implementa rota CRUD (list, create, retrieve, update, patch, delete) e ações customizadas com decorators <code>@action</code>.</li>
+</ul>
+<h3 id="viewset">ViewSet<a class="headerlink" href="#viewset" title="Permanent link">&para;</a></h3>
+<ul>
+<li>CRUD básico via <code>ViewSet.list/retrieve/create/update/partial_update/destroy</code>.</li>
+<li><code>ModelViewSet</code> injeta model + serializer + saída JSON.</li>
+<li>Permissões por <code>permission_classes</code>, <code>permission_classes_by_action</code>.</li>
+<li>Validação de dados:</li>
+<li>Pydantic (InputSchema/OutputSchema)</li>
+<li><code>validate_unique_fields</code> + <code>UniqueValidator</code></li>
+<li><code>validate_field</code>, <code>validate_data</code>, <code>validate</code> hooks.</li>
+<li><code>_validate_schemas</code> cross-check model/schema via <code>SchemaModelValidator</code>.</li>
+</ul>
+<h3 id="models">Models<a class="headerlink" href="#models" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Base <code>strider.models.Model</code> usa SQLAlchemy declarative e <code>ModelMeta</code>.</li>
+<li><code>Field</code> helpers (<code>pk()</code>, <code>string()</code>, <code>email()</code>, <code>datetime()</code>, <code>choice()</code>, <code>struct()</code> etc).</li>
+<li>Manager/QuerySet inspirado em Django (<code>objects.filter</code>, <code>get</code>, <code>all</code>, <code>count</code>, <code>exists</code>, <code>select_related</code>, <code>prefetch_related</code>).</li>
+<li><code>Model.save()</code>, <code>delete()</code>, e hooks <code>before_save</code>, <code>after_save</code>, etc.</li>
+<li><code>create_tables()</code> (auto-migrations básicas e sync columns).</li>
+</ul>
+<h3 id="permissoes">Permissões<a class="headerlink" href="#permissoes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Base <code>Permission</code> definido em <code>strider.permissions</code>.</li>
+<li>Check global e por objeto em <code>check_permissions</code>.</li>
+<li>Classes built-in: <code>AllowAny</code>, <code>DenyAll</code>, <code>IsAuthenticated</code>, <code>IsAuthenticatedOrReadOnly</code>, <code>IsAdmin</code>, <code>IsOwner</code>, <code>HasRole</code>.</li>
+<li>Suporta composição: <code>perm1 &amp; perm2</code>, <code>perm1 | perm2</code>, <code>~perm</code>.</li>
+</ul>
+<h3 id="configuracoes">Configurações<a class="headerlink" href="#configuracoes" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>strider.config.Settings</code> centraliza app/db/auth/cors/messaging/tenancy etc.</li>
+<li><code>.env</code> resize via <code>_resolve_env_files_at_bootstrap()</code>.</li>
+<li>Auto-configura auth via <code>user_model</code> e <code>auth_*</code>.</li>
+</ul>
+<h2 id="fluxos-principais">Fluxos principais<a class="headerlink" href="#fluxos-principais" title="Permanent link">&para;</a></h2>
+<h3 id="startup">Startup<a class="headerlink" href="#startup" title="Permanent link">&para;</a></h3>
+<ol>
+<li><code>StrideApp.__init__()</code> configura logger</li>
+<li>carrega settings (ou <code>get_settings()</code>)</li>
+<li>cria FastAPI</li>
+<li>configura CORS, tenancy, middleware, handlers de exceção</li>
+<li><code>autodiscover()</code> + include routers + ws routes</li>
+<li>(opcional) admin e health checks</li>
+<li><code>Lifespan</code>: <code>_startup</code> executa model/load, DB init, create_tables, validate viewsets, auto_collect_permissions, callbacks</li>
+</ol>
+<h3 id="request-http">Request HTTP<a class="headerlink" href="#request-http" title="Permanent link">&para;</a></h3>
+<ol>
+<li>FastAPI middleware (CORS, request id, etc)</li>
+<li>route resolvida pelo Router</li>
+<li>Permissões via <code>check_permissions</code> em ViewSet/APIView</li>
+<li>Handler CRUD/Action executa DB e serializa response</li>
+<li>Resposta JSON</li>
+</ol>
+<h3 id="websocket">WebSocket<a class="headerlink" href="#websocket" title="Permanent link">&para;</a></h3>
+<ol>
+<li><code>strider.realtime</code> define handlers <code>WebSocketView</code>, <code>SSEView</code></li>
+<li>routes registradas em <code>_ws_router</code> no StrideApp</li>
+<li>Autenticação e permissão via <code>AuthenticationMiddleware</code> e <code>check_permissions</code> em <code>_check_ws_permissions</code></li>
+</ol>
+<h2 id="pontos-de-entrada">Pontos de entrada<a class="headerlink" href="#pontos-de-entrada" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>create_app</code>, <code>get_application</code> (ASGI app)</li>
+<li><code>stride.cli</code> (commands de migrations/run/tests)</li>
+<li><code>strider.urls.autodiscover</code> (routing)</li>
+<li><code>strider.models.init_database</code> (DB)</li>
+<li><code>strider.auth</code> APIs (login, tokens). </li>
+</ul>
+<h2 id="observacoes-de-confiabilidade">Observações de confiabilidade<a class="headerlink" href="#observacoes-de-confiabilidade" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Toda documentação criada deve referenciar esses componentes (não suposições).</li>
+<li>Quando detectar comportamento não claro por código, incluir alerta “⚠️ Não documentado no código".</li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../introduction/" class="btn btn-neutral float-left" title="Introduction"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../core-concepts/" class="btn btn-neutral float-right" title="Core Concepts">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../introduction/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../core-concepts/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

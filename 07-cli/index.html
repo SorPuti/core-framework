@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/07-cli/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>CLI Reference - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "CLI Reference";
+        var mkdocs_page_input_path = "07-cli.md";
+        var mkdocs_page_url = "/core-framework/07-cli/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">CLI Reference</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/07-cli.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="cli-reference">CLI Reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
+<p>Todos os comandos disponíveis via CLI <code>core</code>.</p>
+<h2 id="projeto">Projeto<a class="headerlink" href="#projeto" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Criar novo projeto</span>
+stride<span class="w"> </span>init<span class="w"> </span>my-api
+stride<span class="w"> </span>init<span class="w"> </span>my-api<span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.13
+stride<span class="w"> </span>init<span class="w"> </span>my-api<span class="w"> </span>--minimal<span class="w">  </span><span class="c1"># Projeto mínimo</span>
+
+<span class="c1"># Criar nova app</span>
+core<span class="w"> </span>createapp<span class="w"> </span>posts
+</code></pre></div>
+
+<h2 id="servidor">Servidor<a class="headerlink" href="#servidor" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Servidor de desenvolvimento (hot reload)</span>
+stride<span class="w"> </span>run
+
+<span class="c1"># Produção</span>
+stride<span class="w"> </span>run<span class="w"> </span>--no-reload<span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span><span class="w"> </span>--host<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
+</code></pre></div>
+
+<h2 id="banco-de-dados">Banco de Dados<a class="headerlink" href="#banco-de-dados" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Criar migration</span>
+stride<span class="w"> </span>makemigrations<span class="w"> </span>--name<span class="w"> </span>add_posts
+
+<span class="c1"># Aplicar migrations</span>
+stride<span class="w"> </span>migrate
+
+<span class="c1"># Mostrar status das migrations</span>
+core<span class="w"> </span>showmigrations
+
+<span class="c1"># Rollback última migration</span>
+core<span class="w"> </span>rollback
+
+<span class="c1"># Rollback para migration específica</span>
+core<span class="w"> </span>rollback<span class="w"> </span><span class="m">0002</span>
+
+<span class="c1"># Info do banco</span>
+core<span class="w"> </span>dbinfo
+
+<span class="c1"># Reset do banco (DESTRUTIVO)</span>
+core<span class="w"> </span>reset_db<span class="w"> </span>--yes
+</code></pre></div>
+
+<h2 id="auth">Auth<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Criar superusuário</span>
+core<span class="w"> </span>createsuperuser
+
+<span class="c1"># Coletar permissões dos models</span>
+core<span class="w"> </span>collectpermissions
+</code></pre></div>
+
+<h2 id="debug">Debug<a class="headerlink" href="#debug" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Listar todas as rotas</span>
+core<span class="w"> </span>routes
+
+<span class="c1"># Verificar configuração</span>
+core<span class="w"> </span>check
+
+<span class="c1"># Shell interativo</span>
+stride<span class="w"> </span>shell
+</code></pre></div>
+
+<h2 id="deployment">Deployment<a class="headerlink" href="#deployment" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Gerar Dockerfile</span>
+core<span class="w"> </span>docker<span class="w"> </span>generate
+
+<span class="c1"># Gerar docker-compose.yml</span>
+core<span class="w"> </span>docker<span class="w"> </span>compose
+
+<span class="c1"># Gerar manifests Kubernetes</span>
+core<span class="w"> </span>deploy<span class="w"> </span>kubernetes
+
+<span class="c1"># Gerar config PM2</span>
+core<span class="w"> </span>deploy<span class="w"> </span>pm2
+</code></pre></div>
+
+<h2 id="kafka-messaging">Kafka / Messaging<a class="headerlink" href="#kafka-messaging" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Listar topics</span>
+core<span class="w"> </span>kafka<span class="w"> </span>topics
+
+<span class="c1"># Criar topic</span>
+core<span class="w"> </span>kafka<span class="w"> </span>create-topic<span class="w"> </span>my-topic<span class="w"> </span>--partitions<span class="w"> </span><span class="m">3</span>
+
+<span class="c1"># Deletar topic</span>
+core<span class="w"> </span>kafka<span class="w"> </span>delete-topic<span class="w"> </span>my-topic
+
+<span class="c1"># Consumir mensagens</span>
+core<span class="w"> </span>kafka<span class="w"> </span>consume<span class="w"> </span>my-topic<span class="w"> </span>--group<span class="w"> </span>my-service
+
+<span class="c1"># Executar worker específico</span>
+core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>MyWorker
+
+<span class="c1"># Executar todos os workers</span>
+core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>--all
+
+<span class="c1"># Executar worker com opções</span>
+core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>MyWorker<span class="w"> </span>--concurrency<span class="w"> </span><span class="m">8</span>
+</code></pre></div>
+
+<h2 id="workers-tasks">Workers / Tasks<a class="headerlink" href="#workers-tasks" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Iniciar worker de background</span>
+stride<span class="w"> </span>runworker
+
+<span class="c1"># Listar workers</span>
+core<span class="w"> </span>workers_list
+
+<span class="c1"># Scheduler</span>
+core<span class="w"> </span>scheduler<span class="w"> </span>start
+core<span class="w"> </span>scheduler<span class="w"> </span>stop
+</code></pre></div>
+
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Executar testes</span>
+stride<span class="w"> </span><span class="nb">test</span>
+
+<span class="c1"># Com coverage</span>
+stride<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--cov
+
+<span class="c1"># Arquivo específico</span>
+stride<span class="w"> </span><span class="nb">test</span><span class="w"> </span>tests/test_posts.py
+</code></pre></div>
+
+<h2 id="versao">Versão<a class="headerlink" href="#versao" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>core<span class="w"> </span>version
+core<span class="w"> </span>--version
+</code></pre></div>
+
+<h2 id="ajuda">Ajuda<a class="headerlink" href="#ajuda" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>core<span class="w"> </span>--help
+core<span class="w"> </span>&lt;command&gt;<span class="w"> </span>--help
+</code></pre></div>
+
+<h2 id="opcoes-comuns">Opções Comuns<a class="headerlink" href="#opcoes-comuns" title="Permanent link">&para;</a></h2>
+<p>A maioria dos comandos suporta:</p>
+<table>
+<thead>
+<tr>
+<th>Opção</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--help</code></td>
+<td>Mostrar ajuda</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Preview sem executar</td>
+</tr>
+<tr>
+<td><code>--yes</code></td>
+<td>Pular confirmações</td>
+</tr>
+</tbody>
+</table>
+<h2 id="configuracao-via-settings">Configuração via Settings<a class="headerlink" href="#configuracao-via-settings" title="Permanent link">&para;</a></h2>
+<p>O CLI usa configurações do Settings:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># CLI / Discovery</span>
+    <span class="n">migrations_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;./migrations&quot;</span>
+    <span class="n">app_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;main&quot;</span>
+    <span class="n">models_module</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;app.models&quot;</span>
+    <span class="n">workers_module</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># Auto-discovery</span>
+    <span class="n">tasks_module</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>    <span class="c1"># Auto-discovery</span>
+    <span class="n">app_module</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.main&quot;</span>
+</code></pre></div>
+
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>migrations_dir</code></td>
+<td>Diretório de migrations</td>
+</tr>
+<tr>
+<td><code>app_label</code></td>
+<td>Label da aplicação</td>
+</tr>
+<tr>
+<td><code>models_module</code></td>
+<td>Módulo dos models</td>
+</tr>
+<tr>
+<td><code>workers_module</code></td>
+<td>Módulo dos workers (auto-discovery se None)</td>
+</tr>
+<tr>
+<td><code>tasks_module</code></td>
+<td>Módulo das tasks (auto-discovery se None)</td>
+</tr>
+<tr>
+<td><code>app_module</code></td>
+<td>Módulo da aplicação principal</td>
+</tr>
+</tbody>
+</table>
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../41-migrations/">Migrations</a> — Detalhes de migrations</li>
+<li><a href="../08-permissions/">Permissions</a> — Controle de acesso</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

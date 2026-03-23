@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/03-models/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Models - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Models";
+        var mkdocs_page_input_path = "03-models.md";
+        var mkdocs_page_url = "/core-framework/03-models/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Models</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/03-models.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="models">Models<a class="headerlink" href="#models" title="Permanent link">&para;</a></h1>
+<p>SQLAlchemy models with Django-style conveniences.</p>
+<h2 id="basic-model">Basic Model<a class="headerlink" href="#basic-model" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">title</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+    <span class="n">content</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">text</span><span class="p">()</span>
+    <span class="n">views</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">integer</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">published</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">boolean</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">datetime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now_add</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="field-types">Field Types<a class="headerlink" href="#field-types" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>SQL Type</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Field.pk()</code></td>
+<td>INTEGER PRIMARY KEY</td>
+<td><code>id: Mapped[int] = Field.pk()</code></td>
+</tr>
+<tr>
+<td><code>Field.uuid_pk()</code></td>
+<td>UUID PRIMARY KEY</td>
+<td><code>id: Mapped[UUID] = Field.uuid_pk()</code></td>
+</tr>
+<tr>
+<td><code>Field.string(max_length)</code></td>
+<td>VARCHAR</td>
+<td><code>name: Mapped[str] = Field.string(100)</code></td>
+</tr>
+<tr>
+<td><code>Field.text()</code></td>
+<td>TEXT</td>
+<td><code>bio: Mapped[str] = Field.text()</code></td>
+</tr>
+<tr>
+<td><code>Field.integer()</code></td>
+<td>INTEGER</td>
+<td><code>age: Mapped[int] = Field.integer()</code></td>
+</tr>
+<tr>
+<td><code>Field.float_()</code></td>
+<td>FLOAT</td>
+<td><code>price: Mapped[float] = Field.float_()</code></td>
+</tr>
+<tr>
+<td><code>Field.boolean()</code></td>
+<td>BOOLEAN</td>
+<td><code>active: Mapped[bool] = Field.boolean()</code></td>
+</tr>
+<tr>
+<td><code>Field.datetime()</code></td>
+<td>TIMESTAMP</td>
+<td><code>created: Mapped[datetime] = Field.datetime()</code></td>
+</tr>
+<tr>
+<td><code>Field.date()</code></td>
+<td>DATE</td>
+<td><code>birth: Mapped[date] = Field.date()</code></td>
+</tr>
+<tr>
+<td><code>Field.json()</code></td>
+<td>JSON/JSONB</td>
+<td><code>meta: Mapped[dict] = Field.json()</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="field-options">Field Options<a class="headerlink" href="#field-options" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>      <span class="c1"># VARCHAR length</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>       <span class="c1"># Allow NULL</span>
+    <span class="n">default</span><span class="o">=</span><span class="s2">&quot;draft&quot;</span><span class="p">,</span>     <span class="c1"># Python default</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>          <span class="c1"># Create index</span>
+    <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>         <span class="c1"># Unique constraint</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="auto-timestamps">Auto Timestamps<a class="headerlink" href="#auto-timestamps" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">datetime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now_add</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Set on create</span>
+    <span class="n">updated_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">datetime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>      <span class="c1"># Set on update</span>
+</code></pre></div>
+
+<h2 id="relationships">Relationships<a class="headerlink" href="#relationships" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.relations</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rel</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">author_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">fk</span><span class="p">(</span><span class="s2">&quot;users.id&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Relationship (for ORM access)</span>
+    <span class="n">author</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="s2">&quot;User&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">many_to_one</span><span class="p">(</span><span class="s2">&quot;User&quot;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;posts&quot;</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">posts</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Post&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">one_to_many</span><span class="p">(</span><span class="s2">&quot;Post&quot;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;author&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="relationship-types">Relationship Types<a class="headerlink" href="#relationship-types" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Many-to-One (FK on this model)</span>
+<span class="n">author</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="s2">&quot;User&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">many_to_one</span><span class="p">(</span><span class="s2">&quot;User&quot;</span><span class="p">)</span>
+
+<span class="c1"># One-to-Many (FK on other model)</span>
+<span class="n">posts</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Post&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">one_to_many</span><span class="p">(</span><span class="s2">&quot;Post&quot;</span><span class="p">)</span>
+
+<span class="c1"># Many-to-Many</span>
+<span class="n">tags</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Tag&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">many_to_many</span><span class="p">(</span><span class="s2">&quot;Tag&quot;</span><span class="p">,</span> <span class="n">secondary</span><span class="o">=</span><span class="s2">&quot;post_tags&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="user-model">User Model<a class="headerlink" href="#user-model" title="Permanent link">&para;</a></h2>
+<p>Extend <code>AbstractUser</code> for authentication:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AbstractUser</span><span class="p">,</span> <span class="n">PermissionsMixin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">AbstractUser</span><span class="p">,</span> <span class="n">PermissionsMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+
+    <span class="c1"># AbstractUser provides: id, email, password, is_active, is_staff, is_superuser</span>
+    <span class="c1"># PermissionsMixin provides: groups, user_permissions</span>
+
+    <span class="c1"># Add custom fields</span>
+    <span class="n">first_name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">avatar_url</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="model-discovery">Model Discovery<a class="headerlink" href="#model-discovery" title="Permanent link">&para;</a></h2>
+<p>All models must be imported in <code>src/apps/models.py</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/models.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.apps.users.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>  <span class="c1"># noqa</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.apps.posts.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>  <span class="c1"># noqa</span>
+</code></pre></div>
+
+<p>This ensures models are registered before migrations run.</p>
+<h2 id="queryset-django-style">QuerySet (Django-style)<a class="headerlink" href="#queryset-django-style" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Get all</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Filter</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">published</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Get one</span>
+<span class="n">post</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># First</span>
+<span class="n">post</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">author_id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+
+<span class="c1"># Count</span>
+<span class="n">count</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">published</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+
+<span class="c1"># Order</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;-created_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Limit</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<p>See <a href="../12-querysets/">QuerySets</a> for full reference.</p>
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../04-viewsets/">ViewSets</a> — CRUD endpoints</li>
+<li><a href="../41-migrations/">Migrations</a> — Schema changes</li>
+<li><a href="../12-querysets/">QuerySets</a> — Advanced queries</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

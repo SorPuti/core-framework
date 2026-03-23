@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/41-migrations/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Migrations - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Migrations";
+        var mkdocs_page_input_path = "41-migrations.md";
+        var mkdocs_page_url = "/core-framework/41-migrations/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Migrations</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/41-migrations.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="migrations">Migrations<a class="headerlink" href="#migrations" title="Permanent link">&para;</a></h1>
+<p>Database schema management.</p>
+<h2 id="workflow">Workflow<a class="headerlink" href="#workflow" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. Edit models</span>
+<span class="c1"># 2. Generate migration</span>
+stride<span class="w"> </span>makemigrations<span class="w"> </span>--name<span class="w"> </span>add_posts
+
+<span class="c1"># 3. Review migration file</span>
+cat<span class="w"> </span>migrations/0001_add_posts.py
+
+<span class="c1"># 4. Apply migration</span>
+stride<span class="w"> </span>migrate
+</code></pre></div>
+
+<h2 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Create migration from model changes</span>
+stride<span class="w"> </span>makemigrations<span class="w"> </span>--name<span class="w"> </span>description
+
+<span class="c1"># Apply all pending migrations</span>
+stride<span class="w"> </span>migrate
+
+<span class="c1"># Show migration status</span>
+core<span class="w"> </span>showmigrations
+
+<span class="c1"># Rollback last migration</span>
+core<span class="w"> </span>rollback
+
+<span class="c1"># Rollback to specific migration</span>
+core<span class="w"> </span>rollback<span class="w"> </span><span class="m">0002</span>
+
+<span class="c1"># Preview without applying</span>
+stride<span class="w"> </span>migrate<span class="w"> </span>--dry-run
+</code></pre></div>
+
+<h2 id="migration-file">Migration File<a class="headerlink" href="#migration-file" title="Permanent link">&para;</a></h2>
+<p>Generated in <code>migrations/</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># migrations/0001_add_posts.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.migrations</span><span class="w"> </span><span class="kn">import</span> <span class="n">Migration</span><span class="p">,</span> <span class="n">CreateTable</span><span class="p">,</span> <span class="n">ColumnDef</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Migration</span><span class="p">(</span><span class="n">Migration</span><span class="p">):</span>
+    <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">operations</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">CreateTable</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="o">=</span><span class="s2">&quot;posts&quot;</span><span class="p">,</span>
+            <span class="n">columns</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">ColumnDef</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;INTEGER&quot;</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">ColumnDef</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;VARCHAR(200)&quot;</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+                <span class="n">ColumnDef</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;content&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;TEXT&quot;</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+                <span class="n">ColumnDef</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;BOOLEAN&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+            <span class="p">],</span>
+        <span class="p">),</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<h2 id="operations">Operations<a class="headerlink" href="#operations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CreateTable</code></td>
+<td>Create new table</td>
+</tr>
+<tr>
+<td><code>DropTable</code></td>
+<td>Drop table</td>
+</tr>
+<tr>
+<td><code>AddColumn</code></td>
+<td>Add column</td>
+</tr>
+<tr>
+<td><code>DropColumn</code></td>
+<td>Remove column</td>
+</tr>
+<tr>
+<td><code>AlterColumn</code></td>
+<td>Modify column</td>
+</tr>
+<tr>
+<td><code>RenameColumn</code></td>
+<td>Rename column</td>
+</tr>
+<tr>
+<td><code>CreateIndex</code></td>
+<td>Create index</td>
+</tr>
+<tr>
+<td><code>DropIndex</code></td>
+<td>Drop index</td>
+</tr>
+</tbody>
+</table>
+<h2 id="manual-migration">Manual Migration<a class="headerlink" href="#manual-migration" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># migrations/0002_custom.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.migrations</span><span class="w"> </span><span class="kn">import</span> <span class="n">Migration</span><span class="p">,</span> <span class="n">AddColumn</span><span class="p">,</span> <span class="n">ColumnDef</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Migration</span><span class="p">(</span><span class="n">Migration</span><span class="p">):</span>
+    <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;0001_add_posts&quot;</span><span class="p">]</span>
+
+    <span class="n">operations</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">AddColumn</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="o">=</span><span class="s2">&quot;posts&quot;</span><span class="p">,</span>
+            <span class="n">column</span><span class="o">=</span><span class="n">ColumnDef</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="s2">&quot;views&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;INTEGER&quot;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<h2 id="empty-migration">Empty Migration<a class="headerlink" href="#empty-migration" title="Permanent link">&para;</a></h2>
+<p>For custom SQL:</p>
+<div class="codehilite"><pre><span></span><code>stride<span class="w"> </span>makemigrations<span class="w"> </span>--name<span class="w"> </span>custom_sql<span class="w"> </span>--empty
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># migrations/0003_custom_sql.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.migrations</span><span class="w"> </span><span class="kn">import</span> <span class="n">Migration</span><span class="p">,</span> <span class="n">RunSQL</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Migration</span><span class="p">(</span><span class="n">Migration</span><span class="p">):</span>
+    <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;0002_custom&quot;</span><span class="p">]</span>
+
+    <span class="n">operations</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">RunSQL</span><span class="p">(</span>
+            <span class="n">forward</span><span class="o">=</span><span class="s2">&quot;CREATE INDEX idx_posts_title ON posts(title)&quot;</span><span class="p">,</span>
+            <span class="n">backward</span><span class="o">=</span><span class="s2">&quot;DROP INDEX idx_posts_title&quot;</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>One change per migration</strong> — easier to rollback</li>
+<li><strong>Descriptive names</strong> — <code>add_posts</code>, <code>add_user_avatar</code>, <code>remove_legacy_field</code></li>
+<li><strong>Review before applying</strong> — check generated SQL</li>
+<li><strong>Test rollback</strong> — ensure backward migration works</li>
+<li><strong>Don't edit applied migrations</strong> — create new ones instead</li>
+</ol>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="migration-not-detecting-changes">Migration not detecting changes<a class="headerlink" href="#migration-not-detecting-changes" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Ensure models are imported in barrel file</span>
+<span class="c1"># src/apps/models.py</span>
+from<span class="w"> </span>src.apps.posts.models<span class="w"> </span>import<span class="w"> </span>Post<span class="w">  </span><span class="c1"># noqa</span>
+</code></pre></div>
+
+<h3 id="column-already-exists">Column already exists<a class="headerlink" href="#column-already-exists" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Skip problematic migration</span>
+stride<span class="w"> </span>migrate<span class="w"> </span>--fake<span class="w"> </span><span class="m">0001</span>
+</code></pre></div>
+
+<h3 id="reset-migrations-dev-only">Reset migrations (dev only)<a class="headerlink" href="#reset-migrations-dev-only" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Delete migration files</span>
+rm<span class="w"> </span>-rf<span class="w"> </span>migrations/*.py
+
+<span class="c1"># Reset database</span>
+core<span class="w"> </span>reset_db<span class="w"> </span>--yes
+
+<span class="c1"># Start fresh</span>
+stride<span class="w"> </span>makemigrations<span class="w"> </span>--name<span class="w"> </span>initial
+stride<span class="w"> </span>migrate
+</code></pre></div>
+
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../03-models/">Models</a> — Model definitions</li>
+<li><a href="../07-cli/">CLI</a> — All commands</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

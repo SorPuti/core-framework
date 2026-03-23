@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/13-serializers/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Serializers - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Serializers";
+        var mkdocs_page_input_path = "13-serializers.md";
+        var mkdocs_page_url = "/core-framework/13-serializers/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Serializers</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/13-serializers.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="serializers">Serializers<a class="headerlink" href="#serializers" title="Permanent link">&para;</a></h1>
+<p>Schemas de entrada/saída e ponto único de contrato (Serializer) para request/response. A validação ocorre <strong>uma vez</strong> na borda (FastAPI); o ViewSet não revalida quando recebe instância do schema.</p>
+<h2 id="inputschema-vs-outputschema">InputSchema vs OutputSchema<a class="headerlink" href="#inputschema-vs-outputschema" title="Permanent link">&para;</a></h2>
+<p>Use <code>InputSchema</code> e <code>OutputSchema</code>, não <code>BaseModel</code> puro.</p>
+<table>
+<thead>
+<tr>
+<th>Recurso</th>
+<th><code>InputSchema</code></th>
+<th><code>OutputSchema</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Campos desconhecidos</td>
+<td>Ignorados (<code>extra="ignore"</code>)</td>
+<td>Permitidos</td>
+</tr>
+<tr>
+<td>Strip whitespace</td>
+<td>Sim</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Uso</td>
+<td>Validação do body</td>
+<td>Serialização da response</td>
+</tr>
+</tbody>
+</table>
+<h2 id="inputschema">InputSchema<a class="headerlink" href="#inputschema" title="Permanent link">&para;</a></h2>
+<p>Para o body das requisições.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSchema</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ItemCreateInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">price</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</code></pre></div>
+
+<p>Comportamento padrão:</p>
+<ul>
+<li><code>extra="ignore"</code> — campos não declarados no schema são ignorados (evita 422 por campos extras).</li>
+<li><code>str_strip_whitespace=True</code> — remove espaços em branco em strings.</li>
+<li><code>from_attributes=True</code> — compatível com ORM.</li>
+</ul>
+<p>Para rejeitar campos extras (opt-in):</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigDict</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">StrictInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+</code></pre></div>
+
+<h2 id="outputschema">OutputSchema<a class="headerlink" href="#outputschema" title="Permanent link">&para;</a></h2>
+<p>Para o corpo das respostas.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">OutputSchema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ItemOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">price</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">datetime</span>
+</code></pre></div>
+
+<p>Recursos:</p>
+<ul>
+<li><code>from_attributes=True</code> — criação a partir de instância ORM.</li>
+<li><code>dump_for_list(obj)</code> — serializa com <code>list_include</code>/<code>list_exclude</code> e <code>@computed_orm_field</code>.</li>
+<li><code>from_orm()</code> e <code>from_orm_list()</code> — helpers para criar instâncias a partir de ORM.</li>
+</ul>
+<h2 id="contrato-centralizado-unifiedmodelserializer-sem-inputschemaoutputschema">Contrato centralizado: UnifiedModelSerializer (sem InputSchema/OutputSchema)<a class="headerlink" href="#contrato-centralizado-unifiedmodelserializer-sem-inputschemaoutputschema" title="Permanent link">&para;</a></h2>
+<p>Para não definir InputSchema nem OutputSchema separados, use <strong>UnifiedModelSerializer</strong>: o contrato fica só no Serializer, com <code>fields</code> e <code>read_only_fields</code>. Os schemas de input e output são gerados a partir do model.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">UnifiedModelSerializer</span><span class="p">,</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostSerializer</span><span class="p">(</span><span class="n">UnifiedModelSerializer</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">,</span> <span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">]</span>
+    <span class="n">read_only_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">]</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">PostSerializer</span>
+</code></pre></div>
+
+<ul>
+<li><strong>fields</strong>: lista de nomes de colunas do model a expor.</li>
+<li><strong>read_only_fields</strong>: campos que só aparecem na saída (não aceitos no body de create/update). Geralmente <code>id</code> e timestamps.</li>
+</ul>
+<p>Quando há pelo menos um campo gravável, o framework gera automaticamente as classes de input e output (herdando de InputSchema/OutputSchema). Para validadores ou campos computados customizados, use <a href="#serializer-ponto-único-de-contrato">Serializer com input_schema/output_schema</a>.</p>
+<h2 id="uso-no-viewset-serializer-como-fonte-unica">Uso no ViewSet: Serializer como fonte única<a class="headerlink" href="#uso-no-viewset-serializer-como-fonte-unica" title="Permanent link">&para;</a></h2>
+<p>O recomendado é definir um <strong>Serializer</strong> e usá-lo no ViewSet via <code>serializer_class</code>. Os schemas de input/output vêm do Serializer (<code>input_cls</code>/<code>output_cls</code> ou <code>input_schema</code>/<code>output_schema</code>).</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Item</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">ItemSerializer</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ItemViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Item</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">ItemSerializer</span>
+</code></pre></div>
+
+<p>Sem Serializer, você pode definir direto no ViewSet:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ItemViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Item</span>
+    <span class="n">input_schema</span> <span class="o">=</span> <span class="n">ItemCreateInput</span>
+    <span class="n">output_schema</span> <span class="o">=</span> <span class="n">ItemOutput</span>
+</code></pre></div>
+
+<h2 id="serializer-ponto-unico-de-contrato">Serializer: ponto único de contrato<a class="headerlink" href="#serializer-ponto-unico-de-contrato" title="Permanent link">&para;</a></h2>
+<p>O <strong>Serializer</strong> concentra input e output. O Router e o ViewSet usam <code>serializer_class</code> para obter os schemas (OpenAPI e validação).</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">Serializer</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ItemSerializer</span><span class="p">(</span><span class="n">Serializer</span><span class="p">[</span><span class="n">Item</span><span class="p">,</span> <span class="n">ItemCreateInput</span><span class="p">,</span> <span class="n">ItemOutput</span><span class="p">]):</span>
+    <span class="n">input_schema</span> <span class="o">=</span> <span class="n">ItemCreateInput</span>
+    <span class="n">output_schema</span> <span class="o">=</span> <span class="n">ItemOutput</span>
+    <span class="c1"># Opcional: input_cls / output_cls (aliases para Router/OpenAPI)</span>
+</code></pre></div>
+
+<p>Métodos principais:</p>
+<table>
+<thead>
+<tr>
+<th>Método</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>validate_input(data: dict)</code></td>
+<td>Valida e retorna instância do input schema.</td>
+</tr>
+<tr>
+<td><code>serialize(obj)</code></td>
+<td>Retorna instância do output schema a partir do objeto.</td>
+</tr>
+<tr>
+<td><code>to_representation(obj)</code></td>
+<td>Serializa para dict (list/detail), com list_include/list_exclude e @computed_orm_field.</td>
+</tr>
+<tr>
+<td><code>to_representation_many(objects)</code></td>
+<td>Lista de dicts para listagem.</td>
+</tr>
+</tbody>
+</table>
+<p>O ViewSet usa <code>_serialize_for_response(obj)</code> e <code>_serialize_many_for_response(objects)</code>, que chamam o Serializer quando <code>serializer_class</code> está definido.</p>
+<h2 id="modelserializer">ModelSerializer<a class="headerlink" href="#modelserializer" title="Permanent link">&para;</a></h2>
+<p>Serializer com create/update encapsulados.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelSerializer</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ItemSerializer</span><span class="p">(</span><span class="n">ModelSerializer</span><span class="p">[</span><span class="n">Item</span><span class="p">,</span> <span class="n">ItemCreateInput</span><span class="p">,</span> <span class="n">ItemOutput</span><span class="p">]):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Item</span>
+    <span class="n">input_schema</span> <span class="o">=</span> <span class="n">ItemCreateInput</span>
+    <span class="n">output_schema</span> <span class="o">=</span> <span class="n">ItemOutput</span>
+
+    <span class="n">exclude_on_create</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">]</span>
+    <span class="n">exclude_on_update</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span>
+    <span class="n">read_only_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;created_at&quot;</span><span class="p">,</span> <span class="s2">&quot;updated_at&quot;</span><span class="p">]</span>
+</code></pre></div>
+
+<p>Não é obrigatório sobrescrever <code>create</code>/<code>update</code>; o ViewSet usa os dados validados e chama o model diretamente. O ModelSerializer serve quando você quer lógica de create/update em um único lugar.</p>
+<h2 id="validadores-de-campo">Validadores de campo<a class="headerlink" href="#validadores-de-campo" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSchema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">field_validator</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserCreateInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">password</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_name</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Name must be at least 2 characters&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;password&quot;</span><span class="p">)</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_password</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">8</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Password must be at least 8 characters&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+</code></pre></div>
+
+<h2 id="validadores-de-modelo-cross-field">Validadores de modelo (cross-field)<a class="headerlink" href="#validadores-de-modelo-cross-field" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSchema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">model_validator</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PasswordChangeInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">password</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">password_confirm</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="nd">@model_validator</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;after&quot;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">passwords_match</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;PasswordChangeInput&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">password</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">password_confirm</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Passwords don&#39;t match&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div>
+
+<h2 id="computed-fields">Computed fields<a class="headerlink" href="#computed-fields" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">OutputSchema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">computed_field</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">content</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="nd">@computed_field</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">excerpt</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">content</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">100</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">content</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">content</span><span class="p">[:</span><span class="mi">100</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;...&quot;</span>
+</code></pre></div>
+
+<h2 id="list_include-e-list_exclude">list_include e list_exclude<a class="headerlink" href="#list_include-e-list_exclude" title="Permanent link">&para;</a></h2>
+<p>Para listagem, você pode restringir campos no output:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">content</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">datetime</span>
+
+    <span class="n">list_include</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">)</span>  <span class="c1"># só estes na listagem</span>
+    <span class="c1"># ou list_exclude = (&quot;content&quot;,)</span>
+</code></pre></div>
+
+<p><code>dump_for_list</code> (e portanto <code>to_representation</code>) respeitam esses atributos.</p>
+<h2 id="campos-computados-com-orm-computed_orm_field">Campos computados com ORM (@computed_orm_field)<a class="headerlink" href="#campos-computados-com-orm-computed_orm_field" title="Permanent link">&para;</a></h2>
+<p>Quando o valor depende do objeto ORM (relacionamentos, etc.):</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">OutputSchema</span><span class="p">,</span> <span class="n">computed_orm_field</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">StrategyOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="nd">@computed_orm_field</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">user_email</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orm_obj</span><span class="p">:</span> <span class="n">Strategy</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">orm_obj</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">email</span> <span class="k">if</span> <span class="n">orm_obj</span><span class="o">.</span><span class="n">user</span> <span class="k">else</span> <span class="kc">None</span>
+</code></pre></div>
+
+<h2 id="schemas-aninhados">Schemas aninhados<a class="headerlink" href="#schemas-aninhados" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">UserOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">author</span><span class="p">:</span> <span class="n">UserOutput</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="c1"># Input aninhado</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AddressInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">street</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">city</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserCreateInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">address</span><span class="p">:</span> <span class="n">AddressInput</span>
+</code></pre></div>
+
+<h2 id="atualizacao-parcial-patch">Atualização parcial (PATCH)<a class="headerlink" href="#atualizacao-parcial-patch" title="Permanent link">&para;</a></h2>
+<p>O ViewSet gera automaticamente um schema parcial para PATCH (todos os campos opcionais) a partir do <code>input_schema</code>. Não é necessário definir um schema de update separado só para PATCH.</p>
+<h2 id="padroes-comuns">Padrões comuns<a class="headerlink" href="#padroes-comuns" title="Permanent link">&para;</a></h2>
+<h3 id="create-vs-update">Create vs Update<a class="headerlink" href="#create-vs-update" title="Permanent link">&para;</a></h3>
+<p>Use o mesmo input_schema e deixe o PATCH usar o schema parcial, ou defina schemas separados:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ItemCreateInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">price</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">category_id</span><span class="p">:</span> <span class="nb">int</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ItemUpdateInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">price</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</code></pre></div>
+
+<h3 id="password-no-input-nao-no-output">Password no input, não no output<a class="headerlink" href="#password-no-input-nao-no-output" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">UserCreateInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">password</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="c1"># password não incluído</span>
+</code></pre></div>
+
+<h2 id="fluxo-de-validacao-e-serializacao">Fluxo de validação e serialização<a class="headerlink" href="#fluxo-de-validacao-e-serializacao" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Request</strong>: FastAPI valida o body com o schema de input (do Serializer ou do ViewSet) → uma única validação Pydantic.</li>
+<li><strong>Handler</strong>: O ViewSet recebe <code>data</code> já como instância do schema (ou dict em actions sem schema); não chama <code>model_validate</code> de novo.</li>
+<li><strong>Regras de negócio</strong>: <code>validate_data</code>, <code>validate_*</code> por campo, <code>validate()</code> global.</li>
+<li><strong>Resposta</strong>: <code>_serialize_for_response(obj)</code> → Serializer <code>to_representation</code> ou <code>output_schema.dump_for_list</code>.</li>
+</ol>
+<p>Ver também: <a href="../00-criar-aplicacao/#6-serializers-e-validação">Criar uma aplicação</a>.</p>
+<h2 id="proximos-passos">Próximos passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../14-validators/">Validators</a> — Validação de dados e unicidade</li>
+<li><a href="../04-viewsets/">ViewSets</a> — CRUD e actions</li>
+<li><a href="../99-faq-troubleshooting/">FAQ</a> — Erros comuns (ex.: extra_forbidden)</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

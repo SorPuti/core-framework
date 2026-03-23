@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/20-middleware/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Middleware - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Middleware";
+        var mkdocs_page_input_path = "20-middleware.md";
+        var mkdocs_page_url = "/core-framework/20-middleware/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Middleware</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/20-middleware.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="middleware">Middleware<a class="headerlink" href="#middleware" title="Permanent link">&para;</a></h1>
+<p>Hooks de processamento request/response com configuração via Settings.</p>
+<h2 id="stack-de-middleware">Stack de Middleware<a class="headerlink" href="#stack-de-middleware" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Fluxo de Request&quot;</span>
+<span class="w">        </span><span class="n">REQ</span><span class="p">[</span><span class="n">Request</span><span class="p">]</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">M1</span>
+
+<span class="w">        </span><span class="n">subgraph</span><span class="w"> </span><span class="n">Stack</span><span class="p">[</span><span class="s">&quot;Middleware Stack (ordem importa)&quot;</span><span class="p">]</span>
+<span class="w">            </span><span class="n">M1</span><span class="p">[</span><span class="mf">1.</span><span class="w"> </span><span class="n">TimingMiddleware</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">order</span><span class="o">=</span><span class="mi">10</span><span class="p">]</span>
+<span class="w">            </span><span class="n">M2</span><span class="p">[</span><span class="mf">2.</span><span class="w"> </span><span class="n">RequestIDMiddleware</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">order</span><span class="o">=</span><span class="mi">5</span><span class="p">]</span>
+<span class="w">            </span><span class="n">M3</span><span class="p">[</span><span class="mf">3.</span><span class="w"> </span><span class="n">AuthMiddleware</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">order</span><span class="o">=</span><span class="mi">100</span><span class="p">]</span>
+<span class="w">            </span><span class="n">M4</span><span class="p">[</span><span class="mf">4.</span><span class="w"> </span><span class="n">LoggingMiddleware</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">order</span><span class="o">=</span><span class="mi">20</span><span class="p">]</span>
+<span class="w">        </span><span class="n">end</span>
+
+<span class="w">        </span><span class="n">M1</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">M2</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">M3</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">M4</span>
+<span class="w">        </span><span class="n">M4</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">VIEW</span><span class="p">[</span><span class="n">View</span><span class="w"> </span><span class="n">Handler</span><span class="p">]</span>
+<span class="w">        </span><span class="n">VIEW</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">M4R</span><span class="p">[</span><span class="mf">4.</span><span class="w"> </span><span class="n">after_response</span><span class="p">]</span>
+<span class="w">        </span><span class="n">M4R</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">M3R</span><span class="p">[</span><span class="mf">3.</span><span class="w"> </span><span class="n">after_response</span><span class="p">]</span>
+<span class="w">        </span><span class="n">M3R</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">M2R</span><span class="p">[</span><span class="mf">2.</span><span class="w"> </span><span class="n">after_response</span><span class="p">]</span>
+<span class="w">        </span><span class="n">M2R</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">M1R</span><span class="p">[</span><span class="mf">1.</span><span class="w"> </span><span class="n">after_response</span><span class="p">]</span>
+<span class="w">        </span><span class="n">M1R</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">RESP</span><span class="p">[</span><span class="n">Response</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">M1</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">M2</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">M3</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">M4</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">VIEW</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">c8e6c9</span>
+</code></pre></div>
+
+<h2 id="ciclo-de-vida-do-middleware">Ciclo de Vida do Middleware<a class="headerlink" href="#ciclo-de-vida-do-middleware" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">sequenceDiagram</span>
+<span class="w">    </span><span class="n">participant</span><span class="w"> </span><span class="n">R</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="n">Request</span>
+<span class="w">    </span><span class="n">participant</span><span class="w"> </span><span class="n">M</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="n">Middleware</span>
+<span class="w">    </span><span class="n">participant</span><span class="w"> </span><span class="n">V</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="n">View</span>
+
+<span class="w">    </span><span class="n">R</span><span class="o">-&gt;&gt;</span><span class="n">M</span><span class="o">:</span><span class="w"> </span><span class="n">before_request</span><span class="p">()</span>
+<span class="w">    </span><span class="n">alt</span><span class="w"> </span><span class="n">Short</span><span class="o">-</span><span class="n">circuit</span>
+<span class="w">        </span><span class="n">M</span><span class="o">--&gt;&gt;</span><span class="n">R</span><span class="o">:</span><span class="w"> </span><span class="kr">Return</span><span class="w"> </span><span class="n">Response</span><span class="w"> </span><span class="p">(</span><span class="n">ex</span><span class="o">:</span><span class="w"> </span><span class="mi">429</span><span class="p">)</span>
+<span class="w">    </span><span class="n">else</span><span class="w"> </span><span class="n">Continua</span>
+<span class="w">        </span><span class="n">M</span><span class="o">-&gt;&gt;</span><span class="n">V</span><span class="o">:</span><span class="w"> </span><span class="n">Processa</span><span class="w"> </span><span class="n">request</span>
+<span class="w">        </span><span class="n">V</span><span class="o">--&gt;&gt;</span><span class="n">M</span><span class="o">:</span><span class="w"> </span><span class="n">Response</span>
+<span class="w">        </span><span class="n">M</span><span class="o">-&gt;&gt;</span><span class="n">M</span><span class="o">:</span><span class="w"> </span><span class="n">after_response</span><span class="p">()</span>
+<span class="w">        </span><span class="n">M</span><span class="o">--&gt;&gt;</span><span class="n">R</span><span class="o">:</span><span class="w"> </span><span class="n">Response</span><span class="w"> </span><span class="n">Final</span>
+<span class="w">    </span><span class="kd">end</span>
+
+<span class="w">    </span><span class="n">Note</span><span class="w"> </span><span class="n">over</span><span class="w"> </span><span class="n">M</span><span class="o">:</span><span class="w"> </span><span class="n">on_error</span><span class="p">()</span><span class="w"> </span><span class="n">chamado</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">se</span><span class="w"> </span><span class="n">exceção</span><span class="w"> </span><span class="n">ocorrer</span>
+</code></pre></div>
+
+<h2 id="configuracao-via-settings">Configuração via Settings<a class="headerlink" href="#configuracao-via-settings" title="Permanent link">&para;</a></h2>
+<p><strong>Importante:</strong> Registre middleware via settings, não diretamente no FastAPI.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;timing&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;request_id&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;auth&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;myapp.middleware.CustomMiddleware&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<p>Ou via StrideApp:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">app</span> <span class="o">=</span> <span class="n">StrideApp</span><span class="p">(</span>
+    <span class="n">middleware</span><span class="o">=</span><span class="p">[</span>
+        <span class="s2">&quot;timing&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;auth&quot;</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;logging&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;log_body&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}),</span>  <span class="c1"># Com kwargs</span>
+    <span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="middlewares-built-in">Middlewares Built-in<a class="headerlink" href="#middlewares-built-in" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Shortcut</th>
+<th>Classe</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"timing"</code></td>
+<td><code>TimingMiddleware</code></td>
+<td>Adiciona header <code>X-Response-Time</code></td>
+</tr>
+<tr>
+<td><code>"request_id"</code></td>
+<td><code>RequestIDMiddleware</code></td>
+<td>Adiciona ID único de request</td>
+</tr>
+<tr>
+<td><code>"logging"</code></td>
+<td><code>LoggingMiddleware</code></td>
+<td>Log de requests/responses</td>
+</tr>
+<tr>
+<td><code>"auth"</code></td>
+<td><code>AuthenticationMiddleware</code></td>
+<td>Autenticação JWT (obrigatória)</td>
+</tr>
+<tr>
+<td><code>"optional_auth"</code></td>
+<td><code>OptionalAuthenticationMiddleware</code></td>
+<td>Auth JWT opcional</td>
+</tr>
+<tr>
+<td><code>"tenant"</code></td>
+<td><code>TenantMiddleware</code></td>
+<td>Contexto multi-tenant</td>
+</tr>
+<tr>
+<td><code>"security_headers"</code></td>
+<td><code>SecurityHeadersMiddleware</code></td>
+<td>Headers de segurança (CSP, HSTS via Settings)</td>
+</tr>
+<tr>
+<td><code>"rate_limit"</code></td>
+<td><code>RateLimitMiddleware</code></td>
+<td>Rate limit por IP (429; configurável via Settings)</td>
+</tr>
+<tr>
+<td><code>"content_length_limit"</code></td>
+<td><code>ContentLengthLimitMiddleware</code></td>
+<td>Rejeita body &gt; max_request_size (413)</td>
+</tr>
+<tr>
+<td><code>"maintenance"</code></td>
+<td><code>MaintenanceModeMiddleware</code></td>
+<td>Modo manutenção</td>
+</tr>
+<tr>
+<td><code>"cors"</code></td>
+<td><code>CORSMiddleware</code></td>
+<td>Tratamento CORS</td>
+</tr>
+<tr>
+<td><code>"gzip"</code></td>
+<td><code>GZipMiddleware</code></td>
+<td>Compressão de response</td>
+</tr>
+</tbody>
+</table>
+<h2 id="diferenca-entre-auth-e-optional_auth">Diferença entre <code>auth</code> e <code>optional_auth</code><a class="headerlink" href="#diferenca-entre-auth-e-optional_auth" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Middleware</th>
+<th>Comportamento</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth</code></td>
+<td>Requer autenticação, retorna 401 se não autenticado</td>
+</tr>
+<tr>
+<td><code>optional_auth</code></td>
+<td>Carrega usuário se token presente, permite anônimo</td>
+</tr>
+</tbody>
+</table>
+<h2 id="ordem-de-execucao">Ordem de Execução<a class="headerlink" href="#ordem-de-execucao" title="Permanent link">&para;</a></h2>
+<p>Middleware executa na ordem da lista:</p>
+<div class="codehilite"><pre><span></span><code><span class="nl">Request</span><span class="p">:</span>
+<span class="w">  </span><span class="n">timing</span><span class="p">.</span><span class="n">before_request</span><span class="p">()</span><span class="w">      </span><span class="err">#</span><span class="w"> </span><span class="n">Primeiro</span><span class="w"> </span><span class="p">(</span><span class="n">mais</span><span class="w"> </span><span class="n">externo</span><span class="p">)</span>
+<span class="w">    </span><span class="err">→</span><span class="w"> </span><span class="n">auth</span><span class="p">.</span><span class="n">before_request</span><span class="p">()</span>
+<span class="w">      </span><span class="err">→</span><span class="w"> </span><span class="n">logging</span><span class="p">.</span><span class="n">before_request</span><span class="p">()</span><span class="w">  </span><span class="err">#</span><span class="w"> </span><span class="n">Último</span><span class="w"> </span><span class="p">(</span><span class="n">mais</span><span class="w"> </span><span class="n">interno</span><span class="p">)</span>
+<span class="w">        </span><span class="err">→</span><span class="w"> </span><span class="o">[</span><span class="n">VIEW</span><span class="o">]</span>
+<span class="w">      </span><span class="err">←</span><span class="w"> </span><span class="n">logging</span><span class="p">.</span><span class="n">after_response</span><span class="p">()</span>
+<span class="w">    </span><span class="err">←</span><span class="w"> </span><span class="n">auth</span><span class="p">.</span><span class="n">after_response</span><span class="p">()</span>
+<span class="w">  </span><span class="err">←</span><span class="w"> </span><span class="n">timing</span><span class="p">.</span><span class="n">after_response</span><span class="p">()</span>
+<span class="n">Response</span>
+</code></pre></div>
+
+<h2 id="middleware-customizado">Middleware Customizado<a class="headerlink" href="#middleware-customizado" title="Permanent link">&para;</a></h2>
+<h3 id="asgimiddleware-recomendado">ASGIMiddleware (Recomendado)<a class="headerlink" href="#asgimiddleware-recomendado" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/middleware.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.middleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASGIMiddleware</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">starlette.requests</span><span class="w"> </span><span class="kn">import</span> <span class="n">Request</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">starlette.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">Response</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">starlette.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scope</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">RateLimitMiddleware</span><span class="p">(</span><span class="n">ASGIMiddleware</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;RateLimitMiddleware&quot;</span>
+    <span class="n">order</span> <span class="o">=</span> <span class="mi">5</span>  <span class="c1"># Menor = executa primeiro</span>
+
+    <span class="c1"># Opcional: filtro de paths</span>
+    <span class="n">exclude_paths</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;/health&quot;</span><span class="p">,</span> <span class="s2">&quot;/docs&quot;</span><span class="p">]</span>
+    <span class="n">include_paths</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># Vazio = todos os paths</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app</span><span class="p">,</span> <span class="n">requests_per_minute</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">limit</span> <span class="o">=</span> <span class="n">requests_per_minute</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">before_request</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">scope</span><span class="p">:</span> <span class="n">Scope</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Response</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Chamado antes do request. Retorne Response para short-circuit.&quot;&quot;&quot;</span>
+        <span class="n">client_ip</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span>
+
+        <span class="k">if</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_rate_limited</span><span class="p">(</span><span class="n">client_ip</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">Response</span><span class="p">(</span>
+                <span class="n">content</span><span class="o">=</span><span class="s1">&#39;{&quot;detail&quot;: &quot;Too many requests&quot;}&#39;</span><span class="p">,</span>
+                <span class="n">status_code</span><span class="o">=</span><span class="mi">429</span><span class="p">,</span>
+                <span class="n">media_type</span><span class="o">=</span><span class="s2">&quot;application/json&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Continua para próximo middleware</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">after_response</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">scope</span><span class="p">:</span> <span class="n">Scope</span><span class="p">,</span>
+        <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+        <span class="n">status_code</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">response_headers</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Chamado após response. Pode modificar headers in-place.&quot;&quot;&quot;</span>
+        <span class="n">response_headers</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="sa">b</span><span class="s2">&quot;x-rate-limit&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;60&quot;</span><span class="p">))</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_error</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">scope</span><span class="p">:</span> <span class="n">Scope</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">exc</span><span class="p">:</span> <span class="ne">Exception</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Response</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Chamado em exceção. Retorne Response ou None para re-raise.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="kc">None</span>
+</code></pre></div>
+
+<h3 id="registrar-middleware-customizado">Registrar Middleware Customizado<a class="headerlink" href="#registrar-middleware-customizado" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;timing&quot;</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;src.middleware.RateLimitMiddleware&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;requests_per_minute&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">}),</span>
+        <span class="s2">&quot;auth&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<p>Ou programaticamente:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.middleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_middleware</span>
+
+<span class="n">register_middleware</span><span class="p">(</span>
+    <span class="s2">&quot;src.middleware.RateLimitMiddleware&quot;</span><span class="p">,</span>
+    <span class="n">kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;requests_per_minute&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">}</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="opcoes-dos-middlewares">Opções dos Middlewares<a class="headerlink" href="#opcoes-dos-middlewares" title="Permanent link">&para;</a></h2>
+<h3 id="timingmiddleware">TimingMiddleware<a class="headerlink" href="#timingmiddleware" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">middleware</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;timing&quot;</span><span class="p">,</span>  <span class="c1"># Adiciona header X-Response-Time</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h3 id="requestidmiddleware">RequestIDMiddleware<a class="headerlink" href="#requestidmiddleware" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">middleware</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">&quot;request_id&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;header_name&quot;</span><span class="p">:</span> <span class="s2">&quot;X-Request-ID&quot;</span><span class="p">}),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h3 id="loggingmiddleware">LoggingMiddleware<a class="headerlink" href="#loggingmiddleware" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">middleware</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">&quot;logging&quot;</span><span class="p">,</span> <span class="p">{</span>
+        <span class="s2">&quot;log_body&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">&quot;log_headers&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">&quot;logger_name&quot;</span><span class="p">:</span> <span class="s2">&quot;core.requests&quot;</span><span class="p">,</span>
+    <span class="p">}),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h3 id="securityheadersmiddleware">SecurityHeadersMiddleware<a class="headerlink" href="#securityheadersmiddleware" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">middleware</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">&quot;security_headers&quot;</span><span class="p">,</span> <span class="p">{</span>
+        <span class="s2">&quot;headers&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;X-Content-Type-Options&quot;</span><span class="p">:</span> <span class="s2">&quot;nosniff&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;X-Frame-Options&quot;</span><span class="p">:</span> <span class="s2">&quot;DENY&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;X-XSS-Protection&quot;</span><span class="p">:</span> <span class="s2">&quot;1; mode=block&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="s2">&quot;enable_hsts&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;hsts_max_age&quot;</span><span class="p">:</span> <span class="mi">31536000</span><span class="p">,</span>
+    <span class="p">}),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h3 id="maintenancemodemiddleware">MaintenanceModeMiddleware<a class="headerlink" href="#maintenancemodemiddleware" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">middleware</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">&quot;maintenance&quot;</span><span class="p">,</span> <span class="p">{</span>
+        <span class="s2">&quot;maintenance_enabled&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Sistema em manutenção&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;allowed_ips&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;allowed_paths&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;/health&quot;</span><span class="p">],</span>
+    <span class="p">}),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h2 id="request-state">Request State<a class="headerlink" href="#request-state" title="Permanent link">&para;</a></h2>
+<p>Acesse dados definidos pelo middleware:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Na view</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">):</span>
+    <span class="n">request_id</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">request_id</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user</span>
+    <span class="n">tenant_id</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">tenant_id</span>
+</code></pre></div>
+
+<h2 id="tratamento-de-excecoes">Tratamento de Exceções<a class="headerlink" href="#tratamento-de-excecoes" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ErrorHandlerMiddleware</span><span class="p">(</span><span class="n">ASGIMiddleware</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;ErrorHandlerMiddleware&quot;</span>
+    <span class="n">order</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Executa primeiro</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_error</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">scope</span><span class="p">:</span> <span class="n">Scope</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">exc</span><span class="p">:</span> <span class="ne">Exception</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Response</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="n">MyCustomError</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">JSONResponse</span><span class="p">(</span>
+                <span class="p">{</span><span class="s2">&quot;detail&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)},</span>
+                <span class="n">status_code</span><span class="o">=</span><span class="mi">400</span>
+            <span class="p">)</span>
+        <span class="c1"># Re-raise outras exceções</span>
+        <span class="k">return</span> <span class="kc">None</span>
+</code></pre></div>
+
+<h2 id="registry-de-middleware">Registry de Middleware<a class="headerlink" href="#registry-de-middleware" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.middleware</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">register_middleware</span><span class="p">,</span>
+    <span class="n">unregister_middleware</span><span class="p">,</span>
+    <span class="n">get_registered_middlewares</span><span class="p">,</span>
+    <span class="n">clear_middleware_registry</span><span class="p">,</span>
+    <span class="n">configure_middleware</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Registrar</span>
+<span class="n">register_middleware</span><span class="p">(</span><span class="s2">&quot;myapp.middleware.Custom&quot;</span><span class="p">)</span>
+
+<span class="c1"># Desregistrar</span>
+<span class="n">unregister_middleware</span><span class="p">(</span><span class="s2">&quot;myapp.middleware.Custom&quot;</span><span class="p">)</span>
+
+<span class="c1"># Obter todos</span>
+<span class="n">middlewares</span> <span class="o">=</span> <span class="n">get_registered_middlewares</span><span class="p">()</span>
+
+<span class="c1"># Limpar todos</span>
+<span class="n">clear_middleware_registry</span><span class="p">()</span>
+
+<span class="c1"># Configurar lista inteira</span>
+<span class="n">configure_middleware</span><span class="p">([</span>
+    <span class="s2">&quot;timing&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;auth&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;logging&quot;</span><span class="p">,</span>
+<span class="p">],</span> <span class="n">clear_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="atributo-order">Atributo Order<a class="headerlink" href="#atributo-order" title="Permanent link">&para;</a></h2>
+<p>Controle a ordem de execução via atributo <code>order</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">EarlyMiddleware</span><span class="p">(</span><span class="n">ASGIMiddleware</span><span class="p">):</span>
+    <span class="n">order</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Executa primeiro</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">LateMiddleware</span><span class="p">(</span><span class="n">ASGIMiddleware</span><span class="p">):</span>
+    <span class="n">order</span> <span class="o">=</span> <span class="mi">100</span>  <span class="c1"># Executa depois</span>
+</code></pre></div>
+
+<p>Ordens padrão:
+- <code>MaintenanceModeMiddleware</code>: 1
+- <code>RequestIDMiddleware</code>: 5
+- <code>TimingMiddleware</code>: 10
+- <code>SecurityHeadersMiddleware</code>: 15
+- <code>LoggingMiddleware</code>: 20
+- Default: 100</p>
+<h2 id="exemplo-completo">Exemplo Completo<a class="headerlink" href="#exemplo-completo" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;timing&quot;</span><span class="p">,</span>           <span class="c1"># Mede tempo de resposta</span>
+        <span class="s2">&quot;request_id&quot;</span><span class="p">,</span>       <span class="c1"># Adiciona ID único</span>
+        <span class="s2">&quot;security_headers&quot;</span><span class="p">,</span> <span class="c1"># Headers de segurança</span>
+        <span class="s2">&quot;auth&quot;</span><span class="p">,</span>             <span class="c1"># Autenticação JWT</span>
+        <span class="s2">&quot;logging&quot;</span><span class="p">,</span>          <span class="c1"># Log de requests</span>
+        <span class="p">(</span><span class="s2">&quot;src.middleware.RateLimitMiddleware&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;requests_per_minute&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">}),</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../36-security/">Security</a> — Boas práticas de segurança</li>
+<li><a href="../05-auth/">Auth</a> — Autenticação</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

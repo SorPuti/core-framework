@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/99-faq-troubleshooting/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>FAQ &amp; Troubleshooting - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "FAQ \u0026amp; Troubleshooting";
+        var mkdocs_page_input_path = "99-faq-troubleshooting.md";
+        var mkdocs_page_url = "/core-framework/99-faq-troubleshooting/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">FAQ &amp; Troubleshooting</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/99-faq-troubleshooting.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="faq-troubleshooting">FAQ &amp; Troubleshooting<a class="headerlink" href="#faq-troubleshooting" title="Permanent link">&para;</a></h1>
+<p>Guia completo de resolução de problemas do Stride.</p>
+<hr />
+<h2 id="indice">Índice<a class="headerlink" href="#indice" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="#1-erros-de-migrations">Erros de Migrations</a></li>
+<li><a href="#2-erros-de-autenticação">Erros de Autenticação</a></li>
+<li><a href="#3-erros-de-banco-de-dados">Erros de Banco de Dados</a></li>
+<li><a href="#4-erros-de-configuração">Erros de Configuração</a></li>
+<li><a href="#5-erros-de-middleware">Erros de Middleware</a></li>
+<li><a href="#6-erros-de-serialização">Erros de Serialização</a></li>
+<li><a href="#7-erros-de-permissões">Erros de Permissões</a></li>
+<li><a href="#8-erros-de-multi-tenancy">Erros de Multi-Tenancy</a></li>
+<li><a href="#9-erros-de-performance">Erros de Performance</a></li>
+<li><a href="#10-erros-comuns-de-desenvolvimento">Erros Comuns de Desenvolvimento</a></li>
+</ol>
+<hr />
+<h2 id="1-erros-de-migrations">1. Erros de Migrations<a class="headerlink" href="#1-erros-de-migrations" title="Permanent link">&para;</a></h2>
+<h3 id="type-datetime-does-not-exist">❌ <code>type "datetime" does not exist</code><a class="headerlink" href="#type-datetime-does-not-exist" title="Permanent link">&para;</a></h3>
+<p><strong>Erro completo:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="nx">asyncpg</span><span class="p">.</span><span class="nx">exceptions</span><span class="p">.</span><span class="nx">UndefinedObjectError</span><span class="p">:</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="s">&quot;datetime&quot;</span><span class="w"> </span><span class="nx">does</span><span class="w"> </span><span class="k">not</span><span class="w"> </span><span class="nx">exist</span>
+<span class="p">[</span><span class="nx">SQL</span><span class="p">:</span><span class="w"> </span><span class="nx">CREATE</span><span class="w"> </span><span class="nx">TABLE</span><span class="w"> </span><span class="nx">IF</span><span class="w"> </span><span class="nx">NOT</span><span class="w"> </span><span class="nx">EXISTS</span><span class="w"> </span><span class="s">&quot;users&quot;</span><span class="w"> </span><span class="p">(</span><span class="o">...</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;created_at&quot;</span><span class="w"> </span><span class="nx">DATETIME</span><span class="w"> </span><span class="nx">NOT</span><span class="w"> </span><span class="nx">NULL</span><span class="p">,</span><span class="w"> </span><span class="o">...</span><span class="p">)]</span>
+</code></pre></div>
+
+<p><strong>Causa:</strong> Versão antiga do framework gerando tipo incompatível com PostgreSQL.</p>
+<p><strong>Solução:</strong>
+1. Atualize para v0.12.2+
+2. Para migrations existentes, edite manualmente:
+   <code>python
+   # Substitua
+   type='DATETIME'
+   # Por
+   type='TIMESTAMP WITH TIME ZONE'</code></p>
+<hr />
+<h3 id="column-is-of-type-boolean-but-default-expression-is-of-type-integer">❌ <code>column is of type boolean but default expression is of type integer</code><a class="headerlink" href="#column-is-of-type-boolean-but-default-expression-is-of-type-integer" title="Permanent link">&para;</a></h3>
+<p><strong>Erro completo:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="nx">asyncpg</span><span class="p">.</span><span class="nx">exceptions</span><span class="p">.</span><span class="nx">DatatypeMismatchError</span><span class="p">:</span><span class="w"> </span><span class="nx">column</span><span class="w"> </span><span class="s">&quot;is_active&quot;</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="nx">of</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="nx">boolean</span><span class="w"> </span><span class="nx">but</span><span class="w"> </span><span class="k">default</span><span class="w"> </span><span class="nx">expression</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="nx">of</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="nx">integer</span>
+<span class="nx">HINT</span><span class="p">:</span><span class="w"> </span><span class="nx">You</span><span class="w"> </span><span class="nx">will</span><span class="w"> </span><span class="nx">need</span><span class="w"> </span><span class="nx">to</span><span class="w"> </span><span class="nx">rewrite</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="nx">cast</span><span class="w"> </span><span class="nx">the</span><span class="w"> </span><span class="nx">expression</span><span class="p">.</span>
+</code></pre></div>
+
+<p><strong>Causa:</strong> PostgreSQL exige <code>TRUE</code>/<code>FALSE</code> para boolean defaults, não <code>1</code>/<code>0</code>.</p>
+<p><strong>Solução:</strong>
+1. Atualize para v0.12.2+
+2. Para migrations existentes:
+   <code>python
+   # Substitua
+   default=1  # ou default=0
+   # Por
+   default=True  # ou default=False</code></p>
+<p>Ou no SQL gerado:
+   <code>sql
+   -- De
+   DEFAULT 1
+   -- Para
+   DEFAULT TRUE</code></p>
+<hr />
+<h3 id="relation-table_name-does-not-exist">❌ <code>relation "table_name" does not exist</code><a class="headerlink" href="#relation-table_name-does-not-exist" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Tentando migrar sem ter criado as tabelas dependentes.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Verifique migrations pendentes</span>
+core<span class="w"> </span>showmigrations
+
+<span class="c1"># Aplique todas</span>
+stride<span class="w"> </span>migrate
+
+<span class="c1"># Ou crie tabelas via SQLAlchemy</span>
+python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<span class="s2">import asyncio</span>
+<span class="s2">from strider.models import Model, init_database, create_tables</span>
+
+<span class="s2">async def setup():</span>
+<span class="s2">    await init_database(&#39;postgresql+asyncpg://...&#39;)</span>
+<span class="s2">    await create_tables()</span>
+
+<span class="s2">asyncio.run(setup())</span>
+<span class="s2">&quot;</span>
+</code></pre></div>
+
+<hr />
+<h3 id="duplicate-key-value-violates-unique-constraint">❌ <code>duplicate key value violates unique constraint</code><a class="headerlink" href="#duplicate-key-value-violates-unique-constraint" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Tentando criar registro com valor único já existente.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Verifique antes de criar</span>
+<span class="n">existing</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">email</span><span class="o">=</span><span class="n">email</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+<span class="k">if</span> <span class="n">existing</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="mi">400</span><span class="p">,</span> <span class="s2">&quot;Email já cadastrado&quot;</span><span class="p">)</span>
+
+<span class="c1"># Ou use get_or_create</span>
+<span class="n">user</span><span class="p">,</span> <span class="n">created</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get_or_create</span><span class="p">(</span>
+    <span class="n">email</span><span class="o">=</span><span class="n">email</span><span class="p">,</span>
+    <span class="n">defaults</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;New User&quot;</span><span class="p">}</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h3 id="cannot-drop-column-because-other-objects-depend-on-it">❌ <code>cannot drop column because other objects depend on it</code><a class="headerlink" href="#cannot-drop-column-because-other-objects-depend-on-it" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Coluna tem foreign keys ou constraints.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># No arquivo de migration, remova FK primeiro</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.migrations.operations</span><span class="w"> </span><span class="kn">import</span> <span class="n">DropForeignKey</span><span class="p">,</span> <span class="n">DropColumn</span>
+
+<span class="n">operations</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">DropForeignKey</span><span class="p">(</span>
+        <span class="n">table_name</span><span class="o">=</span><span class="s2">&quot;orders&quot;</span><span class="p">,</span>
+        <span class="n">constraint_name</span><span class="o">=</span><span class="s2">&quot;fk_orders_user_id&quot;</span><span class="p">,</span>
+    <span class="p">),</span>
+    <span class="n">DropColumn</span><span class="p">(</span>
+        <span class="n">table_name</span><span class="o">=</span><span class="s2">&quot;users&quot;</span><span class="p">,</span>
+        <span class="n">column_name</span><span class="o">=</span><span class="s2">&quot;old_column&quot;</span><span class="p">,</span>
+    <span class="p">),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<hr />
+<h2 id="2-erros-de-autenticacao">2. Erros de Autenticação<a class="headerlink" href="#2-erros-de-autenticacao" title="Permanent link">&para;</a></h2>
+<h3 id="not-authenticated-em-authme">❌ <code>Not authenticated</code> em <code>/auth/me</code><a class="headerlink" href="#not-authenticated-em-authme" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> <code>request.state.user</code> está None porque middleware não está configurado.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrideApp</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">StrideApp</span><span class="p">(</span>
+    <span class="n">middleware</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;auth&quot;</span><span class="p">],</span>  <span class="c1"># Adicione isto!</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p>Ou formato antigo:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AuthenticationMiddleware</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">StrideApp</span><span class="p">(</span>
+    <span class="n">middlewares</span><span class="o">=</span><span class="p">[(</span><span class="n">AuthenticationMiddleware</span><span class="p">,</span> <span class="p">{})],</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h3 id="create_access_token-got-an-unexpected-keyword-argument-data">❌ <code>create_access_token() got an unexpected keyword argument 'data'</code><a class="headerlink" href="#create_access_token-got-an-unexpected-keyword-argument-data" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Usando API obsoleta do token.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ API antiga (não funciona)</span>
+<span class="n">token</span> <span class="o">=</span> <span class="n">create_access_token</span><span class="p">(</span>
+    <span class="n">data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sub&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">)},</span>
+    <span class="n">expires_minutes</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># ✅ API atual</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timedelta</span>
+
+<span class="n">token</span> <span class="o">=</span> <span class="n">create_access_token</span><span class="p">(</span>
+    <span class="n">user_id</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">),</span>
+    <span class="n">extra_claims</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">user</span><span class="o">.</span><span class="n">email</span><span class="p">},</span>
+    <span class="n">expires_delta</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">30</span><span class="p">),</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h3 id="invalid-literal-for-int-with-base-10-uuid-string">❌ <code>invalid literal for int() with base 10: 'uuid-string'</code><a class="headerlink" href="#invalid-literal-for-int-with-base-10-uuid-string" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Framework tentando converter UUID para int.</p>
+<p><strong>Solução:</strong> Atualize para v0.12.2+ ou use workaround:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MyAuthViewSet</span><span class="p">(</span><span class="n">AuthViewSet</span><span class="p">):</span>
+    <span class="nd">@action</span><span class="p">(</span><span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;POST&quot;</span><span class="p">],</span> <span class="n">detail</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">permission_classes</span><span class="o">=</span><span class="p">[</span><span class="n">AllowAny</span><span class="p">])</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">refresh</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c1"># ... validação ...</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
+        <span class="n">user_id</span> <span class="o">=</span> <span class="n">UUID</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sub&quot;</span><span class="p">))</span>  <span class="c1"># Converte para UUID</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+</code></pre></div>
+
+<hr />
+<h3 id="invalid-or-expired-refresh-token">❌ <code>Invalid or expired refresh token</code><a class="headerlink" href="#invalid-or-expired-refresh-token" title="Permanent link">&para;</a></h3>
+<p><strong>Causas possíveis:</strong>
+1. Token expirou
+2. Secret key mudou
+3. Token malformado</p>
+<p><strong>Diagnóstico:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode_token</span><span class="p">,</span> <span class="n">verify_token</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="c1"># Tenta decodificar (ignora expiração)</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">decode_token</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Payload:&quot;</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Expiração:&quot;</span><span class="p">,</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;exp&quot;</span><span class="p">))</span>
+<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Token inválido:&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+<span class="c1"># Verifica com tipo</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">verify_token</span><span class="p">(</span><span class="n">token</span><span class="p">,</span> <span class="n">token_type</span><span class="o">=</span><span class="s2">&quot;refresh&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Válido:&quot;</span><span class="p">,</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Solução:</strong>
+1. Solicite novo refresh token via login
+2. Verifique se <code>SECRET_KEY</code> não mudou
+3. Aumente <code>refresh_token_expire_days</code> se necessário</p>
+<hr />
+<h3 id="user-with-this-email-already-exists">❌ <code>User with this email already exists</code><a class="headerlink" href="#user-with-this-email-already-exists" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Tentando registrar email duplicado.</p>
+<p><strong>Solução no cliente:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1">// Trate o erro 400</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">.</span><span class="nx">response</span><span class="o">?</span><span class="p">.</span><span class="nx">status</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="mf">400</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">.</span><span class="nx">response</span><span class="p">.</span><span class="nx">data</span><span class="p">.</span><span class="nx">detail</span><span class="p">.</span><span class="nx">includes</span><span class="p">(</span><span class="s2">&quot;already exists&quot;</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">showError</span><span class="p">(</span><span class="s2">&quot;Este email já está cadastrado. Tente fazer login.&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<hr />
+<h3 id="password-must-be-at-least-8-characters">❌ <code>Password must be at least 8 characters</code><a class="headerlink" href="#password-must-be-at-least-8-characters" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Senha não atende requisitos mínimos.</p>
+<p><strong>Personalização:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseRegisterInput</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">field_validator</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CustomRegisterInput</span><span class="p">(</span><span class="n">BaseRegisterInput</span><span class="p">):</span>
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;password&quot;</span><span class="p">)</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_password</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">12</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Senha deve ter pelo menos 12 caracteres&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">isupper</span><span class="p">()</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">v</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Senha deve ter letra maiúscula&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">v</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Senha deve ter número&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyAuthViewSet</span><span class="p">(</span><span class="n">AuthViewSet</span><span class="p">):</span>
+    <span class="n">register_schema</span> <span class="o">=</span> <span class="n">CustomRegisterInput</span>
+</code></pre></div>
+
+<hr />
+<h3 id="no-user_model-configured">❌ <code>No user_model configured</code><a class="headerlink" href="#no-user_model-configured" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> <code>configure_auth()</code> não foi chamado.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_auth</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myapp.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>
+
+<span class="c1"># No início da aplicação</span>
+<span class="n">configure_auth</span><span class="p">(</span>
+    <span class="n">user_model</span><span class="o">=</span><span class="n">User</span><span class="p">,</span>
+    <span class="n">secret_key</span><span class="o">=</span><span class="s2">&quot;your-secure-key&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="3-erros-de-banco-de-dados">3. Erros de Banco de Dados<a class="headerlink" href="#3-erros-de-banco-de-dados" title="Permanent link">&para;</a></h2>
+<h3 id="cannot-connect-to-database">❌ <code>Cannot connect to database</code><a class="headerlink" href="#cannot-connect-to-database" title="Permanent link">&para;</a></h3>
+<p><strong>Causas:</strong>
+1. URL incorreta
+2. Banco não está rodando
+3. Credenciais erradas</p>
+<p><strong>Diagnóstico:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.ext.asyncio</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_async_engine</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">text</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">test_connection</span><span class="p">():</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="s2">&quot;postgresql+asyncpg://user:pass@localhost:5432/db&quot;</span>
+    <span class="n">engine</span> <span class="o">=</span> <span class="n">create_async_engine</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">async</span> <span class="k">with</span> <span class="n">engine</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;SELECT 1&quot;</span><span class="p">))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Conexão OK:&quot;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">scalar</span><span class="p">())</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Erro:&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">engine</span><span class="o">.</span><span class="n">dispose</span><span class="p">()</span>
+
+<span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">test_connection</span><span class="p">())</span>
+</code></pre></div>
+
+<p><strong>Soluções:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># SQLite (desenvolvimento)</span>
+<span class="n">database_url</span> <span class="o">=</span> <span class="s2">&quot;sqlite+aiosqlite:///./app.db&quot;</span>
+
+<span class="c1"># PostgreSQL</span>
+<span class="n">database_url</span> <span class="o">=</span> <span class="s2">&quot;postgresql+asyncpg://user:password@localhost:5432/dbname&quot;</span>
+
+<span class="c1"># Verifique se o driver está instalado</span>
+<span class="c1"># pip install asyncpg  # Para PostgreSQL</span>
+<span class="c1"># pip install aiosqlite  # Para SQLite</span>
+</code></pre></div>
+
+<hr />
+<h3 id="foreign-key-constraint-cannot-be-implemented">❌ <code>foreign key constraint cannot be implemented</code><a class="headerlink" href="#foreign-key-constraint-cannot-be-implemented" title="Permanent link">&para;</a></h3>
+<p><strong>Erro completo:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="nx">asyncpg</span><span class="p">.</span><span class="nx">exceptions</span><span class="p">.</span><span class="nx">DatatypeMismatchError</span><span class="p">:</span><span class="w"> </span><span class="nx">foreign</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="kd">constraint</span><span class="w"> </span><span class="nx">cannot</span><span class="w"> </span><span class="nx">be</span><span class="w"> </span><span class="nx">implemented</span>
+<span class="nx">DETAIL</span><span class="p">:</span><span class="w"> </span><span class="nx">Key</span><span class="w"> </span><span class="nx">columns</span><span class="w"> </span><span class="s">&quot;user_id&quot;</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="s">&quot;id&quot;</span><span class="w"> </span><span class="nx">are</span><span class="w"> </span><span class="nx">of</span><span class="w"> </span><span class="nx">incompatible</span><span class="w"> </span><span class="nx">types</span><span class="p">:</span><span class="w"> </span><span class="nx">uuid</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="nx">integer</span><span class="p">.</span>
+</code></pre></div>
+
+<p><strong>Causa:</strong> Tipos incompatíveis entre FK e PK.</p>
+<p><strong>Solução v0.12.2+:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AbstractUUIDUser</span><span class="p">,</span> <span class="n">PermissionsMixin</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">AbstractUUIDUser</span><span class="p">,</span> <span class="n">PermissionsMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+    <span class="c1"># UUID é detectado automaticamente</span>
+</code></pre></div>
+
+<p><strong>Solução manual:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Column</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.dialects.postgresql</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
+
+<span class="c1"># Na tabela de associação, use mesmo tipo</span>
+<span class="n">Column</span><span class="p">(</span><span class="s2">&quot;user_id&quot;</span><span class="p">,</span> <span class="n">UUID</span><span class="p">(</span><span class="n">as_uuid</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s2">&quot;users.id&quot;</span><span class="p">))</span>
+</code></pre></div>
+
+<hr />
+<h3 id="queuepool-limit-overflow">❌ <code>QueuePool limit overflow</code><a class="headerlink" href="#queuepool-limit-overflow" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Pool de conexões esgotado.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">database_pool_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span>       <span class="c1"># Aumente</span>
+    <span class="n">database_max_overflow</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>    <span class="c1"># Conexões extras</span>
+    <span class="n">database_pool_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span>    <span class="c1"># Timeout maior</span>
+    <span class="n">database_pool_recycle</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1800</span>  <span class="c1"># Recicla a cada 30min</span>
+</code></pre></div>
+
+<p><strong>Diagnóstico:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Verifique conexões abertas (PostgreSQL)</span>
+<span class="n">SELECT</span> <span class="n">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="n">FROM</span> <span class="n">pg_stat_activity</span> <span class="n">WHERE</span> <span class="n">datname</span> <span class="o">=</span> <span class="s1">&#39;your_db&#39;</span><span class="p">;</span>
+</code></pre></div>
+
+<hr />
+<h3 id="object-is-not-bound-to-a-session">❌ <code>Object is not bound to a Session</code><a class="headerlink" href="#object-is-not-bound-to-a-session" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Tentando acessar objeto fora da sessão.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ Errado</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_user</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">with</span> <span class="n">get_session</span><span class="p">()</span> <span class="k">as</span> <span class="n">db</span><span class="p">:</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+    <span class="c1"># db fechou, user não pode ser usado</span>
+    <span class="k">return</span> <span class="n">user</span><span class="o">.</span><span class="n">email</span>  <span class="c1"># ERRO!</span>
+
+<span class="c1"># ✅ Correto</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_user</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">with</span> <span class="n">get_session</span><span class="p">()</span> <span class="k">as</span> <span class="n">db</span><span class="p">:</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">user</span><span class="o">.</span><span class="n">email</span> <span class="k">if</span> <span class="n">user</span> <span class="k">else</span> <span class="kc">None</span>
+
+<span class="c1"># ✅ Ou retorne dicionário</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_user</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">with</span> <span class="n">get_session</span><span class="p">()</span> <span class="k">as</span> <span class="n">db</span><span class="p">:</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">user</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">user</span><span class="o">.</span><span class="n">email</span><span class="p">}</span>
+        <span class="k">return</span> <span class="kc">None</span>
+</code></pre></div>
+
+<hr />
+<h3 id="greenlet_spawn-has-not-been-called">❌ <code>greenlet_spawn has not been called</code><a class="headerlink" href="#greenlet_spawn-has-not-been-called" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Usando operação síncrona em contexto async.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ Errado - acesso lazy síncrono</span>
+<span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+<span class="n">groups</span> <span class="o">=</span> <span class="n">user</span><span class="o">.</span><span class="n">groups</span>  <span class="c1"># ERRO se groups é lazy</span>
+
+<span class="c1"># ✅ Correto - use selectin ou joinedload</span>
+<span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">select_related</span><span class="p">(</span><span class="s2">&quot;groups&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+<span class="n">groups</span> <span class="o">=</span> <span class="n">user</span><span class="o">.</span><span class="n">groups</span>  <span class="c1"># OK</span>
+
+<span class="c1"># ✅ Ou defina lazy=&quot;selectin&quot; no modelo</span>
+<span class="n">groups</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Group&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span>
+    <span class="s2">&quot;Group&quot;</span><span class="p">,</span>
+    <span class="n">secondary</span><span class="o">=</span><span class="n">user_groups_table</span><span class="p">,</span>
+    <span class="n">lazy</span><span class="o">=</span><span class="s2">&quot;selectin&quot;</span><span class="p">,</span>  <span class="c1"># Carrega automaticamente</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="4-erros-de-configuracao">4. Erros de Configuração<a class="headerlink" href="#4-erros-de-configuracao" title="Permanent link">&para;</a></h2>
+<h3 id="secret_key-not-set">❌ <code>SECRET_KEY not set</code><a class="headerlink" href="#secret_key-not-set" title="Permanent link">&para;</a></h3>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env</span>
+<span class="nv">SECRET_KEY</span><span class="o">=</span>sua-chave-super-secreta-com-pelo-menos-256-bits
+
+<span class="c1"># Gerar chave segura</span>
+python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import secrets; print(secrets.token_hex(32))&quot;</span>
+</code></pre></div>
+
+<hr />
+<h3 id="settings-validation-error">❌ <code>Settings validation error</code><a class="headerlink" href="#settings-validation-error" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Tipo incorreto em variável de ambiente.</p>
+<p><strong>Exemplo:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ Errado</span>
+<span class="nv">DEBUG</span><span class="o">=</span>yes<span class="w">  </span><span class="c1"># Não é bool válido</span>
+
+<span class="c1"># ✅ Correto</span>
+<span class="nv">DEBUG</span><span class="o">=</span><span class="nb">true</span>
+<span class="nv">DEBUG</span><span class="o">=</span><span class="m">1</span>
+<span class="nv">DEBUG</span><span class="o">=</span><span class="nb">false</span>
+<span class="nv">DEBUG</span><span class="o">=</span><span class="m">0</span>
+</code></pre></div>
+
+<p><strong>Para listas:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ Errado</span>
+<span class="nv">CORS_ORIGINS</span><span class="o">=</span>http://localhost,http://example.com
+
+<span class="c1"># ✅ Correto (JSON)</span>
+<span class="nv">CORS_ORIGINS</span><span class="o">=</span><span class="s1">&#39;[&quot;http://localhost&quot;, &quot;http://example.com&quot;]&#39;</span>
+</code></pre></div>
+
+<hr />
+<h3 id="module-not-found-core">❌ <code>Module not found: 'core'</code><a class="headerlink" href="#module-not-found-core" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Stride não está instalado ou PYTHONPATH incorreto.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Instale o framework</span>
+pip<span class="w"> </span>install<span class="w"> </span>stride
+
+<span class="c1"># Ou se é desenvolvimento local</span>
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+
+<span class="c1"># Verifique instalação</span>
+python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import core; print(core.__version__)&quot;</span>
+</code></pre></div>
+
+<hr />
+<h3 id="password-hasher-argon2-requires-the-argon2-cffi-package">❌ <code>Password hasher 'argon2' requires the 'argon2-cffi' package</code><a class="headerlink" href="#password-hasher-argon2-requires-the-argon2-cffi-package" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Dependência opcional não instalada.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Para Argon2</span>
+pip<span class="w"> </span>install<span class="w"> </span>argon2-cffi
+
+<span class="c1"># Para BCrypt</span>
+pip<span class="w"> </span>install<span class="w"> </span>bcrypt
+
+<span class="c1"># Para Scrypt</span>
+pip<span class="w"> </span>install<span class="w"> </span>scrypt
+
+<span class="c1"># Ou use o padrão (sem dependência extra)</span>
+configure_auth<span class="o">(</span><span class="nv">password_hasher</span><span class="o">=</span><span class="s2">&quot;pbkdf2_sha256&quot;</span><span class="o">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="5-erros-de-middleware">5. Erros de Middleware<a class="headerlink" href="#5-erros-de-middleware" title="Permanent link">&para;</a></h2>
+<h3 id="could-not-import-middleware-myappmiddlewarecustom">❌ <code>Could not import middleware 'myapp.middleware.Custom'</code><a class="headerlink" href="#could-not-import-middleware-myappmiddlewarecustom" title="Permanent link">&para;</a></h3>
+<p><strong>Causas:</strong>
+1. Path incorreto
+2. Módulo não existe
+3. Erro de sintaxe no módulo</p>
+<p><strong>Diagnóstico:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Teste o import manualmente</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">myapp.middleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">Custom</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Import OK&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Erro:&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Verifique o path completo</span>
+<span class="n">middleware</span><span class="o">=</span><span class="p">[</span>
+    <span class="s2">&quot;myapp.middleware.CustomMiddleware&quot;</span><span class="p">,</span>  <span class="c1"># myapp/middleware.py, class CustomMiddleware</span>
+<span class="p">]</span>
+
+<span class="c1"># Ou use classe diretamente</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myapp.middleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">CustomMiddleware</span>
+
+<span class="n">middleware</span><span class="o">=</span><span class="p">[</span><span class="n">CustomMiddleware</span><span class="p">]</span>
+</code></pre></div>
+
+<hr />
+<h3 id="nonetype-object-has-no-attribute-user">❌ <code>'NoneType' object has no attribute 'user'</code><a class="headerlink" href="#nonetype-object-has-no-attribute-user" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Acessando <code>request.state.user</code> antes do middleware executar.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ✅ Sempre verifique None</span>
+<span class="n">user</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="mi">401</span><span class="p">,</span> <span class="s2">&quot;Not authenticated&quot;</span><span class="p">)</span>
+
+<span class="c1"># ✅ Ou use dependency</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_current_user</span>
+
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/me&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">me</span><span class="p">(</span><span class="n">user</span><span class="p">:</span> <span class="n">User</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_current_user</span><span class="p">)):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">user</span><span class="o">.</span><span class="n">email</span><span class="p">}</span>
+</code></pre></div>
+
+<hr />
+<h3 id="middleware-nao-esta-sendo-executado">❌ Middleware não está sendo executado<a class="headerlink" href="#middleware-nao-esta-sendo-executado" title="Permanent link">&para;</a></h3>
+<p><strong>Diagnóstico:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.middleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">print_middleware_stack</span>
+
+<span class="n">print_middleware_stack</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+<span class="c1"># Verifique se seu middleware aparece</span>
+</code></pre></div>
+
+<p><strong>Causas comuns:</strong>
+1. Middleware não registrado
+2. <code>exclude_paths</code> inclui o path
+3. Ordem errada (antes de CORS pode bloquear)</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Verifique registro</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.middleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_registered_middlewares</span>
+<span class="k">for</span> <span class="n">mw</span> <span class="ow">in</span> <span class="n">get_registered_middlewares</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">mw</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">mw</span><span class="o">.</span><span class="n">enabled</span><span class="p">)</span>
+
+<span class="c1"># Verifique exclude_paths</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyMiddleware</span><span class="p">(</span><span class="n">BaseMiddleware</span><span class="p">):</span>
+    <span class="n">exclude_paths</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;/api/&quot;</span><span class="p">]</span>  <span class="c1"># Talvez muito amplo?</span>
+</code></pre></div>
+
+<hr />
+<h2 id="6-erros-de-serializacao">6. Erros de Serialização<a class="headerlink" href="#6-erros-de-serializacao" title="Permanent link">&para;</a></h2>
+<h3 id="extra-inputs-are-not-permitted">❌ <code>Extra inputs are not permitted</code><a class="headerlink" href="#extra-inputs-are-not-permitted" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Schema de input com <code>extra="forbid"</code> recebendo campos extras.</p>
+<p><strong>Comportamento:</strong> Por padrão o InputSchema usa <code>extra="ignore"</code> (campos desconhecidos são ignorados). Para rejeitar campos extras, use <code>extra="forbid"</code> no schema:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigDict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSchema</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyStrictInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+</code></pre></div>
+
+<hr />
+<h3 id="input-should-be-a-valid-string">❌ <code>Input should be a valid string</code><a class="headerlink" href="#input-should-be-a-valid-string" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Tipo incorreto no payload.</p>
+<p><strong>Exemplo:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1">// ❌ Errado</span>
+<span class="p">{</span><span class="nt">&quot;email&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">123</span><span class="p">}</span>
+
+<span class="c1">// ✅ Correto</span>
+<span class="p">{</span><span class="nt">&quot;email&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user@example.com&quot;</span><span class="p">}</span>
+</code></pre></div>
+
+<hr />
+<h3 id="object-of-type-uuid-is-not-json-serializable">❌ <code>Object of type UUID is not JSON serializable</code><a class="headerlink" href="#object-of-type-uuid-is-not-json-serializable" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Tentando serializar UUID sem converter.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># No schema de output</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">UserOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># UUID serializa como string</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_orm</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+        <span class="c1"># UUID já é convertido automaticamente pelo Pydantic</span>
+        <span class="k">return</span> <span class="n">data</span>
+
+<span class="c1"># Ou use model_config</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">UserOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span>
+
+    <span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;json_encoders&quot;</span><span class="p">:</span> <span class="p">{</span><span class="n">UUID</span><span class="p">:</span> <span class="nb">str</span><span class="p">}}</span>
+</code></pre></div>
+
+<hr />
+<h3 id="value-is-not-a-valid-email-address">❌ <code>value is not a valid email address</code><a class="headerlink" href="#value-is-not-a-valid-email-address" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Email mal formatado.</p>
+<p><strong>Solução no cliente:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1">// Valide antes de enviar</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">emailRegex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sr">/^[^\s@]+@[^\s@]+\.[^\s@]+$/</span><span class="p">;</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">emailRegex</span><span class="p">.</span><span class="nx">test</span><span class="p">(</span><span class="nx">email</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">showError</span><span class="p">(</span><span class="s2">&quot;Email inválido&quot;</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<hr />
+<h2 id="7-erros-de-permissoes">7. Erros de Permissões<a class="headerlink" href="#7-erros-de-permissoes" title="Permanent link">&para;</a></h2>
+<h3 id="permission-denied">❌ <code>Permission denied</code><a class="headerlink" href="#permission-denied" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Usuário não tem permissão necessária.</p>
+<p><strong>Diagnóstico:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Verifique permissões do usuário</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Permissões:&quot;</span><span class="p">,</span> <span class="n">user</span><span class="o">.</span><span class="n">get_all_permissions</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Grupos:&quot;</span><span class="p">,</span> <span class="n">user</span><span class="o">.</span><span class="n">get_group_names</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;É superuser:&quot;</span><span class="p">,</span> <span class="n">user</span><span class="o">.</span><span class="n">is_superuser</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Adicione permissão</span>
+<span class="k">await</span> <span class="n">user</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span><span class="s2">&quot;posts.create&quot;</span><span class="p">,</span> <span class="n">db</span><span class="p">)</span>
+
+<span class="c1"># Ou adicione ao grupo</span>
+<span class="k">await</span> <span class="n">user</span><span class="o">.</span><span class="n">add_to_group</span><span class="p">(</span><span class="s2">&quot;editors&quot;</span><span class="p">,</span> <span class="n">db</span><span class="p">)</span>
+
+<span class="c1"># Ou faça superuser (tem todas permissões)</span>
+<span class="n">user</span><span class="o">.</span><span class="n">is_superuser</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="k">await</span> <span class="n">user</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h3 id="user-is-not-in-required-group">❌ <code>User is not in required group</code><a class="headerlink" href="#user-is-not-in-required-group" title="Permanent link">&para;</a></h3>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Verifique grupos</span>
+<span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">is_in_group</span><span class="p">(</span><span class="s2">&quot;admin&quot;</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="mi">403</span><span class="p">,</span> <span class="s2">&quot;Acesso negado&quot;</span><span class="p">)</span>
+
+<span class="c1"># Adicione ao grupo</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">Group</span>
+
+<span class="n">admin_group</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Group</span><span class="o">.</span><span class="n">get_or_create</span><span class="p">(</span><span class="s2">&quot;admin&quot;</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span>
+<span class="k">await</span> <span class="n">user</span><span class="o">.</span><span class="n">add_to_group</span><span class="p">(</span><span class="n">admin_group</span><span class="p">,</span> <span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="8-erros-de-multi-tenancy">8. Erros de Multi-Tenancy<a class="headerlink" href="#8-erros-de-multi-tenancy" title="Permanent link">&para;</a></h2>
+<h3 id="tenant-not-set">❌ <code>Tenant not set</code><a class="headerlink" href="#tenant-not-set" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Tentando acessar dados sem tenant definido.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.tenancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_tenant</span><span class="p">,</span> <span class="n">tenant_context</span>
+
+<span class="c1"># Opção 1: Set manual</span>
+<span class="n">set_tenant</span><span class="p">(</span><span class="n">workspace_id</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">MyModel</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Opção 2: Context manager</span>
+<span class="k">async</span> <span class="k">with</span> <span class="n">tenant_context</span><span class="p">(</span><span class="n">workspace_id</span><span class="p">):</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">MyModel</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Opção 3: Via middleware (automático)</span>
+<span class="c1"># Configure TenantMiddleware</span>
+</code></pre></div>
+
+<hr />
+<h3 id="cross-tenant-access-detected">❌ <code>Cross-tenant access detected</code><a class="headerlink" href="#cross-tenant-access-detected" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Tentando acessar dados de outro tenant.</p>
+<p><strong>Solução:</strong> Verifique lógica de filtro:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># TenantQuerySet filtra automaticamente</span>
+<span class="c1"># Mas se acessar diretamente...</span>
+
+<span class="c1"># ❌ Bypass perigoso</span>
+<span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Item</span><span class="p">,</span> <span class="n">item_id</span><span class="p">)</span>  <span class="c1"># Pode ser de outro tenant!</span>
+
+<span class="c1"># ✅ Seguro</span>
+<span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">item_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+<span class="c1"># TenantQuerySet adiciona filtro de tenant automaticamente</span>
+</code></pre></div>
+
+<hr />
+<h2 id="9-erros-de-performance">9. Erros de Performance<a class="headerlink" href="#9-erros-de-performance" title="Permanent link">&para;</a></h2>
+<h3 id="queries-n1">❌ Queries N+1<a class="headerlink" href="#queries-n1" title="Permanent link">&para;</a></h3>
+<p><strong>Sintoma:</strong> Muitas queries para listar dados relacionados.</p>
+<p><strong>Diagnóstico:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Habilite logging SQL</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">database_echo</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+</code></pre></div>
+
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ N+1 queries</span>
+<span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">users</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">posts</span><span class="p">)</span>  <span class="c1"># Query para cada user!</span>
+
+<span class="c1"># ✅ Eager loading</span>
+<span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">select_related</span><span class="p">(</span><span class="s2">&quot;posts&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">users</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">posts</span><span class="p">)</span>  <span class="c1"># Já carregado</span>
+</code></pre></div>
+
+<hr />
+<h3 id="timeout-em-queries">❌ Timeout em queries<a class="headerlink" href="#timeout-em-queries" title="Permanent link">&para;</a></h3>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Configure timeout</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">database_pool_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span>  <span class="c1"># Aumente</span>
+
+<span class="c1"># Ou use timeout específico</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">text</span>
+
+<span class="k">async</span> <span class="k">with</span> <span class="n">engine</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">wait_for</span><span class="p">(</span>
+        <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;SELECT * FROM big_table&quot;</span><span class="p">)),</span>
+        <span class="n">timeout</span><span class="o">=</span><span class="mf">30.0</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h3 id="memoria-alta-com-grandes-datasets">❌ Memória alta com grandes datasets<a class="headerlink" href="#memoria-alta-com-grandes-datasets" title="Permanent link">&para;</a></h3>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ Carrega tudo na memória</span>
+<span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>  <span class="c1"># 1M users!</span>
+
+<span class="c1"># ✅ Paginação</span>
+<span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># ✅ Streaming</span>
+<span class="k">async</span> <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">stream</span><span class="p">():</span>
+    <span class="n">process</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="10-erros-comuns-de-desenvolvimento">10. Erros Comuns de Desenvolvimento<a class="headerlink" href="#10-erros-comuns-de-desenvolvimento" title="Permanent link">&para;</a></h2>
+<h3 id="coroutine-was-never-awaited">❌ <code>coroutine was never awaited</code><a class="headerlink" href="#coroutine-was-never-awaited" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Esqueceu <code>await</code> em função async.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ Errado</span>
+<span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>  <span class="c1"># Retorna coroutine!</span>
+
+<span class="c1"># ✅ Correto</span>
+<span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+</code></pre></div>
+
+<hr />
+<h3 id="this-event-loop-is-already-running">❌ <code>This event loop is already running</code><a class="headerlink" href="#this-event-loop-is-already-running" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Usando <code>asyncio.run()</code> dentro de contexto async.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ Errado (em FastAPI)</span>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/test&quot;</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>  <span class="c1"># Sync</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">async_function</span><span class="p">())</span>  <span class="c1"># ERRO!</span>
+
+<span class="c1"># ✅ Correto</span>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/test&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>  <span class="c1"># Async</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">async_function</span><span class="p">()</span>
+</code></pre></div>
+
+<hr />
+<h3 id="cannot-use-await-outside-async-function">❌ <code>Cannot use 'await' outside async function</code><a class="headerlink" href="#cannot-use-await-outside-async-function" title="Permanent link">&para;</a></h3>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ Errado</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_function</span><span class="p">():</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_user</span><span class="p">()</span>  <span class="c1"># ERRO!</span>
+
+<span class="c1"># ✅ Correto</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_function</span><span class="p">():</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_user</span><span class="p">()</span>
+
+<span class="c1"># ✅ Ou se precisa chamar de sync</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">my_sync_function</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">my_async_function</span><span class="p">())</span>
+</code></pre></div>
+
+<hr />
+<h3 id="circular-import">❌ Circular import<a class="headerlink" href="#circular-import" title="Permanent link">&para;</a></h3>
+<p><strong>Sintoma:</strong> <code>ImportError: cannot import name 'X' from partially initialized module</code></p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ Errado - import no topo causa circular</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myapp.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myapp.services</span><span class="w"> </span><span class="kn">import</span> <span class="n">UserService</span>  <span class="c1"># UserService importa User</span>
+
+<span class="c1"># ✅ Correto - import local</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_user_service</span><span class="p">():</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">myapp.services</span><span class="w"> </span><span class="kn">import</span> <span class="n">UserService</span>
+    <span class="k">return</span> <span class="n">UserService</span><span class="p">()</span>
+
+<span class="c1"># ✅ Ou use TYPE_CHECKING</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">myapp.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="n">user</span><span class="p">:</span> <span class="s2">&quot;User&quot;</span><span class="p">):</span>  <span class="c1"># String annotation</span>
+    <span class="k">pass</span>
+</code></pre></div>
+
+<hr />
+<h3 id="model-class-not-found-in-registry">❌ <code>Model class not found in registry</code><a class="headerlink" href="#model-class-not-found-in-registry" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Model não foi importado antes de usar.</p>
+<p><strong>Solução:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># main.py - importe todos os models</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">myapp.models</span>  <span class="c1"># Força registro</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrideApp</span>
+<span class="n">app</span> <span class="o">=</span> <span class="n">StrideApp</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="storage-google-cloud-storage">Storage / Google Cloud Storage<a class="headerlink" href="#storage-google-cloud-storage" title="Permanent link">&para;</a></h2>
+<h3 id="failed-to-generate-signed-url">"Failed to generate signed URL"<a class="headerlink" href="#failed-to-generate-signed-url" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomas:</strong>
+- Erro ao gerar signed URL para arquivo em bucket privado
+- URL retornada é pública em vez de signed</p>
+<p><strong>Causas e soluções:</strong></p>
+<ol>
+<li>
+<p><strong>Service Account sem permissão para criar tokens:</strong>
+   <code>bash
+   # A SA precisa da role "Service Account Token Creator"
+   gcloud projects add-iam-policy-binding MEU_PROJETO \
+     --member="serviceAccount:EMAIL@MEU_PROJETO.iam.gserviceaccount.com" \
+     --role="roles/iam.serviceAccountTokenCreator"</code></p>
+</li>
+<li>
+<p><strong>Credenciais inválidas ou expiradas:</strong>
+   ```bash
+   # Verifique se o JSON está correto
+   cat config/gcp-service-account.json | python -m json.tool</p>
+</li>
+</ol>
+<p># Teste autenticação
+   gcloud auth activate-service-account --key-file=config/gcp-service-account.json
+   ```</p>
+<ol>
+<li><strong>google-cloud-storage não instalado:</strong>
+   <code>bash
+   pip install google-cloud-storage</code></li>
+</ol>
+<h3 id="url-assinada-expira-muito-rapido">"URL assinada expira muito rápido"<a class="headerlink" href="#url-assinada-expira-muito-rapido" title="Permanent link">&para;</a></h3>
+<p><strong>Solução:</strong> Aumente <code>STORAGE_GCS_EXPIRATION_SECONDS</code> no <code>.env</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1 hora (padrão)</span>
+<span class="nv">STORAGE_GCS_EXPIRATION_SECONDS</span><span class="o">=</span><span class="m">3600</span>
+
+<span class="c1"># 24 horas</span>
+<span class="nv">STORAGE_GCS_EXPIRATION_SECONDS</span><span class="o">=</span><span class="m">86400</span>
+</code></pre></div>
+
+<h3 id="arquivo-nao-encontrado-no-bucket">"Arquivo não encontrado no bucket"<a class="headerlink" href="#arquivo-nao-encontrado-no-bucket" title="Permanent link">&para;</a></h3>
+<p><strong>Verificações:</strong>
+1. O path armazenado no model está correto?
+2. O bucket existe e está acessível?
+3. A SA tem permissão <code>storage.objects.get</code> no bucket?</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Teste se arquivo existe</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">file_exists</span>
+
+<span class="k">if</span> <span class="n">file_exists</span><span class="p">(</span><span class="s2">&quot;uploads/foto.jpg&quot;</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Arquivo existe!&quot;</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Arquivo NÃO encontrado&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="cors-bloqueando-acesso-ao-arquivo">"CORS bloqueando acesso ao arquivo"<a class="headerlink" href="#cors-bloqueando-acesso-ao-arquivo" title="Permanent link">&para;</a></h3>
+<p>Se o frontend não consegue baixar arquivos via signed URL, configure CORS no bucket:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1">// cors.json</span>
+<span class="p">[</span>
+<span class="w">  </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;origin&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://meusite.com&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;http://localhost:3000&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;HEAD&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;responseHeader&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Content-Type&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;maxAgeSeconds&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3600</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>gsutil<span class="w"> </span>cors<span class="w"> </span><span class="nb">set</span><span class="w"> </span>cors.json<span class="w"> </span>gs://meu-bucket
+</code></pre></div>
+
+<hr />
+<h2 id="checklist-de-debug">Checklist de Debug<a class="headerlink" href="#checklist-de-debug" title="Permanent link">&para;</a></h2>
+<p>Quando encontrar um erro:</p>
+<ol>
+<li><strong>Leia a mensagem completa</strong> - geralmente indica a causa</li>
+<li><strong>Verifique a versão</strong> - <code>python -c "import core; print(core.__version__)"</code></li>
+<li><strong>Habilite debug</strong> - <code>DEBUG=true</code> no .env</li>
+<li><strong>Verifique logs SQL</strong> - <code>DATABASE_ECHO=true</code></li>
+<li><strong>Teste isoladamente</strong> - crie script mínimo que reproduz o erro</li>
+<li><strong>Verifique dependências</strong> - <code>pip list | grep -E "(core|sqlalchemy|fastapi)"</code></li>
+<li><strong>Limpe cache</strong> - <code>find . -type d -name __pycache__ -exec rm -rf {} +</code></li>
+</ol>
+<hr />
+<h2 id="obtendo-ajuda">Obtendo Ajuda<a class="headerlink" href="#obtendo-ajuda" title="Permanent link">&para;</a></h2>
+<p>Se o erro persistir:</p>
+<ol>
+<li><strong>Crie issue</strong> com:</li>
+<li>Versão do framework</li>
+<li>Versão do Python</li>
+<li>Banco de dados usado</li>
+<li>Código mínimo que reproduz</li>
+<li>Mensagem de erro completa</li>
+<li>
+<p>Stack trace</p>
+</li>
+<li>
+<p><strong>Informações úteis:</strong>
+   ```python
+   import sys
+   import strider
+   import sqlalchemy
+   import fastapi</p>
+</li>
+</ol>
+<p>print(f"Python: {sys.version}")
+   print(f"Core: {core.<strong>version</strong>}")
+   print(f"SQLAlchemy: {sqlalchemy.<strong>version</strong>}")
+   print(f"FastAPI: {fastapi.<strong>version</strong>}")
+   ```</p>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

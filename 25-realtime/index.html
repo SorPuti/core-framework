@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/25-realtime/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Real-time: WebSocket, SSE &amp; Channels - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Real-time: WebSocket, SSE \u0026amp; Channels";
+        var mkdocs_page_input_path = "25-realtime.md";
+        var mkdocs_page_url = "/core-framework/25-realtime/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Real-time: WebSocket, SSE &amp; Channels</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/25-realtime.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="real-time-websocket-sse-channels">Real-time: WebSocket, SSE &amp; Channels<a class="headerlink" href="#real-time-websocket-sse-channels" title="Permanent link">&para;</a></h1>
+<p>Primitivas para comunicação em tempo real com suporte a permissões, autenticação JWT e integração nativa com o sistema de routing. Para um resumo de uso no fluxo de criação de aplicação, veja <a href="../00-criar-aplicacao/#8-websocket-e-sse">Criar uma aplicação — WebSocket e SSE</a>.</p>
+<h2 id="arquitetura">Arquitetura<a class="headerlink" href="#arquitetura" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">LR</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Client&quot;</span>
+<span class="w">        </span><span class="n">WS_C</span><span class="p">[</span><span class="n">WebSocket</span><span class="w"> </span><span class="n">Client</span><span class="p">]</span>
+<span class="w">        </span><span class="n">SSE_C</span><span class="p">[</span><span class="n">EventSource</span><span class="w"> </span><span class="n">Client</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;StrideApp&quot;</span>
+<span class="w">        </span><span class="n">direction</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">        </span><span class="n">MW</span><span class="p">[</span><span class="n">Middleware</span><span class="w"> </span><span class="n">Stack</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">HTTP</span><span class="w"> </span><span class="n">only</span><span class="p">]</span>
+<span class="w">        </span><span class="n">WS_R</span><span class="p">[</span><span class="n">WS</span><span class="w"> </span><span class="n">Router</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">bypass</span><span class="w"> </span><span class="n">middleware</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Views&quot;</span>
+<span class="w">        </span><span class="n">WSV</span><span class="p">[</span><span class="n">WebSocketView</span><span class="p">]</span>
+<span class="w">        </span><span class="n">SSEV</span><span class="p">[</span><span class="n">SSEView</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Infra&quot;</span>
+<span class="w">        </span><span class="n">CH</span><span class="p">[</span><span class="n">Channel</span><span class="p">]</span>
+<span class="w">        </span><span class="n">REDIS</span><span class="p">[(</span><span class="n">Redis</span><span class="w"> </span><span class="n">Pub</span><span class="o">/</span><span class="n">Sub</span><span class="p">)]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">WS_C</span><span class="w"> </span><span class="o">--&gt;|</span><span class="n">upgrade</span><span class="o">|</span><span class="w"> </span><span class="n">WS_R</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">WSV</span>
+<span class="w">    </span><span class="n">SSE_C</span><span class="w"> </span><span class="o">--&gt;|</span><span class="n">GET</span><span class="o">|</span><span class="w"> </span><span class="n">MW</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">SSEV</span>
+<span class="w">    </span><span class="n">WSV</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">CH</span>
+<span class="w">    </span><span class="n">SSEV</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">CH</span>
+<span class="w">    </span><span class="n">CH</span><span class="w"> </span><span class="o">-</span><span class="p">.</span><span class="o">-&gt;</span><span class="w"> </span><span class="n">REDIS</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">WS_R</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">MW</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+</code></pre></div>
+
+<blockquote>
+<p><strong>WebSocket</strong> connections bypass o middleware stack HTTP automaticamente (o <code>StrideApp.__call__</code> roteia <code>scope["type"] == "websocket"</code> para um Router Starlette dedicado).  <strong>SSE</strong> é HTTP normal e passa pelo middleware stack completo.</p>
+</blockquote>
+<hr />
+<h2 id="imports">Imports<a class="headerlink" href="#imports" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketView</span><span class="p">,</span> <span class="n">SSEView</span><span class="p">,</span> <span class="n">Channel</span><span class="p">,</span> <span class="n">sse_response</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">AllowAny</span><span class="p">,</span> <span class="n">HasRole</span>  <span class="c1"># permissões</span>
+</code></pre></div>
+
+<hr />
+<h2 id="websocketview">WebSocketView<a class="headerlink" href="#websocketview" title="Permanent link">&para;</a></h2>
+<p>Classe base para endpoints WebSocket.  Cada conexão cria uma nova instância (stateful).</p>
+<h3 id="exemplo-publico-sem-auth">Exemplo público (sem auth)<a class="headerlink" href="#exemplo-publico-sem-auth" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketView</span><span class="p">,</span> <span class="n">Router</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">EchoWS</span><span class="p">(</span><span class="n">WebSocketView</span><span class="p">):</span>
+    <span class="n">encoding</span> <span class="o">=</span> <span class="s2">&quot;json&quot;</span>
+    <span class="n">keepalive</span> <span class="o">=</span> <span class="mi">30</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">room</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;room&quot;</span><span class="p">,</span> <span class="s2">&quot;default&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">send_json</span><span class="p">({</span><span class="s2">&quot;echo&quot;</span><span class="p">:</span> <span class="n">data</span><span class="p">})</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">Router</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/chat&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Chat&quot;</span><span class="p">])</span>
+<span class="n">router</span><span class="o">.</span><span class="n">register_websocket</span><span class="p">(</span><span class="s2">&quot;/ws/</span><span class="si">{room}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">EchoWS</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="exemplo-protegido-com-auth">Exemplo protegido (com auth)<a class="headerlink" href="#exemplo-protegido-com-auth" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketView</span><span class="p">,</span> <span class="n">IsAuthenticated</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PrivateStream</span><span class="p">(</span><span class="n">WebSocketView</span><span class="p">):</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">]</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="c1"># self.user é preenchido automaticamente após autenticação</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;User </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> connected&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">send_json</span><span class="p">({</span><span class="s2">&quot;user&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">email</span><span class="p">,</span> <span class="s2">&quot;msg&quot;</span><span class="p">:</span> <span class="n">data</span><span class="p">})</span>
+</code></pre></div>
+
+<h3 id="atributos-de-classe">Atributos de classe<a class="headerlink" href="#atributos-de-classe" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Atributo</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>permission_classes</code></td>
+<td><code>list[type[Permission]]</code></td>
+<td><code>[]</code></td>
+<td>Permissões verificadas antes do <code>accept()</code>. Se vazio, endpoint é público.</td>
+</tr>
+<tr>
+<td><code>encoding</code></td>
+<td><code>str</code></td>
+<td><code>"json"</code></td>
+<td>Formato de mensagens: <code>"json"</code>, <code>"text"</code> ou <code>"bytes"</code></td>
+</tr>
+<tr>
+<td><code>subprotocol</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Subprotocolo WebSocket a negociar</td>
+</tr>
+<tr>
+<td><code>keepalive</code></td>
+<td><code>int</code></td>
+<td><code>30</code></td>
+<td>Segundos entre pings do servidor. <code>0</code> = desabilitado</td>
+</tr>
+</tbody>
+</table>
+<h3 id="atributos-de-instancia-disponiveis-nos-hooks">Atributos de instância (disponíveis nos hooks)<a class="headerlink" href="#atributos-de-instancia-disponiveis-nos-hooks" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Atributo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>self.user</code></td>
+<td><code>User \| None</code></td>
+<td>Usuário autenticado (preenchido após auth, antes de <code>on_connect</code>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="lifecycle-hooks">Lifecycle hooks<a class="headerlink" href="#lifecycle-hooks" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>sequenceDiagram
+    participant C as Client
+    participant V as WebSocketView
+
+    C-&gt;&gt;V: WebSocket upgrade
+    Note over V: Extrair token (header ou ?token=)
+    Note over V: Verificar permission_classes
+    alt Permissão negada
+        V--&gt;&gt;C: close(4003, reason)
+    else Permissão OK
+        V-&gt;&gt;C: accept()
+        V-&gt;&gt;V: on_connect(ws, **params)
+        loop Mensagens
+            C-&gt;&gt;V: send message
+            V-&gt;&gt;V: on_receive(ws, data)
+        end
+        V-&gt;&gt;V: on_disconnect(ws, code)
+        V-&gt;&gt;C: close()
+    end
+</code></pre></div>
+
+<h3 id="autenticacao-websocket">Autenticação WebSocket<a class="headerlink" href="#autenticacao-websocket" title="Permanent link">&para;</a></h3>
+<p>O token JWT é extraído automaticamente nesta ordem:</p>
+<ol>
+<li><strong>Header</strong> <code>Authorization: Bearer &lt;token&gt;</code> — padrão HTTP</li>
+<li><strong>Query param</strong> <code>?token=&lt;token&gt;</code> — para clientes browser que não suportam headers customizados em WebSocket</li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="c1">// JavaScript — via query param (recomendado para browser)</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">ws</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">WebSocket</span><span class="p">(</span><span class="sb">`wss://api.example.com/ws/room?token=</span><span class="si">${</span><span class="nx">jwt</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+
+<span class="c1">// JavaScript — via header (requer biblioteca como ws em Node.js)</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">ws</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">WebSocket</span><span class="p">(</span><span class="s1">&#39;wss://api.example.com/ws/room&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">headers</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Authorization</span><span class="o">:</span><span class="w"> </span><span class="sb">`Bearer </span><span class="si">${</span><span class="nx">jwt</span><span class="si">}</span><span class="sb">`</span><span class="w"> </span><span class="p">}</span>
+<span class="p">})</span>
+</code></pre></div>
+
+<h3 id="push-only-pattern-servidor-envia-cliente-so-escuta">Push-only pattern (servidor envia, cliente só escuta)<a class="headerlink" href="#push-only-pattern-servidor-envia-cliente-so-escuta" title="Permanent link">&para;</a></h3>
+<p>Para streams unidirecionais (ex: ticks de mercado), sobrescreva <code>_handle</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">starlette.websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketState</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TickStream</span><span class="p">(</span><span class="n">WebSocketView</span><span class="p">):</span>
+    <span class="n">keepalive</span> <span class="o">=</span> <span class="mi">15</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">symbol</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;symbol&quot;</span><span class="p">,</span> <span class="s2">&quot;R_100&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_queue</span> <span class="o">=</span> <span class="k">await</span> <span class="n">tick_hub</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">symbol</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">tick_hub</span><span class="o">.</span><span class="n">unsubscribe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">symbol</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queue</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">ws</span><span class="o">.</span><span class="n">path_params</span> <span class="ow">or</span> <span class="p">{}</span>
+
+        <span class="c1"># Auth (se permission_classes definido)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">permission_classes</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">_authenticate_ws</span><span class="p">(</span><span class="n">ws</span><span class="p">)</span>
+            <span class="n">denied</span> <span class="o">=</span> <span class="k">await</span> <span class="n">_check_ws_permissions</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">permission_classes</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="p">,</span> <span class="bp">self</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">denied</span><span class="p">:</span>
+                <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">4003</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="n">denied</span><span class="p">)</span>
+                <span class="k">return</span>
+
+        <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">accept</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_connect</span><span class="p">(</span><span class="n">ws</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">1011</span><span class="p">)</span>
+            <span class="k">return</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="n">tick</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queue</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">ws</span><span class="o">.</span><span class="n">client_state</span> <span class="o">!=</span> <span class="n">WebSocketState</span><span class="o">.</span><span class="n">CONNECTED</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">send_json</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_disconnect</span><span class="p">(</span><span class="n">ws</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="sseview">SSEView<a class="headerlink" href="#sseview" title="Permanent link">&para;</a></h2>
+<p>Classe base para endpoints Server-Sent Events (HTTP streaming).</p>
+<h3 id="exemplo-publico">Exemplo público<a class="headerlink" href="#exemplo-publico" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">SSEView</span><span class="p">,</span> <span class="n">Router</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">SystemEvents</span><span class="p">(</span><span class="n">SSEView</span><span class="p">):</span>
+    <span class="n">ping_interval</span> <span class="o">=</span> <span class="mi">15</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">event</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_next_event</span><span class="p">()</span>
+            <span class="k">yield</span> <span class="p">{</span><span class="s2">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;update&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">}</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">Router</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/events&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Events&quot;</span><span class="p">])</span>
+<span class="n">router</span><span class="o">.</span><span class="n">register_sse</span><span class="p">(</span><span class="s2">&quot;/system&quot;</span><span class="p">,</span> <span class="n">SystemEvents</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="exemplo-protegido">Exemplo protegido<a class="headerlink" href="#exemplo-protegido" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">SSEView</span><span class="p">,</span> <span class="n">IsAuthenticated</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserNotifications</span><span class="p">(</span><span class="n">SSEView</span><span class="p">):</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">]</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="n">user_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>  <span class="c1"># disponível após auth</span>
+        <span class="k">async</span> <span class="k">for</span> <span class="n">notification</span> <span class="ow">in</span> <span class="n">listen_notifications</span><span class="p">(</span><span class="n">user_id</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="p">{</span>
+                <span class="s2">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;notification&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">notification</span><span class="p">,</span>
+                <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">notification</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]),</span>
+            <span class="p">}</span>
+</code></pre></div>
+
+<h3 id="atributos-de-classe_1">Atributos de classe<a class="headerlink" href="#atributos-de-classe_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Atributo</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>permission_classes</code></td>
+<td><code>list[type[Permission]]</code></td>
+<td><code>[]</code></td>
+<td>Permissões verificadas antes do streaming. Se falhar, emite <code>event: error</code>.</td>
+</tr>
+<tr>
+<td><code>ping_interval</code></td>
+<td><code>int</code></td>
+<td><code>15</code></td>
+<td>Segundos entre comentários <code>: ping</code>. <code>0</code> = desabilitado</td>
+</tr>
+<tr>
+<td><code>headers</code></td>
+<td><code>dict[str, str]</code></td>
+<td><code>{}</code></td>
+<td>Headers HTTP extras na response</td>
+</tr>
+</tbody>
+</table>
+<h3 id="atributos-de-instancia">Atributos de instância<a class="headerlink" href="#atributos-de-instancia" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Atributo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>self.user</code></td>
+<td><code>User \| None</code></td>
+<td>Usuário autenticado</td>
+</tr>
+</tbody>
+</table>
+<h3 id="formato-do-evento-sse">Formato do evento SSE<a class="headerlink" href="#formato-do-evento-sse" title="Permanent link">&para;</a></h3>
+<p>O método <code>stream()</code> deve fazer <code>yield</code> de dicts com as chaves:</p>
+<table>
+<thead>
+<tr>
+<th>Chave</th>
+<th>Tipo</th>
+<th>Obrigatório</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>event</code></td>
+<td><code>str</code></td>
+<td>Não</td>
+<td>Nome do evento (ex: <code>"trade"</code>, <code>"log"</code>)</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td><code>str \| dict \| list</code></td>
+<td>Sim</td>
+<td>Payload (dicts são serializados como JSON)</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td><code>str</code></td>
+<td>Não</td>
+<td>ID do evento para reconnect via <code>Last-Event-ID</code></td>
+</tr>
+<tr>
+<td><code>retry</code></td>
+<td><code>int</code></td>
+<td>Não</td>
+<td>Tempo em ms para o cliente esperar antes de reconectar</td>
+</tr>
+</tbody>
+</table>
+<h3 id="autenticacao-sse">Autenticação SSE<a class="headerlink" href="#autenticacao-sse" title="Permanent link">&para;</a></h3>
+<p>O token é extraído automaticamente:</p>
+<ol>
+<li><strong>Header</strong> <code>Authorization: Bearer &lt;token&gt;</code> — padrão HTTP</li>
+<li><strong>Query param</strong> <code>?token=&lt;token&gt;</code> — para <code>EventSource</code> que não suporta headers</li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="c1">// Com header (requer fetch + ReadableStream)</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetch</span><span class="p">(</span><span class="s1">&#39;/api/events/stream&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">headers</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Authorization</span><span class="o">:</span><span class="w"> </span><span class="sb">`Bearer </span><span class="si">${</span><span class="nx">token</span><span class="si">}</span><span class="sb">`</span><span class="w"> </span><span class="p">}</span>
+<span class="p">})</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">reader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">getReader</span><span class="p">()</span>
+
+<span class="c1">// Com query param (EventSource nativo)</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">es</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">EventSource</span><span class="p">(</span><span class="sb">`/api/events/stream?token=</span><span class="si">${</span><span class="nx">token</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+<span class="nx">es</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s1">&#39;trade&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">e</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">e</span><span class="p">.</span><span class="nx">data</span><span class="p">))</span>
+<span class="p">})</span>
+</code></pre></div>
+
+<hr />
+<h2 id="channel">Channel<a class="headerlink" href="#channel" title="Permanent link">&para;</a></h2>
+<p>Pub/sub in-process para fan-out de mensagens.  Cada subscriber recebe uma cópia de cada mensagem via <code>asyncio.Queue</code>.</p>
+<h3 id="uso-basico">Uso básico<a class="headerlink" href="#uso-basico" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Channel</span>
+
+<span class="c1"># Criar canal global</span>
+<span class="n">notifications</span> <span class="o">=</span> <span class="n">Channel</span><span class="p">(</span><span class="n">maxlen</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+
+<span class="c1"># Publicar (de qualquer lugar)</span>
+<span class="k">await</span> <span class="n">notifications</span><span class="o">.</span><span class="n">publish</span><span class="p">({</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;alert&quot;</span><span class="p">,</span> <span class="s2">&quot;msg&quot;</span><span class="p">:</span> <span class="s2">&quot;Server restarting&quot;</span><span class="p">})</span>
+
+<span class="c1"># Consumir (async iterator)</span>
+<span class="k">async</span> <span class="k">for</span> <span class="n">msg</span> <span class="ow">in</span> <span class="n">notifications</span><span class="o">.</span><span class="n">subscribe</span><span class="p">():</span>
+    <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">send_json</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+
+<span class="c1"># Consumir (queue manual)</span>
+<span class="n">queue</span> <span class="o">=</span> <span class="k">await</span> <span class="n">notifications</span><span class="o">.</span><span class="n">subscribe_queue</span><span class="p">()</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="k">await</span> <span class="n">queue</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+        <span class="n">process</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+<span class="k">finally</span><span class="p">:</span>
+    <span class="k">await</span> <span class="n">notifications</span><span class="o">.</span><span class="n">unsubscribe_queue</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="api">API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Método</th>
+<th>Retorno</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>publish(message)</code></td>
+<td><code>int</code></td>
+<td>Broadcast para todos os subscribers. Retorna quantidade entregue.</td>
+</tr>
+<tr>
+<td><code>subscribe()</code></td>
+<td><code>AsyncIterator</code></td>
+<td>Async iterator que yield mensagens. Cleanup automático.</td>
+</tr>
+<tr>
+<td><code>subscribe_queue()</code></td>
+<td><code>asyncio.Queue</code></td>
+<td>Queue raw para consumo manual.</td>
+</tr>
+<tr>
+<td><code>unsubscribe_queue(queue)</code></td>
+<td><code>None</code></td>
+<td>Remove queue do canal.</td>
+</tr>
+<tr>
+<td><code>subscriber_count</code></td>
+<td><code>int</code></td>
+<td>Propriedade: número de subscribers ativos.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="comportamento-com-slow-consumers">Comportamento com slow consumers<a class="headerlink" href="#comportamento-com-slow-consumers" title="Permanent link">&para;</a></h3>
+<p>Quando a queue de um subscriber está cheia (<code>maxlen</code>), a mensagem mais antiga é descartada para dar lugar à nova.  Se isso falhar, o subscriber é removido automaticamente.</p>
+<hr />
+<h2 id="sse_response-helper-funcional">sse_response() — helper funcional<a class="headerlink" href="#sse_response-helper-funcional" title="Permanent link">&para;</a></h2>
+<p>Para endpoints que não precisam de uma classe completa:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">sse_response</span>
+
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/events&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">events</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">gen</span><span class="p">():</span>
+        <span class="k">yield</span> <span class="p">{</span><span class="s2">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;hello&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="s2">&quot;world&quot;</span><span class="p">}</span>
+        <span class="k">yield</span> <span class="p">{</span><span class="s2">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;update&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="mi">42</span><span class="p">}}</span>
+    <span class="k">return</span> <span class="n">sse_response</span><span class="p">(</span><span class="n">gen</span><span class="p">())</span>
+</code></pre></div>
+
+<hr />
+<h2 id="registro-de-rotas">Registro de rotas<a class="headerlink" href="#registro-de-rotas" title="Permanent link">&para;</a></h2>
+<h3 id="router">Router<a class="headerlink" href="#router" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Router</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">Router</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/api/v1&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Realtime&quot;</span><span class="p">])</span>
+
+<span class="c1"># WebSocket</span>
+<span class="n">router</span><span class="o">.</span><span class="n">register_websocket</span><span class="p">(</span><span class="s2">&quot;/ws/ticks/</span><span class="si">{symbol}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">TickStreamWS</span><span class="p">)</span>
+
+<span class="c1"># SSE</span>
+<span class="n">router</span><span class="o">.</span><span class="n">register_sse</span><span class="p">(</span><span class="s2">&quot;/events/</span><span class="si">{userId}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">TradeEventsSSE</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="autorouter">AutoRouter<a class="headerlink" href="#autorouter" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoRouter</span>
+
+<span class="n">api</span> <span class="o">=</span> <span class="n">AutoRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/api&quot;</span><span class="p">)</span>
+<span class="n">api</span><span class="o">.</span><span class="n">register_websocket</span><span class="p">(</span><span class="s2">&quot;/ws/chat/</span><span class="si">{room}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">ChatWS</span><span class="p">)</span>
+<span class="n">api</span><span class="o">.</span><span class="n">register_sse</span><span class="p">(</span><span class="s2">&quot;/stream/</span><span class="si">{userId}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">UserStream</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="como-funciona-internamente">Como funciona internamente<a class="headerlink" href="#como-funciona-internamente" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Registro&quot;</span>
+<span class="w">        </span><span class="n">RW</span><span class="p">[</span><span class="n">register_websocket</span><span class="p">]</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">WSR</span><span class="p">[</span><span class="n">_ws_routes</span><span class="w"> </span><span class="n">list</span><span class="p">]</span>
+<span class="w">        </span><span class="n">RS</span><span class="p">[</span><span class="n">register_sse</span><span class="p">]</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">HTTP</span><span class="p">[</span><span class="n">add_api_route</span><span class="w"> </span><span class="n">GET</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;StrideApp.__init__&quot;</span>
+<span class="w">        </span><span class="n">IR</span><span class="p">[</span><span class="n">include_router</span><span class="p">]</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">PROP</span><span class="p">[</span><span class="n">Propaga</span><span class="w"> </span><span class="n">_ws_routes</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">com</span><span class="w"> </span><span class="n">prefixos</span><span class="p">]</span>
+<span class="w">        </span><span class="n">PROP</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">BUILD</span><span class="p">[</span><span class="n">_build_ws_router</span><span class="p">]</span>
+<span class="w">        </span><span class="n">BUILD</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">STAR</span><span class="p">[</span><span class="n">Starlette</span><span class="w"> </span><span class="n">Router</span><span class="o">&lt;</span><span class="n">br</span><span class="o">/&gt;</span><span class="n">dedicado</span><span class="w"> </span><span class="n">para</span><span class="w"> </span><span class="n">WS</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;StrideApp.__call__&quot;</span>
+<span class="w">        </span><span class="n">REQ</span><span class="p">{</span><span class="n">scope</span><span class="w"> </span><span class="n">type</span><span class="o">?</span><span class="p">}</span>
+<span class="w">        </span><span class="n">REQ</span><span class="w"> </span><span class="o">--&gt;|</span><span class="n">websocket</span><span class="o">|</span><span class="w"> </span><span class="n">STAR</span>
+<span class="w">        </span><span class="n">REQ</span><span class="w"> </span><span class="o">--&gt;|</span><span class="n">http</span><span class="o">|</span><span class="w"> </span><span class="n">FAST</span><span class="p">[</span><span class="n">FastAPI</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Middleware</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+</code></pre></div>
+
+<hr />
+<h2 id="permissoes-disponiveis">Permissões disponíveis<a class="headerlink" href="#permissoes-disponiveis" title="Permanent link">&para;</a></h2>
+<p>Todas as permissões do sistema de auth funcionam em WebSocket e SSE:</p>
+<table>
+<thead>
+<tr>
+<th>Permissão</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AllowAny</code></td>
+<td>Acesso público (default quando <code>permission_classes = []</code>)</td>
+</tr>
+<tr>
+<td><code>IsAuthenticated</code></td>
+<td>Requer token JWT válido</td>
+</tr>
+<tr>
+<td><code>IsAdmin</code></td>
+<td>Requer <code>user.is_admin</code> ou <code>user.is_superuser</code></td>
+</tr>
+<tr>
+<td><code>HasRole("editor")</code></td>
+<td>Requer role específico</td>
+</tr>
+<tr>
+<td><code>IsOwner</code></td>
+<td>Verifica propriedade do objeto</td>
+</tr>
+</tbody>
+</table>
+<h3 id="permissao-customizada">Permissão customizada<a class="headerlink" href="#permissao-customizada" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Permission</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">IsSubscriber</span><span class="p">(</span><span class="n">Permission</span><span class="p">):</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;Subscription required&quot;</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">user</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">user</span><span class="p">,</span> <span class="s2">&quot;is_subscriber&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PremiumStream</span><span class="p">(</span><span class="n">WebSocketView</span><span class="p">):</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsSubscriber</span><span class="p">]</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="c1"># Só chega aqui se autenticado E subscriber</span>
+        <span class="o">...</span>
+</code></pre></div>
+
+<h3 id="codigos-de-erro-websocket">Códigos de erro WebSocket<a class="headerlink" href="#codigos-de-erro-websocket" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Código</th>
+<th>Significado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>4003</code></td>
+<td>Permissão negada (permission check falhou)</td>
+</tr>
+<tr>
+<td><code>1011</code></td>
+<td>Erro interno do servidor</td>
+</tr>
+<tr>
+<td><code>1000</code></td>
+<td>Fechamento normal</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="configuracao-nginx-para-websocket">Configuração Nginx para WebSocket<a class="headerlink" href="#configuracao-nginx-para-websocket" title="Permanent link">&para;</a></h2>
+<p>O Nginx precisa de configuração específica para proxy WebSocket:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Dentro do bloco server {}</span>
+<span class="k">location</span><span class="w"> </span><span class="s">/api/ws/</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://upstream_api</span><span class="p">;</span>
+<span class="w">    </span><span class="kn">proxy_http_version</span><span class="w"> </span><span class="mi">1</span><span class="s">.1</span><span class="p">;</span>
+<span class="w">    </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Upgrade</span><span class="w"> </span><span class="nv">$http_upgrade</span><span class="p">;</span>
+<span class="w">    </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Connection</span><span class="w"> </span><span class="s">&quot;upgrade&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Host</span><span class="w"> </span><span class="nv">$host</span><span class="p">;</span>
+<span class="w">    </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Real-IP</span><span class="w"> </span><span class="nv">$remote_addr</span><span class="p">;</span>
+<span class="w">    </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-For</span><span class="w"> </span><span class="nv">$proxy_add_x_forwarded_for</span><span class="p">;</span>
+<span class="w">    </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-Proto</span><span class="w"> </span><span class="nv">$scheme</span><span class="p">;</span>
+<span class="w">    </span><span class="kn">proxy_read_timeout</span><span class="w"> </span><span class="mi">86400</span><span class="p">;</span>
+<span class="w">    </span><span class="kn">proxy_send_timeout</span><span class="w"> </span><span class="mi">86400</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<blockquote>
+<p>O <code>X-Accel-Buffering: no</code> é enviado automaticamente pelo SSEView para desabilitar o buffering do Nginx em respostas SSE.</p>
+</blockquote>
+<hr />
+<h2 id="exemplo-completo-sistema-de-trading">Exemplo completo: sistema de trading<a class="headerlink" href="#exemplo-completo-sistema-de-trading" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># routes.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Router</span><span class="p">,</span> <span class="n">WebSocketView</span><span class="p">,</span> <span class="n">SSEView</span><span class="p">,</span> <span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">Channel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">starlette.websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocket</span><span class="p">,</span> <span class="n">WebSocketState</span>
+
+<span class="c1"># Canal global de ticks</span>
+<span class="n">tick_channel</span> <span class="o">=</span> <span class="n">Channel</span><span class="p">(</span><span class="n">maxlen</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TickStreamWS</span><span class="p">(</span><span class="n">WebSocketView</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Ticks de mercado em tempo real (público).&quot;&quot;&quot;</span>
+    <span class="n">keepalive</span> <span class="o">=</span> <span class="mi">15</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">symbol</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;symbol&quot;</span><span class="p">,</span> <span class="s2">&quot;R_100&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">accept</span><span class="p">()</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_connect</span><span class="p">(</span><span class="n">ws</span><span class="p">,</span> <span class="o">**</span><span class="p">(</span><span class="n">ws</span><span class="o">.</span><span class="n">path_params</span> <span class="ow">or</span> <span class="p">{}))</span>
+        <span class="k">async</span> <span class="k">for</span> <span class="n">tick</span> <span class="ow">in</span> <span class="n">tick_channel</span><span class="o">.</span><span class="n">subscribe</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">tick</span><span class="p">[</span><span class="s2">&quot;symbol&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">symbol</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">ws</span><span class="o">.</span><span class="n">client_state</span> <span class="o">!=</span> <span class="n">WebSocketState</span><span class="o">.</span><span class="n">CONNECTED</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">send_json</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TradeEventsSSE</span><span class="p">(</span><span class="n">SSEView</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Eventos de trade do usuário (protegido).&quot;&quot;&quot;</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">]</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="n">user_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+        <span class="k">async</span> <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">listen_trade_events</span><span class="p">(</span><span class="n">user_id</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="p">{</span><span class="s2">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;trade&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">}</span>
+
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">Router</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/trading&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Trading&quot;</span><span class="p">])</span>
+<span class="n">router</span><span class="o">.</span><span class="n">register_websocket</span><span class="p">(</span><span class="s2">&quot;/ws/ticks/</span><span class="si">{symbol}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">TickStreamWS</span><span class="p">)</span>
+<span class="n">router</span><span class="o">.</span><span class="n">register_sse</span><span class="p">(</span><span class="s2">&quot;/events/</span><span class="si">{userId}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">TradeEventsSSE</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># main.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrideApp</span><span class="p">,</span> <span class="n">AutoRouter</span>
+
+<span class="n">api</span> <span class="o">=</span> <span class="n">AutoRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/api&quot;</span><span class="p">)</span>
+<span class="n">api</span><span class="o">.</span><span class="n">include_router</span><span class="p">(</span><span class="n">router</span><span class="p">)</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">StrideApp</span><span class="p">(</span><span class="n">routers</span><span class="o">=</span><span class="p">[</span><span class="n">api</span><span class="p">])</span>
+<span class="c1"># WebSocket: /api/trading/ws/ticks/{symbol}</span>
+<span class="c1"># SSE:       /api/trading/events/{userId}</span>
+</code></pre></div>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

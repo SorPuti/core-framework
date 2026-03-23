@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/40-admin/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Admin Panel - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Admin Panel";
+        var mkdocs_page_input_path = "40-admin.md";
+        var mkdocs_page_url = "/core-framework/40-admin/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Admin Panel</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/40-admin.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="admin-panel">Admin Panel<a class="headerlink" href="#admin-panel" title="Permanent link">&para;</a></h1>
+<p>Painel administrativo estilo Django com tipagem genérica para autocomplete no PyCharm.</p>
+<h2 id="habilitacao">Habilitação<a class="headerlink" href="#habilitacao" title="Permanent link">&para;</a></h2>
+<p>Admin é habilitado por padrão. Acesse em <code>/admin/</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">admin_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Default</span>
+    <span class="n">admin_url_prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;/admin&quot;</span>
+    <span class="n">admin_site_title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Minha Empresa&quot;</span>
+    <span class="n">admin_site_header</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Painel Administrativo&quot;</span>
+    <span class="n">admin_primary_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#3B82F6&quot;</span>  <span class="c1"># blue-500</span>
+</code></pre></div>
+
+<h2 id="registrar-models">Registrar Models<a class="headerlink" href="#registrar-models" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/posts/admin.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.admin</span><span class="w"> </span><span class="kn">import</span> <span class="n">admin</span><span class="p">,</span> <span class="n">ModelAdmin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>
+
+<span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">Post</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PostAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">Post</span><span class="p">]):</span>  <span class="c1"># Tipagem genérica para autocomplete</span>
+    <span class="n">display_name</span> <span class="o">=</span> <span class="s2">&quot;Post&quot;</span>
+    <span class="n">display_name_plural</span> <span class="o">=</span> <span class="s2">&quot;Posts&quot;</span>
+    <span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;file-text&quot;</span>  <span class="c1"># Lucide icon</span>
+
+    <span class="n">list_display</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">)</span>
+    <span class="n">list_filter</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;published&quot;</span><span class="p">,)</span>
+    <span class="n">search_fields</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">)</span>
+    <span class="n">ordering</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;-created_at&quot;</span><span class="p">,)</span>
+</code></pre></div>
+
+<h2 id="tipagem-generica">Tipagem Genérica<a class="headerlink" href="#tipagem-generica" title="Permanent link">&para;</a></h2>
+<p>Use <code>ModelAdmin[Model]</code> para autocomplete no PyCharm:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.admin</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelAdmin</span><span class="p">,</span> <span class="n">WidgetConfig</span><span class="p">,</span> <span class="n">IconType</span>
+
+<span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">Domain</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">DomainAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">Domain</span><span class="p">]):</span>
+    <span class="c1"># PyCharm sugere ícones válidos</span>
+    <span class="n">icon</span><span class="p">:</span> <span class="n">IconType</span> <span class="o">=</span> <span class="s2">&quot;globe&quot;</span>
+
+    <span class="c1"># Campos do model Domain</span>
+    <span class="n">list_display</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="s2">&quot;is_verified&quot;</span><span class="p">)</span>
+
+    <span class="c1"># TypedDict para widgets</span>
+    <span class="n">widgets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">WidgetConfig</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;hostname_status&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;widget&quot;</span><span class="p">:</span> <span class="s2">&quot;choices&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Status do Hostname&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h2 id="opcoes-completas">Opções Completas<a class="headerlink" href="#opcoes-completas" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">Post</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PostAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">Post</span><span class="p">]):</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Metadados</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">display_name</span> <span class="o">=</span> <span class="s2">&quot;Post&quot;</span>
+    <span class="n">display_name_plural</span> <span class="o">=</span> <span class="s2">&quot;Posts&quot;</span>
+    <span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;file-text&quot;</span>  <span class="c1"># Lucide icon</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># List View</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">list_display</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;author_id&quot;</span><span class="p">,</span> <span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">)</span>
+    <span class="n">list_display_links</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">)</span>  <span class="c1"># Campos clicáveis</span>
+    <span class="n">list_filter</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;author_id&quot;</span><span class="p">)</span>
+    <span class="n">search_fields</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">)</span>
+    <span class="n">ordering</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;-created_at&quot;</span><span class="p">,)</span>
+    <span class="n">list_per_page</span> <span class="o">=</span> <span class="mi">25</span>
+    <span class="n">list_max_show_all</span> <span class="o">=</span> <span class="mi">200</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Detail/Edit View</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">,</span> <span class="s2">&quot;published&quot;</span><span class="p">)</span>  <span class="c1"># Campos no form</span>
+    <span class="n">exclude</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;deleted_at&quot;</span><span class="p">,)</span>  <span class="c1"># Campos a excluir</span>
+    <span class="n">readonly_fields</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">,</span> <span class="s2">&quot;updated_at&quot;</span><span class="p">)</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Fieldsets (agrupamento)</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">fieldsets</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;Conteúdo&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">)}),</span>
+        <span class="p">(</span><span class="s2">&quot;Status&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;published&quot;</span><span class="p">,)}),</span>
+        <span class="p">(</span><span class="s2">&quot;Metadados&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;created_at&quot;</span><span class="p">,</span> <span class="s2">&quot;updated_at&quot;</span><span class="p">)}),</span>
+    <span class="p">]</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Widgets e Help Texts</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">widgets</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;widget&quot;</span><span class="p">:</span> <span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Conteúdo do Post&quot;</span><span class="p">},</span>
+    <span class="p">}</span>
+
+    <span class="n">help_texts</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;Título que aparece na listagem&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;Conteúdo em markdown&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Permissões</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;view&quot;</span><span class="p">,</span> <span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="s2">&quot;change&quot;</span><span class="p">,</span> <span class="s2">&quot;delete&quot;</span><span class="p">)</span>
+    <span class="n">exclude_actions</span> <span class="o">=</span> <span class="p">()</span>  <span class="c1"># Actions a desabilitar</span>
+</code></pre></div>
+
+<h2 id="widgets-disponiveis">Widgets Disponíveis<a class="headerlink" href="#widgets-disponiveis" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Widget</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>default</code></td>
+<td>Input padrão baseado no tipo</td>
+</tr>
+<tr>
+<td><code>string</code></td>
+<td>Input de texto</td>
+</tr>
+<tr>
+<td><code>text</code></td>
+<td>Textarea</td>
+</tr>
+<tr>
+<td><code>integer</code></td>
+<td>Input numérico</td>
+</tr>
+<tr>
+<td><code>float</code></td>
+<td>Input decimal</td>
+</tr>
+<tr>
+<td><code>boolean</code></td>
+<td>Checkbox</td>
+</tr>
+<tr>
+<td><code>datetime</code></td>
+<td>Date/time picker</td>
+</tr>
+<tr>
+<td><code>date</code></td>
+<td>Date picker</td>
+</tr>
+<tr>
+<td><code>time</code></td>
+<td>Time picker</td>
+</tr>
+<tr>
+<td><code>json</code></td>
+<td>Editor JSON</td>
+</tr>
+<tr>
+<td><code>uuid</code></td>
+<td>Input UUID</td>
+</tr>
+<tr>
+<td><code>password</code></td>
+<td>Input de senha</td>
+</tr>
+<tr>
+<td><code>password_hash</code></td>
+<td>Campo de hash (oculto)</td>
+</tr>
+<tr>
+<td><code>virtual_password</code></td>
+<td>Senha virtual (usa set_password)</td>
+</tr>
+<tr>
+<td><code>secret</code></td>
+<td>Campo secreto (nunca exibe)</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>Input de email</td>
+</tr>
+<tr>
+<td><code>url</code></td>
+<td>Input de URL</td>
+</tr>
+<tr>
+<td><code>slug</code></td>
+<td>Input de slug (auto-gera)</td>
+</tr>
+<tr>
+<td><code>color</code></td>
+<td>Color picker</td>
+</tr>
+<tr>
+<td><code>ip</code></td>
+<td>Input de IP</td>
+</tr>
+<tr>
+<td><code>choices</code></td>
+<td>Select dropdown (enum)</td>
+</tr>
+<tr>
+<td><code>fk</code></td>
+<td>Foreign key (autocomplete)</td>
+</tr>
+<tr>
+<td><code>m2m_select</code></td>
+<td>Many-to-many select</td>
+</tr>
+<tr>
+<td><code>file_upload</code></td>
+<td>Upload de arquivo (storage local ou GCS); drag-and-drop, preview</td>
+</tr>
+</tbody>
+</table>
+<h2 id="campos-de-arquivo-storage-e-exclusao">Campos de arquivo (Storage) e exclusão<a class="headerlink" href="#campos-de-arquivo-storage-e-exclusao" title="Permanent link">&para;</a></h2>
+<p>Quando o model tem campos que armazenam <strong>path ou URL de arquivo</strong> (ex.: <code>image</code>, <code>avatar</code>, <code>file_path</code>, <code>attachment_url</code>), o admin detecta automaticamente e exibe o widget <strong>file_upload</strong>:</p>
+<ul>
+<li><strong>Detecção automática</strong>: nomes como <code>image</code>, <code>avatar</code>, <code>photo</code>, <code>file_path</code>, <code>attachment</code>, <code>*_url</code> (para imagem/arquivo) viram <code>file_upload</code>.</li>
+<li><strong>Widget no formulário</strong>: área de drag-and-drop, preview (imagem ou ícone), link para o arquivo atual e botão para remover.</li>
+<li><strong>Upload</strong>: o arquivo é enviado para o backend configurado em Settings (<code>storage_backend</code>: local ou GCS). O valor retornado (path ou URL) é salvo no campo.</li>
+</ul>
+<p>Configure o storage em <code>src/settings.py</code> (veja <a href="../02-settings/#storage--file-uploads">Settings — Storage</a>). Documentação completa da API e fluxo: <a href="../37-storage/">Storage (37-storage.md)</a>.</p>
+<h3 id="exclusao-e-arquivos-fisicos">Exclusão e arquivos físicos<a class="headerlink" href="#exclusao-e-arquivos-fisicos" title="Permanent link">&para;</a></h3>
+<p>Ao <strong>deletar</strong> um registro (botão "Delete" na tela de edição):</p>
+<ol>
+<li>Abre um <strong>modal de confirmação</strong>.</li>
+<li>Se o model tiver campos file_upload com valor, aparece a opção: <strong>"Also delete X file(s) from storage"</strong>.</li>
+<li>Se marcar, o backend remove o(s) arquivo(s) do disco ou do bucket GCS ao deletar o registro.</li>
+</ol>
+<p>Assim você evita arquivo órfão no storage. Em <strong>bulk delete</strong> (listagem), o body da requisição pode incluir <code>"delete_physical_files": true</code> para o mesmo efeito.</p>
+<h3 id="forcar-widget-file_upload-em-um-campo">Forçar widget file_upload em um campo<a class="headerlink" href="#forcar-widget-file_upload-em-um-campo" title="Permanent link">&para;</a></h3>
+<p>Se o nome da coluna não for detectado automaticamente, use <code>widgets</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">Profile</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ProfileAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">Profile</span><span class="p">]):</span>
+    <span class="n">widgets</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;cover_image&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;widget&quot;</span><span class="p">:</span> <span class="s2">&quot;file_upload&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Cover image&quot;</span><span class="p">},</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h2 id="icones-lucide">Ícones (Lucide)<a class="headerlink" href="#icones-lucide" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Ícones mais comuns</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;file&quot;</span>        <span class="c1"># Arquivo</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;folder&quot;</span>      <span class="c1"># Pasta</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;user&quot;</span>        <span class="c1"># Usuário</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>       <span class="c1"># Usuários</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;settings&quot;</span>    <span class="c1"># Configurações</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;database&quot;</span>    <span class="c1"># Banco de dados</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;globe&quot;</span>       <span class="c1"># Domínio/Web</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;mail&quot;</span>        <span class="c1"># Email</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;lock&quot;</span>        <span class="c1"># Segurança</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;key&quot;</span>         <span class="c1"># Chave</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;shield&quot;</span>      <span class="c1"># Proteção</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;activity&quot;</span>    <span class="c1"># Atividade</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;calendar&quot;</span>    <span class="c1"># Calendário</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;clock&quot;</span>       <span class="c1"># Tempo</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;tag&quot;</span>         <span class="c1"># Tag</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;bookmark&quot;</span>    <span class="c1"># Favorito</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;star&quot;</span>        <span class="c1"># Estrela</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;heart&quot;</span>       <span class="c1"># Coração</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;bell&quot;</span>        <span class="c1"># Notificação</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;search&quot;</span>      <span class="c1"># Busca</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;filter&quot;</span>      <span class="c1"># Filtro</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;edit&quot;</span>        <span class="c1"># Editar</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;trash&quot;</span>       <span class="c1"># Lixeira</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;plus&quot;</span>        <span class="c1"># Adicionar</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;refresh-cw&quot;</span>  <span class="c1"># Atualizar</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;download&quot;</span>    <span class="c1"># Download</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;upload&quot;</span>      <span class="c1"># Upload</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;link&quot;</span>        <span class="c1"># Link</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;eye&quot;</span>         <span class="c1"># Visualizar</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;copy&quot;</span>        <span class="c1"># Copiar</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;archive&quot;</span>     <span class="c1"># Arquivar</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;box&quot;</span>         <span class="c1"># Caixa</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;package&quot;</span>     <span class="c1"># Pacote</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;layers&quot;</span>      <span class="c1"># Camadas</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;grid&quot;</span>        <span class="c1"># Grade</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;list&quot;</span>        <span class="c1"># Lista</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;table&quot;</span>       <span class="c1"># Tabela</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;pie-chart&quot;</span>   <span class="c1"># Gráfico pizza</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;bar-chart&quot;</span>   <span class="c1"># Gráfico barras</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;trending-up&quot;</span> <span class="c1"># Tendência alta</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;dollar-sign&quot;</span> <span class="c1"># Dinheiro</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;credit-card&quot;</span> <span class="c1"># Cartão</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;shopping-cart&quot;</span> <span class="c1"># Carrinho</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;truck&quot;</span>       <span class="c1"># Entrega</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;map-pin&quot;</span>     <span class="c1"># Localização</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;zap&quot;</span>         <span class="c1"># Raio/Rápido</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span>         <span class="c1"># Processador</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;server&quot;</span>      <span class="c1"># Servidor</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;hard-drive&quot;</span>  <span class="c1"># Disco</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;wifi&quot;</span>        <span class="c1"># WiFi</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;monitor&quot;</span>     <span class="c1"># Monitor</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;smartphone&quot;</span>  <span class="c1"># Celular</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;code&quot;</span>        <span class="c1"># Código</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;terminal&quot;</span>    <span class="c1"># Terminal</span>
+<span class="n">icon</span> <span class="o">=</span> <span class="s2">&quot;git-branch&quot;</span>  <span class="c1"># Git</span>
+</code></pre></div>
+
+<h2 id="actions-customizadas">Actions Customizadas<a class="headerlink" href="#actions-customizadas" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">Post</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PostAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">Post</span><span class="p">]):</span>
+    <span class="n">list_display</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;published&quot;</span><span class="p">)</span>
+    <span class="n">actions</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;delete_selected&quot;</span><span class="p">,</span> <span class="s2">&quot;publish&quot;</span><span class="p">,</span> <span class="s2">&quot;unpublish&quot;</span><span class="p">]</span>
+
+    <span class="nd">@admin</span><span class="o">.</span><span class="n">action</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;Publicar selecionados&quot;</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">queryset</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">post</span> <span class="ow">in</span> <span class="n">queryset</span><span class="p">:</span>
+            <span class="n">post</span><span class="o">.</span><span class="n">published</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">await</span> <span class="n">post</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+
+    <span class="nd">@admin</span><span class="o">.</span><span class="n">action</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;Despublicar selecionados&quot;</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">unpublish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">queryset</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">post</span> <span class="ow">in</span> <span class="n">queryset</span><span class="p">:</span>
+            <span class="n">post</span><span class="o">.</span><span class="n">published</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">await</span> <span class="n">post</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="hooks-de-ciclo-de-vida">Hooks de Ciclo de Vida<a class="headerlink" href="#hooks-de-ciclo-de-vida" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">Post</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PostAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">Post</span><span class="p">]):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">before_save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">is_new</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Executado antes de salvar (create ou update).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">is_new</span><span class="p">:</span>
+            <span class="n">obj</span><span class="o">.</span><span class="n">slug</span> <span class="o">=</span> <span class="n">slugify</span><span class="p">(</span><span class="n">obj</span><span class="o">.</span><span class="n">title</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">after_save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">is_new</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Executado após salvar.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">is_new</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">send_notification</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Novo post: </span><span class="si">{</span><span class="n">obj</span><span class="o">.</span><span class="n">title</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">before_delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Executado antes de deletar.&quot;&quot;&quot;</span>
+        <span class="k">await</span> <span class="n">archive_post</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">after_delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Executado após deletar.&quot;&quot;&quot;</span>
+        <span class="k">await</span> <span class="n">clear_cache</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;post:</span><span class="si">{</span><span class="n">obj</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="queryset-customizado">Queryset Customizado<a class="headerlink" href="#queryset-customizado" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">Post</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PostAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">Post</span><span class="p">]):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_queryset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Filtra queryset base.&quot;&quot;&quot;</span>
+        <span class="c1"># Exemplo: só mostrar posts do workspace do usuário</span>
+        <span class="k">return</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">workspace_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">workspace_id</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="password-virtual">Password Virtual<a class="headerlink" href="#password-virtual" title="Permanent link">&para;</a></h2>
+<p>Para models com <code>set_password()</code>, o admin detecta automaticamente e cria um campo virtual de senha:</p>
+<div class="codehilite"><pre><span></span><code><span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">User</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">UserAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">User</span><span class="p">]):</span>
+    <span class="c1"># password_field é auto-detectado se model tem set_password()</span>
+    <span class="c1"># e uma coluna password_hash/hashed_password</span>
+
+    <span class="c1"># Para customizar:</span>
+    <span class="n">password_field</span> <span class="o">=</span> <span class="s2">&quot;password_hash&quot;</span>  <span class="c1"># Coluna do hash</span>
+
+    <span class="n">widgets</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;help_text&quot;</span><span class="p">:</span> <span class="s2">&quot;Deixe vazio para manter a senha atual&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;required_on_create&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;required_on_edit&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h2 id="many-to-many">Many-to-Many<a class="headerlink" href="#many-to-many" title="Permanent link">&para;</a></h2>
+<p>Relacionamentos M2M são detectados automaticamente:</p>
+<div class="codehilite"><pre><span></span><code><span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">User</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">UserAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">User</span><span class="p">]):</span>
+    <span class="c1"># groups e user_permissions são detectados automaticamente</span>
+    <span class="c1"># se o model tem esses relacionamentos M2M</span>
+
+    <span class="n">fieldsets</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;Conta&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;password&quot;</span><span class="p">)}),</span>
+        <span class="p">(</span><span class="s2">&quot;Permissões&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;is_active&quot;</span><span class="p">,</span> <span class="s2">&quot;is_staff&quot;</span><span class="p">,</span> <span class="s2">&quot;groups&quot;</span><span class="p">,</span> <span class="s2">&quot;user_permissions&quot;</span><span class="p">)}),</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<h2 id="permissoes">Permissões<a class="headerlink" href="#permissoes" title="Permanent link">&para;</a></h2>
+<p>Acesso ao admin requer <code>is_staff=True</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="nd">@admin</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">Post</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PostAdmin</span><span class="p">(</span><span class="n">ModelAdmin</span><span class="p">[</span><span class="n">Post</span><span class="p">]):</span>
+    <span class="c1"># Permissões disponíveis</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;view&quot;</span><span class="p">,</span> <span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="s2">&quot;change&quot;</span><span class="p">,</span> <span class="s2">&quot;delete&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Desabilitar ações específicas</span>
+    <span class="n">exclude_actions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;delete_selected&quot;</span><span class="p">,)</span>
+</code></pre></div>
+
+<h2 id="configuracoes-do-admin">Configurações do Admin<a class="headerlink" href="#configuracoes-do-admin" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Habilitar/desabilitar</span>
+    <span class="n">admin_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="c1"># URL</span>
+    <span class="n">admin_url_prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;/admin&quot;</span>  <span class="c1"># ou &quot;/backoffice&quot;, &quot;/ops-secret&quot;</span>
+
+    <span class="c1"># Branding</span>
+    <span class="n">admin_site_title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Minha Empresa&quot;</span>  <span class="c1"># Título na aba</span>
+    <span class="n">admin_site_header</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Painel Admin&quot;</span>  <span class="c1"># Header no sidebar</span>
+    <span class="n">admin_logo_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;/static/logo.png&quot;</span>  <span class="c1"># Logo custom</span>
+
+    <span class="c1"># Tema</span>
+    <span class="n">admin_theme</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span>  <span class="c1"># ou &quot;dark&quot;</span>
+    <span class="n">admin_primary_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#3B82F6&quot;</span>  <span class="c1"># Cor primária (hex)</span>
+    <span class="n">admin_custom_css</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;./static/admin-custom.css&quot;</span>  <span class="c1"># CSS extra</span>
+
+    <span class="c1"># Segurança</span>
+    <span class="n">admin_cookie_secure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># None = auto-detect HTTPS</span>
+</code></pre></div>
+
+<h2 id="operations-center">Operations Center<a class="headerlink" href="#operations-center" title="Permanent link">&para;</a></h2>
+<p>O admin inclui um centro de operações para monitorar:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Habilitar Operations Center</span>
+    <span class="n">ops_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="c1"># Tasks</span>
+    <span class="n">ops_task_persist</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Persistir execuções</span>
+    <span class="n">ops_task_retention_days</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>  <span class="c1"># Dias para reter</span>
+
+    <span class="c1"># Workers</span>
+    <span class="n">ops_worker_heartbeat_interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>  <span class="c1"># Heartbeat (segundos)</span>
+    <span class="n">ops_worker_offline_ttl</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">24</span>  <span class="c1"># Horas para manter offline</span>
+
+    <span class="c1"># Logs</span>
+    <span class="n">ops_log_buffer_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5000</span>  <span class="c1"># Tamanho do buffer</span>
+    <span class="n">ops_log_stream_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Streaming SSE</span>
+
+    <span class="c1"># Infraestrutura</span>
+    <span class="n">ops_infrastructure_poll_interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span>  <span class="c1"># Métricas (segundos)</span>
+</code></pre></div>
+
+<h2 id="login">Login<a class="headerlink" href="#login" title="Permanent link">&para;</a></h2>
+<p>Admin usa autenticação por sessão (separada do JWT da API).</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Criar superusuário</span>
+core<span class="w"> </span>createsuperuser
+</code></pre></div>
+
+<p>Login padrão: <code>/admin/login</code></p>
+<h2 id="auto-discovery">Auto-Discovery<a class="headerlink" href="#auto-discovery" title="Permanent link">&para;</a></h2>
+<p>Módulos admin são descobertos automaticamente de arquivos <code>admin.py</code>:</p>
+<div class="codehilite"><pre><span></span><code>src/apps/
+├── posts/
+│   ├── models.py
+│   └── admin.py  # Auto-descoberto
+└── users/
+    ├── models.py
+    └── admin.py  # Auto-descoberto
+</code></pre></div>
+
+<h2 id="tipos-para-autocomplete">Tipos para Autocomplete<a class="headerlink" href="#tipos-para-autocomplete" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.admin</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">ModelAdmin</span><span class="p">,</span>
+    <span class="n">WidgetConfig</span><span class="p">,</span>      <span class="c1"># TypedDict para widgets</span>
+    <span class="n">FieldsetConfig</span><span class="p">,</span>    <span class="c1"># Tipo para fieldsets</span>
+    <span class="n">IconType</span><span class="p">,</span>          <span class="c1"># Literal com ícones válidos</span>
+    <span class="n">PermissionType</span><span class="p">,</span>    <span class="c1"># Literal para permissões</span>
+    <span class="n">WidgetType</span><span class="p">,</span>        <span class="c1"># Literal com widgets válidos</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../07-cli/">CLI</a> — Comandos disponíveis</li>
+<li><a href="../08-permissions/">Permissions</a> — Controle de acesso</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

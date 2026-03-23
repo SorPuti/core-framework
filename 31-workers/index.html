@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/31-workers/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Workers - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Workers";
+        var mkdocs_page_input_path = "31-workers.md";
+        var mkdocs_page_url = "/core-framework/31-workers/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Workers</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/31-workers.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="workers">Workers<a class="headerlink" href="#workers" title="Permanent link">&para;</a></h1>
+<p>Sistema de processamento de tasks em background com configuração plug-and-play.</p>
+<h2 id="fluxo-do-worker">Fluxo do Worker<a class="headerlink" href="#fluxo-do-worker" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">LR</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Producer&quot;</span>
+<span class="w">        </span><span class="n">API</span><span class="p">[</span><span class="n">API</span><span class="w"> </span><span class="n">Request</span><span class="p">]</span>
+<span class="w">        </span><span class="n">PUB</span><span class="p">[</span><span class="n">Publish</span><span class="w"> </span><span class="n">Task</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Queue&quot;</span>
+<span class="w">        </span><span class="n">TOPIC</span><span class="p">[</span><span class="n">Kafka</span><span class="w"> </span><span class="n">Topic</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Worker&quot;</span>
+<span class="w">        </span><span class="n">POLL</span><span class="p">[</span><span class="n">Poll</span><span class="w"> </span><span class="n">Messages</span><span class="p">]</span>
+<span class="w">        </span><span class="n">PROC</span><span class="p">[</span><span class="n">Process</span><span class="p">]</span>
+<span class="w">        </span><span class="n">RETRY</span><span class="p">{</span><span class="n">Retry</span><span class="o">?</span><span class="p">}</span>
+<span class="w">        </span><span class="n">DLQ</span><span class="p">[</span><span class="n">Dead</span><span class="w"> </span><span class="n">Letter</span><span class="w"> </span><span class="n">Queue</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">API</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">PUB</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">TOPIC</span>
+<span class="w">    </span><span class="n">TOPIC</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">POLL</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">PROC</span>
+<span class="w">    </span><span class="n">PROC</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">error</span><span class="o">|</span><span class="w"> </span><span class="n">RETRY</span>
+<span class="w">    </span><span class="n">RETRY</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">yes</span><span class="o">|</span><span class="w"> </span><span class="n">TOPIC</span>
+<span class="w">    </span><span class="n">RETRY</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">max</span><span class="w"> </span><span class="n">retries</span><span class="o">|</span><span class="w"> </span><span class="n">DLQ</span>
+<span class="w">    </span><span class="n">PROC</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">success</span><span class="o">|</span><span class="w"> </span><span class="n">COMMIT</span><span class="p">[</span><span class="n">Commit</span><span class="w"> </span><span class="n">Offset</span><span class="p">]</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">TOPIC</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">DLQ</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">ffcdd2</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">COMMIT</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">c8e6c9</span>
+</code></pre></div>
+
+<h2 id="estrategia-de-retry">Estratégia de Retry<a class="headerlink" href="#estrategia-de-retry" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Retry com Backoff&quot;</span>
+<span class="w">        </span><span class="n">E1</span><span class="p">[</span><span class="n">Erro</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="kr">wait</span><span class="w"> </span><span class="mi">1</span><span class="n">s</span><span class="o">|</span><span class="w"> </span><span class="n">R1</span><span class="p">[</span><span class="n">Retry</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span>
+<span class="w">        </span><span class="n">R1</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">erro</span><span class="o">|</span><span class="w"> </span><span class="n">E2</span><span class="p">[</span><span class="n">Erro</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span>
+<span class="w">        </span><span class="n">E2</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="kr">wait</span><span class="w"> </span><span class="mi">2</span><span class="n">s</span><span class="o">|</span><span class="w"> </span><span class="n">R2</span><span class="p">[</span><span class="n">Retry</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span>
+<span class="w">        </span><span class="n">R2</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">erro</span><span class="o">|</span><span class="w"> </span><span class="n">E3</span><span class="p">[</span><span class="n">Erro</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span>
+<span class="w">        </span><span class="n">E3</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="kr">wait</span><span class="w"> </span><span class="mi">4</span><span class="n">s</span><span class="o">|</span><span class="w"> </span><span class="n">R3</span><span class="p">[</span><span class="n">Retry</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span>
+<span class="w">        </span><span class="n">R3</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">erro</span><span class="o">|</span><span class="w"> </span><span class="n">DLQ</span><span class="p">[</span><span class="n">Dead</span><span class="w"> </span><span class="n">Letter</span><span class="w"> </span><span class="n">Queue</span><span class="p">]</span>
+
+<span class="w">        </span><span class="n">R1</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">sucesso</span><span class="o">|</span><span class="w"> </span><span class="n">OK1</span><span class="p">[</span><span class="err">✓</span><span class="p">]</span>
+<span class="w">        </span><span class="n">R2</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">sucesso</span><span class="o">|</span><span class="w"> </span><span class="n">OK2</span><span class="p">[</span><span class="err">✓</span><span class="p">]</span>
+<span class="w">        </span><span class="n">R3</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">sucesso</span><span class="o">|</span><span class="w"> </span><span class="n">OK3</span><span class="p">[</span><span class="err">✓</span><span class="p">]</span>
+<span class="w">    </span><span class="kd">end</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">DLQ</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">ffcdd2</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">OK1</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">c8e6c9</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">OK2</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">c8e6c9</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">OK3</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">c8e6c9</span>
+</code></pre></div>
+
+<h2 id="configuracao-plug-and-play">Configuração Plug-and-Play<a class="headerlink" href="#configuracao-plug-and-play" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Tasks - auto-configurado quando task_enabled=True</span>
+    <span class="n">task_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">task_default_queue</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span>
+    <span class="n">task_default_retry</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">task_default_retry_delay</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span>
+    <span class="n">task_retry_backoff</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">task_default_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">300</span>
+    <span class="n">task_worker_concurrency</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">task_result_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;redis&quot;</span>  <span class="c1"># none, redis, database</span>
+
+    <span class="c1"># Kafka (necessário para workers)</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">kafka_bootstrap_servers</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;localhost:9092&quot;</span>
+</code></pre></div>
+
+<p><strong>Zero configuração explícita</strong>: Você NÃO precisa chamar <code>configure_tasks()</code>. Basta definir <code>task_enabled=True</code>.</p>
+<h2 id="settings-de-tasks">Settings de Tasks<a class="headerlink" href="#settings-de-tasks" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td><strong>Habilita Tasks</strong></td>
+</tr>
+<tr>
+<td><code>task_default_queue</code></td>
+<td><code>str</code></td>
+<td><code>"default"</code></td>
+<td>Fila padrão</td>
+</tr>
+<tr>
+<td><code>task_default_retry</code></td>
+<td><code>int</code></td>
+<td><code>3</code></td>
+<td>Número de retries</td>
+</tr>
+<tr>
+<td><code>task_default_retry_delay</code></td>
+<td><code>int</code></td>
+<td><code>60</code></td>
+<td>Delay entre retries (segundos)</td>
+</tr>
+<tr>
+<td><code>task_retry_backoff</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Usar backoff exponencial</td>
+</tr>
+<tr>
+<td><code>task_default_timeout</code></td>
+<td><code>int</code></td>
+<td><code>300</code></td>
+<td>Timeout de task (segundos)</td>
+</tr>
+<tr>
+<td><code>task_worker_concurrency</code></td>
+<td><code>int</code></td>
+<td><code>4</code></td>
+<td>Tarefas concorrentes por worker</td>
+</tr>
+<tr>
+<td><code>task_result_backend</code></td>
+<td><code>Literal</code></td>
+<td><code>"none"</code></td>
+<td>Backend: none, redis, database</td>
+</tr>
+</tbody>
+</table>
+<h2 id="worker-com-decorator">Worker com Decorator<a class="headerlink" href="#worker-com-decorator" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">worker</span>
+
+<span class="nd">@worker</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;tasks&quot;</span><span class="p">,</span>
+    <span class="n">group_id</span><span class="o">=</span><span class="s2">&quot;task-processor&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process_task</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Processa uma única task.&quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">do_work</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">])</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;completed&quot;</span><span class="p">,</span> <span class="s2">&quot;result&quot;</span><span class="p">:</span> <span class="n">result</span><span class="p">}</span>
+</code></pre></div>
+
+<h2 id="worker-baseado-em-classe">Worker Baseado em Classe<a class="headerlink" href="#worker-baseado-em-classe" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">Worker</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">EmailWorker</span><span class="p">(</span><span class="n">Worker</span><span class="p">):</span>
+    <span class="n">input_topic</span> <span class="o">=</span> <span class="s2">&quot;emails&quot;</span>
+    <span class="n">group_id</span> <span class="o">=</span> <span class="s2">&quot;email-sender&quot;</span>
+    <span class="n">concurrency</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">max_retries</span> <span class="o">=</span> <span class="mi">3</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Processa uma mensagem.&quot;&quot;&quot;</span>
+        <span class="k">await</span> <span class="n">send_email</span><span class="p">(</span>
+            <span class="n">to</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;to&quot;</span><span class="p">],</span>
+            <span class="n">subject</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">],</span>
+            <span class="n">body</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;body&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;sent&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">error</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Chamado em erro de processamento.&quot;&quot;&quot;</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Falha ao enviar email: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_success</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Chamado em sucesso.&quot;&quot;&quot;</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Email enviado: </span><span class="si">{</span><span class="n">result</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="opcoes-do-worker">Opções do Worker<a class="headerlink" href="#opcoes-do-worker" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MyWorker</span><span class="p">(</span><span class="n">Worker</span><span class="p">):</span>
+    <span class="n">input_topic</span> <span class="o">=</span> <span class="s2">&quot;tasks&quot;</span>
+    <span class="n">output_topic</span> <span class="o">=</span> <span class="s2">&quot;results&quot;</span>      <span class="c1"># Opcional: publica resultados</span>
+    <span class="n">group_id</span> <span class="o">=</span> <span class="s2">&quot;my-worker&quot;</span>
+
+    <span class="c1"># Concorrência</span>
+    <span class="n">concurrency</span> <span class="o">=</span> <span class="mi">4</span>               <span class="c1"># Processamento paralelo</span>
+
+    <span class="c1"># Retry</span>
+    <span class="n">max_retries</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">retry_backoff</span> <span class="o">=</span> <span class="s2">&quot;exponential&quot;</span>  <span class="c1"># &quot;linear&quot;, &quot;fixed&quot;</span>
+
+    <span class="c1"># Batching</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">10</span>               <span class="c1"># Processa N mensagens de uma vez</span>
+    <span class="n">batch_timeout</span> <span class="o">=</span> <span class="mf">5.0</span>           <span class="c1"># Tempo máximo para batch (segundos)</span>
+
+    <span class="c1"># Dead Letter Queue</span>
+    <span class="n">dlq_topic</span> <span class="o">=</span> <span class="s2">&quot;tasks-dlq&quot;</span>       <span class="c1"># Mensagens com falha vão aqui</span>
+</code></pre></div>
+
+<h2 id="processamento-em-batch">Processamento em Batch<a class="headerlink" href="#processamento-em-batch" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">BatchWorker</span><span class="p">(</span><span class="n">Worker</span><span class="p">):</span>
+    <span class="n">input_topic</span> <span class="o">=</span> <span class="s2">&quot;events&quot;</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">100</span>
+    <span class="n">batch_timeout</span> <span class="o">=</span> <span class="mf">10.0</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Processa múltiplas mensagens de uma vez.&quot;&quot;&quot;</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">msg</span> <span class="ow">in</span> <span class="n">messages</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">process_single</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span>
+</code></pre></div>
+
+<h2 id="politica-de-retry">Política de Retry<a class="headerlink" href="#politica-de-retry" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">worker</span>
+
+<span class="nd">@worker</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;tasks&quot;</span><span class="p">,</span>
+    <span class="n">max_retries</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">retry_backoff</span><span class="o">=</span><span class="s2">&quot;exponential&quot;</span><span class="p">,</span>
+    <span class="n">dlq_topic</span><span class="o">=</span><span class="s2">&quot;tasks-dlq&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process_task</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+    <span class="c1"># Se falhar, vai fazer retry com backoff exponencial</span>
+    <span class="c1"># Após max_retries, mensagem vai para dlq_topic</span>
+    <span class="o">...</span>
+</code></pre></div>
+
+<p>Cálculo de backoff:
+- <code>"fixed"</code>: Sempre <code>initial_delay</code> segundos
+- <code>"linear"</code>: <code>initial_delay * attempt</code> segundos
+- <code>"exponential"</code>: <code>initial_delay * (2 ** attempt)</code> segundos</p>
+<h2 id="output-topic">Output Topic<a class="headerlink" href="#output-topic" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="nd">@worker</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;orders&quot;</span><span class="p">,</span>
+    <span class="n">output_topic</span><span class="o">=</span><span class="s2">&quot;order-results&quot;</span><span class="p">,</span>
+    <span class="n">group_id</span><span class="o">=</span><span class="s2">&quot;order-processor&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process_order</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="c1"># Valor de retorno é publicado no output_topic</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;order_id&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">],</span> <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;processed&quot;</span><span class="p">}</span>
+</code></pre></div>
+
+<h2 id="executar-workers">Executar Workers<a class="headerlink" href="#executar-workers" title="Permanent link">&para;</a></h2>
+<h3 id="worker-unico">Worker Único<a class="headerlink" href="#worker-unico" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>EmailWorker
+</code></pre></div>
+
+<h3 id="todos-os-workers">Todos os Workers<a class="headerlink" href="#todos-os-workers" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>--all
+</code></pre></div>
+
+<h3 id="com-opcoes">Com Opções<a class="headerlink" href="#com-opcoes" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>EmailWorker<span class="w"> </span>--concurrency<span class="w"> </span><span class="m">8</span>
+</code></pre></div>
+
+<h2 id="publicar-tasks">Publicar Tasks<a class="headerlink" href="#publicar-tasks" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_producer</span>
+
+<span class="n">producer</span> <span class="o">=</span> <span class="n">get_producer</span><span class="p">(</span><span class="s2">&quot;kafka&quot;</span><span class="p">)</span>
+
+<span class="c1"># Publicar task</span>
+<span class="k">await</span> <span class="n">producer</span><span class="o">.</span><span class="n">send</span><span class="p">(</span>
+    <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;tasks&quot;</span><span class="p">,</span>
+    <span class="n">message</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;process&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">}},</span>
+    <span class="n">key</span><span class="o">=</span><span class="s2">&quot;task-123&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="registry-de-workers">Registry de Workers<a class="headerlink" href="#registry-de-workers" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">get_worker</span><span class="p">,</span>
+    <span class="n">get_all_workers</span><span class="p">,</span>
+    <span class="n">list_workers</span><span class="p">,</span>
+    <span class="n">run_worker</span><span class="p">,</span>
+    <span class="n">run_all_workers</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Obter config do worker</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">get_worker</span><span class="p">(</span><span class="s2">&quot;EmailWorker&quot;</span><span class="p">)</span>
+
+<span class="c1"># Listar todos os workers</span>
+<span class="n">names</span> <span class="o">=</span> <span class="n">list_workers</span><span class="p">()</span>
+
+<span class="c1"># Executar programaticamente</span>
+<span class="k">await</span> <span class="n">run_worker</span><span class="p">(</span><span class="n">EmailWorker</span><span class="p">)</span>
+<span class="k">await</span> <span class="n">run_all_workers</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="tratamento-de-erros">Tratamento de Erros<a class="headerlink" href="#tratamento-de-erros" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MyWorker</span><span class="p">(</span><span class="n">Worker</span><span class="p">):</span>
+    <span class="n">input_topic</span> <span class="o">=</span> <span class="s2">&quot;tasks&quot;</span>
+    <span class="n">dlq_topic</span> <span class="o">=</span> <span class="s2">&quot;tasks-dlq&quot;</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="n">do_work</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">TemporaryError</span><span class="p">:</span>
+            <span class="c1"># Re-raise para disparar retry</span>
+            <span class="k">raise</span>
+        <span class="k">except</span> <span class="n">PermanentError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="c1"># Log e não faz retry</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Erro permanente: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)}</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">error</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">):</span>
+        <span class="c1"># Chamado após todos os retries esgotados</span>
+        <span class="c1"># Mensagem será enviada para dlq_topic</span>
+        <span class="k">await</span> <span class="n">notify_admin</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="graceful-shutdown">Graceful Shutdown<a class="headerlink" href="#graceful-shutdown" title="Permanent link">&para;</a></h2>
+<p>Workers tratam SIGTERM/SIGINT:</p>
+<ol>
+<li>Para de aceitar novas mensagens</li>
+<li>Finaliza processamento do batch atual</li>
+<li>Commit dos offsets</li>
+<li>Sai limpo</li>
+</ol>
+<h2 id="monitoramento">Monitoramento<a class="headerlink" href="#monitoramento" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MyWorker</span><span class="p">(</span><span class="n">Worker</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_success</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+        <span class="n">metrics</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="s2">&quot;worker.success&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">error</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">):</span>
+        <span class="n">metrics</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="s2">&quot;worker.error&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="operations-center">Operations Center<a class="headerlink" href="#operations-center" title="Permanent link">&para;</a></h2>
+<p>O admin panel inclui monitoramento de workers:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">ops_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">ops_task_persist</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">ops_task_retention_days</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>
+    <span class="n">ops_worker_heartbeat_interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>
+    <span class="n">ops_worker_offline_ttl</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">24</span>
+</code></pre></div>
+
+<h2 id="exemplo-completo">Exemplo Completo<a class="headerlink" href="#exemplo-completo" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/workers/email.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.messaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">Worker</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.services.email</span><span class="w"> </span><span class="kn">import</span> <span class="n">EmailService</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">EmailWorker</span><span class="p">(</span><span class="n">Worker</span><span class="p">):</span>
+    <span class="n">input_topic</span> <span class="o">=</span> <span class="s2">&quot;emails&quot;</span>
+    <span class="n">group_id</span> <span class="o">=</span> <span class="s2">&quot;email-sender&quot;</span>
+    <span class="n">concurrency</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">max_retries</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">retry_backoff</span> <span class="o">=</span> <span class="s2">&quot;exponential&quot;</span>
+    <span class="n">dlq_topic</span> <span class="o">=</span> <span class="s2">&quot;emails-dlq&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">email_service</span> <span class="o">=</span> <span class="n">EmailService</span><span class="p">()</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">email_service</span><span class="o">.</span><span class="n">send</span><span class="p">(</span>
+            <span class="n">to</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;to&quot;</span><span class="p">],</span>
+            <span class="n">subject</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">],</span>
+            <span class="n">template</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;template&quot;</span><span class="p">],</span>
+            <span class="n">context</span><span class="o">=</span><span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;context&quot;</span><span class="p">,</span> <span class="p">{}),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;sent&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;to&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;to&quot;</span><span class="p">]}</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">error</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Email falhou: </span><span class="si">{</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;to&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_success</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Email enviado: </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;to&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Executar worker</span>
+core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>EmailWorker
+</code></pre></div>
+
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../30-messaging/">Messaging</a> — Integração Kafka/Redis</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

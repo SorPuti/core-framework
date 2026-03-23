@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/14-validators/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Validators - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Validators";
+        var mkdocs_page_input_path = "14-validators.md";
+        var mkdocs_page_url = "/core-framework/14-validators/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Validators</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/14-validators.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="validators">Validators<a class="headerlink" href="#validators" title="Permanent link">&para;</a></h1>
+<p>Data validation system.</p>
+<h2 id="validator-types">Validator Types<a class="headerlink" href="#validator-types" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Base Class</th>
+<th>Usage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sync</td>
+<td><code>Validator</code></td>
+<td>Format validation</td>
+</tr>
+<tr>
+<td>Async</td>
+<td><code>AsyncValidator</code></td>
+<td>Database validation</td>
+</tr>
+</tbody>
+</table>
+<h2 id="database-validators-async">Database Validators (Async)<a class="headerlink" href="#database-validators-async" title="Permanent link">&para;</a></h2>
+<h3 id="uniquevalidator">UniqueValidator<a class="headerlink" href="#uniquevalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">UniqueValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">UniqueValidator</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">User</span><span class="p">,</span>
+    <span class="n">field_name</span><span class="o">=</span><span class="s2">&quot;email&quot;</span><span class="p">,</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;This email already exists.&quot;</span><span class="p">,</span>
+    <span class="n">exclude_pk</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># Exclude on update</span>
+<span class="p">)</span>
+
+<span class="c1"># Usage</span>
+<span class="k">await</span> <span class="n">validator</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="uniquetogethervalidator">UniqueTogetherValidator<a class="headerlink" href="#uniquetogethervalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">UniqueTogetherValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">UniqueTogetherValidator</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">Post</span><span class="p">,</span>
+    <span class="n">fields</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;slug&quot;</span><span class="p">,</span> <span class="s2">&quot;workspace_id&quot;</span><span class="p">],</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Slug must be unique per workspace.&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Usage (pass dict)</span>
+<span class="k">await</span> <span class="n">validator</span><span class="p">({</span><span class="s2">&quot;slug&quot;</span><span class="p">:</span> <span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="s2">&quot;workspace_id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span> <span class="n">session</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="existsvalidator">ExistsValidator<a class="headerlink" href="#existsvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExistsValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">ExistsValidator</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">Category</span><span class="p">,</span>
+    <span class="n">field_name</span><span class="o">=</span><span class="s2">&quot;id&quot;</span><span class="p">,</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Category does not exist.&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Usage</span>
+<span class="k">await</span> <span class="n">validator</span><span class="p">(</span><span class="n">category_id</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="format-validators-sync">Format Validators (Sync)<a class="headerlink" href="#format-validators-sync" title="Permanent link">&para;</a></h2>
+<h3 id="regexvalidator">RegexValidator<a class="headerlink" href="#regexvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">RegexValidator</span><span class="p">(</span>
+    <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;^[A-Z]</span><span class="si">{3}</span><span class="s2">-\d</span><span class="si">{4}</span><span class="s2">$&quot;</span><span class="p">,</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Invalid code format. Use XXX-0000.&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;ABC-1234&quot;</span><span class="p">)</span>  <span class="c1"># OK</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;abc-1234&quot;</span><span class="p">)</span>  <span class="c1"># Raises ValidationError</span>
+</code></pre></div>
+
+<h3 id="emailvalidator">EmailValidator<a class="headerlink" href="#emailvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">EmailValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">EmailValidator</span><span class="p">()</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;user@example.com&quot;</span><span class="p">)</span>  <span class="c1"># OK</span>
+</code></pre></div>
+
+<h3 id="urlvalidator">URLValidator<a class="headerlink" href="#urlvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">URLValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">URLValidator</span><span class="p">(</span><span class="n">schemes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;http&quot;</span><span class="p">,</span> <span class="s2">&quot;https&quot;</span><span class="p">])</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;https://example.com&quot;</span><span class="p">)</span>  <span class="c1"># OK</span>
+</code></pre></div>
+
+<h3 id="slugvalidator">SlugValidator<a class="headerlink" href="#slugvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">SlugValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">SlugValidator</span><span class="p">(</span><span class="n">allow_unicode</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;my-slug-123&quot;</span><span class="p">)</span>  <span class="c1"># OK</span>
+</code></pre></div>
+
+<h2 id="brazilian-validators">Brazilian Validators<a class="headerlink" href="#brazilian-validators" title="Permanent link">&para;</a></h2>
+<h3 id="phonevalidator">PhoneValidator<a class="headerlink" href="#phonevalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">PhoneValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">PhoneValidator</span><span class="p">()</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;11999998888&quot;</span><span class="p">)</span>  <span class="c1"># OK (10 or 11 digits)</span>
+</code></pre></div>
+
+<h3 id="cpfvalidator">CPFValidator<a class="headerlink" href="#cpfvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">CPFValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">CPFValidator</span><span class="p">()</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;12345678909&quot;</span><span class="p">)</span>  <span class="c1"># Validates check digits</span>
+</code></pre></div>
+
+<h3 id="cnpjvalidator">CNPJValidator<a class="headerlink" href="#cnpjvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">CNPJValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">CNPJValidator</span><span class="p">()</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;11222333000181&quot;</span><span class="p">)</span>  <span class="c1"># Validates check digits</span>
+</code></pre></div>
+
+<h2 id="range-validators">Range Validators<a class="headerlink" href="#range-validators" title="Permanent link">&para;</a></h2>
+<h3 id="minlengthvalidator-maxlengthvalidator">MinLengthValidator / MaxLengthValidator<a class="headerlink" href="#minlengthvalidator-maxlengthvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">MinLengthValidator</span><span class="p">,</span> <span class="n">MaxLengthValidator</span>
+
+<span class="n">min_validator</span> <span class="o">=</span> <span class="n">MinLengthValidator</span><span class="p">(</span><span class="n">min_length</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">max_validator</span> <span class="o">=</span> <span class="n">MaxLengthValidator</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+
+<span class="n">min_validator</span><span class="p">(</span><span class="s2">&quot;ab&quot;</span><span class="p">)</span>  <span class="c1"># Raises: min 3 characters</span>
+<span class="n">max_validator</span><span class="p">(</span><span class="s2">&quot;x&quot;</span> <span class="o">*</span> <span class="mi">101</span><span class="p">)</span>  <span class="c1"># Raises: max 100 characters</span>
+</code></pre></div>
+
+<h3 id="minvaluevalidator-maxvaluevalidator">MinValueValidator / MaxValueValidator<a class="headerlink" href="#minvaluevalidator-maxvaluevalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">MinValueValidator</span><span class="p">,</span> <span class="n">MaxValueValidator</span>
+
+<span class="n">min_validator</span> <span class="o">=</span> <span class="n">MinValueValidator</span><span class="p">(</span><span class="n">min_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">max_validator</span> <span class="o">=</span> <span class="n">MaxValueValidator</span><span class="p">(</span><span class="n">max_value</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+
+<span class="n">min_validator</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># Raises: min value is 0</span>
+<span class="n">max_validator</span><span class="p">(</span><span class="mi">101</span><span class="p">)</span>  <span class="c1"># Raises: max value is 100</span>
+</code></pre></div>
+
+<h3 id="rangevalidator">RangeValidator<a class="headerlink" href="#rangevalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">RangeValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">RangeValidator</span><span class="p">(</span><span class="n">min_value</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_value</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">validator</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>  <span class="c1"># OK</span>
+<span class="n">validator</span><span class="p">(</span><span class="mi">11</span><span class="p">)</span>  <span class="c1"># Raises: must be between 1 and 10</span>
+</code></pre></div>
+
+<h3 id="decimalplacesvalidator">DecimalPlacesValidator<a class="headerlink" href="#decimalplacesvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">DecimalPlacesValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">DecimalPlacesValidator</span><span class="p">(</span><span class="n">max_digits</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">decimal_places</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">validator</span><span class="p">(</span><span class="mf">123.45</span><span class="p">)</span>  <span class="c1"># OK</span>
+<span class="n">validator</span><span class="p">(</span><span class="mf">123.456</span><span class="p">)</span>  <span class="c1"># Raises: max 2 decimal places</span>
+</code></pre></div>
+
+<h2 id="choice-validators">Choice Validators<a class="headerlink" href="#choice-validators" title="Permanent link">&para;</a></h2>
+<h3 id="choicevalidator">ChoiceValidator<a class="headerlink" href="#choicevalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">ChoiceValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">ChoiceValidator</span><span class="p">(</span><span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;draft&quot;</span><span class="p">,</span> <span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;archived&quot;</span><span class="p">])</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;draft&quot;</span><span class="p">)</span>  <span class="c1"># OK</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;invalid&quot;</span><span class="p">)</span>  <span class="c1"># Raises: not a valid choice</span>
+</code></pre></div>
+
+<h3 id="prohibitedvalidator">ProhibitedValidator<a class="headerlink" href="#prohibitedvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProhibitedValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">ProhibitedValidator</span><span class="p">(</span><span class="n">prohibited</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;admin&quot;</span><span class="p">,</span> <span class="s2">&quot;root&quot;</span><span class="p">,</span> <span class="s2">&quot;system&quot;</span><span class="p">])</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;user&quot;</span><span class="p">)</span>  <span class="c1"># OK</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;admin&quot;</span><span class="p">)</span>  <span class="c1"># Raises: prohibited value</span>
+</code></pre></div>
+
+<h2 id="file-validators">File Validators<a class="headerlink" href="#file-validators" title="Permanent link">&para;</a></h2>
+<h3 id="fileextensionvalidator">FileExtensionValidator<a class="headerlink" href="#fileextensionvalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">FileExtensionValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">FileExtensionValidator</span><span class="p">(</span><span class="n">allowed_extensions</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;jpg&quot;</span><span class="p">,</span> <span class="s2">&quot;png&quot;</span><span class="p">,</span> <span class="s2">&quot;gif&quot;</span><span class="p">])</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;image.jpg&quot;</span><span class="p">)</span>  <span class="c1"># OK</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;file.exe&quot;</span><span class="p">)</span>  <span class="c1"># Raises: extension not allowed</span>
+</code></pre></div>
+
+<h3 id="filesizevalidator">FileSizeValidator<a class="headerlink" href="#filesizevalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">FileSizeValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">FileSizeValidator</span><span class="p">(</span><span class="n">max_size</span><span class="o">=</span><span class="mi">5</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">)</span>  <span class="c1"># 5MB</span>
+<span class="n">validator</span><span class="p">(</span><span class="n">file_size_bytes</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="password-validator">Password Validator<a class="headerlink" href="#password-validator" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">PasswordValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">PasswordValidator</span><span class="p">(</span>
+    <span class="n">min_length</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span>
+    <span class="n">require_uppercase</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">require_lowercase</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">require_digit</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">require_special</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;Password123&quot;</span><span class="p">)</span>  <span class="c1"># OK</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;weak&quot;</span><span class="p">)</span>  <span class="c1"># Raises: doesn&#39;t meet requirements</span>
+</code></pre></div>
+
+<h2 id="composite-validators">Composite Validators<a class="headerlink" href="#composite-validators" title="Permanent link">&para;</a></h2>
+<h3 id="composevalidators-sync">ComposeValidators (Sync)<a class="headerlink" href="#composevalidators-sync" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">ComposeValidators</span><span class="p">,</span> <span class="n">MinLengthValidator</span><span class="p">,</span> <span class="n">MaxLengthValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">ComposeValidators</span><span class="p">([</span>
+    <span class="n">MinLengthValidator</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
+    <span class="n">MaxLengthValidator</span><span class="p">(</span><span class="mi">50</span><span class="p">),</span>
+    <span class="n">SlugValidator</span><span class="p">(),</span>
+<span class="p">])</span>
+
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;my-slug&quot;</span><span class="p">)</span>  <span class="c1"># Runs all validators</span>
+</code></pre></div>
+
+<h3 id="composeasyncvalidators-async">ComposeAsyncValidators (Async)<a class="headerlink" href="#composeasyncvalidators-async" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">ComposeAsyncValidators</span><span class="p">,</span> <span class="n">UniqueValidator</span><span class="p">,</span> <span class="n">ExistsValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">ComposeAsyncValidators</span><span class="p">([</span>
+    <span class="n">UniqueValidator</span><span class="p">(</span><span class="n">User</span><span class="p">,</span> <span class="s2">&quot;email&quot;</span><span class="p">),</span>
+    <span class="n">ExistsValidator</span><span class="p">(</span><span class="n">Workspace</span><span class="p">,</span> <span class="s2">&quot;id&quot;</span><span class="p">),</span>
+<span class="p">])</span>
+
+<span class="k">await</span> <span class="n">validator</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="usage-in-viewsets">Usage in ViewSets<a class="headerlink" href="#usage-in-viewsets" title="Permanent link">&para;</a></h2>
+<h3 id="unique_fields">unique_fields<a class="headerlink" href="#unique_fields" title="Permanent link">&para;</a></h3>
+<p>Auto-validates uniqueness.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">UserViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">User</span>
+    <span class="n">unique_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;username&quot;</span><span class="p">]</span>
+</code></pre></div>
+
+<h3 id="field_validators">field_validators<a class="headerlink" href="#field_validators" title="Permanent link">&para;</a></h3>
+<p>Custom validators per field.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">UserViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">User</span>
+
+    <span class="n">field_validators</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">EmailValidator</span><span class="p">()],</span>
+        <span class="s2">&quot;phone&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">PhoneValidator</span><span class="p">()],</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h3 id="validate_field-method">validate_{field} Method<a class="headerlink" href="#validate_field-method" title="Permanent link">&para;</a></h3>
+<p>Custom validation method.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">UserViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">User</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">validate_email</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;@spam.com&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Email domain not allowed&quot;</span><span class="p">,</span> <span class="n">field</span><span class="o">=</span><span class="s2">&quot;email&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+</code></pre></div>
+
+<h3 id="validate-method">validate() Method<a class="headerlink" href="#validate-method" title="Permanent link">&para;</a></h3>
+<p>Cross-field validation.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OrderViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Order</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;quantity&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;stock&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Quantity exceeds stock&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">data</span>
+</code></pre></div>
+
+<h2 id="utility-functions">Utility Functions<a class="headerlink" href="#utility-functions" title="Permanent link">&para;</a></h2>
+<h3 id="validate_all-sync">validate_all (Sync)<a class="headerlink" href="#validate_all-sync" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_all</span><span class="p">,</span> <span class="n">MinLengthValidator</span><span class="p">,</span> <span class="n">MaxLengthValidator</span>
+
+<span class="n">errors</span> <span class="o">=</span> <span class="n">validate_all</span><span class="p">(</span>
+    <span class="n">value</span><span class="o">=</span><span class="s2">&quot;ab&quot;</span><span class="p">,</span>
+    <span class="n">validators</span><span class="o">=</span><span class="p">[</span><span class="n">MinLengthValidator</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span> <span class="n">MaxLengthValidator</span><span class="p">(</span><span class="mi">50</span><span class="p">)],</span>
+<span class="p">)</span>
+<span class="c1"># Returns list of ValidationError</span>
+</code></pre></div>
+
+<h3 id="validate_all_async-async">validate_all_async (Async)<a class="headerlink" href="#validate_all_async-async" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_all_async</span>
+
+<span class="n">errors</span> <span class="o">=</span> <span class="k">await</span> <span class="n">validate_all_async</span><span class="p">(</span>
+    <span class="n">value</span><span class="o">=</span><span class="n">email</span><span class="p">,</span>
+    <span class="n">validators</span><span class="o">=</span><span class="p">[</span><span class="n">UniqueValidator</span><span class="p">(</span><span class="n">User</span><span class="p">,</span> <span class="s2">&quot;email&quot;</span><span class="p">)],</span>
+    <span class="n">session</span><span class="o">=</span><span class="n">db</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="custom-validator">Custom Validator<a class="headerlink" href="#custom-validator" title="Permanent link">&para;</a></h2>
+<h3 id="sync-validator">Sync Validator<a class="headerlink" href="#sync-validator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">Validator</span><span class="p">,</span> <span class="n">ValidationError</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">NoSpacesValidator</span><span class="p">(</span><span class="n">Validator</span><span class="p">):</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;Value cannot contain spaces.&quot;</span>
+    <span class="n">code</span> <span class="o">=</span> <span class="s2">&quot;no_spaces&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s2">&quot; &quot;</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">value</span>
+</code></pre></div>
+
+<h3 id="async-validator">Async Validator<a class="headerlink" href="#async-validator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncValidator</span><span class="p">,</span> <span class="n">ValidationError</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UniqueSlugValidator</span><span class="p">(</span><span class="n">AsyncValidator</span><span class="p">):</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;Slug already exists.&quot;</span>
+    <span class="n">code</span> <span class="o">=</span> <span class="s2">&quot;unique_slug&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">exclude_pk</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">exclude_pk</span> <span class="o">=</span> <span class="n">exclude_pk</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="o">**</span><span class="n">context</span><span class="p">):</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">session</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">slug</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">exclude_pk</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="n">query</span><span class="o">.</span><span class="n">exclude</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">exclude_pk</span><span class="p">)</span>
+        <span class="k">if</span> <span class="k">await</span> <span class="n">query</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">value</span>
+</code></pre></div>
+
+<h2 id="error-format">Error Format<a class="headerlink" href="#error-format" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;detail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Validation error&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;validation_error&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;errors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;This email already exists.&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;unique&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;field&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;email&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h2 id="proximos-passos">Próximos passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../00-criar-aplicacao/#9-validação-regras-de-negócio">Criar uma aplicação</a> — Validação no ViewSet</li>
+<li><a href="../13-serializers/">Serializers</a> — Schemas de Input/Output</li>
+<li><a href="../04-viewsets/">ViewSets</a> — CRUD e hooks</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

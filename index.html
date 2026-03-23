@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="description" content="Documentação gerada a partir do código real de core-framework" /><link rel="canonical" href="https://sorputi.github.io/core-framework/" />
+      <link rel="shortcut icon" href="img/favicon.ico" />
+    <title>Stride Framework</title>
+    <link rel="stylesheet" href="css/theme.css" />
+    <link rel="stylesheet" href="css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Home";
+        var mkdocs_page_input_path = "README.md";
+        var mkdocs_page_url = "/core-framework/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">Home</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#arquitetura">Arquitetura</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#filosofia-plug-and-play">Filosofia Plug-and-Play</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#instalacao">Instalação</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#documentacao">Documentação</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#comecando">Começando</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#autenticacao">Autenticação</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#camada-de-dados">Camada de Dados</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#infraestrutura">Infraestrutura</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#avancado">Avançado</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#referencia">Referência</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#estrutura-do-projeto">Estrutura do Projeto</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#exemplo-minimo">Exemplo Mínimo</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#exemplo-completo-com-auto-configuracao">Exemplo Completo com Auto-Configuração</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#filefield-nativo-storage-com-signed-urls">FileField Nativo (Storage com Signed URLs)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#comandos-rapidos">Comandos Rápidos</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#links">Links</a>
+    </li>
+    </ul>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href=".">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Home</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/README.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="stride">Stride<a class="headerlink" href="#stride" title="Permanent link">&para;</a></h1>
+<p>Framework estilo Django para FastAPI. Models, ViewSets, Auth, Admin — baterias incluídas.</p>
+<h2 id="arquitetura">Arquitetura<a class="headerlink" href="#arquitetura" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Client Layer&quot;</span>
+<span class="w">        </span><span class="n">WEB</span><span class="p">[</span><span class="n">Web</span><span class="o">/</span><span class="n">Mobile</span><span class="p">]</span>
+<span class="w">        </span><span class="n">CLI</span><span class="p">[</span><span class="n">CLI</span><span class="w"> </span><span class="n">Tools</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Stride&quot;</span>
+<span class="w">        </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;API Layer&quot;</span>
+<span class="w">            </span><span class="n">RT</span><span class="p">[</span><span class="n">AutoRouter</span><span class="p">]</span>
+<span class="w">            </span><span class="n">VS</span><span class="p">[</span><span class="n">ViewSets</span><span class="p">]</span>
+<span class="w">            </span><span class="n">AUTH</span><span class="p">[</span><span class="n">Auth</span><span class="o">/</span><span class="n">JWT</span><span class="p">]</span>
+<span class="w">        </span><span class="n">end</span>
+
+<span class="w">        </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Business Layer&quot;</span>
+<span class="w">            </span><span class="n">PERM</span><span class="p">[</span><span class="n">Permissions</span><span class="p">]</span>
+<span class="w">            </span><span class="n">VALID</span><span class="p">[</span><span class="n">Validators</span><span class="p">]</span>
+<span class="w">            </span><span class="n">SER</span><span class="p">[</span><span class="n">Serializers</span><span class="p">]</span>
+<span class="w">        </span><span class="n">end</span>
+
+<span class="w">        </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Data Layer&quot;</span>
+<span class="w">            </span><span class="n">MOD</span><span class="p">[</span><span class="n">Models</span><span class="p">]</span>
+<span class="w">            </span><span class="n">QS</span><span class="p">[</span><span class="n">QuerySets</span><span class="p">]</span>
+<span class="w">            </span><span class="n">REL</span><span class="p">[</span><span class="n">Relations</span><span class="p">]</span>
+<span class="w">        </span><span class="n">end</span>
+
+<span class="w">        </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Infrastructure&quot;</span>
+<span class="w">            </span><span class="n">MW</span><span class="p">[</span><span class="n">Middleware</span><span class="p">]</span>
+<span class="w">            </span><span class="n">MSG</span><span class="p">[</span><span class="n">Messaging</span><span class="p">]</span>
+<span class="w">            </span><span class="n">TASK</span><span class="p">[</span><span class="n">Workers</span><span class="p">]</span>
+<span class="w">        </span><span class="n">end</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="s">&quot;Storage&quot;</span>
+<span class="w">        </span><span class="n">DB</span><span class="p">[(</span><span class="n">PostgreSQL</span><span class="p">)]</span>
+<span class="w">        </span><span class="n">CACHE</span><span class="p">[(</span><span class="n">Redis</span><span class="p">)]</span>
+<span class="w">        </span><span class="n">MQ</span><span class="p">[</span><span class="n">Kafka</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">WEB</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">RT</span>
+<span class="w">    </span><span class="n">CLI</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">RT</span>
+<span class="w">    </span><span class="n">RT</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">VS</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">PERM</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">MOD</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">DB</span>
+<span class="w">    </span><span class="n">VS</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">VALID</span>
+<span class="w">    </span><span class="n">VS</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">SER</span>
+<span class="w">    </span><span class="n">MOD</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">QS</span>
+<span class="w">    </span><span class="n">MOD</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">REL</span>
+<span class="w">    </span><span class="n">MW</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">AUTH</span>
+<span class="w">    </span><span class="n">MSG</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">MQ</span>
+<span class="w">    </span><span class="n">TASK</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="n">CACHE</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">VS</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e3f2fd</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">MOD</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">c8e6c9</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">AUTH</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">fff3e0</span>
+</code></pre></div>
+
+<h2 id="filosofia-plug-and-play">Filosofia Plug-and-Play<a class="headerlink" href="#filosofia-plug-and-play" title="Permanent link">&para;</a></h2>
+<p>Configure no Settings, tudo é auto-configurado:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Auth - auto-configurado</span>
+    <span class="n">user_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps.users.models.User&quot;</span>
+
+    <span class="c1"># Kafka - auto-configurado</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="c1"># Tasks - auto-configurado</span>
+    <span class="n">task_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="c1"># Multi-tenancy - auto-configurado</span>
+    <span class="n">tenancy_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+</code></pre></div>
+
+<p><strong>Zero chamadas explícitas</strong>: Você NÃO precisa chamar <code>configure_auth()</code>, <code>configure_kafka()</code>, etc.</p>
+<h2 id="instalacao">Instalação<a class="headerlink" href="#instalacao" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>pipx<span class="w"> </span>install<span class="w"> </span>stride
+stride<span class="w"> </span>init<span class="w"> </span>my-api<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>my-api
+stride<span class="w"> </span>run
+<span class="c1"># → http://localhost:8000/docs</span>
+</code></pre></div>
+
+<h2 id="documentacao">Documentação<a class="headerlink" href="#documentacao" title="Permanent link">&para;</a></h2>
+<h3 id="comecando">Começando<a class="headerlink" href="#comecando" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Doc</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="00-criar-aplicacao/">Criar uma aplicação</a></td>
+<td>Guia completo: config, DB, ViewSet, APIView, serializers, paginação, WebSocket, SSE, validação</td>
+</tr>
+<tr>
+<td><a href="01-quickstart/">Quickstart</a></td>
+<td>Primeira API em 5 minutos</td>
+</tr>
+<tr>
+<td><a href="02-settings/">Settings</a></td>
+<td>Sistema de configuração plug-and-play</td>
+</tr>
+<tr>
+<td><a href="03-models/">Models</a></td>
+<td>Modelos de banco de dados</td>
+</tr>
+<tr>
+<td><a href="04-viewsets/">ViewSets</a></td>
+<td>Endpoints CRUD</td>
+</tr>
+</tbody>
+</table>
+<h3 id="autenticacao">Autenticação<a class="headerlink" href="#autenticacao" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Doc</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="05-auth/">Auth</a></td>
+<td>Autenticação JWT</td>
+</tr>
+<tr>
+<td><a href="06-auth-backends/">Auth Backends</a></td>
+<td>Backends customizados</td>
+</tr>
+<tr>
+<td><a href="07-cli/">CLI</a></td>
+<td>Referência de comandos</td>
+</tr>
+<tr>
+<td><a href="08-permissions/">Permissions</a></td>
+<td>Controle de acesso</td>
+</tr>
+</tbody>
+</table>
+<h3 id="camada-de-dados">Camada de Dados<a class="headerlink" href="#camada-de-dados" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Doc</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="10-fields/">Fields</a></td>
+<td>Todos os tipos de campos</td>
+</tr>
+<tr>
+<td><a href="11-relations/">Relations</a></td>
+<td>Relacionamentos</td>
+</tr>
+<tr>
+<td><a href="12-querysets/">QuerySets</a></td>
+<td>Queries estilo Django</td>
+</tr>
+<tr>
+<td><a href="13-serializers/">Serializers</a></td>
+<td>Schemas de Input/Output</td>
+</tr>
+<tr>
+<td><a href="14-validators/">Validators</a></td>
+<td>Validação de dados</td>
+</tr>
+</tbody>
+</table>
+<h3 id="infraestrutura">Infraestrutura<a class="headerlink" href="#infraestrutura" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Doc</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="20-middleware/">Middleware</a></td>
+<td>Hooks de request/response</td>
+</tr>
+<tr>
+<td><a href="21-replicas/">Database Replicas</a></td>
+<td>Separação read/write</td>
+</tr>
+<tr>
+<td><a href="22-soft-delete/">Soft Delete</a></td>
+<td>Deleção lógica</td>
+</tr>
+<tr>
+<td><a href="23-routing/">Routing</a></td>
+<td>Roteamento de URLs</td>
+</tr>
+<tr>
+<td><a href="24-dependencies/">Dependencies</a></td>
+<td>Injeção de dependências</td>
+</tr>
+<tr>
+<td><a href="25-realtime/">Real-time</a></td>
+<td>WebSocket, SSE &amp; Channels</td>
+</tr>
+</tbody>
+</table>
+<h3 id="avancado">Avançado<a class="headerlink" href="#avancado" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Doc</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="30-messaging/">Messaging</a></td>
+<td>Integração Kafka/Redis</td>
+</tr>
+<tr>
+<td><a href="31-workers/">Workers</a></td>
+<td>Workers em background</td>
+</tr>
+<tr>
+<td><a href="32-tenancy/">Tenancy</a></td>
+<td>Multi-tenant</td>
+</tr>
+<tr>
+<td><a href="33-choices/">Choices</a></td>
+<td>TextChoices/IntegerChoices</td>
+</tr>
+<tr>
+<td><a href="34-exceptions/">Exceptions</a></td>
+<td>Tratamento de erros</td>
+</tr>
+<tr>
+<td><a href="35-datetime/">DateTime</a></td>
+<td>Tratamento de timezone</td>
+</tr>
+<tr>
+<td><a href="36-security/">Security</a></td>
+<td>Boas práticas de segurança</td>
+</tr>
+<tr>
+<td><a href="37-storage/">Storage</a></td>
+<td>Armazenamento de arquivos, Signed URLs para buckets privados</td>
+</tr>
+</tbody>
+</table>
+<h3 id="referencia">Referência<a class="headerlink" href="#referencia" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Doc</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="40-admin/">Admin</a></td>
+<td>Painel administrativo</td>
+</tr>
+<tr>
+<td><a href="41-migrations/">Migrations</a></td>
+<td>Migrations de banco</td>
+</tr>
+</tbody>
+</table>
+<h2 id="estrutura-do-projeto">Estrutura do Projeto<a class="headerlink" href="#estrutura-do-projeto" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>my-api/
+├── src/
+│   ├── settings.py      # Toda configuração aqui
+│   ├── main.py          # Entry point da app
+│   └── apps/
+│       ├── models.py    # Imports de models (barrel)
+│       └── items/
+│           ├── models.py
+│           ├── views.py
+│           └── routes.py
+├── migrations/
+├── .env
+└── pyproject.toml
+</code></pre></div>
+
+<h2 id="exemplo-minimo">Exemplo Mínimo<a class="headerlink" href="#exemplo-minimo" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">configure</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Minha API&quot;</span>
+
+<span class="n">settings</span> <span class="o">=</span> <span class="n">configure</span><span class="p">(</span><span class="n">settings_class</span><span class="o">=</span><span class="n">AppSettings</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/items/models.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Item</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;items&quot;</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/items/views.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Item</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ItemViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Item</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/main.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrideApp</span><span class="p">,</span> <span class="n">AutoRouter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.apps.items.routes</span><span class="w"> </span><span class="kn">import</span> <span class="n">router</span> <span class="k">as</span> <span class="n">items_router</span>
+
+<span class="n">api</span> <span class="o">=</span> <span class="n">AutoRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/api/v1&quot;</span><span class="p">)</span>
+<span class="n">api</span><span class="o">.</span><span class="n">include_router</span><span class="p">(</span><span class="n">items_router</span><span class="p">)</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">StrideApp</span><span class="p">(</span><span class="n">routers</span><span class="o">=</span><span class="p">[</span><span class="n">api</span><span class="p">])</span>
+</code></pre></div>
+
+<h2 id="exemplo-completo-com-auto-configuracao">Exemplo Completo com Auto-Configuração<a class="headerlink" href="#exemplo-completo-com-auto-configuracao" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">PydanticField</span><span class="p">,</span> <span class="n">configure</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Aplicação</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Minha API&quot;</span>
+    <span class="n">app_version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;1.0.0&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Auth (auto-configurado quando user_model definido)</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">user_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps.users.models.User&quot;</span>
+    <span class="n">models_module</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps&quot;</span>
+    <span class="n">auth_password_hasher</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;argon2&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Kafka (auto-configurado quando kafka_enabled=True)</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">kafka_bootstrap_servers</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;kafka:9092&quot;</span>
+    <span class="n">avro_default_namespace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;com.mycompany.events&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Tasks (auto-configurado quando task_enabled=True)</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">task_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">task_worker_concurrency</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Multi-tenancy</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">tenancy_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">tenancy_field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;workspace_id&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Middleware</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;timing&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;request_id&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;tenant&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;auth&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;logging&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Admin</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">admin_site_title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Minha Empresa&quot;</span>
+    <span class="n">admin_primary_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#10B981&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Campos customizados</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">stripe_api_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PydanticField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Stripe API Key&quot;</span><span class="p">)</span>
+
+<span class="c1"># Configura TUDO automaticamente</span>
+<span class="n">settings</span> <span class="o">=</span> <span class="n">configure</span><span class="p">(</span><span class="n">settings_class</span><span class="o">=</span><span class="n">AppSettings</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="filefield-nativo-storage-com-signed-urls">FileField Nativo (Storage com Signed URLs)<a class="headerlink" href="#filefield-nativo-storage-com-signed-urls" title="Permanent link">&para;</a></h2>
+<p>FileField estilo Django para upload e acesso a arquivos com signed URLs:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. Configure no .env</span>
+<span class="c1"># STORAGE_BACKEND=gcs</span>
+<span class="c1"># STORAGE_GCS_BUCKET_NAME=meu-bucket</span>
+<span class="c1"># STORAGE_GCS_CREDENTIALS_FILE=config/gcp-sa.json</span>
+<span class="c1"># STORAGE_GCS_USE_SIGNED_URLS=true</span>
+
+<span class="c1"># 2. No model, use AdvancedField.file() - estilo Django</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.fields</span><span class="w"> </span><span class="kn">import</span> <span class="n">AdvancedField</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Course</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;courses&quot;</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+
+    <span class="c1"># Coluna do banco (armazena path)</span>
+    <span class="n">cover_url</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># FileField nativo</span>
+    <span class="n">cover</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="s2">&quot;cover_url&quot;</span><span class="p">,</span> <span class="n">upload_to</span><span class="o">=</span><span class="s2">&quot;courses/covers/&quot;</span><span class="p">)</span>
+
+<span class="c1"># 3. Use como Django FileField</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">name</span>     <span class="c1"># &quot;courses/covers/abc.jpg&quot;</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">url</span>      <span class="c1"># &quot;https://...?X-Goog-Signature=...&quot; (signed URL)</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;foto.jpg&quot;</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="s2">&quot;image/jpeg&quot;</span><span class="p">)</span>  <span class="c1"># Upload</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span> <span class="c1"># Remove do storage</span>
+
+<span class="c1"># 4. Em schemas, transforme com get_file_url()</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_file_url</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CourseResponse</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="n">cover_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@model_validator</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;after&quot;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform_urls</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cover_url</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cover_url</span> <span class="o">=</span> <span class="n">get_file_url</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cover_url</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div>
+
+<p><strong>Ver</strong>: <a href="37-storage/">Storage</a> para documentação completa.</p>
+<h2 id="comandos-rapidos">Comandos Rápidos<a class="headerlink" href="#comandos-rapidos" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>stride<span class="w"> </span>init<span class="w"> </span>my-api<span class="w">          </span><span class="c1"># Criar projeto</span>
+stride<span class="w"> </span>init<span class="w"> </span>my-api<span class="w"> </span>--minimal<span class="w"> </span><span class="c1"># Projeto mínimo</span>
+stride<span class="w"> </span>makemigrations<span class="w">       </span><span class="c1"># Gerar migrations</span>
+stride<span class="w"> </span>migrate<span class="w">              </span><span class="c1"># Aplicar migrations</span>
+stride<span class="w"> </span>run<span class="w">                  </span><span class="c1"># Iniciar servidor</span>
+core<span class="w"> </span>createsuperuser<span class="w">      </span><span class="c1"># Criar usuário admin</span>
+core<span class="w"> </span>kafka<span class="w"> </span>worker<span class="w"> </span>--all<span class="w">   </span><span class="c1"># Executar workers</span>
+</code></pre></div>
+
+<h2 id="links">Links<a class="headerlink" href="#links" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/your-org/stride">GitHub</a></li>
+<li><a href="https://pypi.org/project/stride/">PyPI</a></li>
+<li><a href="CHANGELOG/">Changelog</a></li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="introduction/" class="btn btn-neutral float-right" title="Introduction">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+      <span><a href="introduction/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = ".";</script>
+    <script src="js/theme_extra.js"></script>
+    <script src="js/theme.js"></script>
+      <script src="search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
+
+<!--
+MkDocs version : 1.6.1
+Build Date UTC : 2026-03-23 20:00:10.950934+00:00
+-->

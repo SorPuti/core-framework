@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/24-dependencies/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Dependencies - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Dependencies";
+        var mkdocs_page_input_path = "24-dependencies.md";
+        var mkdocs_page_url = "/core-framework/24-dependencies/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Dependencies</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/24-dependencies.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">&para;</a></h1>
+<p>Dependency injection system.</p>
+<h2 id="built-in-dependencies">Built-in Dependencies<a class="headerlink" href="#built-in-dependencies" title="Permanent link">&para;</a></h2>
+<h3 id="get_db">get_db<a class="headerlink" href="#get_db" title="Permanent link">&para;</a></h3>
+<p>Database session.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_db</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.ext.asyncio</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncSession</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Depends</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">db</span><span class="p">:</span> <span class="n">AsyncSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">)):</span>
+    <span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="get_current_user">get_current_user<a class="headerlink" href="#get_current_user" title="Permanent link">&para;</a></h3>
+<p>Authenticated user (required).</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_current_user</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">user</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_current_user</span><span class="p">)):</span>
+    <span class="c1"># Raises 401 if not authenticated</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">}</span>
+</code></pre></div>
+
+<h3 id="get_optional_user">get_optional_user<a class="headerlink" href="#get_optional_user" title="Permanent link">&para;</a></h3>
+<p>Authenticated user (optional).</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_optional_user</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">user</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_optional_user</span><span class="p">)):</span>
+    <span class="k">if</span> <span class="n">user</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">}</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">}</span>
+</code></pre></div>
+
+<h3 id="get_settings_dep">get_settings_dep<a class="headerlink" href="#get_settings_dep" title="Permanent link">&para;</a></h3>
+<p>Application settings.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings_dep</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings_dep</span><span class="p">)):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;app_name&quot;</span><span class="p">:</span> <span class="n">settings</span><span class="o">.</span><span class="n">app_name</span><span class="p">}</span>
+</code></pre></div>
+
+<h2 id="type-aliases">Type Aliases<a class="headerlink" href="#type-aliases" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabaseSession</span><span class="p">,</span> <span class="n">CurrentUser</span><span class="p">,</span> <span class="n">OptionalUser</span><span class="p">,</span> <span class="n">AppSettings</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">DatabaseSession</span><span class="p">,</span>
+    <span class="n">user</span><span class="p">:</span> <span class="n">CurrentUser</span><span class="p">,</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">AppSettings</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="k">pass</span>
+</code></pre></div>
+
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<h3 id="configure_auth">configure_auth<a class="headerlink" href="#configure_auth" title="Permanent link">&para;</a></h3>
+<p>Set up user loading.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_auth</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.apps.users.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">load_user</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">get_or_none</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user_id</span><span class="p">)</span>
+
+<span class="n">configure_auth</span><span class="p">(</span><span class="n">user_loader</span><span class="o">=</span><span class="n">load_user</span><span class="p">)</span>
+</code></pre></div>
+
+<p>With token decoder:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode_token</span>
+
+<span class="n">configure_auth</span><span class="p">(</span>
+    <span class="n">user_loader</span><span class="o">=</span><span class="n">load_user</span><span class="p">,</span>
+    <span class="n">token_decoder</span><span class="o">=</span><span class="n">decode_token</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="set_session_factory">set_session_factory<a class="headerlink" href="#set_session_factory" title="Permanent link">&para;</a></h3>
+<p>Custom session factory.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_session_factory</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_db_replicas</span>
+
+<span class="c1"># Use replicas globally</span>
+<span class="n">set_session_factory</span><span class="p">(</span><span class="n">get_db_replicas</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="pagination">Pagination<a class="headerlink" href="#pagination" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">PaginationParams</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Depends</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_items</span><span class="p">(</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">DatabaseSession</span><span class="p">,</span>
+    <span class="n">pagination</span><span class="p">:</span> <span class="n">PaginationParams</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(),</span>
+<span class="p">):</span>
+    <span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">pagination</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="n">pagination</span><span class="o">.</span><span class="n">limit</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;items&quot;</span><span class="p">:</span> <span class="n">items</span><span class="p">,</span> <span class="s2">&quot;page&quot;</span><span class="p">:</span> <span class="n">pagination</span><span class="o">.</span><span class="n">page</span><span class="p">}</span>
+</code></pre></div>
+
+<p>PaginationParams attributes:
+- <code>page</code>: Current page (default: 1)
+- <code>page_size</code>: Items per page (default: 20)
+- <code>max_page_size</code>: Maximum allowed (default: 100)
+- <code>offset</code>: Calculated offset
+- <code>limit</code>: Same as page_size</p>
+<h2 id="sorting">Sorting<a class="headerlink" href="#sorting" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">SortingParams</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Depends</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_items</span><span class="p">(</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">DatabaseSession</span><span class="p">,</span>
+    <span class="n">sorting</span><span class="p">:</span> <span class="n">SortingParams</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(),</span>
+<span class="p">):</span>
+    <span class="n">order</span> <span class="o">=</span> <span class="n">sorting</span><span class="o">.</span><span class="n">order_by</span>  <span class="c1"># Returns list for SQLAlchemy</span>
+    <span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="o">*</span><span class="n">order</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">items</span>
+</code></pre></div>
+
+<p>SortingParams attributes:
+- <code>sort_by</code>: Field name
+- <code>sort_order</code>: <code>"asc"</code> or <code>"desc"</code>
+- <code>allowed_fields</code>: List of allowed sort fields
+- <code>order_by</code>: Property returning SQLAlchemy-compatible list</p>
+<h2 id="request-context">Request Context<a class="headerlink" href="#request-context" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_request_context</span><span class="p">,</span> <span class="n">RequestContext</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Depends</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">RequestContext</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_request_context</span><span class="p">)):</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;method&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;url&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;client_ip&quot;</span><span class="p">:</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;client_ip&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;user_agent&quot;</span><span class="p">:</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;user_agent&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;user&quot;</span><span class="p">:</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;user&quot;</span><span class="p">],</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h2 id="custom-dependencies">Custom Dependencies<a class="headerlink" href="#custom-dependencies" title="Permanent link">&para;</a></h2>
+<h3 id="simple-dependency">Simple Dependency<a class="headerlink" href="#simple-dependency" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Depends</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">get_api_key</span><span class="p">(</span><span class="n">api_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="o">...</span><span class="p">)):</span>
+    <span class="k">if</span> <span class="n">api_key</span> <span class="o">!=</span> <span class="s2">&quot;secret&quot;</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="mi">401</span><span class="p">,</span> <span class="s2">&quot;Invalid API key&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">api_key</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">api_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_api_key</span><span class="p">)):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;authenticated&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+</code></pre></div>
+
+<h3 id="class-dependency">Class Dependency<a class="headerlink" href="#class-dependency" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">RateLimiter</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">requests_per_minute</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">limit</span> <span class="o">=</span> <span class="n">requests_per_minute</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">):</span>
+        <span class="c1"># Check rate limit</span>
+        <span class="k">if</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_limited</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="mi">429</span><span class="p">,</span> <span class="s2">&quot;Rate limit exceeded&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+<span class="n">rate_limiter</span> <span class="o">=</span> <span class="n">RateLimiter</span><span class="p">(</span><span class="n">requests_per_minute</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">_</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">rate_limiter</span><span class="p">)):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;ok&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+</code></pre></div>
+
+<h3 id="service-dependency">Service Dependency<a class="headerlink" href="#service-dependency" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">DependencyFactory</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserService</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">:</span> <span class="n">AsyncSession</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span> <span class="o">=</span> <span class="n">db</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_active_users</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">is_active</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Auto-injects db</span>
+<span class="n">user_service_dep</span> <span class="o">=</span> <span class="n">DependencyFactory</span><span class="p">(</span><span class="n">UserService</span><span class="p">)</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">service</span><span class="p">:</span> <span class="n">UserService</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">user_service_dep</span><span class="p">)):</span>
+    <span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">service</span><span class="o">.</span><span class="n">get_active_users</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">users</span>
+</code></pre></div>
+
+<h2 id="viewset-dependencies">ViewSet Dependencies<a class="headerlink" href="#viewset-dependencies" title="Permanent link">&para;</a></h2>
+<p>ViewSets auto-inject:
+- <code>db</code>: Database session
+- <code>_user</code>: Optional user (via <code>get_optional_user</code>)</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ItemViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Item</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c1"># db is auto-injected</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">list</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="dependency-override">Dependency Override<a class="headerlink" href="#dependency-override" title="Permanent link">&para;</a></h2>
+<p>For testing:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.testclient</span><span class="w"> </span><span class="kn">import</span> <span class="n">TestClient</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">mock_get_db</span><span class="p">():</span>
+    <span class="k">yield</span> <span class="n">test_session</span>
+
+<span class="n">app</span><span class="o">.</span><span class="n">dependency_overrides</span><span class="p">[</span><span class="n">get_db</span><span class="p">]</span> <span class="o">=</span> <span class="n">mock_get_db</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">TestClient</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/items&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="common-patterns">Common Patterns<a class="headerlink" href="#common-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="require-admin">Require Admin<a class="headerlink" href="#require-admin" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_current_user</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">require_admin</span><span class="p">(</span><span class="n">user</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_current_user</span><span class="p">)):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">is_admin</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="mi">403</span><span class="p">,</span> <span class="s2">&quot;Admin required&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">user</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">admin_view</span><span class="p">(</span><span class="n">user</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">require_admin</span><span class="p">)):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;admin&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+</code></pre></div>
+
+<h3 id="tenant-context">Tenant Context<a class="headerlink" href="#tenant-context" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_tenant</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">DatabaseSession</span><span class="p">,</span>
+    <span class="n">user</span><span class="p">:</span> <span class="n">CurrentUser</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="n">tenant_id</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;X-Tenant-ID&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">user</span><span class="o">.</span><span class="n">default_tenant_id</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">Tenant</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">tenant_id</span><span class="p">)</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">my_view</span><span class="p">(</span><span class="n">tenant</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_tenant</span><span class="p">)):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;tenant&quot;</span><span class="p">:</span> <span class="n">tenant</span><span class="o">.</span><span class="n">name</span><span class="p">}</span>
+</code></pre></div>
+
+<h3 id="combined-dependencies">Combined Dependencies<a class="headerlink" href="#combined-dependencies" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_post_with_permission</span><span class="p">(</span>
+    <span class="n">post_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">DatabaseSession</span><span class="p">,</span>
+    <span class="n">user</span><span class="p">:</span> <span class="n">CurrentUser</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="n">post</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">get_or_none</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">post_id</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">post</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="mi">404</span><span class="p">,</span> <span class="s2">&quot;Post not found&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">post</span><span class="o">.</span><span class="n">author_id</span> <span class="o">!=</span> <span class="n">user</span><span class="o">.</span><span class="n">id</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">is_admin</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="mi">403</span><span class="p">,</span> <span class="s2">&quot;Not allowed&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">post</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">update_post</span><span class="p">(</span><span class="n">post</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_post_with_permission</span><span class="p">)):</span>
+    <span class="c1"># post is loaded and permission checked</span>
+    <span class="k">pass</span>
+</code></pre></div>
+
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../23-routing/">Routing</a> — URL routing</li>
+<li><a href="../04-viewsets/">ViewSets</a> — CRUD endpoints</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/37-storage/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Storage (arquivos) - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Storage (arquivos)";
+        var mkdocs_page_input_path = "37-storage.md";
+        var mkdocs_page_url = "/core-framework/37-storage/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Storage (arquivos)</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/37-storage.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="storage-arquivos">Storage (arquivos)<a class="headerlink" href="#storage-arquivos" title="Permanent link">&para;</a></h1>
+<p>Sistema de armazenamento de arquivos plug-and-play: <strong>local</strong> (disco) ou <strong>Google Cloud Storage (GCS)</strong>. Inspirado em Django + django-storages. Usado pelo Admin Panel para upload em campos de arquivo e para remover arquivos físicos na exclusão.</p>
+<h2 id="visao-geral">Visão geral<a class="headerlink" href="#visao-geral" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Configuração</strong>: em <a href="../02-settings/#storage--file-uploads">Settings</a> você define <code>storage_backend</code> (<code>local</code> ou <code>gcs</code>) e os parâmetros do backend (bucket, credenciais, etc.).</li>
+<li><strong>Admin</strong>: modelos com campos que armazenam path/URL de arquivo ganham o widget <a href="../40-admin/#campos-de-arquivo-storage-e-exclusão">file_upload no Admin</a> (drag-and-drop, preview) e, ao deletar, a opção de apagar o arquivo físico do storage.</li>
+<li><strong>API programática</strong>: use <code>core.storage</code> para salvar/remover arquivos fora do admin (jobs, APIs customizadas, etc.).</li>
+<li><strong>Signed URLs</strong>: suporte nativo para buckets privados via signed URLs — seguro e temporário.</li>
+</ul>
+<h2 id="configuracao">Configuração<a class="headerlink" href="#configuracao" title="Permanent link">&para;</a></h2>
+<p>Toda a configuração fica em <strong>Settings</strong> (e <code>.env</code>). Resumo:</p>
+<table>
+<thead>
+<tr>
+<th>Backend</th>
+<th>Settings principais</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>local</strong></td>
+<td><code>storage_backend="local"</code>, <code>storage_local_media_root</code>, <code>storage_media_url</code></td>
+</tr>
+<tr>
+<td><strong>gcs</strong> (público)</td>
+<td><code>storage_backend="gcs"</code>, <code>storage_gcs_bucket_name</code>, <code>storage_gcs_use_signed_urls=false</code></td>
+</tr>
+<tr>
+<td><strong>gcs</strong> (privado)</td>
+<td><code>storage_backend="gcs"</code>, <code>storage_gcs_bucket_name</code>, <code>storage_gcs_use_signed_urls=true</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="configuracoes-gcs">Configurações GCS<a class="headerlink" href="#configuracoes-gcs" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Descrição</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>storage_gcs_bucket_name</code></td>
+<td>Nome do bucket</td>
+<td>obrigatório</td>
+</tr>
+<tr>
+<td><code>storage_gcs_credentials_file</code></td>
+<td>Caminho do JSON da Service Account</td>
+<td>None (usa ADC)</td>
+</tr>
+<tr>
+<td><code>storage_gcs_project</code></td>
+<td>ID do projeto GCP</td>
+<td>None (usa do JSON)</td>
+</tr>
+<tr>
+<td><code>storage_gcs_use_signed_urls</code></td>
+<td>Usar signed URLs para bucket privado</td>
+<td><code>true</code></td>
+</tr>
+<tr>
+<td><code>storage_gcs_expiration_seconds</code></td>
+<td>Tempo de expiração das signed URLs</td>
+<td><code>3600</code> (1 hora)</td>
+</tr>
+<tr>
+<td><code>storage_gcs_default_acl</code></td>
+<td>ACL padrão dos objetos</td>
+<td><code>private</code></td>
+</tr>
+<tr>
+<td><code>storage_media_url</code></td>
+<td>URL base (fallback se signed URLs falharem)</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dependencia-opcional-para-gcs">Dependência opcional para GCS<a class="headerlink" href="#dependencia-opcional-para-gcs" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;stride[gcs]&quot;</span>
+<span class="c1"># ou</span>
+pip<span class="w"> </span>install<span class="w"> </span>google-cloud-storage
+</code></pre></div>
+
+<h2 id="buckets-privados-signed-urls">Buckets Privados (Signed URLs)<a class="headerlink" href="#buckets-privados-signed-urls" title="Permanent link">&para;</a></h2>
+<p>Para buckets privados, o framework gera <strong>signed URLs</strong> automaticamente. Isso é similar ao comportamento do Django com <code>django-storages</code>:</p>
+<ol>
+<li>O <strong>model armazena apenas o path relativo</strong> (ex: <code>uploads/foto.jpg</code>)</li>
+<li>A <strong>API retorna signed URLs</strong> automaticamente ao serializar</li>
+</ol>
+<h3 id="configuracao-para-bucket-privado">Configuração para bucket privado<a class="headerlink" href="#configuracao-para-bucket-privado" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env</span>
+<span class="nv">STORAGE_BACKEND</span><span class="o">=</span>gcs
+<span class="nv">STORAGE_GCS_PROJECT</span><span class="o">=</span>meu-projeto-123456
+<span class="nv">STORAGE_GCS_BUCKET_NAME</span><span class="o">=</span>meu-bucket-privado
+<span class="nv">STORAGE_GCS_CREDENTIALS_FILE</span><span class="o">=</span>config/gcp-service-account.json
+<span class="nv">STORAGE_GCS_USE_SIGNED_URLS</span><span class="o">=</span><span class="nb">true</span>
+<span class="nv">STORAGE_GCS_EXPIRATION_SECONDS</span><span class="o">=</span><span class="m">3600</span>
+<span class="nv">STORAGE_GCS_DEFAULT_ACL</span><span class="o">=</span>private
+</code></pre></div>
+
+<h3 id="permissoes-necessarias-para-signed-urls">Permissões necessárias para signed URLs<a class="headerlink" href="#permissoes-necessarias-para-signed-urls" title="Permanent link">&para;</a></h3>
+<p>A Service Account precisa de permissões adicionais para gerar signed URLs:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># No bucket</span>
+roles/storage.objectAdmin<span class="w">  </span><span class="c1"># ou objectCreator + objectViewer</span>
+
+<span class="c1"># Para signed URLs (no projeto)</span>
+roles/iam.serviceAccountTokenCreator
+</code></pre></div>
+
+<p>Comando para adicionar permissão de token creator:</p>
+<div class="codehilite"><pre><span></span><code>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>MEU_PROJETO<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--member<span class="o">=</span><span class="s2">&quot;serviceAccount:EMAIL_DA_SA@MEU_PROJETO.iam.gserviceaccount.com&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--role<span class="o">=</span><span class="s2">&quot;roles/iam.serviceAccountTokenCreator&quot;</span>
+</code></pre></div>
+
+<h2 id="api-corestorage">API: <code>core.storage</code><a class="headerlink" href="#api-corestorage" title="Permanent link">&para;</a></h2>
+<h3 id="save_filerelative_path-content-content_typenone-str"><code>save_file(relative_path, content, content_type=None) -&gt; str</code><a class="headerlink" href="#save_filerelative_path-content-content_typenone-str" title="Permanent link">&para;</a></h3>
+<p>Salva o conteúdo no backend configurado (local ou GCS).</p>
+<ul>
+<li><strong>relative_path</strong>: caminho relativo, ex.: <code>uploads/2025/02/abc.jpg</code>.</li>
+<li><strong>content</strong>: bytes do arquivo.</li>
+<li><strong>content_type</strong>: MIME type (opcional; usado no GCS).</li>
+<li><strong>Retorno</strong>: <strong>path relativo</strong> a ser armazenado no modelo.</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">save_file</span>
+
+<span class="n">path</span> <span class="o">=</span> <span class="n">save_file</span><span class="p">(</span><span class="s2">&quot;uploads/2025/02/foto.jpg&quot;</span><span class="p">,</span> <span class="n">file_bytes</span><span class="p">,</span> <span class="s2">&quot;image/jpeg&quot;</span><span class="p">)</span>
+<span class="c1"># Retorna sempre: &quot;uploads/2025/02/foto.jpg&quot;</span>
+<span class="c1"># O path é armazenado no model; use get_file_url() para obter a URL de acesso.</span>
+</code></pre></div>
+
+<h3 id="get_file_urlpath-expirationnone-str"><code>get_file_url(path, expiration=None) -&gt; str</code><a class="headerlink" href="#get_file_urlpath-expirationnone-str" title="Permanent link">&para;</a></h3>
+<p>Gera URL de acesso ao arquivo. Para buckets privados, retorna <strong>signed URL</strong>.</p>
+<ul>
+<li><strong>path</strong>: path relativo armazenado no modelo.</li>
+<li><strong>expiration</strong>: tempo de expiração em segundos ou timedelta (default: <code>storage_gcs_expiration_seconds</code>).</li>
+<li><strong>Retorno</strong>: URL de acesso (signed URL para bucket privado).</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_file_url</span>
+
+<span class="n">url</span> <span class="o">=</span> <span class="n">get_file_url</span><span class="p">(</span><span class="s2">&quot;uploads/2025/02/foto.jpg&quot;</span><span class="p">)</span>
+<span class="c1"># Bucket privado → &quot;https://storage.googleapis.com/bucket/...?X-Goog-Signature=...&quot;</span>
+<span class="c1"># Bucket público → &quot;https://storage.googleapis.com/bucket/uploads/2025/02/foto.jpg&quot;</span>
+<span class="c1"># Local → &quot;/media/uploads/2025/02/foto.jpg&quot;</span>
+
+<span class="c1"># Com expiração customizada (5 minutos)</span>
+<span class="n">url</span> <span class="o">=</span> <span class="n">get_file_url</span><span class="p">(</span><span class="s2">&quot;uploads/foto.jpg&quot;</span><span class="p">,</span> <span class="n">expiration</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="delete_filepath_or_url-bool"><code>delete_file(path_or_url) -&gt; bool</code><a class="headerlink" href="#delete_filepath_or_url-bool" title="Permanent link">&para;</a></h3>
+<p>Remove o arquivo físico do backend.</p>
+<ul>
+<li><strong>path_or_url</strong>: valor armazenado no modelo (path relativo, URL pública ou <code>gs://bucket/key</code>).</li>
+<li><strong>Retorno</strong>: <code>True</code> se removeu ou não existia; <code>False</code> em erro (erro é logado).</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">delete_file</span>
+
+<span class="n">delete_file</span><span class="p">(</span><span class="s2">&quot;uploads/2025/02/foto.jpg&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="file_existspath-bool"><code>file_exists(path) -&gt; bool</code><a class="headerlink" href="#file_existspath-bool" title="Permanent link">&para;</a></h3>
+<p>Verifica se o arquivo existe no storage.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">file_exists</span>
+
+<span class="k">if</span> <span class="n">file_exists</span><span class="p">(</span><span class="s2">&quot;uploads/foto.jpg&quot;</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Arquivo existe!&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="filefield-nativo-estilo-django">FileField Nativo (estilo Django)<a class="headerlink" href="#filefield-nativo-estilo-django" title="Permanent link">&para;</a></h2>
+<p>O framework oferece <code>AdvancedField.file()</code> - um FileField nativo que funciona igual ao Django:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.fields</span><span class="w"> </span><span class="kn">import</span> <span class="n">AdvancedField</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Course</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;courses&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="mi">255</span><span class="p">)</span>
+
+    <span class="c1"># Coluna do banco (string que armazena o path)</span>
+    <span class="n">cover_image_url</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># FileField nativo - interface rica para arquivos</span>
+    <span class="n">cover</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="s2">&quot;cover_image_url&quot;</span><span class="p">,</span> <span class="n">upload_to</span><span class="o">=</span><span class="s2">&quot;courses/covers/&quot;</span><span class="p">)</span>
+
+<span class="c1"># Uso:</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">name</span>     <span class="c1"># &quot;courses/covers/abc.jpg&quot; (path armazenado)</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">url</span>      <span class="c1"># &quot;https://...?X-Goog-Signature=...&quot; (signed URL)</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;foto.jpg&quot;</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="s2">&quot;image/jpeg&quot;</span><span class="p">)</span>  <span class="c1"># Upload</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span> <span class="c1"># Remove do storage</span>
+<span class="nb">bool</span><span class="p">(</span><span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="p">)</span>    <span class="c1"># True se tem arquivo</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="c1"># Verifica se existe no storage</span>
+</code></pre></div>
+
+<h3 id="parametros-do-filefield">Parâmetros do FileField<a class="headerlink" href="#parametros-do-filefield" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">AdvancedField</span><span class="o">.</span><span class="n">file</span><span class="p">(</span>
+    <span class="n">db_column</span><span class="o">=</span><span class="s2">&quot;cover_image_url&quot;</span><span class="p">,</span>    <span class="c1"># Coluna do banco que armazena o path</span>
+    <span class="n">upload_to</span><span class="o">=</span><span class="s2">&quot;courses/covers/&quot;</span><span class="p">,</span>     <span class="c1"># Diretório de upload (ou função)</span>
+    <span class="n">url_expiration</span><span class="o">=</span><span class="mi">3600</span><span class="p">,</span>             <span class="c1"># Expiração da signed URL (segundos)</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="upload-dinamico-com-funcao">Upload dinâmico com função<a class="headerlink" href="#upload-dinamico-com-funcao" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">course_cover_path</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Gera path baseado no ID do curso.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;courses/</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">/covers/</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&quot;</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Course</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">cover_url</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">cover</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="s2">&quot;cover_url&quot;</span><span class="p">,</span> <span class="n">upload_to</span><span class="o">=</span><span class="n">course_cover_path</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="metodos-do-fieldfile">Métodos do FieldFile<a class="headerlink" href="#metodos-do-fieldfile" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Método</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.name</code></td>
+<td>Path relativo do arquivo</td>
+</tr>
+<tr>
+<td><code>.url</code></td>
+<td>URL de acesso (signed URL para bucket privado)</td>
+</tr>
+<tr>
+<td><code>.save(filename, content, content_type)</code></td>
+<td>Salva arquivo no storage</td>
+</tr>
+<tr>
+<td><code>.delete(save_model=False)</code></td>
+<td>Remove arquivo do storage</td>
+</tr>
+<tr>
+<td><code>.exists()</code></td>
+<td>Verifica se arquivo existe</td>
+</tr>
+<tr>
+<td><code>bool(file)</code></td>
+<td>True se tem arquivo</td>
+</tr>
+</tbody>
+</table>
+<h3 id="alternativa-storage_file_property">Alternativa: <code>storage_file_property</code><a class="headerlink" href="#alternativa-storage_file_property" title="Permanent link">&para;</a></h3>
+<p>Para casos mais simples (somente leitura), existe também o <code>storage_file_property</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">storage_file_property</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Course</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">cover_image_url</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">cover_image</span> <span class="o">=</span> <span class="n">storage_file_property</span><span class="p">(</span><span class="s2">&quot;cover_image_url&quot;</span><span class="p">)</span>
+
+<span class="c1"># Apenas leitura:</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover_image</span><span class="o">.</span><span class="n">url</span>   <span class="c1"># Signed URL</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover_image</span><span class="o">.</span><span class="n">name</span>  <span class="c1"># Path</span>
+</code></pre></div>
+
+<h2 id="uso-em-schemas-api-response">Uso em Schemas (API Response)<a class="headerlink" href="#uso-em-schemas-api-response" title="Permanent link">&para;</a></h2>
+<p>Para retornar signed URLs automaticamente nas respostas da API, use um <code>model_validator</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">model_validator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">OutputSchema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_file_url</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CourseResponse</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">cover_image_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@model_validator</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;after&quot;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform_file_urls</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Transforma paths em signed URLs automaticamente.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cover_image_url</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cover_image_url</span> <span class="o">=</span> <span class="n">get_file_url</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cover_image_url</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+<span class="c1"># Agora a API retorna signed URLs automaticamente:</span>
+<span class="c1"># GET /api/courses/123</span>
+<span class="c1"># {</span>
+<span class="c1">#   &quot;id&quot;: &quot;...&quot;,</span>
+<span class="c1">#   &quot;name&quot;: &quot;Curso X&quot;,</span>
+<span class="c1">#   &quot;cover_image_url&quot;: &quot;https://storage.googleapis.com/...?X-Goog-Signature=...&quot;</span>
+<span class="c1"># }</span>
+</code></pre></div>
+
+<h2 id="como-obter-credenciais-no-google-cloud">Como obter credenciais no Google Cloud<a class="headerlink" href="#como-obter-credenciais-no-google-cloud" title="Permanent link">&para;</a></h2>
+<h3 id="1-id-do-projeto-storage_gcs_project">1. ID do projeto (<code>STORAGE_GCS_PROJECT</code>)<a class="headerlink" href="#1-id-do-projeto-storage_gcs_project" title="Permanent link">&para;</a></h3>
+<ul>
+<li>No topo da página do Console, ao lado do logo do Google Cloud, aparece o <strong>nome do projeto</strong> e um <strong>ID</strong> (ex.: <code>meu-projeto-123456</code>).</li>
+<li>Use esse ID em <code>storage_gcs_project</code> (ou deixe em branco se for usar só o JSON — o projeto já vem dentro do JSON).</li>
+</ul>
+<h3 id="2-bucket-storage_gcs_bucket_name">2. Bucket (<code>STORAGE_GCS_BUCKET_NAME</code>)<a class="headerlink" href="#2-bucket-storage_gcs_bucket_name" title="Permanent link">&para;</a></h3>
+<ul>
+<li>No menu lateral: <strong>Storage</strong> → <strong>Buckets</strong> (ou <a href="https://console.cloud.google.com/storage/browser">Cloud Storage → Buckets</a>).</li>
+<li>Se ainda não tiver bucket: <strong>CREATE BUCKET</strong> → escolha nome, região e tipo de acesso.</li>
+</ul>
+<h3 id="3-service-account-e-arquivo-json">3. Service Account e arquivo JSON<a class="headerlink" href="#3-service-account-e-arquivo-json" title="Permanent link">&para;</a></h3>
+<ol>
+<li>No menu lateral: <strong>IAM &amp; Admin</strong> → <strong>Service Accounts</strong>.</li>
+<li><strong>CREATE SERVICE ACCOUNT</strong> → Nome: <code>storage-uploader</code> → <strong>Create and Continue</strong>.</li>
+<li>Na lista, clique na Service Account → aba <strong>KEYS</strong> → <strong>ADD KEY</strong> → <strong>Create new key</strong> → <strong>JSON</strong>.</li>
+<li>Guarde o arquivo JSON em local seguro (ex.: <code>config/gcp-service-account.json</code>).</li>
+</ol>
+<p><strong>Permissões necessárias:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># No bucket (Storage → Buckets → Permissions)</span>
+Storage<span class="w"> </span>Object<span class="w"> </span>Admin
+
+<span class="c1"># Para signed URLs (IAM → projeto)</span>
+Service<span class="w"> </span>Account<span class="w"> </span>Token<span class="w"> </span>Creator
+</code></pre></div>
+
+<h3 id="exemplo-completo-de-env">Exemplo completo de <code>.env</code><a class="headerlink" href="#exemplo-completo-de-env" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Bucket privado com signed URLs</span>
+<span class="nv">STORAGE_BACKEND</span><span class="o">=</span>gcs
+<span class="nv">STORAGE_GCS_PROJECT</span><span class="o">=</span>meu-projeto-123456
+<span class="nv">STORAGE_GCS_BUCKET_NAME</span><span class="o">=</span>meu-bucket-uploads
+<span class="nv">STORAGE_GCS_CREDENTIALS_FILE</span><span class="o">=</span>config/gcp-service-account.json
+<span class="nv">STORAGE_GCS_USE_SIGNED_URLS</span><span class="o">=</span><span class="nb">true</span>
+<span class="nv">STORAGE_GCS_EXPIRATION_SECONDS</span><span class="o">=</span><span class="m">3600</span>
+<span class="nv">STORAGE_GCS_DEFAULT_ACL</span><span class="o">=</span>private
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Bucket público (sem signed URLs)</span>
+<span class="nv">STORAGE_BACKEND</span><span class="o">=</span>gcs
+<span class="nv">STORAGE_GCS_PROJECT</span><span class="o">=</span>meu-projeto-123456
+<span class="nv">STORAGE_GCS_BUCKET_NAME</span><span class="o">=</span>meu-bucket-publico
+<span class="nv">STORAGE_GCS_CREDENTIALS_FILE</span><span class="o">=</span>config/gcp-service-account.json
+<span class="nv">STORAGE_GCS_USE_SIGNED_URLS</span><span class="o">=</span><span class="nb">false</span>
+<span class="nv">STORAGE_GCS_DEFAULT_ACL</span><span class="o">=</span>publicRead
+<span class="nv">STORAGE_MEDIA_URL</span><span class="o">=</span>https://storage.googleapis.com/meu-bucket-publico/
+</code></pre></div>
+
+<h2 id="uso-no-admin-panel">Uso no Admin Panel<a class="headerlink" href="#uso-no-admin-panel" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Campos de arquivo</strong>: o admin detecta automaticamente colunas como <code>image</code>, <code>avatar</code>, <code>photo</code>, <code>file_path</code>, <code>attachment_url</code> e exibe o widget <strong>file_upload</strong> (drag-and-drop, preview, link para o arquivo atual).</li>
+<li><strong>Upload</strong>: ao soltar ou escolher arquivo, o frontend chama <code>POST /api/{app}/{model}/upload-file</code>; o backend usa <code>save_file</code> e devolve path, que é salvo no campo ao salvar o formulário.</li>
+<li><strong>Exclusão</strong>: ao deletar um registro, o modal pergunta se deseja <strong>também deletar X arquivo(s) do storage</strong>.</li>
+</ul>
+<h2 id="servir-arquivos-locais">Servir arquivos locais<a class="headerlink" href="#servir-arquivos-locais" title="Permanent link">&para;</a></h2>
+<p>Com <code>storage_backend="local"</code>, os arquivos ficam em <code>storage_local_media_root</code> (ex.: <code>media/</code>). Para o frontend conseguir abrir os arquivos:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.staticfiles</span><span class="w"> </span><span class="kn">import</span> <span class="n">StaticFiles</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span>
+
+<span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">()</span>
+<span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">storage_backend</span> <span class="o">==</span> <span class="s2">&quot;local&quot;</span><span class="p">:</span>
+    <span class="n">app</span><span class="o">.</span><span class="n">mount</span><span class="p">(</span><span class="s2">&quot;/media&quot;</span><span class="p">,</span> <span class="n">StaticFiles</span><span class="p">(</span><span class="n">directory</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">storage_local_media_root</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;media&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="funcoes-auxiliares">Funções auxiliares<a class="headerlink" href="#funcoes-auxiliares" title="Permanent link">&para;</a></h2>
+<h3 id="get_storage_file_fieldsadmin_instance-liststr"><code>get_storage_file_fields(admin_instance) -&gt; list[str]</code><a class="headerlink" href="#get_storage_file_fieldsadmin_instance-liststr" title="Permanent link">&para;</a></h3>
+<p>Retorna os nomes dos campos do model que são de arquivo (widget <code>file_upload</code>).</p>
+<h3 id="collect_file_pathsinstance-field_names-liststr"><code>collect_file_paths(instance, field_names) -&gt; list[str]</code><a class="headerlink" href="#collect_file_pathsinstance-field_names-liststr" title="Permanent link">&para;</a></h3>
+<p>Coleta os valores (path/URL) de arquivo de uma instância para os campos dados.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">collect_file_paths</span><span class="p">,</span> <span class="n">get_storage_file_fields</span><span class="p">,</span> <span class="n">delete_file</span>
+
+<span class="n">file_fields</span> <span class="o">=</span> <span class="n">get_storage_file_fields</span><span class="p">(</span><span class="n">admin_instance</span><span class="p">)</span>
+<span class="n">paths</span> <span class="o">=</span> <span class="n">collect_file_paths</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">file_fields</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">:</span>
+    <span class="n">delete_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="ver-tambem">Ver também<a class="headerlink" href="#ver-tambem" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../02-settings/#storage--file-uploads">Settings — Storage / File Uploads</a> — configuração completa</li>
+<li><a href="../40-admin/#campos-de-arquivo-storage-e-exclusão">Admin — Campos de arquivo e exclusão</a> — widget file_upload</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

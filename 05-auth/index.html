@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/05-auth/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Authentication - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Authentication";
+        var mkdocs_page_input_path = "05-auth.md";
+        var mkdocs_page_url = "/core-framework/05-auth/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Authentication</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/05-auth.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h1>
+<p>Sistema de autenticação JWT com configuração plug-and-play. Defina <code>user_model</code> no Settings e tudo é configurado automaticamente.</p>
+<h2 id="fluxo-de-auth">Fluxo de Auth<a class="headerlink" href="#fluxo-de-auth" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">sequenceDiagram</span>
+<span class="w">    </span><span class="n">participant</span><span class="w"> </span><span class="n">C</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="n">Client</span>
+<span class="w">    </span><span class="n">participant</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="n">Auth</span><span class="w"> </span><span class="n">API</span>
+<span class="w">    </span><span class="n">participant</span><span class="w"> </span><span class="n">DB</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="n">Database</span>
+
+<span class="w">    </span><span class="n">Note</span><span class="w"> </span><span class="n">over</span><span class="w"> </span><span class="n">C</span><span class="p">,</span><span class="n">DB</span><span class="o">:</span><span class="w"> </span><span class="n">Login</span><span class="w"> </span><span class="n">Flow</span>
+<span class="w">    </span><span class="n">C</span><span class="o">-&gt;&gt;</span><span class="n">A</span><span class="o">:</span><span class="w"> </span><span class="n">POST</span><span class="w"> </span><span class="o">/</span><span class="n">auth</span><span class="o">/</span><span class="n">login</span><span class="w"> </span><span class="p">{</span><span class="n">email</span><span class="p">,</span><span class="w"> </span><span class="n">password</span><span class="p">}</span>
+<span class="w">    </span><span class="n">A</span><span class="o">-&gt;&gt;</span><span class="n">DB</span><span class="o">:</span><span class="w"> </span><span class="n">Find</span><span class="w"> </span><span class="n">user</span><span class="w"> </span><span class="n">by</span><span class="w"> </span><span class="n">email</span>
+<span class="w">    </span><span class="n">DB</span><span class="o">--&gt;&gt;</span><span class="n">A</span><span class="o">:</span><span class="w"> </span><span class="n">User</span><span class="w"> </span><span class="kd">record</span>
+<span class="w">    </span><span class="n">A</span><span class="o">-&gt;&gt;</span><span class="n">A</span><span class="o">:</span><span class="w"> </span><span class="n">Verify</span><span class="w"> </span><span class="n">password</span><span class="w"> </span><span class="nf">hash</span>
+<span class="w">    </span><span class="n">A</span><span class="o">--&gt;&gt;</span><span class="n">C</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="n">access_token</span><span class="p">,</span><span class="w"> </span><span class="n">refresh_token</span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">Note</span><span class="w"> </span><span class="n">over</span><span class="w"> </span><span class="n">C</span><span class="p">,</span><span class="n">DB</span><span class="o">:</span><span class="w"> </span><span class="n">Authenticated</span><span class="w"> </span><span class="n">Request</span>
+<span class="w">    </span><span class="n">C</span><span class="o">-&gt;&gt;</span><span class="n">A</span><span class="o">:</span><span class="w"> </span><span class="n">GET</span><span class="w"> </span><span class="o">/</span><span class="n">posts</span><span class="w"> </span><span class="p">(</span><span class="n">Bearer</span><span class="w"> </span><span class="kr">token</span><span class="p">)</span>
+<span class="w">    </span><span class="n">A</span><span class="o">-&gt;&gt;</span><span class="n">A</span><span class="o">:</span><span class="w"> </span><span class="n">Verify</span><span class="w"> </span><span class="n">JWT</span><span class="w"> </span><span class="n">signature</span>
+<span class="w">    </span><span class="n">A</span><span class="o">-&gt;&gt;</span><span class="n">DB</span><span class="o">:</span><span class="w"> </span><span class="n">Get</span><span class="w"> </span><span class="n">user</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="kr">token</span><span class="p">.</span><span class="n">sub</span>
+<span class="w">    </span><span class="n">A</span><span class="o">--&gt;&gt;</span><span class="n">C</span><span class="o">:</span><span class="w"> </span><span class="n">Response</span><span class="w"> </span><span class="kt">data</span>
+
+<span class="w">    </span><span class="n">Note</span><span class="w"> </span><span class="n">over</span><span class="w"> </span><span class="n">C</span><span class="p">,</span><span class="n">DB</span><span class="o">:</span><span class="w"> </span><span class="kt">Token</span><span class="w"> </span><span class="n">Refresh</span>
+<span class="w">    </span><span class="n">C</span><span class="o">-&gt;&gt;</span><span class="n">A</span><span class="o">:</span><span class="w"> </span><span class="n">POST</span><span class="w"> </span><span class="o">/</span><span class="n">auth</span><span class="o">/</span><span class="n">refresh</span><span class="w"> </span><span class="p">{</span><span class="n">refresh_token</span><span class="p">}</span>
+<span class="w">    </span><span class="n">A</span><span class="o">-&gt;&gt;</span><span class="n">A</span><span class="o">:</span><span class="w"> </span><span class="n">Verify</span><span class="w"> </span><span class="n">refresh</span><span class="w"> </span><span class="kt">token</span>
+<span class="w">    </span><span class="n">A</span><span class="o">--&gt;&gt;</span><span class="n">C</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="n">new_access_token</span><span class="p">}</span>
+</code></pre></div>
+
+<h2 id="ciclo-de-vida-dos-tokens">Ciclo de Vida dos Tokens<a class="headerlink" href="#ciclo-de-vida-dos-tokens" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">LR</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="n">Tokens</span>
+<span class="w">        </span><span class="k">AT</span><span class="o">[</span><span class="n">Access Token&lt;br/&gt;30 min TTL</span><span class="o">]</span>
+<span class="w">        </span><span class="n">RT</span><span class="o">[</span><span class="n">Refresh Token&lt;br/&gt;7 dias TTL</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">LOGIN</span><span class="o">[</span><span class="n">Login</span><span class="o">]</span><span class="w"> </span><span class="c1">--&gt; AT</span>
+<span class="w">    </span><span class="n">LOGIN</span><span class="w"> </span><span class="c1">--&gt; RT</span>
+
+<span class="w">    </span><span class="k">AT</span><span class="w"> </span><span class="c1">--&gt; |expirado| REFRESH[Refresh]</span>
+<span class="w">    </span><span class="n">RT</span><span class="w"> </span><span class="c1">--&gt; REFRESH</span>
+<span class="w">    </span><span class="n">REFRESH</span><span class="w"> </span><span class="c1">--&gt; AT2[Novo Access Token]</span>
+
+<span class="w">    </span><span class="n">RT</span><span class="w"> </span><span class="c1">--&gt; |expirado| LOGIN2[Re-login]</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="k">AT</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">RT</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#e3f2fd</span>
+</code></pre></div>
+
+<h2 id="configuracao-plug-and-play">Configuração Plug-and-Play<a class="headerlink" href="#configuracao-plug-and-play" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">configure</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Auth - auto-configurado quando user_model está definido</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">user_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps.users.models.User&quot;</span>
+    <span class="n">models_module</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps&quot;</span>  <span class="c1"># Para carregar relacionamentos</span>
+
+    <span class="c1"># Tokens (opcional)</span>
+    <span class="n">auth_access_token_expire_minutes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>
+    <span class="n">auth_refresh_token_expire_days</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">7</span>
+
+    <span class="c1"># Password (opcional)</span>
+    <span class="n">auth_password_hasher</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;argon2&quot;</span>
+    <span class="n">auth_password_min_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">auth_password_require_uppercase</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">auth_password_require_digit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+<span class="n">settings</span> <span class="o">=</span> <span class="n">configure</span><span class="p">(</span><span class="n">settings_class</span><span class="o">=</span><span class="n">AppSettings</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Zero configuração explícita</strong>: Você NÃO precisa chamar <code>configure_auth()</code>. Basta definir <code>user_model</code>.</p>
+<h2 id="settings-de-auth">Settings de Auth<a class="headerlink" href="#settings-de-auth" title="Permanent link">&para;</a></h2>
+<h3 id="tokens-e-chaves">Tokens e Chaves<a class="headerlink" href="#tokens-e-chaves" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth_secret_key</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Chave para tokens. Usa <code>secret_key</code> se None</td>
+</tr>
+<tr>
+<td><code>auth_algorithm</code></td>
+<td><code>str</code></td>
+<td><code>"HS256"</code></td>
+<td>Algoritmo JWT: HS256, HS384, HS512, RS256</td>
+</tr>
+<tr>
+<td><code>auth_access_token_expire_minutes</code></td>
+<td><code>int</code></td>
+<td><code>30</code></td>
+<td>TTL do access token (minutos)</td>
+</tr>
+<tr>
+<td><code>auth_refresh_token_expire_days</code></td>
+<td><code>int</code></td>
+<td><code>7</code></td>
+<td>TTL do refresh token (dias)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="user-model">User Model<a class="headerlink" href="#user-model" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_model</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Path do modelo User. <strong>Obrigatório para auth</strong></td>
+</tr>
+<tr>
+<td><code>auth_username_field</code></td>
+<td><code>str</code></td>
+<td><code>"email"</code></td>
+<td>Campo usado como username: email, username, cpf</td>
+</tr>
+</tbody>
+</table>
+<h3 id="backends">Backends<a class="headerlink" href="#backends" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth_backends</code></td>
+<td><code>list[str]</code></td>
+<td><code>["model"]</code></td>
+<td>Backends a tentar: model, oauth, ldap, token, api_key</td>
+</tr>
+<tr>
+<td><code>auth_backend</code></td>
+<td><code>str</code></td>
+<td><code>"model"</code></td>
+<td>Backend padrão</td>
+</tr>
+<tr>
+<td><code>auth_token_backend</code></td>
+<td><code>str</code></td>
+<td><code>"jwt"</code></td>
+<td>Backend de tokens: jwt, opaque, redis</td>
+</tr>
+<tr>
+<td><code>auth_permission_backend</code></td>
+<td><code>str</code></td>
+<td><code>"default"</code></td>
+<td>Backend de permissões: default, rbac, abac</td>
+</tr>
+</tbody>
+</table>
+<h3 id="password">Password<a class="headerlink" href="#password" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth_password_hasher</code></td>
+<td><code>str</code></td>
+<td><code>"pbkdf2_sha256"</code></td>
+<td>Hasher: pbkdf2_sha256, argon2, bcrypt, scrypt</td>
+</tr>
+<tr>
+<td><code>auth_password_min_length</code></td>
+<td><code>int</code></td>
+<td><code>8</code></td>
+<td>Comprimento mínimo</td>
+</tr>
+<tr>
+<td><code>auth_password_require_uppercase</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Exigir maiúscula</td>
+</tr>
+<tr>
+<td><code>auth_password_require_lowercase</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Exigir minúscula</td>
+</tr>
+<tr>
+<td><code>auth_password_require_digit</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Exigir dígito</td>
+</tr>
+<tr>
+<td><code>auth_password_require_special</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Exigir caractere especial</td>
+</tr>
+</tbody>
+</table>
+<h3 id="http">HTTP<a class="headerlink" href="#http" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth_header</code></td>
+<td><code>str</code></td>
+<td><code>"Authorization"</code></td>
+<td>Header HTTP para auth</td>
+</tr>
+<tr>
+<td><code>auth_scheme</code></td>
+<td><code>str</code></td>
+<td><code>"Bearer"</code></td>
+<td>Scheme: Bearer, Basic, Token</td>
+</tr>
+<tr>
+<td><code>auth_warn_missing_middleware</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Warning se middleware não configurado</td>
+</tr>
+</tbody>
+</table>
+<h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
+<h3 id="1-criar-user-model">1. Criar User Model<a class="headerlink" href="#1-criar-user-model" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/users/models.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AbstractUser</span><span class="p">,</span> <span class="n">PermissionsMixin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">AbstractUser</span><span class="p">,</span> <span class="n">PermissionsMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+
+    <span class="c1"># AbstractUser fornece:</span>
+    <span class="c1"># - id, email, password (hashed), is_active, is_staff, is_superuser</span>
+
+    <span class="c1"># PermissionsMixin fornece:</span>
+    <span class="c1"># - groups, user_permissions (relacionamentos M2M)</span>
+
+    <span class="c1"># Campos customizados</span>
+    <span class="n">first_name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">last_name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="2-adicionar-rotas-de-auth">2. Adicionar Rotas de Auth<a class="headerlink" href="#2-adicionar-rotas-de-auth" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/users/views.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AuthViewSet</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AuthViewSet</span><span class="p">(</span><span class="n">AuthViewSet</span><span class="p">):</span>
+    <span class="k">pass</span>  <span class="c1"># Usa defaults</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/users/routes.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoRouter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.views</span><span class="w"> </span><span class="kn">import</span> <span class="n">AuthViewSet</span>
+
+<span class="n">auth_router</span> <span class="o">=</span> <span class="n">AutoRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/auth&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Auth&quot;</span><span class="p">])</span>
+<span class="n">auth_router</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">AuthViewSet</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/main.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrideApp</span><span class="p">,</span> <span class="n">AutoRouter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.apps.users.routes</span><span class="w"> </span><span class="kn">import</span> <span class="n">auth_router</span>
+
+<span class="n">api</span> <span class="o">=</span> <span class="n">AutoRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/api/v1&quot;</span><span class="p">)</span>
+<span class="n">api</span><span class="o">.</span><span class="n">include_router</span><span class="p">(</span><span class="n">auth_router</span><span class="p">)</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">StrideApp</span><span class="p">(</span>
+    <span class="n">routers</span><span class="o">=</span><span class="p">[</span><span class="n">api</span><span class="p">],</span>
+    <span class="n">middleware</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;auth&quot;</span><span class="p">],</span>  <span class="c1"># Habilita middleware de auth</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="endpoints">Endpoints<a class="headerlink" href="#endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Método</th>
+<th>Path</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td>/auth/login</td>
+<td>Login, obter tokens</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>/auth/register</td>
+<td>Criar conta</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>/auth/refresh</td>
+<td>Renovar access token</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>/auth/me</td>
+<td>Obter usuário atual</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>/auth/logout</td>
+<td>Invalidar tokens</td>
+</tr>
+</tbody>
+</table>
+<h3 id="login">Login<a class="headerlink" href="#login" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/auth/login<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;email&quot;: &quot;user@example.com&quot;, &quot;password&quot;: &quot;secret123&quot;}&#39;</span>
+</code></pre></div>
+
+<p>Resposta:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;access_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;eyJ...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;refresh_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;eyJ...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;token_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bearer&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;user&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;email&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user@example.com&quot;</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="register">Register<a class="headerlink" href="#register" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/auth/register<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;email&quot;: &quot;new@example.com&quot;, &quot;password&quot;: &quot;secret123&quot;}&#39;</span>
+</code></pre></div>
+
+<h3 id="request-autenticado">Request Autenticado<a class="headerlink" href="#request-autenticado" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>curl<span class="w"> </span>http://localhost:8000/api/v1/posts/<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer eyJ...&quot;</span>
+</code></pre></div>
+
+<h2 id="proteger-endpoints">Proteger Endpoints<a class="headerlink" href="#proteger-endpoints" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">AllowAny</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">]</span>  <span class="c1"># Requer auth</span>
+
+    <span class="n">permission_classes_by_action</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;list&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span>     <span class="c1"># Lista pública</span>
+        <span class="s2">&quot;retrieve&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span> <span class="c1"># Detalhe público</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h2 id="acessar-usuario-atual">Acessar Usuário Atual<a class="headerlink" href="#acessar-usuario-atual" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">perform_create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">validated_data</span><span class="p">):</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">author_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+        <span class="k">await</span> <span class="n">instance</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</code></pre></div>
+
+<p>Ou em qualquer rota:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Depends</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_current_user</span>
+
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/me&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">me</span><span class="p">(</span><span class="n">user</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_current_user</span><span class="p">)):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">user</span><span class="o">.</span><span class="n">email</span><span class="p">}</span>
+</code></pre></div>
+
+<h2 id="criar-superusuario">Criar Superusuário<a class="headerlink" href="#criar-superusuario" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>core<span class="w"> </span>createsuperuser
+<span class="c1"># Digite email e senha</span>
+</code></pre></div>
+
+<h2 id="password-hashers">Password Hashers<a class="headerlink" href="#password-hashers" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Hasher</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pbkdf2_sha256</code></td>
+<td>Default, seguro, compatível</td>
+</tr>
+<tr>
+<td><code>argon2</code></td>
+<td>Mais seguro, requer <code>argon2-cffi</code></td>
+</tr>
+<tr>
+<td><code>bcrypt</code></td>
+<td>Popular, requer <code>bcrypt</code></td>
+</tr>
+<tr>
+<td><code>scrypt</code></td>
+<td>Resistente a hardware</td>
+</tr>
+</tbody>
+</table>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">auth_password_hasher</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;argon2&quot;</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Instalar dependência</span>
+pip<span class="w"> </span>install<span class="w"> </span>argon2-cffi<span class="w">  </span><span class="c1"># para argon2</span>
+pip<span class="w"> </span>install<span class="w"> </span>bcrypt<span class="w">       </span><span class="c1"># para bcrypt</span>
+</code></pre></div>
+
+<h2 id="validacao-de-senha">Validação de Senha<a class="headerlink" href="#validacao-de-senha" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">auth_password_min_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12</span>
+    <span class="n">auth_password_require_uppercase</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">auth_password_require_lowercase</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">auth_password_require_digit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">auth_password_require_special</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+</code></pre></div>
+
+<h2 id="authviewset-customizado">AuthViewSet Customizado<a class="headerlink" href="#authviewset-customizado" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AuthViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">action</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CustomAuthViewSet</span><span class="p">(</span><span class="n">AuthViewSet</span><span class="p">):</span>
+
+    <span class="nd">@action</span><span class="p">(</span><span class="n">detail</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;POST&quot;</span><span class="p">])</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">change_password</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">check_password</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;old_password&quot;</span><span class="p">]):</span>
+            <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="mi">400</span><span class="p">,</span> <span class="s2">&quot;Senha incorreta&quot;</span><span class="p">)</span>
+
+        <span class="n">user</span><span class="o">.</span><span class="n">set_password</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;new_password&quot;</span><span class="p">])</span>
+        <span class="k">await</span> <span class="n">user</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">}</span>
+
+    <span class="nd">@action</span><span class="p">(</span><span class="n">detail</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;POST&quot;</span><span class="p">])</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">forgot_password</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+        <span class="c1"># Implementar lógica de reset</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;email enviado&quot;</span><span class="p">}</span>
+</code></pre></div>
+
+<h2 id="middleware">Middleware<a class="headerlink" href="#middleware" title="Permanent link">&para;</a></h2>
+<h3 id="shortcuts">Shortcuts<a class="headerlink" href="#shortcuts" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;auth&quot;</span><span class="p">,</span>           <span class="c1"># AuthenticationMiddleware (requer auth)</span>
+        <span class="s2">&quot;optional_auth&quot;</span><span class="p">,</span>  <span class="c1"># OptionalAuthenticationMiddleware (auth opcional)</span>
+    <span class="p">]</span>
+</code></pre></div>
+
+<h3 id="diferenca">Diferença<a class="headerlink" href="#diferenca" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Middleware</th>
+<th>Comportamento</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth</code></td>
+<td>Requer autenticação, retorna 401 se não autenticado</td>
+</tr>
+<tr>
+<td><code>optional_auth</code></td>
+<td>Carrega usuário se token presente, permite anônimo</td>
+</tr>
+</tbody>
+</table>
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../06-auth-backends/">Auth Backends</a> — Backends de autenticação</li>
+<li><a href="../08-permissions/">Permissions</a> — Controle de acesso</li>
+<li><a href="../40-admin/">Admin</a> — Painel administrativo</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

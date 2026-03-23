@@ -1,0 +1,1893 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/02-settings/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Settings - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Settings";
+        var mkdocs_page_input_path = "02-settings.md";
+        var mkdocs_page_url = "/core-framework/02-settings/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Settings</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/02-settings.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h1>
+<p>Configuração centralizada e plug-and-play. Defina valores no Settings e todos os subsistemas são configurados automaticamente.</p>
+<h2 id="arquitetura-plug-and-play">Arquitetura Plug-and-Play<a class="headerlink" href="#arquitetura-plug-and-play" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="n">Settings</span><span class="o">[</span><span class="n">&quot;src/settings.py&quot;</span><span class="o">]</span>
+<span class="w">        </span><span class="n">CFG</span><span class="o">[</span><span class="n">AppSettings</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="n">Auto</span><span class="o">[</span><span class="n">&quot;Auto-configuração&quot;</span><span class="o">]</span>
+<span class="w">        </span><span class="n">DT</span><span class="o">[</span><span class="n">DateTime</span><span class="o">]</span>
+<span class="w">        </span><span class="n">AUTH</span><span class="o">[</span><span class="n">Auth</span><span class="o">]</span>
+<span class="w">        </span><span class="n">KAFKA</span><span class="o">[</span><span class="n">Kafka</span><span class="o">]</span>
+<span class="w">        </span><span class="n">TASKS</span><span class="o">[</span><span class="n">Tasks</span><span class="o">]</span>
+<span class="w">        </span><span class="n">MW</span><span class="o">[</span><span class="n">Middleware</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">CFG</span><span class="w"> </span><span class="c1">--&gt; |configure| DT</span>
+<span class="w">    </span><span class="n">CFG</span><span class="w"> </span><span class="c1">--&gt; |user_model| AUTH</span>
+<span class="w">    </span><span class="n">CFG</span><span class="w"> </span><span class="c1">--&gt; |kafka_enabled| KAFKA</span>
+<span class="w">    </span><span class="n">CFG</span><span class="w"> </span><span class="c1">--&gt; |task_enabled| TASKS</span>
+<span class="w">    </span><span class="n">CFG</span><span class="w"> </span><span class="c1">--&gt; |middleware| MW</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">CFG</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#c8e6c9</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">Auto</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#e3f2fd</span>
+</code></pre></div>
+
+<p><strong>Zero configuração explícita</strong>: Você NÃO precisa chamar <code>configure_auth()</code>, <code>configure_datetime()</code>, etc. Basta definir no Settings.</p>
+<h2 id="prioridade-de-configuracao">Prioridade de Configuração<a class="headerlink" href="#prioridade-de-configuracao" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">LR</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="n">Priority</span><span class="p">[</span><span class="s">&quot;Prioridade (alta → baixa)&quot;</span><span class="p">]</span>
+<span class="w">        </span><span class="n">ENV</span><span class="p">[</span><span class="n">OS</span><span class="w"> </span><span class="n">Environment</span><span class="p">]</span>
+<span class="w">        </span><span class="n">ENVF</span><span class="p">[</span><span class="s">&quot;.env.{ENV}&quot;</span><span class="p">]</span>
+<span class="w">        </span><span class="n">ENVB</span><span class="p">[</span><span class="s">&quot;.env&quot;</span><span class="p">]</span>
+<span class="w">        </span><span class="n">DEF</span><span class="p">[</span><span class="kt">Class</span><span class="w"> </span><span class="n">Defaults</span><span class="p">]</span>
+<span class="w">    </span><span class="n">end</span>
+
+<span class="w">    </span><span class="n">ENV</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">sobrescreve</span><span class="o">|</span><span class="w"> </span><span class="n">ENVF</span>
+<span class="w">    </span><span class="n">ENVF</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">sobrescreve</span><span class="o">|</span><span class="w"> </span><span class="n">ENVB</span>
+<span class="w">    </span><span class="n">ENVB</span><span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">|</span><span class="n">sobrescreve</span><span class="o">|</span><span class="w"> </span><span class="n">DEF</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">ENV</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">ffcdd2</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">DEF</span><span class="w"> </span><span class="n">fill</span><span class="o">:</span><span class="err">#</span><span class="n">e8f5e9</span>
+</code></pre></div>
+
+<h2 id="setup-basico">Setup Básico<a class="headerlink" href="#setup-basico" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">PydanticField</span><span class="p">,</span> <span class="n">configure</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Aplicação</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Minha API&quot;</span>
+    <span class="n">app_version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;1.0.0&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Auth - configurado AUTOMATICAMENTE quando user_model está definido</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">user_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps.users.models.User&quot;</span>
+    <span class="n">models_module</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Kafka - configurado AUTOMATICAMENTE quando kafka_enabled=True</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">kafka_bootstrap_servers</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;kafka:9092&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Tasks - configurado AUTOMATICAMENTE quando task_enabled=True</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">task_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Campos customizados</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">stripe_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PydanticField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Stripe API key&quot;</span><span class="p">)</span>
+
+<span class="c1"># Configura TUDO automaticamente</span>
+<span class="n">settings</span> <span class="o">=</span> <span class="n">configure</span><span class="p">(</span><span class="n">settings_class</span><span class="o">=</span><span class="n">AppSettings</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="arquivos-de-ambiente">Arquivos de Ambiente<a class="headerlink" href="#arquivos-de-ambiente" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env (base)</span>
+<span class="nv">DATABASE_URL</span><span class="o">=</span>postgresql+asyncpg://localhost/mydb
+<span class="nv">SECRET_KEY</span><span class="o">=</span>dev-secret
+<span class="nv">DEBUG</span><span class="o">=</span><span class="nb">true</span>
+
+<span class="c1"># .env.production (sobrescreve em production)</span>
+<span class="nv">ENVIRONMENT</span><span class="o">=</span>production
+<span class="nv">DEBUG</span><span class="o">=</span><span class="nb">false</span>
+<span class="nv">DATABASE_POOL_SIZE</span><span class="o">=</span><span class="m">20</span>
+<span class="nv">SECRET_KEY</span><span class="o">=</span>super-secret-production-key
+</code></pre></div>
+
+<h2 id="multiplos-servidores-cluster">Múltiplos Servidores (Cluster)<a class="headerlink" href="#multiplos-servidores-cluster" title="Permanent link">&para;</a></h2>
+<h3 id="kafka-multiplos-brokers">Kafka - Múltiplos Brokers<a class="headerlink" href="#kafka-multiplos-brokers" title="Permanent link">&para;</a></h3>
+<p>Use vírgula para separar múltiplos servidores:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">kafka_bootstrap_servers</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;kafka1:9092,kafka2:9092,kafka3:9092&quot;</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env</span>
+<span class="nv">KAFKA_BOOTSTRAP_SERVERS</span><span class="o">=</span>kafka1:9092,kafka2:9092,kafka3:9092
+</code></pre></div>
+
+<h3 id="redis-cluster-e-sentinel">Redis - Cluster e Sentinel<a class="headerlink" href="#redis-cluster-e-sentinel" title="Permanent link">&para;</a></h3>
+<p>O sistema suporta três modos de conexão Redis:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Standalone (padrão)</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">redis_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;redis://localhost:6379/0&quot;</span>
+    <span class="n">redis_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;standalone&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Cluster - múltiplos nós</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">redis_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;redis://node1:6379,node2:6379,node3:6379&quot;</span>
+    <span class="n">redis_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cluster&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Sentinel - alta disponibilidade</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">redis_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;redis://sentinel1:26379,sentinel2:26379&quot;</span>
+    <span class="n">redis_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sentinel&quot;</span>
+    <span class="n">redis_sentinel_master</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mymaster&quot;</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env - Standalone</span>
+<span class="nv">REDIS_URL</span><span class="o">=</span>redis://localhost:6379/0
+<span class="nv">REDIS_MODE</span><span class="o">=</span>standalone
+
+<span class="c1"># .env - Cluster</span>
+<span class="nv">REDIS_URL</span><span class="o">=</span>redis://redis1:6379,redis2:6379,redis3:6379
+<span class="nv">REDIS_MODE</span><span class="o">=</span>cluster
+
+<span class="c1"># .env - Sentinel</span>
+<span class="nv">REDIS_URL</span><span class="o">=</span>redis://sentinel1:26379,sentinel2:26379
+<span class="nv">REDIS_MODE</span><span class="o">=</span>sentinel
+<span class="nv">REDIS_SENTINEL_MASTER</span><span class="o">=</span>mymaster
+</code></pre></div>
+
+<h3 id="database-multiplas-replicas">Database - Múltiplas Replicas<a class="headerlink" href="#database-multiplas-replicas" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Primary (escrita)</span>
+    <span class="n">database_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;postgresql+asyncpg://user:pass@primary:5432/db&quot;</span>
+
+    <span class="c1"># Replica (leitura) - pode ser load balancer para múltiplas replicas</span>
+    <span class="n">database_read_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;postgresql+asyncpg://user:pass@replica-lb:5432/db&quot;</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env - Usando PgBouncer ou HAProxy como load balancer</span>
+<span class="nv">DATABASE_URL</span><span class="o">=</span>postgresql+asyncpg://user:pass@pgbouncer-primary:6432/db
+<span class="nv">DATABASE_READ_URL</span><span class="o">=</span>postgresql+asyncpg://user:pass@pgbouncer-replica:6432/db
+</code></pre></div>
+
+<h3 id="schema-registry-multiplas-instancias">Schema Registry - Múltiplas Instâncias<a class="headerlink" href="#schema-registry-multiplas-instancias" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Múltiplos Schema Registry (separados por vírgula)</span>
+    <span class="n">kafka_schema_registry_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;http://sr1:8081,http://sr2:8081&quot;</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env</span>
+<span class="nv">KAFKA_SCHEMA_REGISTRY_URL</span><span class="o">=</span>http://schema-registry1:8081,http://schema-registry2:8081
+</code></pre></div>
+
+<h3 id="exemplo-completo-de-producao">Exemplo Completo de Produção<a class="headerlink" href="#exemplo-completo-de-producao" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env.production</span>
+
+<span class="c1"># Database Cluster</span>
+<span class="nv">DATABASE_URL</span><span class="o">=</span>postgresql+asyncpg://user:pass@pgbouncer-primary:6432/mydb
+<span class="nv">DATABASE_READ_URL</span><span class="o">=</span>postgresql+asyncpg://user:pass@pgbouncer-replica:6432/mydb
+<span class="nv">DATABASE_POOL_SIZE</span><span class="o">=</span><span class="m">20</span>
+<span class="nv">DATABASE_READ_POOL_SIZE</span><span class="o">=</span><span class="m">40</span>
+
+<span class="c1"># Kafka Cluster</span>
+<span class="nv">KAFKA_BOOTSTRAP_SERVERS</span><span class="o">=</span>kafka1:9092,kafka2:9092,kafka3:9092
+<span class="nv">KAFKA_SCHEMA_REGISTRY_URL</span><span class="o">=</span>http://sr1:8081,http://sr2:8081
+<span class="nv">KAFKA_SECURITY_PROTOCOL</span><span class="o">=</span>SASL_SSL
+<span class="nv">KAFKA_SASL_MECHANISM</span><span class="o">=</span>SCRAM-SHA-256
+
+<span class="c1"># Redis Cluster</span>
+<span class="nv">REDIS_URL</span><span class="o">=</span>redis://redis1:6379,redis2:6379,redis3:6379
+<span class="nv">REDIS_MODE</span><span class="o">=</span>cluster
+<span class="nv">REDIS_MAX_CONNECTIONS</span><span class="o">=</span><span class="m">50</span>
+</code></pre></div>
+
+<h2 id="verificar-status-dos-subsistemas">Verificar Status dos Subsistemas<a class="headerlink" href="#verificar-status-dos-subsistemas" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_configured_subsystems</span>
+
+<span class="n">status</span> <span class="o">=</span> <span class="n">get_configured_subsystems</span><span class="p">()</span>
+<span class="c1"># {</span>
+<span class="c1">#     &#39;datetime&#39;: True,</span>
+<span class="c1">#     &#39;models&#39;: True,</span>
+<span class="c1">#     &#39;auth&#39;: True,</span>
+<span class="c1">#     &#39;storage&#39;: True,</span>
+<span class="c1">#     &#39;kafka&#39;: True,</span>
+<span class="c1">#     &#39;tasks&#39;: True</span>
+<span class="c1"># }</span>
+</code></pre></div>
+
+<hr />
+<h2 id="referencia-completa-de-settings">Referência Completa de Settings<a class="headerlink" href="#referencia-completa-de-settings" title="Permanent link">&para;</a></h2>
+<h3 id="application">Application<a class="headerlink" href="#application" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>app_name</code></td>
+<td><code>str</code></td>
+<td><code>"Stride App"</code></td>
+<td>Nome da aplicação exibido na documentação</td>
+</tr>
+<tr>
+<td><code>app_version</code></td>
+<td><code>str</code></td>
+<td><code>"0.1.0"</code></td>
+<td>Versão da aplicação</td>
+</tr>
+<tr>
+<td><code>environment</code></td>
+<td><code>Literal</code></td>
+<td><code>"development"</code></td>
+<td>Ambiente: <code>development</code>, <code>staging</code>, <code>production</code>, <code>testing</code></td>
+</tr>
+<tr>
+<td><code>debug</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Modo debug. <strong>NUNCA use em produção</strong></td>
+</tr>
+<tr>
+<td><code>secret_key</code></td>
+<td><code>str</code></td>
+<td>auto-gerado</td>
+<td>Chave secreta para criptografia. <strong>Obrigatória em production</strong></td>
+</tr>
+<tr>
+<td><code>auto_create_tables</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Cria tabelas no startup. Use migrations em produção</td>
+</tr>
+</tbody>
+</table>
+<h3 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>strict_validation</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Validação rigorosa de schemas contra models</td>
+</tr>
+<tr>
+<td><code>validation_fail_fast</code></td>
+<td><code>bool \| None</code></td>
+<td><code>None</code></td>
+<td>Falha no primeiro erro. <code>None</code> = usa valor de DEBUG</td>
+</tr>
+</tbody>
+</table>
+<h3 id="database">Database<a class="headerlink" href="#database" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>database_url</code></td>
+<td><code>str</code></td>
+<td><code>sqlite+aiosqlite:///./app.db</code></td>
+<td>URL de conexão async</td>
+</tr>
+<tr>
+<td><code>database_echo</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Log de queries SQL</td>
+</tr>
+<tr>
+<td><code>database_pool_size</code></td>
+<td><code>int</code></td>
+<td><code>5</code></td>
+<td>Tamanho do pool de conexões</td>
+</tr>
+<tr>
+<td><code>database_max_overflow</code></td>
+<td><code>int</code></td>
+<td><code>10</code></td>
+<td>Conexões extras além do pool</td>
+</tr>
+<tr>
+<td><code>database_pool_timeout</code></td>
+<td><code>int</code></td>
+<td><code>30</code></td>
+<td>Timeout para obter conexão (segundos)</td>
+</tr>
+<tr>
+<td><code>database_pool_recycle</code></td>
+<td><code>int</code></td>
+<td><code>3600</code></td>
+<td>Tempo para reciclar conexões (segundos)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="database-replicas">Database Replicas<a class="headerlink" href="#database-replicas" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>database_read_url</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>URL do banco de leitura (replica)</td>
+</tr>
+<tr>
+<td><code>database_read_pool_size</code></td>
+<td><code>int \| None</code></td>
+<td><code>None</code></td>
+<td>Pool size para replica (default: 2x write)</td>
+</tr>
+<tr>
+<td><code>database_read_max_overflow</code></td>
+<td><code>int \| None</code></td>
+<td><code>None</code></td>
+<td>Max overflow para replica (default: 2x write)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="storage-file-uploads">Storage / File Uploads<a class="headerlink" href="#storage-file-uploads" title="Permanent link">&para;</a></h3>
+<p><strong>Arquitetura inspirada em Django + django-storages (GoogleCloudStorage)</strong><br />
+Você escolhe o backend via <code>storage_backend</code> e configura os detalhes por settings, assim como no Django com <code>DEFAULT_FILE_STORAGE</code>, <code>GS_BUCKET_NAME</code>, <code>GS_CREDENTIALS</code>, etc.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>storage_backend</code></td>
+<td><code>Literal["local", "gcs"]</code></td>
+<td><code>"local"</code></td>
+<td>Backend de storage de arquivos. <code>"local"</code> usa sistema de arquivos, <code>"gcs"</code> usa Google Cloud Storage (GCS) com bucket configurado</td>
+</tr>
+<tr>
+<td><code>storage_media_url</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Base URL pública para servir arquivos. Ex: <code>"/media/"</code>, <code>"https://storage.googleapis.com/&lt;bucket&gt;/"</code> ou URL de CDN</td>
+</tr>
+<tr>
+<td><code>storage_local_media_root</code></td>
+<td><code>str</code></td>
+<td><code>"media"</code></td>
+<td>Diretório local (relativo ao projeto) para salvar arquivos quando <code>storage_backend="local"</code></td>
+</tr>
+<tr>
+<td><code>storage_gcs_bucket_name</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Nome do bucket GCS quando <code>storage_backend="gcs"</code>. Equivalente a <code>GS_BUCKET_NAME</code> no django-storages</td>
+</tr>
+<tr>
+<td><code>storage_gcs_project</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>ID do projeto GCP (opcional). Se <code>None</code>, usa o projeto das credenciais</td>
+</tr>
+<tr>
+<td><code>storage_gcs_credentials_file</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Caminho para o JSON de Service Account do GCP. Se <code>None</code>, usa Application Default Credentials (ADC). Equivalente a <code>GS_CREDENTIALS</code> quando configurado via arquivo</td>
+</tr>
+<tr>
+<td><code>storage_gcs_default_acl</code></td>
+<td><code>str \| None</code></td>
+<td><code>"private"</code></td>
+<td>ACL padrão dos blobs (<code>"publicRead"</code>, <code>"private"</code>, etc.). Equivalente a <code>GS_DEFAULT_ACL</code></td>
+</tr>
+<tr>
+<td><code>storage_gcs_use_signed_urls</code></td>
+<td><code>bool</code></td>
+<td><code>true</code></td>
+<td>Se <code>true</code>, gera signed URLs para acesso a arquivos em buckets privados. Se <code>false</code>, retorna URLs diretas (bucket deve ser público)</td>
+</tr>
+<tr>
+<td><code>storage_gcs_expiration_seconds</code></td>
+<td><code>int</code></td>
+<td><code>3600</code></td>
+<td>Validade (segundos) de signed URLs. Ex: 3600 = 1 hora. Equivalente a <code>GS_EXPIRATION</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="exemplo-storage-local-padrao">Exemplo: Storage Local (padrão)<a class="headerlink" href="#exemplo-storage-local-padrao" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">configure</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Storage local (files em disco)</span>
+    <span class="n">storage_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;local&quot;</span>
+    <span class="n">storage_local_media_root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;media&quot;</span>
+    <span class="n">storage_media_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;/media/&quot;</span>
+
+
+<span class="n">settings</span> <span class="o">=</span> <span class="n">configure</span><span class="p">(</span><span class="n">settings_class</span><span class="o">=</span><span class="n">AppSettings</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env</span>
+<span class="nv">STORAGE_BACKEND</span><span class="o">=</span><span class="nb">local</span>
+<span class="nv">STORAGE_LOCAL_MEDIA_ROOT</span><span class="o">=</span>media
+<span class="nv">STORAGE_MEDIA_URL</span><span class="o">=</span>/media/
+</code></pre></div>
+
+<h4 id="exemplo-gcs-com-bucket-privado-signed-urls-recomendado">Exemplo: GCS com Bucket Privado (Signed URLs) — Recomendado<a class="headerlink" href="#exemplo-gcs-com-bucket-privado-signed-urls-recomendado" title="Permanent link">&para;</a></h4>
+<p>Para buckets privados, o framework gera <strong>signed URLs</strong> automaticamente. Isso é mais seguro e funciona como o Django com django-storages:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env - Bucket PRIVADO com Signed URLs (recomendado)</span>
+<span class="nv">STORAGE_BACKEND</span><span class="o">=</span>gcs
+<span class="nv">STORAGE_GCS_BUCKET_NAME</span><span class="o">=</span>minha-api-media
+<span class="nv">STORAGE_GCS_CREDENTIALS_FILE</span><span class="o">=</span>config/gcp-service-account.json
+<span class="nv">STORAGE_GCS_DEFAULT_ACL</span><span class="o">=</span>private
+<span class="nv">STORAGE_GCS_USE_SIGNED_URLS</span><span class="o">=</span><span class="nb">true</span>
+<span class="nv">STORAGE_GCS_EXPIRATION_SECONDS</span><span class="o">=</span><span class="m">3600</span>
+</code></pre></div>
+
+<p><strong>Como funciona:</strong></p>
+<ol>
+<li>O model armazena apenas o <strong>path relativo</strong> (ex: <code>uploads/foto.jpg</code>)</li>
+<li>Ao serializar para a API, use <code>get_file_url()</code> para obter a <strong>signed URL</strong></li>
+<li>A signed URL é temporária (expira após <code>STORAGE_GCS_EXPIRATION_SECONDS</code>)</li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Model armazena apenas o path</span>
+<span class="n">course</span><span class="o">.</span><span class="n">cover_image_path</span>  <span class="c1"># &quot;uploads/cover.jpg&quot;</span>
+
+<span class="c1"># API retorna signed URL</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_file_url</span>
+<span class="n">url</span> <span class="o">=</span> <span class="n">get_file_url</span><span class="p">(</span><span class="n">course</span><span class="o">.</span><span class="n">cover_image_path</span><span class="p">)</span>
+<span class="c1"># → &quot;https://storage.googleapis.com/bucket/...?X-Goog-Signature=...&quot;</span>
+</code></pre></div>
+
+<p><strong>Permissões necessárias no GCP:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># A Service Account precisa destas roles:</span>
+roles/storage.objectAdmin<span class="w">           </span><span class="c1"># No bucket</span>
+roles/iam.serviceAccountTokenCreator<span class="w">  </span><span class="c1"># No projeto (para gerar signed URLs)</span>
+</code></pre></div>
+
+<h4 id="exemplo-gcs-com-bucket-publico">Exemplo: GCS com Bucket Público<a class="headerlink" href="#exemplo-gcs-com-bucket-publico" title="Permanent link">&para;</a></h4>
+<p>Para buckets públicos (mídia acessível por qualquer um), desative signed URLs:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env - Bucket PÚBLICO (sem signed URLs)</span>
+<span class="nv">STORAGE_BACKEND</span><span class="o">=</span>gcs
+<span class="nv">STORAGE_GCS_BUCKET_NAME</span><span class="o">=</span>minha-api-media-publica
+<span class="nv">STORAGE_GCS_CREDENTIALS_FILE</span><span class="o">=</span>config/gcp-service-account.json
+<span class="nv">STORAGE_GCS_DEFAULT_ACL</span><span class="o">=</span>publicRead
+<span class="nv">STORAGE_GCS_USE_SIGNED_URLS</span><span class="o">=</span><span class="nb">false</span>
+<span class="nv">STORAGE_MEDIA_URL</span><span class="o">=</span>https://storage.googleapis.com/minha-api-media-publica/
+</code></pre></div>
+
+<h4 id="exemplo-em-python-settings-class">Exemplo em Python (Settings class)<a class="headerlink" href="#exemplo-em-python-settings-class" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">configure</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Storage: Google Cloud Storage (privado com signed URLs)</span>
+    <span class="n">storage_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;gcs&quot;</span>
+    <span class="n">storage_gcs_bucket_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;minha-api-media&quot;</span>
+    <span class="n">storage_gcs_credentials_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">&quot;config/gcp-service-account.json&quot;</span>
+    <span class="n">storage_gcs_default_acl</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;private&quot;</span>
+    <span class="n">storage_gcs_use_signed_urls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">storage_gcs_expiration_seconds</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3600</span>  <span class="c1"># 1 hora</span>
+
+
+<span class="n">settings</span> <span class="o">=</span> <span class="n">configure</span><span class="p">(</span><span class="n">settings_class</span><span class="o">=</span><span class="n">AppSettings</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Comportamento plug-and-play</strong>:</p>
+<ul>
+<li><strong>Local</strong>: defina <code>STORAGE_BACKEND=local</code> e os arquivos serão gravados no diretório <code>STORAGE_LOCAL_MEDIA_ROOT</code>, servidos a partir de <code>STORAGE_MEDIA_URL</code>.</li>
+<li><strong>GCS Privado</strong>: defina <code>STORAGE_GCS_USE_SIGNED_URLS=true</code> (padrão). O framework gera signed URLs automaticamente via <code>get_file_url()</code>.</li>
+<li><strong>GCS Público</strong>: defina <code>STORAGE_GCS_USE_SIGNED_URLS=false</code> e <code>STORAGE_MEDIA_URL</code> com a URL base do bucket.</li>
+</ul>
+<p><strong>Ver também</strong>: <a href="../37-storage/">Storage (37-storage.md)</a> — API <code>core.storage</code>, signed URLs, uso em models e schemas.</p>
+<h3 id="api">API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_prefix</code></td>
+<td><code>str</code></td>
+<td><code>"/api/v1"</code></td>
+<td>Prefixo das rotas da API</td>
+</tr>
+<tr>
+<td><code>docs_url</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>URL do Swagger. Auto-habilitado em development</td>
+</tr>
+<tr>
+<td><code>redoc_url</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>URL do ReDoc. Auto-habilitado em development</td>
+</tr>
+<tr>
+<td><code>openapi_url</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>URL do schema OpenAPI</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cors">CORS<a class="headerlink" href="#cors" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cors_origins</code></td>
+<td><code>list[str]</code></td>
+<td><code>[]</code></td>
+<td>Origens permitidas. Vazio = seguro</td>
+</tr>
+<tr>
+<td><code>cors_allow_credentials</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Permitir cookies</td>
+</tr>
+<tr>
+<td><code>cors_allow_methods</code></td>
+<td><code>list[str]</code></td>
+<td><code>["*"]</code></td>
+<td>Métodos HTTP permitidos</td>
+</tr>
+<tr>
+<td><code>cors_allow_headers</code></td>
+<td><code>list[str]</code></td>
+<td><code>["*"]</code></td>
+<td>Headers permitidos</td>
+</tr>
+</tbody>
+</table>
+<h3 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h3>
+<h4 id="tokens-e-chaves">Tokens e Chaves<a class="headerlink" href="#tokens-e-chaves" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth_secret_key</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Chave para tokens. Usa <code>secret_key</code> se None</td>
+</tr>
+<tr>
+<td><code>auth_algorithm</code></td>
+<td><code>str</code></td>
+<td><code>"HS256"</code></td>
+<td>Algoritmo JWT: HS256, HS384, HS512, RS256</td>
+</tr>
+<tr>
+<td><code>auth_access_token_expire_minutes</code></td>
+<td><code>int</code></td>
+<td><code>30</code></td>
+<td>TTL do access token (minutos)</td>
+</tr>
+<tr>
+<td><code>auth_refresh_token_expire_days</code></td>
+<td><code>int</code></td>
+<td><code>7</code></td>
+<td>TTL do refresh token (dias)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="user-model">User Model<a class="headerlink" href="#user-model" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_model</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Path do modelo User. <strong>Obrigatório para auth</strong></td>
+</tr>
+<tr>
+<td><code>auth_username_field</code></td>
+<td><code>str</code></td>
+<td><code>"email"</code></td>
+<td>Campo usado como username: email, username, cpf</td>
+</tr>
+</tbody>
+</table>
+<h4 id="backends">Backends<a class="headerlink" href="#backends" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth_backends</code></td>
+<td><code>list[str]</code></td>
+<td><code>["model"]</code></td>
+<td>Backends a tentar: model, oauth, ldap, token, api_key</td>
+</tr>
+<tr>
+<td><code>auth_backend</code></td>
+<td><code>str</code></td>
+<td><code>"model"</code></td>
+<td>Backend padrão</td>
+</tr>
+<tr>
+<td><code>auth_token_backend</code></td>
+<td><code>str</code></td>
+<td><code>"jwt"</code></td>
+<td>Backend de tokens: jwt, opaque, redis</td>
+</tr>
+<tr>
+<td><code>auth_permission_backend</code></td>
+<td><code>str</code></td>
+<td><code>"default"</code></td>
+<td>Backend de permissões: default, rbac, abac</td>
+</tr>
+</tbody>
+</table>
+<h4 id="password">Password<a class="headerlink" href="#password" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth_password_hasher</code></td>
+<td><code>str</code></td>
+<td><code>"pbkdf2_sha256"</code></td>
+<td>Hasher: pbkdf2_sha256, argon2, bcrypt, scrypt</td>
+</tr>
+<tr>
+<td><code>auth_password_min_length</code></td>
+<td><code>int</code></td>
+<td><code>8</code></td>
+<td>Comprimento mínimo</td>
+</tr>
+<tr>
+<td><code>auth_password_require_uppercase</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Exigir maiúscula</td>
+</tr>
+<tr>
+<td><code>auth_password_require_lowercase</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Exigir minúscula</td>
+</tr>
+<tr>
+<td><code>auth_password_require_digit</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Exigir dígito</td>
+</tr>
+<tr>
+<td><code>auth_password_require_special</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Exigir caractere especial</td>
+</tr>
+</tbody>
+</table>
+<h4 id="http">HTTP<a class="headerlink" href="#http" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth_header</code></td>
+<td><code>str</code></td>
+<td><code>"Authorization"</code></td>
+<td>Header HTTP para auth</td>
+</tr>
+<tr>
+<td><code>auth_scheme</code></td>
+<td><code>str</code></td>
+<td><code>"Bearer"</code></td>
+<td>Scheme: Bearer, Basic, Token</td>
+</tr>
+<tr>
+<td><code>auth_warn_missing_middleware</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Warning se middleware não configurado</td>
+</tr>
+</tbody>
+</table>
+<h3 id="middleware">Middleware<a class="headerlink" href="#middleware" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>middleware</code></td>
+<td><code>list[str]</code></td>
+<td><code>[]</code></td>
+<td>Lista de middlewares estilo Django</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Shortcuts disponíveis:</strong>
+- <code>auth</code> → AuthenticationMiddleware
+- <code>optional_auth</code> → OptionalAuthenticationMiddleware
+- <code>timing</code> → TimingMiddleware
+- <code>request_id</code> → RequestIDMiddleware
+- <code>logging</code> → LoggingMiddleware
+- <code>security_headers</code> → SecurityHeadersMiddleware
+- <code>maintenance</code> → MaintenanceModeMiddleware</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Exemplo</span>
+<span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;timing&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;auth&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;core.middleware.LoggingMiddleware&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h3 id="datetime-timezone">DateTime / Timezone<a class="headerlink" href="#datetime-timezone" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>timezone</code></td>
+<td><code>str</code></td>
+<td><code>"UTC"</code></td>
+<td>Timezone padrão da aplicação</td>
+</tr>
+<tr>
+<td><code>use_tz</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Usar datetimes aware (com timezone)</td>
+</tr>
+<tr>
+<td><code>datetime_format</code></td>
+<td><code>str</code></td>
+<td><code>"%Y-%m-%dT%H:%M:%S%z"</code></td>
+<td>Formato de datetime</td>
+</tr>
+<tr>
+<td><code>date_format</code></td>
+<td><code>str</code></td>
+<td><code>"%Y-%m-%d"</code></td>
+<td>Formato de data</td>
+</tr>
+<tr>
+<td><code>time_format</code></td>
+<td><code>str</code></td>
+<td><code>"%H:%M:%S"</code></td>
+<td>Formato de hora</td>
+</tr>
+</tbody>
+</table>
+<h3 id="server">Server<a class="headerlink" href="#server" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>host</code></td>
+<td><code>str</code></td>
+<td><code>"0.0.0.0"</code></td>
+<td>Host do servidor</td>
+</tr>
+<tr>
+<td><code>port</code></td>
+<td><code>int</code></td>
+<td><code>8000</code></td>
+<td>Porta</td>
+</tr>
+<tr>
+<td><code>workers</code></td>
+<td><code>int</code></td>
+<td><code>1</code></td>
+<td>Número de workers</td>
+</tr>
+<tr>
+<td><code>reload</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Auto-reload em desenvolvimento</td>
+</tr>
+</tbody>
+</table>
+<h3 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>request_timeout</code></td>
+<td><code>int</code></td>
+<td><code>30</code></td>
+<td>Timeout de requisições (segundos)</td>
+</tr>
+<tr>
+<td><code>max_request_size</code></td>
+<td><code>int</code></td>
+<td><code>10485760</code></td>
+<td>Tamanho máximo de request (10MB); usado por <code>content_length_limit</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="security-middleware">Security middleware<a class="headerlink" href="#security-middleware" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rate_limit_requests</code></td>
+<td><code>int</code></td>
+<td><code>100</code></td>
+<td>Máximo de requests por IP por janela (<code>rate_limit</code>)</td>
+</tr>
+<tr>
+<td><code>rate_limit_window_seconds</code></td>
+<td><code>int</code></td>
+<td><code>60</code></td>
+<td>Janela do rate limit (segundos)</td>
+</tr>
+<tr>
+<td><code>rate_limit_exclude_paths</code></td>
+<td><code>list[str]</code></td>
+<td><code>["/healthz", "/readyz", "/docs", ...]</code></td>
+<td>Paths excluídos do rate limit</td>
+</tr>
+<tr>
+<td><code>security_csp</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Valor do header Content-Security-Policy (<code>security_headers</code>)</td>
+</tr>
+<tr>
+<td><code>security_headers_hsts</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Habilitar HSTS em HTTPS</td>
+</tr>
+</tbody>
+</table>
+<h3 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>log_level</code></td>
+<td><code>Literal</code></td>
+<td><code>"INFO"</code></td>
+<td>Nível: DEBUG, INFO, WARNING, ERROR, CRITICAL</td>
+</tr>
+<tr>
+<td><code>log_format</code></td>
+<td><code>str</code></td>
+<td><code>"%(asctime)s..."</code></td>
+<td>Formato de log</td>
+</tr>
+<tr>
+<td><code>log_json</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Usar formato JSON</td>
+</tr>
+</tbody>
+</table>
+<h3 id="multi-tenancy">Multi-Tenancy<a class="headerlink" href="#multi-tenancy" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tenancy_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Habilita multi-tenancy automático</td>
+</tr>
+<tr>
+<td><code>tenancy_field</code></td>
+<td><code>str</code></td>
+<td><code>"workspace_id"</code></td>
+<td>Campo de tenant nos models</td>
+</tr>
+<tr>
+<td><code>tenancy_user_attribute</code></td>
+<td><code>str</code></td>
+<td><code>"workspace_id"</code></td>
+<td>Atributo do usuário com tenant ID</td>
+</tr>
+<tr>
+<td><code>tenancy_header</code></td>
+<td><code>str</code></td>
+<td><code>"X-Tenant-ID"</code></td>
+<td>Header HTTP para tenant (fallback)</td>
+</tr>
+<tr>
+<td><code>tenancy_require</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Rejeitar requests sem tenant</td>
+</tr>
+</tbody>
+</table>
+<h3 id="soft-delete">Soft Delete<a class="headerlink" href="#soft-delete" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>soft_delete_field</code></td>
+<td><code>str</code></td>
+<td><code>"deleted_at"</code></td>
+<td>Nome do campo de soft delete</td>
+</tr>
+<tr>
+<td><code>soft_delete_cascade</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Soft delete em cascata</td>
+</tr>
+<tr>
+<td><code>soft_delete_auto_filter</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Filtrar deletados automaticamente</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uuid">UUID<a class="headerlink" href="#uuid" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>uuid_version</code></td>
+<td><code>Literal</code></td>
+<td><code>"uuid7"</code></td>
+<td>Versão: uuid4 ou uuid7 (time-sortable)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="kafka-messaging">Kafka / Messaging<a class="headerlink" href="#kafka-messaging" title="Permanent link">&para;</a></h3>
+<h4 id="basico">Básico<a class="headerlink" href="#basico" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td><strong>Habilita Kafka</strong> (auto-configura quando True)</td>
+</tr>
+<tr>
+<td><code>kafka_backend</code></td>
+<td><code>Literal</code></td>
+<td><code>"aiokafka"</code></td>
+<td>Backend: aiokafka (async) ou confluent (performance)</td>
+</tr>
+<tr>
+<td><code>kafka_bootstrap_servers</code></td>
+<td><code>str</code></td>
+<td><code>"localhost:9092"</code></td>
+<td>Servidores Kafka</td>
+</tr>
+<tr>
+<td><code>kafka_client_id</code></td>
+<td><code>str</code></td>
+<td><code>"stride"</code></td>
+<td>Client ID</td>
+</tr>
+<tr>
+<td><code>kafka_fire_and_forget</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Não aguardar confirmação do broker</td>
+</tr>
+</tbody>
+</table>
+<h4 id="seguranca">Segurança<a class="headerlink" href="#seguranca" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_security_protocol</code></td>
+<td><code>Literal</code></td>
+<td><code>"PLAINTEXT"</code></td>
+<td>PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL</td>
+</tr>
+<tr>
+<td><code>kafka_sasl_mechanism</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>PLAIN, SCRAM-SHA-256, SCRAM-SHA-512</td>
+</tr>
+<tr>
+<td><code>kafka_sasl_username</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Usuário SASL</td>
+</tr>
+<tr>
+<td><code>kafka_sasl_password</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Senha SASL</td>
+</tr>
+<tr>
+<td><code>kafka_ssl_cafile</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Certificado CA</td>
+</tr>
+<tr>
+<td><code>kafka_ssl_certfile</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Certificado cliente</td>
+</tr>
+<tr>
+<td><code>kafka_ssl_keyfile</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Chave privada</td>
+</tr>
+</tbody>
+</table>
+<h4 id="producer">Producer<a class="headerlink" href="#producer" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_compression_type</code></td>
+<td><code>Literal</code></td>
+<td><code>"none"</code></td>
+<td>none, gzip, snappy, lz4, zstd</td>
+</tr>
+<tr>
+<td><code>kafka_linger_ms</code></td>
+<td><code>int</code></td>
+<td><code>0</code></td>
+<td>Tempo para acumular batch (ms)</td>
+</tr>
+<tr>
+<td><code>kafka_max_batch_size</code></td>
+<td><code>int</code></td>
+<td><code>16384</code></td>
+<td>Tamanho máximo do batch (bytes)</td>
+</tr>
+<tr>
+<td><code>kafka_request_timeout_ms</code></td>
+<td><code>int</code></td>
+<td><code>30000</code></td>
+<td>Timeout de requisição (ms)</td>
+</tr>
+<tr>
+<td><code>kafka_retry_backoff_ms</code></td>
+<td><code>int</code></td>
+<td><code>100</code></td>
+<td>Backoff entre retries (ms)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="consumer">Consumer<a class="headerlink" href="#consumer" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_auto_offset_reset</code></td>
+<td><code>Literal</code></td>
+<td><code>"earliest"</code></td>
+<td>earliest, latest, none</td>
+</tr>
+<tr>
+<td><code>kafka_enable_auto_commit</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Auto-commit de offsets</td>
+</tr>
+<tr>
+<td><code>kafka_auto_commit_interval_ms</code></td>
+<td><code>int</code></td>
+<td><code>5000</code></td>
+<td>Intervalo de auto-commit (ms)</td>
+</tr>
+<tr>
+<td><code>kafka_max_poll_records</code></td>
+<td><code>int</code></td>
+<td><code>500</code></td>
+<td>Máximo de registros por poll</td>
+</tr>
+<tr>
+<td><code>kafka_session_timeout_ms</code></td>
+<td><code>int</code></td>
+<td><code>10000</code></td>
+<td>Timeout de sessão (ms)</td>
+</tr>
+<tr>
+<td><code>kafka_heartbeat_interval_ms</code></td>
+<td><code>int</code></td>
+<td><code>3000</code></td>
+<td>Intervalo de heartbeat (ms)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="schema-registry">Schema Registry<a class="headerlink" href="#schema-registry" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kafka_schema_registry_url</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>URL do Schema Registry (Avro)</td>
+</tr>
+<tr>
+<td><code>avro_default_namespace</code></td>
+<td><code>str</code></td>
+<td><code>"com.core.events"</code></td>
+<td>Namespace padrão para schemas Avro</td>
+</tr>
+</tbody>
+</table>
+<h4 id="messaging-geral">Messaging Geral<a class="headerlink" href="#messaging-geral" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>messaging_default_topic</code></td>
+<td><code>str</code></td>
+<td><code>"events"</code></td>
+<td>Tópico padrão</td>
+</tr>
+<tr>
+<td><code>messaging_event_source</code></td>
+<td><code>str</code></td>
+<td><code>""</code></td>
+<td>Identificador de origem</td>
+</tr>
+<tr>
+<td><code>messaging_dead_letter_topic</code></td>
+<td><code>str</code></td>
+<td><code>"dead-letter"</code></td>
+<td>Tópico para mensagens com falha</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tasks-workers">Tasks / Workers<a class="headerlink" href="#tasks-workers" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td><strong>Habilita Tasks</strong> (auto-configura quando True)</td>
+</tr>
+<tr>
+<td><code>task_default_queue</code></td>
+<td><code>str</code></td>
+<td><code>"default"</code></td>
+<td>Fila padrão</td>
+</tr>
+<tr>
+<td><code>task_default_retry</code></td>
+<td><code>int</code></td>
+<td><code>3</code></td>
+<td>Número de retries</td>
+</tr>
+<tr>
+<td><code>task_default_retry_delay</code></td>
+<td><code>int</code></td>
+<td><code>60</code></td>
+<td>Delay entre retries (segundos)</td>
+</tr>
+<tr>
+<td><code>task_retry_backoff</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Usar backoff exponencial</td>
+</tr>
+<tr>
+<td><code>task_default_timeout</code></td>
+<td><code>int</code></td>
+<td><code>300</code></td>
+<td>Timeout de task (segundos)</td>
+</tr>
+<tr>
+<td><code>task_worker_concurrency</code></td>
+<td><code>int</code></td>
+<td><code>4</code></td>
+<td>Tarefas concorrentes por worker</td>
+</tr>
+<tr>
+<td><code>task_result_backend</code></td>
+<td><code>Literal</code></td>
+<td><code>"none"</code></td>
+<td>Backend: none, redis, database</td>
+</tr>
+</tbody>
+</table>
+<h3 id="redis">Redis<a class="headerlink" href="#redis" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>redis_url</code></td>
+<td><code>str</code></td>
+<td><code>"redis://localhost:6379/0"</code></td>
+<td>URL de conexão (múltiplos hosts separados por vírgula)</td>
+</tr>
+<tr>
+<td><code>redis_mode</code></td>
+<td><code>Literal</code></td>
+<td><code>"standalone"</code></td>
+<td>Modo: standalone, cluster, sentinel</td>
+</tr>
+<tr>
+<td><code>redis_sentinel_master</code></td>
+<td><code>str</code></td>
+<td><code>"mymaster"</code></td>
+<td>Nome do master para Sentinel</td>
+</tr>
+<tr>
+<td><code>redis_max_connections</code></td>
+<td><code>int</code></td>
+<td><code>10</code></td>
+<td>Máximo de conexões no pool</td>
+</tr>
+<tr>
+<td><code>redis_socket_timeout</code></td>
+<td><code>float</code></td>
+<td><code>5.0</code></td>
+<td>Timeout de socket (segundos)</td>
+</tr>
+<tr>
+<td><code>redis_stream_max_len</code></td>
+<td><code>int</code></td>
+<td><code>10000</code></td>
+<td>Tamanho máximo de streams (MAXLEN)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cli-discovery">CLI / Discovery<a class="headerlink" href="#cli-discovery" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>migrations_dir</code></td>
+<td><code>str</code></td>
+<td><code>"./migrations"</code></td>
+<td>Diretório de migrations</td>
+</tr>
+<tr>
+<td><code>app_label</code></td>
+<td><code>str</code></td>
+<td><code>"main"</code></td>
+<td>Label da aplicação</td>
+</tr>
+<tr>
+<td><code>models_module</code></td>
+<td><code>str</code></td>
+<td><code>"app.models"</code></td>
+<td>Módulo dos models</td>
+</tr>
+<tr>
+<td><code>workers_module</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Módulo dos workers (auto-discovery)</td>
+</tr>
+<tr>
+<td><code>tasks_module</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Módulo das tasks (auto-discovery)</td>
+</tr>
+<tr>
+<td><code>app_module</code></td>
+<td><code>str</code></td>
+<td><code>"src.main"</code></td>
+<td>Módulo da aplicação principal</td>
+</tr>
+</tbody>
+</table>
+<h3 id="health-check">Health Check<a class="headerlink" href="#health-check" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>health_check_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Habilita /healthz e /readyz</td>
+</tr>
+</tbody>
+</table>
+<h3 id="admin-panel">Admin Panel<a class="headerlink" href="#admin-panel" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>admin_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Habilita admin panel</td>
+</tr>
+<tr>
+<td><code>admin_url_prefix</code></td>
+<td><code>str</code></td>
+<td><code>"/admin"</code></td>
+<td>Prefixo da URL</td>
+</tr>
+<tr>
+<td><code>admin_site_title</code></td>
+<td><code>str</code></td>
+<td><code>"Admin"</code></td>
+<td>Título na aba do browser</td>
+</tr>
+<tr>
+<td><code>admin_site_header</code></td>
+<td><code>str</code></td>
+<td><code>"Stride Admin"</code></td>
+<td>Header no sidebar</td>
+</tr>
+<tr>
+<td><code>admin_theme</code></td>
+<td><code>str</code></td>
+<td><code>"default"</code></td>
+<td>Tema: default ou dark</td>
+</tr>
+<tr>
+<td><code>admin_logo_url</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>URL do logo custom</td>
+</tr>
+<tr>
+<td><code>admin_primary_color</code></td>
+<td><code>str</code></td>
+<td><code>"#3B82F6"</code></td>
+<td>Cor primária (hex)</td>
+</tr>
+<tr>
+<td><code>admin_custom_css</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Path para CSS custom</td>
+</tr>
+<tr>
+<td><code>admin_cookie_secure</code></td>
+<td><code>bool \| None</code></td>
+<td><code>None</code></td>
+<td>Flag Secure do cookie. None = auto-detect</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operations-center">Operations Center<a class="headerlink" href="#operations-center" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ops_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Habilita Operations Center</td>
+</tr>
+<tr>
+<td><code>ops_task_persist</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Persistir resultados de tasks</td>
+</tr>
+<tr>
+<td><code>ops_task_retention_days</code></td>
+<td><code>int</code></td>
+<td><code>30</code></td>
+<td>Dias para reter execuções</td>
+</tr>
+<tr>
+<td><code>ops_worker_heartbeat_interval</code></td>
+<td><code>int</code></td>
+<td><code>30</code></td>
+<td>Intervalo de heartbeat (segundos)</td>
+</tr>
+<tr>
+<td><code>ops_worker_offline_ttl</code></td>
+<td><code>int</code></td>
+<td><code>24</code></td>
+<td>Horas para manter workers offline</td>
+</tr>
+<tr>
+<td><code>auto_collect_permissions</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Auto-gerar permissões CRUD</td>
+</tr>
+<tr>
+<td><code>ops_log_buffer_size</code></td>
+<td><code>int</code></td>
+<td><code>5000</code></td>
+<td>Tamanho do buffer de logs</td>
+</tr>
+<tr>
+<td><code>ops_log_stream_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Habilita streaming de logs (SSE)</td>
+</tr>
+<tr>
+<td><code>ops_infrastructure_poll_interval</code></td>
+<td><code>int</code></td>
+<td><code>60</code></td>
+<td>Intervalo de métricas (segundos)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="acessando-settings">Acessando Settings<a class="headerlink" href="#acessando-settings" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span>
+
+<span class="c1"># Sem tipo - retorna Settings base</span>
+<span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">database_url</span><span class="p">)</span>
+
+<span class="c1"># Com tipo - autocomplete completo para campos customizados</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">AppSettings</span>
+<span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">(</span><span class="n">AppSettings</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">stripe_key</span><span class="p">)</span>  <span class="c1"># ✅ PyCharm sugere</span>
+</code></pre></div>
+
+<h2 id="campos-customizados">Campos Customizados<a class="headerlink" href="#campos-customizados" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># Com validação</span>
+    <span class="n">max_upload_mb</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">PydanticField</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">le</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Max upload size in MB&quot;</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Lista de JSON</span>
+    <span class="n">allowed_ips</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">PydanticField</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">],</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Allowed IP addresses&quot;</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># .env</span>
+<span class="nv">MAX_UPLOAD_MB</span><span class="o">=</span><span class="m">50</span>
+<span class="nv">ALLOWED_IPS</span><span class="o">=</span><span class="s1">&#39;[&quot;10.0.0.1&quot;, &quot;10.0.0.2&quot;]&#39;</span>
+</code></pre></div>
+
+<h2 id="exemplo-completo">Exemplo Completo<a class="headerlink" href="#exemplo-completo" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">PydanticField</span><span class="p">,</span> <span class="n">configure</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Aplicação</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Minha API&quot;</span>
+    <span class="n">app_version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;1.0.0&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Auth (auto-configurado)</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">user_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps.users.models.User&quot;</span>
+    <span class="n">models_module</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps&quot;</span>
+    <span class="n">auth_password_hasher</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;argon2&quot;</span>
+    <span class="n">auth_password_min_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">auth_password_require_uppercase</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">auth_password_require_digit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Kafka (auto-configurado)</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">kafka_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">kafka_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;confluent&quot;</span>
+    <span class="n">kafka_bootstrap_servers</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;kafka:9092&quot;</span>
+    <span class="n">kafka_schema_registry_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;http://schema-registry:8081&quot;</span>
+    <span class="n">avro_default_namespace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;com.mycompany.events&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Tasks (auto-configurado)</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">task_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">task_worker_concurrency</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span>
+    <span class="n">task_result_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;redis&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Multi-tenancy</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">tenancy_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">tenancy_field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;workspace_id&quot;</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Middleware</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">middleware</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;timing&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;request_id&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;auth&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;logging&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Admin</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">admin_site_title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Minha Empresa&quot;</span>
+    <span class="n">admin_site_header</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Painel Administrativo&quot;</span>
+    <span class="n">admin_primary_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#10B981&quot;</span>  <span class="c1"># green-500</span>
+
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="c1"># Campos customizados</span>
+    <span class="c1"># ══════════════════════════════════════════════════════════════════</span>
+    <span class="n">stripe_api_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PydanticField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Stripe API Key&quot;</span><span class="p">)</span>
+    <span class="n">sendgrid_api_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PydanticField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;SendGrid API Key&quot;</span><span class="p">)</span>
+
+<span class="n">settings</span> <span class="o">=</span> <span class="n">configure</span><span class="p">(</span><span class="n">settings_class</span><span class="o">=</span><span class="n">AppSettings</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../03-models/">Models</a> — Modelos de banco de dados</li>
+<li><a href="../05-auth/">Auth</a> — Sistema de autenticação</li>
+<li><a href="../30-messaging/">Messaging</a> — Kafka e eventos</li>
+<li><a href="../37-storage/">Storage</a> — Armazenamento de arquivos (local / GCS) e uso no Admin</li>
+<li><a href="../40-admin/">Admin</a> — Painel administrativo</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

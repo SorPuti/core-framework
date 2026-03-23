@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/12-querysets/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>QuerySets - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "QuerySets";
+        var mkdocs_page_input_path = "12-querysets.md";
+        var mkdocs_page_url = "/core-framework/12-querysets/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">QuerySets</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/12-querysets.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="querysets">QuerySets<a class="headerlink" href="#querysets" title="Permanent link">&para;</a></h1>
+<p>Django-style query API.</p>
+<h2 id="query-chain">Query Chain<a class="headerlink" href="#query-chain" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">LR</span>
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="ss">&quot;Chainable (returns QuerySet)&quot;</span>
+<span class="w">        </span><span class="n">F</span><span class="o">[</span><span class="n">filter</span><span class="o">]</span>
+<span class="w">        </span><span class="n">E</span><span class="o">[</span><span class="n">exclude</span><span class="o">]</span>
+<span class="w">        </span><span class="n">O</span><span class="o">[</span><span class="n">order_by</span><span class="o">]</span>
+<span class="w">        </span><span class="n">L</span><span class="o">[</span><span class="n">limit</span><span class="o">]</span>
+<span class="w">        </span><span class="k">OF</span><span class="o">[</span><span class="n">offset</span><span class="o">]</span>
+<span class="w">        </span><span class="n">SR</span><span class="o">[</span><span class="n">select_related</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">subgraph</span><span class="w"> </span><span class="ss">&quot;Terminal (executes query)&quot;</span>
+<span class="w">        </span><span class="ow">ALL</span><span class="o">[</span><span class="n">all → List</span><span class="o">]</span>
+<span class="w">        </span><span class="k">GET</span><span class="o">[</span><span class="n">get → Object</span><span class="o">]</span>
+<span class="w">        </span><span class="k">FIRST</span><span class="o">[</span><span class="n">first → Object?</span><span class="o">]</span>
+<span class="w">        </span><span class="nf">COUNT</span><span class="o">[</span><span class="n">count → int</span><span class="o">]</span>
+<span class="w">        </span><span class="ow">EXISTS</span><span class="o">[</span><span class="n">exists → bool</span><span class="o">]</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="n">F</span><span class="w"> </span><span class="c1">--&gt; E --&gt; O --&gt; L --&gt; ALL</span>
+<span class="w">    </span><span class="n">F</span><span class="w"> </span><span class="c1">--&gt; GET</span>
+<span class="w">    </span><span class="n">F</span><span class="w"> </span><span class="c1">--&gt; COUNT</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="ow">ALL</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#c8e6c9</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="k">GET</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#c8e6c9</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="nf">COUNT</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#c8e6c9</span>
+</code></pre></div>
+
+<h2 id="lookup-expressions">Lookup Expressions<a class="headerlink" href="#lookup-expressions" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span> <span class="n">TB</span>
+    <span class="n">subgraph</span> <span class="s">&quot;Comparison&quot;</span>
+        <span class="n">EQ</span><span class="p">[</span><span class="s">&quot;field=value (exact)&quot;</span><span class="p">]</span>
+        <span class="n">GT</span><span class="p">[</span><span class="s">&quot;field__gt (&gt;)&quot;</span><span class="p">]</span>
+        <span class="n">GTE</span><span class="p">[</span><span class="s">&quot;field__gte (&gt;=)&quot;</span><span class="p">]</span>
+        <span class="n">LT</span><span class="p">[</span><span class="s">&quot;field__lt (&lt;)&quot;</span><span class="p">]</span>
+        <span class="n">LTE</span><span class="p">[</span><span class="s">&quot;field__lte (&lt;=)&quot;</span><span class="p">]</span>
+    <span class="n">end</span>
+
+    <span class="n">subgraph</span> <span class="s">&quot;String&quot;</span>
+        <span class="n">CONT</span><span class="p">[</span><span class="s">&quot;field__contains&quot;</span><span class="p">]</span>
+        <span class="n">ICONT</span><span class="p">[</span><span class="s">&quot;field__icontains&quot;</span><span class="p">]</span>
+        <span class="n">START</span><span class="p">[</span><span class="s">&quot;field__startswith&quot;</span><span class="p">]</span>
+        <span class="kr">END</span><span class="p">[</span><span class="s">&quot;field__endswith&quot;</span><span class="p">]</span>
+    <span class="n">end</span>
+
+    <span class="n">subgraph</span> <span class="s">&quot;Null/In&quot;</span>
+        <span class="n">NULL</span><span class="p">[</span><span class="s">&quot;field__isnull&quot;</span><span class="p">]</span>
+        <span class="kr">IN</span><span class="p">[</span><span class="s">&quot;field__in&quot;</span><span class="p">]</span>
+    <span class="n">end</span>
+
+    <span class="n">style</span> <span class="n">EQ</span> <span class="n">fill</span><span class="p">:</span><span class="o">#</span><span class="n">e3f2fd</span>
+    <span class="n">style</span> <span class="n">CONT</span> <span class="n">fill</span><span class="p">:</span><span class="o">#</span><span class="n">fff3e0</span>
+    <span class="n">style</span> <span class="n">NULL</span> <span class="n">fill</span><span class="p">:</span><span class="o">#</span><span class="n">e8f5e9</span>
+</code></pre></div>
+
+<h2 id="basic-usage">Basic Usage<a class="headerlink" href="#basic-usage" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># All records</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Filter</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Get single record</span>
+<span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># First/Last</span>
+<span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+<span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;-created_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">last</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="chainable-methods">Chainable Methods<a class="headerlink" href="#chainable-methods" title="Permanent link">&para;</a></h2>
+<h3 id="filterkwargs"><code>filter(**kwargs)</code><a class="headerlink" href="#filterkwargs" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Exact match</span>
+<span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Test&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Multiple conditions (AND)</span>
+<span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">,</span> <span class="n">price__lt</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="excludekwargs"><code>exclude(**kwargs)</code><a class="headerlink" href="#excludekwargs" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Exclude records</span>
+<span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">exclude</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;deleted&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="order_byfields"><code>order_by(*fields)</code><a class="headerlink" href="#order_byfields" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Ascending</span>
+<span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Descending (prefix with -)</span>
+<span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;-created_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Multiple fields</span>
+<span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;-priority&quot;</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="limitn-offsetn"><code>limit(n)</code> / <code>offset(n)</code><a class="headerlink" href="#limitn-offsetn" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Pagination</span>
+<span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="select_relatedfields"><code>select_related(*fields)</code><a class="headerlink" href="#select_relatedfields" title="Permanent link">&para;</a></h3>
+<p>Eager load relationships.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Load author with post</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">select_related</span><span class="p">(</span><span class="s2">&quot;author&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Multiple relations</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">select_related</span><span class="p">(</span><span class="s2">&quot;author&quot;</span><span class="p">,</span> <span class="s2">&quot;category&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="usingsession"><code>using(session)</code><a class="headerlink" href="#usingsession" title="Permanent link">&para;</a></h3>
+<p>Set database session.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="terminal-methods">Terminal Methods<a class="headerlink" href="#terminal-methods" title="Permanent link">&para;</a></h2>
+<h3 id="all"><code>all()</code><a class="headerlink" href="#all" title="Permanent link">&para;</a></h3>
+<p>Returns all matching records.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="getkwargs"><code>get(**kwargs)</code><a class="headerlink" href="#getkwargs" title="Permanent link">&para;</a></h3>
+<p>Returns exactly one record. Raises <code>DoesNotExist</code> or <code>MultipleObjectsReturned</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">slug</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="get_or_nonekwargs"><code>get_or_none(**kwargs)</code><a class="headerlink" href="#get_or_nonekwargs" title="Permanent link">&para;</a></h3>
+<p>Returns one record or <code>None</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">get_or_none</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="first-last"><code>first()</code> / <code>last()</code><a class="headerlink" href="#first-last" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;created_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+<span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;created_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">last</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="count"><code>count()</code><a class="headerlink" href="#count" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">total</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="exists"><code>exists()</code><a class="headerlink" href="#exists" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">has_items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;pending&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="valuesfields"><code>values(*fields)</code><a class="headerlink" href="#valuesfields" title="Permanent link">&para;</a></h3>
+<p>Returns list of dictionaries.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<span class="c1"># [{&quot;id&quot;: 1, &quot;name&quot;: &quot;Item 1&quot;}, {&quot;id&quot;: 2, &quot;name&quot;: &quot;Item 2&quot;}]</span>
+</code></pre></div>
+
+<h3 id="values_listfields-flatfalse"><code>values_list(*fields, flat=False)</code><a class="headerlink" href="#values_listfields-flatfalse" title="Permanent link">&para;</a></h3>
+<p>Returns list of tuples or flat list.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">values_list</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">)</span>
+<span class="c1"># [(1, &quot;Item 1&quot;), (2, &quot;Item 2&quot;)]</span>
+
+<span class="n">ids</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">values_list</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="n">flat</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="c1"># [1, 2, 3]</span>
+</code></pre></div>
+
+<h3 id="delete"><code>delete()</code><a class="headerlink" href="#delete" title="Permanent link">&para;</a></h3>
+<p>Deletes matching records.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">count</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;deleted&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="updatekwargs"><code>update(**kwargs)</code><a class="headerlink" href="#updatekwargs" title="Permanent link">&para;</a></h3>
+<p>Updates matching records.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">count</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;draft&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;published&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="lookup-expressions_1">Lookup Expressions<a class="headerlink" href="#lookup-expressions_1" title="Permanent link">&para;</a></h2>
+<p>Use <code>field__lookup=value</code> syntax.</p>
+<table>
+<thead>
+<tr>
+<th>Lookup</th>
+<th>SQL</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>exact</code></td>
+<td><code>= value</code></td>
+<td><code>filter(name="John")</code></td>
+</tr>
+<tr>
+<td><code>iexact</code></td>
+<td><code>ILIKE value</code></td>
+<td><code>filter(name__iexact="john")</code></td>
+</tr>
+<tr>
+<td><code>contains</code></td>
+<td><code>LIKE '%value%'</code></td>
+<td><code>filter(name__contains="oh")</code></td>
+</tr>
+<tr>
+<td><code>icontains</code></td>
+<td><code>ILIKE '%value%'</code></td>
+<td><code>filter(name__icontains="oh")</code></td>
+</tr>
+<tr>
+<td><code>startswith</code></td>
+<td><code>LIKE 'value%'</code></td>
+<td><code>filter(name__startswith="Jo")</code></td>
+</tr>
+<tr>
+<td><code>istartswith</code></td>
+<td><code>ILIKE 'value%'</code></td>
+<td><code>filter(name__istartswith="jo")</code></td>
+</tr>
+<tr>
+<td><code>endswith</code></td>
+<td><code>LIKE '%value'</code></td>
+<td><code>filter(email__endswith=".com")</code></td>
+</tr>
+<tr>
+<td><code>iendswith</code></td>
+<td><code>ILIKE '%value'</code></td>
+<td><code>filter(email__iendswith=".COM")</code></td>
+</tr>
+<tr>
+<td><code>gt</code></td>
+<td><code>&gt; value</code></td>
+<td><code>filter(price__gt=100)</code></td>
+</tr>
+<tr>
+<td><code>gte</code></td>
+<td><code>&gt;= value</code></td>
+<td><code>filter(price__gte=100)</code></td>
+</tr>
+<tr>
+<td><code>lt</code></td>
+<td><code>&lt; value</code></td>
+<td><code>filter(price__lt=50)</code></td>
+</tr>
+<tr>
+<td><code>lte</code></td>
+<td><code>&lt;= value</code></td>
+<td><code>filter(stock__lte=0)</code></td>
+</tr>
+<tr>
+<td><code>in</code></td>
+<td><code>IN (values)</code></td>
+<td><code>filter(status__in=["a", "b"])</code></td>
+</tr>
+<tr>
+<td><code>isnull</code></td>
+<td><code>IS NULL</code></td>
+<td><code>filter(deleted_at__isnull=True)</code></td>
+</tr>
+<tr>
+<td><code>range</code></td>
+<td><code>BETWEEN a AND b</code></td>
+<td><code>filter(price__range=(10, 100))</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="aggregations">Aggregations<a class="headerlink" href="#aggregations" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.querysets</span><span class="w"> </span><span class="kn">import</span> <span class="n">Count</span><span class="p">,</span> <span class="n">Sum</span><span class="p">,</span> <span class="n">Avg</span><span class="p">,</span> <span class="n">Max</span><span class="p">,</span> <span class="n">Min</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">aggregate</span><span class="p">(</span>
+    <span class="n">total</span><span class="o">=</span><span class="n">Count</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">),</span>
+    <span class="n">avg_price</span><span class="o">=</span><span class="n">Avg</span><span class="p">(</span><span class="s2">&quot;price&quot;</span><span class="p">),</span>
+    <span class="n">max_price</span><span class="o">=</span><span class="n">Max</span><span class="p">(</span><span class="s2">&quot;price&quot;</span><span class="p">),</span>
+    <span class="n">min_price</span><span class="o">=</span><span class="n">Min</span><span class="p">(</span><span class="s2">&quot;price&quot;</span><span class="p">),</span>
+    <span class="n">total_value</span><span class="o">=</span><span class="n">Sum</span><span class="p">(</span><span class="s2">&quot;price&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="c1"># {&quot;total&quot;: 100, &quot;avg_price&quot;: 50.0, &quot;max_price&quot;: 200, ...}</span>
+</code></pre></div>
+
+<h2 id="soft-delete-queryset">Soft Delete QuerySet<a class="headerlink" href="#soft-delete-queryset" title="Permanent link">&para;</a></h2>
+<p>For models with <code>SoftDeleteMixin</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Default: excludes deleted</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Include deleted</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">with_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Only deleted</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">only_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Explicitly active only</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">active</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="tenant-queryset">Tenant QuerySet<a class="headerlink" href="#tenant-queryset" title="Permanent link">&para;</a></h2>
+<p>For models with <code>TenantMixin</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Filter by tenant</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span><span class="n">tenant_id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Uses context tenant if not specified</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="combined-queryset">Combined QuerySet<a class="headerlink" href="#combined-queryset" title="Permanent link">&para;</a></h2>
+<p>For models with both mixins:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Tenant + soft delete</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">with_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="raw-sql">Raw SQL<a class="headerlink" href="#raw-sql" title="Permanent link">&para;</a></h2>
+<p>When needed:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">text</span>
+
+<span class="k">async</span> <span class="k">with</span> <span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;SELECT * FROM items WHERE price &gt; :price&quot;</span><span class="p">),</span> <span class="p">{</span><span class="s2">&quot;price&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">})</span> <span class="k">as</span> <span class="n">result</span><span class="p">:</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
+<h3 id="pagination">Pagination<a class="headerlink" href="#pagination" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">page</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">page_size</span> <span class="o">=</span> <span class="mi">20</span>
+<span class="n">offset</span> <span class="o">=</span> <span class="p">(</span><span class="n">page</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">page_size</span>
+
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;-created_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="n">page_size</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<span class="n">total</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="search">Search<a class="headerlink" href="#search" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">name__icontains</span><span class="o">=</span><span class="n">query</span>
+<span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="complex-filter">Complex Filter<a class="headerlink" href="#complex-filter" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">,</span>
+    <span class="n">price__gte</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">price__lte</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">category_id__in</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+<span class="p">)</span><span class="o">.</span><span class="n">exclude</span><span class="p">(</span>
+    <span class="n">is_featured</span><span class="o">=</span><span class="kc">False</span>
+<span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;-created_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">50</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="bulk-operations">Bulk Operations<a class="headerlink" href="#bulk-operations" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Bulk update</span>
+<span class="n">count</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">status</span><span class="o">=</span><span class="s2">&quot;draft&quot;</span><span class="p">,</span>
+    <span class="n">created_at__lt</span><span class="o">=</span><span class="n">cutoff_date</span>
+<span class="p">)</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;archived&quot;</span><span class="p">)</span>
+
+<span class="c1"># Bulk delete</span>
+<span class="n">count</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">status</span><span class="o">=</span><span class="s2">&quot;deleted&quot;</span><span class="p">,</span>
+    <span class="n">deleted_at__lt</span><span class="o">=</span><span class="n">cutoff_date</span>
+<span class="p">)</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../13-serializers/">Serializers</a> — Input/Output schemas</li>
+<li><a href="../22-soft-delete/">Soft Delete</a> — Logical deletion</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

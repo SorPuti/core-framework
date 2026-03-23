@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/34-exceptions/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Exceptions - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Exceptions";
+        var mkdocs_page_input_path = "34-exceptions.md";
+        var mkdocs_page_url = "/core-framework/34-exceptions/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Exceptions</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/34-exceptions.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="exceptions">Exceptions<a class="headerlink" href="#exceptions" title="Permanent link">&para;</a></h1>
+<p>Custom exception classes and error handling.</p>
+<h2 id="exception-hierarchy">Exception Hierarchy<a class="headerlink" href="#exception-hierarchy" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>StrideException
+├── ValidationException
+│   ├── FieldValidationError
+│   ├── UniqueConstraintError
+│   └── MultipleValidationErrors
+├── DatabaseException
+│   ├── DoesNotExist
+│   ├── MultipleObjectsReturned
+│   ├── IntegrityError
+│   └── ConnectionError
+├── AuthException
+│   ├── AuthenticationFailed
+│   ├── InvalidCredentials
+│   ├── InvalidToken
+│   ├── TokenExpired
+│   ├── PermissionDenied
+│   ├── UserInactive
+│   └── UserNotFound
+└── BusinessException
+    ├── ResourceLocked
+    ├── PreconditionFailed
+    ├── OperationNotAllowed
+    └── QuotaExceeded
+
+HTTPException
+├── BadRequest (400)
+├── Unauthorized (401)
+├── Forbidden (403)
+├── NotFound (404)
+├── MethodNotAllowed (405)
+├── Conflict (409)
+├── UnprocessableEntity (422)
+├── TooManyRequests (429)
+├── InternalServerError (500)
+└── ServiceUnavailable (503)
+</code></pre></div>
+
+<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
+<h3 id="validation-errors">Validation Errors<a class="headerlink" href="#validation-errors" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationException</span><span class="p">,</span> <span class="n">FieldValidationError</span>
+
+<span class="c1"># Single field error</span>
+<span class="k">raise</span> <span class="n">FieldValidationError</span><span class="p">(</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Invalid email format&quot;</span><span class="p">,</span>
+    <span class="n">field</span><span class="o">=</span><span class="s2">&quot;email&quot;</span><span class="p">,</span>
+    <span class="n">code</span><span class="o">=</span><span class="s2">&quot;invalid_email&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Multiple errors</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">MultipleValidationErrors</span>
+
+<span class="n">errors</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">FieldValidationError</span><span class="p">(</span><span class="s2">&quot;Email required&quot;</span><span class="p">,</span> <span class="n">field</span><span class="o">=</span><span class="s2">&quot;email&quot;</span><span class="p">),</span>
+    <span class="n">FieldValidationError</span><span class="p">(</span><span class="s2">&quot;Password too short&quot;</span><span class="p">,</span> <span class="n">field</span><span class="o">=</span><span class="s2">&quot;password&quot;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="k">raise</span> <span class="n">MultipleValidationErrors</span><span class="p">(</span><span class="n">errors</span><span class="p">)</span>
+
+<span class="c1"># Unique constraint</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">UniqueConstraintError</span>
+
+<span class="k">raise</span> <span class="n">UniqueConstraintError</span><span class="p">(</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Email already exists&quot;</span><span class="p">,</span>
+    <span class="n">field</span><span class="o">=</span><span class="s2">&quot;email&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="database-errors">Database Errors<a class="headerlink" href="#database-errors" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">DoesNotExist</span><span class="p">,</span> <span class="n">MultipleObjectsReturned</span>
+
+<span class="c1"># Not found</span>
+<span class="k">raise</span> <span class="n">DoesNotExist</span><span class="p">(</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;User not found&quot;</span><span class="p">,</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;User&quot;</span><span class="p">,</span>
+    <span class="n">lookup</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># Multiple results</span>
+<span class="k">raise</span> <span class="n">MultipleObjectsReturned</span><span class="p">(</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Multiple users found&quot;</span><span class="p">,</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;User&quot;</span><span class="p">,</span>
+    <span class="n">count</span><span class="o">=</span><span class="mi">3</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="auth-errors">Auth Errors<a class="headerlink" href="#auth-errors" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AuthenticationFailed</span><span class="p">,</span>
+    <span class="n">InvalidCredentials</span><span class="p">,</span>
+    <span class="n">InvalidToken</span><span class="p">,</span>
+    <span class="n">TokenExpired</span><span class="p">,</span>
+    <span class="n">PermissionDenied</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="k">raise</span> <span class="n">AuthenticationFailed</span><span class="p">(</span><span class="s2">&quot;Authentication required&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">InvalidCredentials</span><span class="p">(</span><span class="s2">&quot;Wrong email or password&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">InvalidToken</span><span class="p">(</span><span class="s2">&quot;Token is invalid&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">TokenExpired</span><span class="p">(</span><span class="s2">&quot;Token has expired&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">PermissionDenied</span><span class="p">(</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Cannot edit this resource&quot;</span><span class="p">,</span>
+    <span class="n">permission</span><span class="o">=</span><span class="s2">&quot;posts.edit&quot;</span><span class="p">,</span>
+    <span class="n">resource</span><span class="o">=</span><span class="s2">&quot;Post&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="http-errors">HTTP Errors<a class="headerlink" href="#http-errors" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BadRequest</span><span class="p">,</span>
+    <span class="n">Unauthorized</span><span class="p">,</span>
+    <span class="n">Forbidden</span><span class="p">,</span>
+    <span class="n">NotFound</span><span class="p">,</span>
+    <span class="n">Conflict</span><span class="p">,</span>
+    <span class="n">TooManyRequests</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 400 Bad Request</span>
+<span class="k">raise</span> <span class="n">BadRequest</span><span class="p">(</span><span class="s2">&quot;Invalid request&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">BadRequest</span><span class="o">.</span><span class="n">with_field</span><span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;Invalid format&quot;</span><span class="p">)</span>
+
+<span class="c1"># 401 Unauthorized</span>
+<span class="k">raise</span> <span class="n">Unauthorized</span><span class="p">(</span><span class="s2">&quot;Login required&quot;</span><span class="p">)</span>
+
+<span class="c1"># 403 Forbidden</span>
+<span class="k">raise</span> <span class="n">Forbidden</span><span class="p">(</span><span class="s2">&quot;Access denied&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">Forbidden</span><span class="o">.</span><span class="n">for_resource</span><span class="p">(</span><span class="s2">&quot;Post&quot;</span><span class="p">,</span> <span class="s2">&quot;delete&quot;</span><span class="p">)</span>
+
+<span class="c1"># 404 Not Found</span>
+<span class="k">raise</span> <span class="n">NotFound</span><span class="p">(</span><span class="s2">&quot;Resource not found&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">NotFound</span><span class="o">.</span><span class="n">for_model</span><span class="p">(</span><span class="s2">&quot;User&quot;</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># 409 Conflict</span>
+<span class="k">raise</span> <span class="n">Conflict</span><span class="p">(</span><span class="s2">&quot;Resource already exists&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">Conflict</span><span class="o">.</span><span class="n">duplicate</span><span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;user@example.com&quot;</span><span class="p">)</span>
+
+<span class="c1"># 429 Too Many Requests</span>
+<span class="k">raise</span> <span class="n">TooManyRequests</span><span class="p">(</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Rate limit exceeded&quot;</span><span class="p">,</span>
+    <span class="n">retry_after</span><span class="o">=</span><span class="mi">60</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="business-errors">Business Errors<a class="headerlink" href="#business-errors" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">ResourceLocked</span><span class="p">,</span>
+    <span class="n">PreconditionFailed</span><span class="p">,</span>
+    <span class="n">OperationNotAllowed</span><span class="p">,</span>
+    <span class="n">QuotaExceeded</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="k">raise</span> <span class="n">ResourceLocked</span><span class="p">(</span><span class="s2">&quot;Document is being edited&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">PreconditionFailed</span><span class="p">(</span><span class="s2">&quot;Version mismatch&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">OperationNotAllowed</span><span class="p">(</span><span class="s2">&quot;Cannot delete active subscription&quot;</span><span class="p">)</span>
+<span class="k">raise</span> <span class="n">QuotaExceeded</span><span class="p">(</span><span class="s2">&quot;Storage limit reached&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="error-response-format">Error Response Format<a class="headerlink" href="#error-response-format" title="Permanent link">&para;</a></h2>
+<p>All exceptions return consistent JSON:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;detail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Error message&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;error_code&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="validation-errors_1">Validation Errors<a class="headerlink" href="#validation-errors_1" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;detail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Validation error&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;validation_error&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;errors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Invalid email format&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;invalid_email&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;field&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;email&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="unique-constraint">Unique Constraint<a class="headerlink" href="#unique-constraint" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;detail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Email already exists&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;unique_constraint&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;field&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;email&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user@example.com&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="not-found">Not Found<a class="headerlink" href="#not-found" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;detail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;User not found&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;does_not_exist&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h2 id="exception-handlers">Exception Handlers<a class="headerlink" href="#exception-handlers" title="Permanent link">&para;</a></h2>
+<p>StrideApp auto-registers handlers for:</p>
+<ul>
+<li>Pydantic <code>ValidationError</code> → 422</li>
+<li>Core <code>ValidationError</code> → 422</li>
+<li><code>MultipleValidationErrors</code> → 422</li>
+<li><code>UniqueValidationError</code> → 409</li>
+<li>SQLAlchemy <code>IntegrityError</code> → 409/400/422</li>
+<li>SQLAlchemy <code>DataError</code> → 422</li>
+<li>SQLAlchemy <code>OperationalError</code> → 503</li>
+<li>Generic <code>Exception</code> → 500</li>
+</ul>
+<h2 id="custom-exception">Custom Exception<a class="headerlink" href="#custom-exception" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrideException</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PaymentFailedException</span><span class="p">(</span><span class="n">StrideException</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Payment processing failed.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Payment failed&quot;</span><span class="p">,</span>
+        <span class="n">code</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;payment_failed&quot;</span><span class="p">,</span>
+        <span class="n">transaction_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">code</span><span class="o">=</span><span class="n">code</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transaction_id</span> <span class="o">=</span> <span class="n">transaction_id</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transaction_id</span><span class="p">:</span>
+            <span class="n">data</span><span class="p">[</span><span class="s2">&quot;transaction_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">transaction_id</span>
+        <span class="k">return</span> <span class="n">data</span>
+</code></pre></div>
+
+<h2 id="custom-handler">Custom Handler<a class="headerlink" href="#custom-handler" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Request</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">JSONResponse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrideApp</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">StrideApp</span><span class="p">()</span>
+
+<span class="nd">@app</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">exception_handler</span><span class="p">(</span><span class="n">PaymentFailedException</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">payment_failed_handler</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">exc</span><span class="p">:</span> <span class="n">PaymentFailedException</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">JSONResponse</span><span class="p">(</span>
+        <span class="n">status_code</span><span class="o">=</span><span class="mi">402</span><span class="p">,</span>
+        <span class="n">content</span><span class="o">=</span><span class="n">exc</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<h2 id="in-viewsets">In ViewSets<a class="headerlink" href="#in-viewsets" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">NotFound</span><span class="p">,</span> <span class="n">Forbidden</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">retrieve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">post</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span><span class="n">db</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">post</span><span class="o">.</span><span class="n">is_private</span> <span class="ow">and</span> <span class="n">post</span><span class="o">.</span><span class="n">author_id</span> <span class="o">!=</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">Forbidden</span><span class="p">(</span><span class="s2">&quot;Cannot view private post&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="n">post</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="status-codes">Status Codes<a class="headerlink" href="#status-codes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Exception</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BadRequest</code></td>
+<td>400</td>
+</tr>
+<tr>
+<td><code>Unauthorized</code></td>
+<td>401</td>
+</tr>
+<tr>
+<td><code>Forbidden</code></td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>NotFound</code></td>
+<td>404</td>
+</tr>
+<tr>
+<td><code>MethodNotAllowed</code></td>
+<td>405</td>
+</tr>
+<tr>
+<td><code>Conflict</code></td>
+<td>409</td>
+</tr>
+<tr>
+<td><code>UnprocessableEntity</code></td>
+<td>422</td>
+</tr>
+<tr>
+<td><code>ResourceLocked</code></td>
+<td>423</td>
+</tr>
+<tr>
+<td><code>TooManyRequests</code></td>
+<td>429</td>
+</tr>
+<tr>
+<td><code>InternalServerError</code></td>
+<td>500</td>
+</tr>
+<tr>
+<td><code>ServiceUnavailable</code></td>
+<td>503</td>
+</tr>
+</tbody>
+</table>
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../14-validators/">Validators</a> — Data validation</li>
+<li><a href="../04-viewsets/">ViewSets</a> — CRUD endpoints</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

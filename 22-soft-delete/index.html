@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/22-soft-delete/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Soft Delete - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Soft Delete";
+        var mkdocs_page_input_path = "22-soft-delete.md";
+        var mkdocs_page_url = "/core-framework/22-soft-delete/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Soft Delete</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/22-soft-delete.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="soft-delete">Soft Delete<a class="headerlink" href="#soft-delete" title="Permanent link">&para;</a></h1>
+<p>Deleção lógica ao invés de remoção permanente, com configuração via Settings.</p>
+<h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
+<p>Adicione <code>SoftDeleteMixin</code> ao seu model:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">SoftDeleteMixin</span><span class="p">,</span> <span class="n">SoftDeleteManager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Item</span><span class="p">(</span><span class="n">Model</span><span class="p">,</span> <span class="n">SoftDeleteMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;items&quot;</span>
+    <span class="n">objects</span> <span class="o">=</span> <span class="n">SoftDeleteManager</span><span class="p">[</span><span class="s2">&quot;Item&quot;</span><span class="p">]()</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Isso adiciona:
+- Campo <code>deleted_at: Mapped[DateTime | None]</code>
+- Propriedades <code>is_deleted</code> e <code>is_active</code>
+- Métodos <code>soft_delete()</code>, <code>restore()</code>, <code>hard_delete()</code></p>
+<h2 id="configuracao-via-settings">Configuração via Settings<a class="headerlink" href="#configuracao-via-settings" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">soft_delete_field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;deleted_at&quot;</span>      <span class="c1"># Nome do campo</span>
+    <span class="n">soft_delete_cascade</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>          <span class="c1"># Cascade para relações</span>
+    <span class="n">soft_delete_auto_filter</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>       <span class="c1"># Auto-filtrar em queries</span>
+</code></pre></div>
+
+<p>Ou via ambiente:</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">SOFT_DELETE_FIELD</span><span class="o">=</span>deleted_at
+<span class="nv">SOFT_DELETE_CASCADE</span><span class="o">=</span><span class="nb">false</span>
+<span class="nv">SOFT_DELETE_AUTO_FILTER</span><span class="o">=</span><span class="nb">true</span>
+</code></pre></div>
+
+<h2 id="settings-de-soft-delete">Settings de Soft Delete<a class="headerlink" href="#settings-de-soft-delete" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Tipo</th>
+<th>Default</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>soft_delete_field</code></td>
+<td><code>str</code></td>
+<td><code>"deleted_at"</code></td>
+<td>Nome do campo de soft delete</td>
+</tr>
+<tr>
+<td><code>soft_delete_cascade</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Soft delete em cascata para relacionamentos</td>
+</tr>
+<tr>
+<td><code>soft_delete_auto_filter</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Filtrar deletados automaticamente em queries</td>
+</tr>
+</tbody>
+</table>
+<h2 id="uso-basico">Uso Básico<a class="headerlink" href="#uso-basico" title="Permanent link">&para;</a></h2>
+<h3 id="soft-delete_1">Soft Delete<a class="headerlink" href="#soft-delete_1" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Soft delete (define deleted_at)</span>
+<span class="k">await</span> <span class="n">item</span><span class="o">.</span><span class="n">soft_delete</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+
+<span class="c1"># Verificar status</span>
+<span class="n">item</span><span class="o">.</span><span class="n">is_deleted</span>  <span class="c1"># True</span>
+<span class="n">item</span><span class="o">.</span><span class="n">is_active</span>   <span class="c1"># False</span>
+</code></pre></div>
+
+<h3 id="restaurar">Restaurar<a class="headerlink" href="#restaurar" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Restaurar (define deleted_at = None)</span>
+<span class="k">await</span> <span class="n">item</span><span class="o">.</span><span class="n">restore</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+
+<span class="n">item</span><span class="o">.</span><span class="n">is_deleted</span>  <span class="c1"># False</span>
+<span class="n">item</span><span class="o">.</span><span class="n">is_active</span>   <span class="c1"># True</span>
+</code></pre></div>
+
+<h3 id="hard-delete">Hard Delete<a class="headerlink" href="#hard-delete" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Deleção permanente</span>
+<span class="k">await</span> <span class="n">item</span><span class="o">.</span><span class="n">hard_delete</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="queries">Queries<a class="headerlink" href="#queries" title="Permanent link">&para;</a></h2>
+<h3 id="comportamento-padrao">Comportamento Padrão<a class="headerlink" href="#comportamento-padrao" title="Permanent link">&para;</a></h3>
+<p>Registros soft-deleted são <strong>excluídos por padrão</strong>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Apenas registros ativos</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="incluir-deletados">Incluir Deletados<a class="headerlink" href="#incluir-deletados" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Todos os registros (ativos + deletados)</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">with_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="apenas-deletados">Apenas Deletados<a class="headerlink" href="#apenas-deletados" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Apenas registros soft-deleted</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">only_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h3 id="ativos-explicito">Ativos Explícito<a class="headerlink" href="#ativos-explicito" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Mesmo que padrão, mas explícito</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">active</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="operacoes-em-bulk">Operações em Bulk<a class="headerlink" href="#operacoes-em-bulk" title="Permanent link">&para;</a></h2>
+<h3 id="bulk-soft-delete">Bulk Soft Delete<a class="headerlink" href="#bulk-soft-delete" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">count</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">soft_delete_by</span><span class="p">(</span>
+    <span class="n">status</span><span class="o">=</span><span class="s2">&quot;archived&quot;</span><span class="p">,</span>
+    <span class="n">created_at__lt</span><span class="o">=</span><span class="n">cutoff_date</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="bulk-restore">Bulk Restore<a class="headerlink" href="#bulk-restore" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">count</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">restore_by</span><span class="p">(</span>
+    <span class="n">workspace_id</span><span class="o">=</span><span class="n">workspace_id</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="nome-de-campo-customizado">Nome de Campo Customizado<a class="headerlink" href="#nome-de-campo-customizado" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">Item</span><span class="p">(</span><span class="n">Model</span><span class="p">,</span> <span class="n">SoftDeleteMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;items&quot;</span>
+    <span class="n">objects</span> <span class="o">=</span> <span class="n">SoftDeleteManager</span><span class="p">[</span><span class="s2">&quot;Item&quot;</span><span class="p">](</span><span class="n">deleted_field</span><span class="o">=</span><span class="s2">&quot;removed_at&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="com-multi-tenancy">Com Multi-Tenancy<a class="headerlink" href="#com-multi-tenancy" title="Permanent link">&para;</a></h2>
+<p>Use <code>TenantSoftDeleteManager</code> para ambos:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">TenantSoftDeleteManager</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Item</span><span class="p">(</span><span class="n">Model</span><span class="p">,</span> <span class="n">SoftDeleteMixin</span><span class="p">,</span> <span class="n">TenantMixin</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;items&quot;</span>
+    <span class="n">objects</span> <span class="o">=</span> <span class="n">TenantSoftDeleteManager</span><span class="p">[</span><span class="s2">&quot;Item&quot;</span><span class="p">]()</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Filtra por tenant + exclui deletados</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span><span class="n">tenant_id</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Filtra por tenant + inclui deletados</span>
+<span class="n">items</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">for_tenant</span><span class="p">(</span><span class="n">tenant_id</span><span class="p">)</span><span class="o">.</span><span class="n">with_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="integracao-com-viewset">Integração com ViewSet<a class="headerlink" href="#integracao-com-viewset" title="Permanent link">&para;</a></h2>
+<p>Soft delete funciona automaticamente em ViewSets:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ItemViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Item</span>  <span class="c1"># Usa Item.objects (SoftDeleteManager)</span>
+
+    <span class="c1"># Endpoint DELETE chama soft_delete por padrão</span>
+    <span class="c1"># se model tem SoftDeleteMixin</span>
+</code></pre></div>
+
+<p>Sobrescrever para hard delete:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ItemViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Item</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">perform_destroy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">instance</span><span class="o">.</span><span class="n">hard_delete</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="filtrar-deletados-no-viewset">Filtrar Deletados no ViewSet<a class="headerlink" href="#filtrar-deletados-no-viewset" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ItemViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Item</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_queryset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="n">qs</span> <span class="o">=</span> <span class="n">Item</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+
+        <span class="c1"># Incluir deletados para admins</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">is_admin</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">qs</span><span class="o">.</span><span class="n">with_deleted</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">qs</span>  <span class="c1"># Padrão: exclui deletados</span>
+</code></pre></div>
+
+<h2 id="migration">Migration<a class="headerlink" href="#migration" title="Permanent link">&para;</a></h2>
+<p>Ao adicionar soft delete a model existente:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. Adicionar mixin</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Item</span><span class="p">(</span><span class="n">Model</span><span class="p">,</span> <span class="n">SoftDeleteMixin</span><span class="p">):</span>
+    <span class="o">...</span>
+
+<span class="c1"># 2. Gerar migration</span>
+<span class="n">stride</span> <span class="n">makemigrations</span>
+
+<span class="c1"># 3. Aplicar</span>
+<span class="n">stride</span> <span class="n">migrate</span>
+</code></pre></div>
+
+<p>A migration adiciona coluna <code>deleted_at</code> (nullable).</p>
+<h2 id="propriedades">Propriedades<a class="headerlink" href="#propriedades" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Propriedade</th>
+<th>Tipo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>deleted_at</code></td>
+<td><code>DateTime \| None</code></td>
+<td>Timestamp de deleção</td>
+</tr>
+<tr>
+<td><code>is_deleted</code></td>
+<td><code>bool</code></td>
+<td><code>True</code> se <code>deleted_at</code> está definido</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td><code>bool</code></td>
+<td><code>True</code> se <code>deleted_at</code> é <code>None</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="metodos">Métodos<a class="headerlink" href="#metodos" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Método</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>soft_delete(db)</code></td>
+<td>Define <code>deleted_at = now()</code></td>
+</tr>
+<tr>
+<td><code>restore(db)</code></td>
+<td>Define <code>deleted_at = None</code></td>
+</tr>
+<tr>
+<td><code>hard_delete(db)</code></td>
+<td>Deleção permanente</td>
+</tr>
+</tbody>
+</table>
+<h2 id="metodos-do-manager">Métodos do Manager<a class="headerlink" href="#metodos-do-manager" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Método</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>with_deleted()</code></td>
+<td>Incluir registros deletados</td>
+</tr>
+<tr>
+<td><code>only_deleted()</code></td>
+<td>Apenas registros deletados</td>
+</tr>
+<tr>
+<td><code>active()</code></td>
+<td>Apenas registros ativos (padrão)</td>
+</tr>
+<tr>
+<td><code>soft_delete_by(**filters)</code></td>
+<td>Bulk soft delete</td>
+</tr>
+<tr>
+<td><code>restore_by(**filters)</code></td>
+<td>Bulk restore</td>
+</tr>
+</tbody>
+</table>
+<h2 id="proximos-passos">Próximos Passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../12-querysets/">QuerySets</a> — Consultas de dados</li>
+<li><a href="../32-tenancy/">Tenancy</a> — Multi-tenant</li>
+<li><a href="../02-settings/">Settings</a> — Todas as configurações</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/06-auth-backends/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Auth Backends - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Auth Backends";
+        var mkdocs_page_input_path = "06-auth-backends.md";
+        var mkdocs_page_url = "/core-framework/06-auth-backends/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Auth Backends</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/06-auth-backends.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="auth-backends">Auth Backends<a class="headerlink" href="#auth-backends" title="Permanent link">&para;</a></h1>
+<p>Customizable authentication backends.</p>
+<h2 id="available-backends">Available Backends<a class="headerlink" href="#available-backends" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Class</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"model"</code></td>
+<td><code>ModelBackend</code></td>
+<td>Email/password auth (default)</td>
+</tr>
+<tr>
+<td><code>"token"</code></td>
+<td><code>TokenAuthBackend</code></td>
+<td>Bearer token auth</td>
+</tr>
+<tr>
+<td><code>"multi"</code></td>
+<td><code>MultiBackend</code></td>
+<td>Try multiple backends</td>
+</tr>
+</tbody>
+</table>
+<h2 id="custom-auth-backend">Custom Auth Backend<a class="headerlink" href="#custom-auth-backend" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/auth/backends.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AuthBackend</span><span class="p">,</span> <span class="n">register_auth_backend</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">OAuthBackend</span><span class="p">(</span><span class="n">AuthBackend</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;OAuth2 authentication backend.&quot;&quot;&quot;</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">credentials</span><span class="p">):</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">credentials</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;oauth_token&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="c1"># Validate with OAuth provider</span>
+        <span class="n">user_data</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate_oauth</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user_data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="c1"># Get or create user</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_or_create_user</span><span class="p">(</span><span class="n">user_data</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_user</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_id</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">src.apps.users.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">get_or_none</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user_id</span><span class="p">)</span>
+
+<span class="c1"># Register backend</span>
+<span class="n">register_auth_backend</span><span class="p">(</span><span class="s2">&quot;oauth&quot;</span><span class="p">,</span> <span class="n">OAuthBackend</span><span class="p">())</span>
+</code></pre></div>
+
+<h2 id="use-custom-backend">Use Custom Backend<a class="headerlink" href="#use-custom-backend" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">auth_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;oauth&quot;</span>  <span class="c1"># Use your backend</span>
+</code></pre></div>
+
+<p>Or use MultiBackend:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">MultiBackend</span><span class="p">,</span> <span class="n">register_auth_backend</span>
+
+<span class="n">multi</span> <span class="o">=</span> <span class="n">MultiBackend</span><span class="p">(</span><span class="n">backends</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;oauth&quot;</span><span class="p">,</span> <span class="s2">&quot;token&quot;</span><span class="p">,</span> <span class="s2">&quot;model&quot;</span><span class="p">])</span>
+<span class="n">register_auth_backend</span><span class="p">(</span><span class="s2">&quot;multi&quot;</span><span class="p">,</span> <span class="n">multi</span><span class="p">)</span>
+
+<span class="c1"># In settings</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">auth_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;multi&quot;</span>
+</code></pre></div>
+
+<h2 id="password-hashers">Password Hashers<a class="headerlink" href="#password-hashers" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Algorithm</th>
+<th>Dependencies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"pbkdf2_sha256"</code></td>
+<td>PBKDF2-SHA256</td>
+<td>None (default)</td>
+</tr>
+<tr>
+<td><code>"argon2"</code></td>
+<td>Argon2id</td>
+<td><code>pip install argon2-cffi</code></td>
+</tr>
+<tr>
+<td><code>"bcrypt"</code></td>
+<td>BCrypt</td>
+<td><code>pip install bcrypt</code></td>
+</tr>
+<tr>
+<td><code>"scrypt"</code></td>
+<td>Scrypt</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<h3 id="custom-hasher">Custom Hasher<a class="headerlink" href="#custom-hasher" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">PasswordHasher</span><span class="p">,</span> <span class="n">register_password_hasher</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyHasher</span><span class="p">(</span><span class="n">PasswordHasher</span><span class="p">):</span>
+    <span class="n">algorithm</span> <span class="o">=</span> <span class="s2">&quot;my_algo&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">hash</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">password</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">my_hash_function</span><span class="p">(</span><span class="n">password</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">verify</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">password</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">hashed</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">my_verify_function</span><span class="p">(</span><span class="n">password</span><span class="p">,</span> <span class="n">hashed</span><span class="p">)</span>
+
+<span class="n">register_password_hasher</span><span class="p">(</span><span class="s2">&quot;my_algo&quot;</span><span class="p">,</span> <span class="n">MyHasher</span><span class="p">())</span>
+</code></pre></div>
+
+<h2 id="token-backends">Token Backends<a class="headerlink" href="#token-backends" title="Permanent link">&para;</a></h2>
+<p>Default: JWT (<code>"jwt"</code>)</p>
+<h3 id="custom-token-backend">Custom Token Backend<a class="headerlink" href="#custom-token-backend" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenBackend</span><span class="p">,</span> <span class="n">register_token_backend</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyTokenBackend</span><span class="p">(</span><span class="n">TokenBackend</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">,</span> <span class="n">token_type</span><span class="o">=</span><span class="s2">&quot;access&quot;</span><span class="p">,</span> <span class="n">expires_delta</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">my_encode</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">expires_delta</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">my_decode</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">verify_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">token_type</span><span class="o">=</span><span class="s2">&quot;access&quot;</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">payload</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">decode_token</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">token_type</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="k">return</span> <span class="n">payload</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+<span class="n">register_token_backend</span><span class="p">(</span><span class="s2">&quot;my_tokens&quot;</span><span class="p">,</span> <span class="n">MyTokenBackend</span><span class="p">())</span>
+</code></pre></div>
+
+<h2 id="permission-backends">Permission Backends<a class="headerlink" href="#permission-backends" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Class</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"default"</code></td>
+<td><code>DefaultPermissionBackend</code></td>
+<td>User + group permissions</td>
+</tr>
+<tr>
+<td><code>"object"</code></td>
+<td><code>ObjectPermissionBackend</code></td>
+<td>Object-level permissions</td>
+</tr>
+<tr>
+<td><code>"rbac"</code></td>
+<td><code>RoleBasedPermissionBackend</code></td>
+<td>Role-based access</td>
+</tr>
+</tbody>
+</table>
+<h3 id="rbac-example">RBAC Example<a class="headerlink" href="#rbac-example" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">RoleBasedPermissionBackend</span><span class="p">,</span> <span class="n">register_permission_backend</span>
+
+<span class="n">rbac</span> <span class="o">=</span> <span class="n">RoleBasedPermissionBackend</span><span class="p">(</span>
+    <span class="n">role_permissions</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;admin&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;*&quot;</span><span class="p">],</span>  <span class="c1"># All permissions</span>
+        <span class="s2">&quot;editor&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;posts.*&quot;</span><span class="p">,</span> <span class="s2">&quot;comments.*&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;viewer&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;posts.view&quot;</span><span class="p">,</span> <span class="s2">&quot;comments.view&quot;</span><span class="p">],</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+<span class="n">register_permission_backend</span><span class="p">(</span><span class="s2">&quot;rbac&quot;</span><span class="p">,</span> <span class="n">rbac</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="user-id-customization">User ID Customization<a class="headerlink" href="#user-id-customization" title="Permanent link">&para;</a></h2>
+<h3 id="integer-id-default">Integer ID (Default)<a class="headerlink" href="#integer-id-default" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AbstractUser</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">AbstractUser</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+    <span class="c1"># id: Mapped[int] = Field.pk()  # Inherited</span>
+</code></pre></div>
+
+<h3 id="uuid-id">UUID ID<a class="headerlink" href="#uuid-id" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AbstractUUIDUser</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">AbstractUUIDUser</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+    <span class="c1"># id: Mapped[UUID] = AdvancedField.uuid_pk()  # Inherited</span>
+</code></pre></div>
+
+<h3 id="custom-id">Custom ID<a class="headerlink" href="#custom-id" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">AbstractUser</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.fields</span><span class="w"> </span><span class="kn">import</span> <span class="n">AdvancedField</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">AbstractUser</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+
+    <span class="c1"># Override with BigInteger</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">AdvancedField</span><span class="o">.</span><span class="n">bigint_pk</span><span class="p">()</span>
+
+    <span class="c1"># Or with String</span>
+    <span class="c1"># id: Mapped[str] = Field.string(primary_key=True, max_length=36)</span>
+</code></pre></div>
+
+<h2 id="authconfig">AuthConfig<a class="headerlink" href="#authconfig" title="Permanent link">&para;</a></h2>
+<p>Full configuration:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_auth</span><span class="p">,</span> <span class="n">AuthConfig</span>
+
+<span class="n">configure_auth</span><span class="p">(</span>
+    <span class="n">secret_key</span><span class="o">=</span><span class="s2">&quot;your-secret-key&quot;</span><span class="p">,</span>
+    <span class="n">user_model</span><span class="o">=</span><span class="n">User</span><span class="p">,</span>
+    <span class="n">password_hasher</span><span class="o">=</span><span class="s2">&quot;argon2&quot;</span><span class="p">,</span>
+    <span class="n">token_backend</span><span class="o">=</span><span class="s2">&quot;jwt&quot;</span><span class="p">,</span>
+    <span class="n">auth_backend</span><span class="o">=</span><span class="s2">&quot;model&quot;</span><span class="p">,</span>
+    <span class="n">permission_backend</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
+    <span class="n">access_token_expire_minutes</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+    <span class="n">refresh_token_expire_days</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span>
+    <span class="n">username_field</span><span class="o">=</span><span class="s2">&quot;email&quot;</span><span class="p">,</span>
+    <span class="n">jwt_algorithm</span><span class="o">=</span><span class="s2">&quot;HS256&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../08-permissions/">Permissions</a> — Access control</li>
+<li><a href="../05-auth/">Auth</a> — Basic authentication</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

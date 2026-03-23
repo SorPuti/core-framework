@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/00-criar-aplicacao/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Criar uma aplicação - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Criar uma aplica\u00e7\u00e3o";
+        var mkdocs_page_input_path = "00-criar-aplicacao.md";
+        var mkdocs_page_url = "/core-framework/00-criar-aplicacao/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Criar uma aplicação</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/00-criar-aplicacao.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="criar-uma-aplicacao">Criar uma aplicação<a class="headerlink" href="#criar-uma-aplicacao" title="Permanent link">&para;</a></h1>
+<p>Guia completo para criar, configurar e publicar uma aplicação com o framework: configuração, banco de dados, ViewSets, APIView, ModelViewSet, serializers, paginação, WebSocket, SSE e validação.</p>
+<h2 id="indice">Índice<a class="headerlink" href="#indice" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="#1-requisitos-e-instalação">Requisitos e instalação</a></li>
+<li><a href="#2-configuração">Configuração</a></li>
+<li><a href="#3-banco-de-dados-e-models">Banco de dados e Models</a></li>
+<li><a href="#4-viewset-e-modelviewset">ViewSet e ModelViewSet</a></li>
+<li><a href="#5-apiview">APIView</a></li>
+<li><a href="#6-serializers-e-validação">Serializers e validação</a></li>
+<li><a href="#7-paginação">Paginação</a></li>
+<li><a href="#8-websocket-e-sse">WebSocket e SSE</a></li>
+<li><a href="#9-validação-regras-de-negócio">Validação (regras de negócio)</a></li>
+<li><a href="#10-resumo-do-fluxo-request--response">Resumo do fluxo request → response</a></li>
+</ol>
+<hr />
+<h2 id="1-requisitos-e-instalacao">1. Requisitos e instalação<a class="headerlink" href="#1-requisitos-e-instalacao" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Python 3.12+</li>
+<li>PostgreSQL (ou SQLite para desenvolvimento)</li>
+</ul>
+<div class="codehilite"><pre><span></span><code>pipx<span class="w"> </span>install<span class="w"> </span>stride
+<span class="c1"># ou</span>
+pip<span class="w"> </span>install<span class="w"> </span>stride
+</code></pre></div>
+
+<p>Criar projeto:</p>
+<div class="codehilite"><pre><span></span><code>stride<span class="w"> </span>init<span class="w"> </span>my-api
+<span class="nb">cd</span><span class="w"> </span>my-api
+</code></pre></div>
+
+<p>Estrutura inicial:</p>
+<div class="codehilite"><pre><span></span><code>my-api/
+├── src/
+│   ├── settings.py
+│   ├── main.py
+│   └── apps/
+│       ├── models.py    # barrel de models
+│       └── users/       # app de exemplo
+├── migrations/
+├── .env
+└── pyproject.toml
+</code></pre></div>
+
+<hr />
+<h2 id="2-configuracao">2. Configuração<a class="headerlink" href="#2-configuracao" title="Permanent link">&para;</a></h2>
+<p>Toda a configuração fica em <code>src/settings.py</code> e em variáveis de ambiente (<code>.env</code>). O framework usa <strong>plug-and-play</strong>: definir um atributo no Settings ativa o subsistema correspondente.</p>
+<h3 id="settings-basico">Settings básico<a class="headerlink" href="#settings-basico" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/settings.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">configure</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppSettings</span><span class="p">(</span><span class="n">Settings</span><span class="p">):</span>
+    <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Minha API&quot;</span>
+    <span class="n">app_version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;1.0.0&quot;</span>
+
+    <span class="c1"># Módulo onde estão os models (para discovery)</span>
+    <span class="n">models_module</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps&quot;</span>
+
+    <span class="c1"># Auth (ativa JWT, user_model, etc.)</span>
+    <span class="n">user_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;src.apps.users.models.User&quot;</span>
+
+<span class="n">settings</span> <span class="o">=</span> <span class="n">configure</span><span class="p">(</span><span class="n">settings_class</span><span class="o">=</span><span class="n">AppSettings</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="arquivo-env">Arquivo .env<a class="headerlink" href="#arquivo-env" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">DATABASE_URL</span><span class="o">=</span><span class="n">postgresql</span><span class="o">+</span><span class="nl">asyncpg</span><span class="p">:</span><span class="o">//</span><span class="k">user</span><span class="err">:</span><span class="n">pass</span><span class="nv">@localhost</span><span class="o">/</span><span class="n">mydb</span>
+<span class="n">SECRET_KEY</span><span class="o">=</span><span class="n">altere</span><span class="o">-</span><span class="n">em</span><span class="o">-</span><span class="n">producao</span>
+<span class="n">DEBUG</span><span class="o">=</span><span class="k">true</span>
+</code></pre></div>
+
+<h3 id="opcoes-mais-usadas">Opções mais usadas<a class="headerlink" href="#opcoes-mais-usadas" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Atributo</th>
+<th>Descrição</th>
+<th>Padrão</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>app_name</code></td>
+<td>Nome da aplicação</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>database_url</code></td>
+<td>URL do banco (asyncpg)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>secret_key</code></td>
+<td>Chave para JWT/sessão</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>debug</code></td>
+<td>Modo debug</td>
+<td><code>false</code></td>
+</tr>
+<tr>
+<td><code>user_model</code></td>
+<td>Model de usuário (ativa auth)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>models_module</code></td>
+<td>Módulo de discovery de models</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>api_prefix</code></td>
+<td>Prefixo global da API</td>
+<td><code>"/api/v1"</code></td>
+</tr>
+<tr>
+<td><code>installed_apps</code></td>
+<td>Lista de apps para carregar URLs</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>middleware</code></td>
+<td>Lista de middlewares</td>
+<td><code>["timing", "request_id", "auth"]</code></td>
+</tr>
+</tbody>
+</table>
+<p>Documentação completa: <a href="../02-settings/">Settings</a>.</p>
+<hr />
+<h2 id="3-banco-de-dados-e-models">3. Banco de dados e Models<a class="headerlink" href="#3-banco-de-dados-e-models" title="Permanent link">&para;</a></h2>
+<h3 id="definir-um-model">Definir um model<a class="headerlink" href="#definir-um-model" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/posts/models.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">title</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">content</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">text</span><span class="p">()</span>
+    <span class="n">published</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">boolean</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">datetime</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">auto_now_add</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="importar-no-barrel">Importar no barrel<a class="headerlink" href="#importar-no-barrel" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/models.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.apps.posts.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>  <span class="c1"># noqa</span>
+</code></pre></div>
+
+<h3 id="migrations">Migrations<a class="headerlink" href="#migrations" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>stride<span class="w"> </span>makemigrations<span class="w"> </span>--name<span class="w"> </span>add_posts
+stride<span class="w"> </span>migrate
+</code></pre></div>
+
+<p>Tipos de campos e relacionamentos: <a href="../03-models/">Models</a>, <a href="../10-fields/">Fields</a>, <a href="../11-relations/">Relations</a>.</p>
+<hr />
+<h2 id="4-viewset-e-modelviewset">4. ViewSet e ModelViewSet<a class="headerlink" href="#4-viewset-e-modelviewset" title="Permanent link">&para;</a></h2>
+<p>ViewSets geram CRUD completo a partir do model. <strong>ModelViewSet</strong> é a variante mais usada.</p>
+<h3 id="basico">Básico<a class="headerlink" href="#basico" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/posts/views.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AllowAny</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">]</span>
+</code></pre></div>
+
+<p>Endpoints gerados:</p>
+<table>
+<thead>
+<tr>
+<th>Método</th>
+<th>Path</th>
+<th>Ação</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td>/api/v1/posts/</td>
+<td>list</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>/api/v1/posts/</td>
+<td>create</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>/api/v1/posts/{id}</td>
+<td>retrieve</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td>/api/v1/posts/{id}</td>
+<td>update</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td>/api/v1/posts/{id}</td>
+<td>partial_update</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td>/api/v1/posts/{id}</td>
+<td>destroy</td>
+</tr>
+</tbody>
+</table>
+<h3 id="com-serializer-centralizado-unifiedmodelserializer">Com Serializer centralizado (UnifiedModelSerializer)<a class="headerlink" href="#com-serializer-centralizado-unifiedmodelserializer" title="Permanent link">&para;</a></h3>
+<p>Você pode <strong>não definir InputSchema nem OutputSchema</strong>: use <strong>UnifiedModelSerializer</strong> com <code>fields</code> e <code>read_only_fields</code>. Os schemas são gerados a partir do model.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/posts/serializers.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">UnifiedModelSerializer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostSerializer</span><span class="p">(</span><span class="n">UnifiedModelSerializer</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">,</span> <span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">]</span>
+    <span class="n">read_only_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">]</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/posts/views.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">PostSerializer</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">PostSerializer</span>
+</code></pre></div>
+
+<h3 id="com-serializer-e-schemas-explicitos-validadorescampos-computados">Com Serializer e schemas explícitos (validadores/campos computados)<a class="headerlink" href="#com-serializer-e-schemas-explicitos-validadorescampos-computados" title="Permanent link">&para;</a></h3>
+<p>Quando precisar de validadores Pydantic ou campos computados, defina InputSchema e OutputSchema e use <strong>ModelSerializer</strong>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/posts/schemas.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSchema</span><span class="p">,</span> <span class="n">OutputSchema</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">content</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">published</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">content</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">published</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">datetime</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/posts/serializers.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelSerializer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">PostInput</span><span class="p">,</span> <span class="n">PostOutput</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostSerializer</span><span class="p">(</span><span class="n">ModelSerializer</span><span class="p">[</span><span class="n">Post</span><span class="p">,</span> <span class="n">PostInput</span><span class="p">,</span> <span class="n">PostOutput</span><span class="p">]):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">input_schema</span> <span class="o">=</span> <span class="n">PostInput</span>
+    <span class="n">output_schema</span> <span class="o">=</span> <span class="n">PostOutput</span>
+</code></pre></div>
+
+<p>O padrão recomendado é <strong>serializer_class</strong> (UnifiedModelSerializer ou ModelSerializer).</p>
+<h3 id="permissoes-por-acao">Permissões por ação<a class="headerlink" href="#permissoes-por-acao" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AllowAny</span><span class="p">,</span> <span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsAdminUser</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">PostSerializer</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">]</span>
+    <span class="n">permission_classes_by_action</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;list&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span>
+        <span class="s2">&quot;retrieve&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span>
+        <span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">],</span>
+        <span class="s2">&quot;update&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">],</span>
+        <span class="s2">&quot;destroy&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAdminUser</span><span class="p">],</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h3 id="hooks-do-ciclo-de-vida">Hooks do ciclo de vida<a class="headerlink" href="#hooks-do-ciclo-de-vida" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Hook</th>
+<th>Quando é chamado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>perform_create_validation(data, db)</code></td>
+<td>Antes de criar o objeto (validação extra)</td>
+</tr>
+<tr>
+<td><code>after_create(obj, db)</code></td>
+<td>Depois de criar e salvar</td>
+</tr>
+<tr>
+<td><code>perform_update_validation(data, instance, db)</code></td>
+<td>Antes de atualizar</td>
+</tr>
+<tr>
+<td><code>after_update(obj, db)</code></td>
+<td>Depois de atualizar e salvar</td>
+</tr>
+</tbody>
+</table>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">PostSerializer</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">perform_create_validation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="n">data</span><span class="p">[</span><span class="s2">&quot;author_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+        <span class="k">return</span> <span class="n">data</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">after_create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">send_notification</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Post </span><span class="si">{</span><span class="n">obj</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> criado&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="actions-customizadas-action">Actions customizadas (@action)<a class="headerlink" href="#actions-customizadas-action" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span><span class="p">,</span> <span class="n">action</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">PostSerializer</span>
+
+    <span class="nd">@action</span><span class="p">(</span><span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;POST&quot;</span><span class="p">],</span> <span class="n">detail</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;POST /posts/{id}/publish/&quot;&quot;&quot;</span>
+        <span class="n">obj</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span><span class="n">db</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">obj</span><span class="o">.</span><span class="n">published</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">await</span> <span class="n">obj</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_for_response</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="outras-variantes-de-viewset">Outras variantes de ViewSet<a class="headerlink" href="#outras-variantes-de-viewset" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>ReadOnlyModelViewSet</strong>: só <code>list</code> e <code>retrieve</code></li>
+<li><strong>ListCreateModelViewSet</strong>: <code>list</code> e <code>create</code></li>
+<li><strong>SearchModelViewSet</strong>: CRUD + busca textual</li>
+</ul>
+<p>Documentação completa: <a href="../04-viewsets/">ViewSets</a>, <a href="../23-routing/">Routing</a>.</p>
+<hr />
+<h2 id="5-apiview">5. APIView<a class="headerlink" href="#5-apiview" title="Permanent link">&para;</a></h2>
+<p>Para endpoints que não são CRUD sobre um model, use <strong>APIView</strong>. Você implementa os métodos HTTP que precisar.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/health/views.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIView</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Request</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">HealthView</span><span class="p">(</span><span class="n">APIView</span><span class="p">):</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">]</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">db</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">,</span> <span class="s2">&quot;database&quot;</span><span class="p">:</span> <span class="s2">&quot;connected&quot;</span><span class="p">}</span>
+</code></pre></div>
+
+<p>Registro de rota:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/health/urls.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.views</span><span class="w"> </span><span class="kn">import</span> <span class="n">HealthView</span>
+
+<span class="n">urlpatterns</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">path</span><span class="p">(</span><span class="s2">&quot;health&quot;</span><span class="p">,</span> <span class="n">HealthView</span><span class="p">),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<p>Para converter em rota FastAPI com métodos explícitos:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">path</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="n">HealthView</span><span class="o">.</span><span class="n">as_route</span><span class="p">(</span><span class="s2">&quot;/health&quot;</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="s2">&quot;HEAD&quot;</span><span class="p">])</span>
+<span class="n">router</span><span class="o">.</span><span class="n">add_api_route</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="6-serializers-e-validacao">6. Serializers e validação<a class="headerlink" href="#6-serializers-e-validacao" title="Permanent link">&para;</a></h2>
+<p>O fluxo é: <strong>uma única validação</strong> na borda (FastAPI com o schema de input) → handler recebe dados já validados → regras de negócio em <code>validate_data</code> → serialização com o Serializer.</p>
+<h3 id="inputschema-e-outputschema">InputSchema e OutputSchema<a class="headerlink" href="#inputschema-e-outputschema" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>InputSchema</strong>: body da request. Por padrão <code>extra="ignore"</code> (campos desconhecidos são ignorados).</li>
+<li><strong>OutputSchema</strong>: corpo da response; suporta <code>list_include</code>/<code>list_exclude</code> e <code>@computed_orm_field</code>.</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSchema</span><span class="p">,</span> <span class="n">OutputSchema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">field_validator</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserCreateInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">password</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;password&quot;</span><span class="p">)</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_password</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">8</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Mínimo 8 caracteres&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+</code></pre></div>
+
+<h3 id="serializer-como-fonte-unica">Serializer como fonte única<a class="headerlink" href="#serializer-como-fonte-unica" title="Permanent link">&para;</a></h3>
+<p>O ViewSet usa <code>serializer_class</code>. O Router obtém os schemas de body/response do Serializer (<code>input_cls</code>/<code>output_cls</code> ou <code>input_schema</code>/<code>output_schema</code>).</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">UserSerializer</span><span class="p">(</span><span class="n">Serializer</span><span class="p">[</span><span class="n">User</span><span class="p">,</span> <span class="n">UserCreateInput</span><span class="p">,</span> <span class="n">UserOutput</span><span class="p">]):</span>
+    <span class="n">input_schema</span> <span class="o">=</span> <span class="n">UserCreateInput</span>
+    <span class="n">output_schema</span> <span class="o">=</span> <span class="n">UserOutput</span>
+    <span class="c1"># Opcional: input_cls / output_cls (aliases para OpenAPI)</span>
+</code></pre></div>
+
+<p>Métodos úteis do Serializer:</p>
+<ul>
+<li><code>validate_input(data)</code> — valida dict → instância do input schema</li>
+<li><code>to_representation(obj)</code> — serializa um objeto (list/detail) com <code>dump_for_list</code></li>
+<li><code>to_representation_many(objects)</code> — serializa lista</li>
+</ul>
+<p>No ViewSet, a serialização passa por <code>_serialize_for_response(obj)</code> e <code>_serialize_many_for_response(objects)</code>, que usam o Serializer quando existir.</p>
+<h3 id="rejeitar-campos-extras-opt-in">Rejeitar campos extras (opt-in)<a class="headerlink" href="#rejeitar-campos-extras-opt-in" title="Permanent link">&para;</a></h3>
+<p>Por padrão, campos extras no body são <strong>ignorados</strong>. Para rejeitar:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigDict</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">StrictInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+</code></pre></div>
+
+<p>Documentação completa: <a href="../13-serializers/">Serializers</a>.</p>
+<hr />
+<h2 id="7-paginacao">7. Paginação<a class="headerlink" href="#7-paginacao" title="Permanent link">&para;</a></h2>
+<p>ViewSets de listagem já retornam resposta paginada.</p>
+<p>Parâmetros de query:</p>
+<ul>
+<li><code>page</code> — número da página (começa em 1)</li>
+<li><code>page_size</code> — itens por página (limitado por <code>max_page_size</code> do ViewSet)</li>
+</ul>
+<p>Resposta:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;items&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;total&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;page&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;page_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;pages&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>Configuração no ViewSet:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">page_size</span> <span class="o">=</span> <span class="mi">20</span>   <span class="c1"># padrão por página</span>
+    <span class="n">max_page_size</span> <span class="o">=</span> <span class="mi">100</span>  <span class="c1"># teto para page_size</span>
+</code></pre></div>
+
+<hr />
+<h2 id="8-websocket-e-sse">8. WebSocket e SSE<a class="headerlink" href="#8-websocket-e-sse" title="Permanent link">&para;</a></h2>
+<h3 id="websocket">WebSocket<a class="headerlink" href="#websocket" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketView</span><span class="p">,</span> <span class="n">Router</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">EchoWS</span><span class="p">(</span><span class="n">WebSocketView</span><span class="p">):</span>
+    <span class="n">encoding</span> <span class="o">=</span> <span class="s2">&quot;json&quot;</span>
+    <span class="n">keepalive</span> <span class="o">=</span> <span class="mi">30</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">room</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;room&quot;</span><span class="p">,</span> <span class="s2">&quot;default&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">ws</span><span class="o">.</span><span class="n">send_json</span><span class="p">({</span><span class="s2">&quot;echo&quot;</span><span class="p">:</span> <span class="n">data</span><span class="p">})</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">Router</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/chat&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Chat&quot;</span><span class="p">])</span>
+<span class="n">router</span><span class="o">.</span><span class="n">register_websocket</span><span class="p">(</span><span class="s2">&quot;/ws/</span><span class="si">{room}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">EchoWS</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Protegido com JWT:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketView</span><span class="p">,</span> <span class="n">IsAuthenticated</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PrivateStream</span><span class="p">(</span><span class="n">WebSocketView</span><span class="p">):</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">]</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ws</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="c1"># self.user preenchido após auth</span>
+        <span class="k">pass</span>
+</code></pre></div>
+
+<p>Token: header <code>Authorization: Bearer &lt;token&gt;</code> ou query <code>?token=&lt;token&gt;</code>.</p>
+<h3 id="sse-server-sent-events">SSE (Server-Sent Events)<a class="headerlink" href="#sse-server-sent-events" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">SSEView</span><span class="p">,</span> <span class="n">Router</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">SystemEvents</span><span class="p">(</span><span class="n">SSEView</span><span class="p">):</span>
+    <span class="n">ping_interval</span> <span class="o">=</span> <span class="mi">15</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">event</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_next_event</span><span class="p">()</span>
+            <span class="k">yield</span> <span class="p">{</span><span class="s2">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;update&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">}</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">Router</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/events&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Events&quot;</span><span class="p">])</span>
+<span class="n">router</span><span class="o">.</span><span class="n">register_sse</span><span class="p">(</span><span class="s2">&quot;/system&quot;</span><span class="p">,</span> <span class="n">SystemEvents</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Documentação completa: <a href="../25-realtime/">Real-time</a>.</p>
+<hr />
+<h2 id="9-validacao-regras-de-negocio">9. Validação (regras de negócio)<a class="headerlink" href="#9-validacao-regras-de-negocio" title="Permanent link">&para;</a></h2>
+<p>A validação de <strong>formato</strong> (tipos, Pydantic) ocorre uma vez na borda. As <strong>regras de negócio</strong> (unicidade, existência de FK, etc.) ficam no ViewSet.</p>
+<h3 id="campos-unicos">Campos únicos<a class="headerlink" href="#campos-unicos" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">UserViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">User</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">UserSerializer</span>
+    <span class="n">unique_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;username&quot;</span><span class="p">]</span>
+</code></pre></div>
+
+<h3 id="validadores-por-campo">Validadores por campo<a class="headerlink" href="#validadores-por-campo" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UserViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">User</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">UserSerializer</span>
+    <span class="n">unique_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;email&quot;</span><span class="p">]</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">validate_email</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;@blocked.com&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Domínio não permitido&quot;</span><span class="p">,</span> <span class="n">field</span><span class="o">=</span><span class="s2">&quot;email&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+</code></pre></div>
+
+<h3 id="validacao-global">Validação global<a class="headerlink" href="#validacao-global" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OrderViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;start_date&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;end_date&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;start_date deve ser anterior a end_date&quot;</span><span class="p">,</span> <span class="n">field</span><span class="o">=</span><span class="s2">&quot;start_date&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">data</span>
+</code></pre></div>
+
+<p>Documentação completa: <a href="../14-validators/">Validators</a>.</p>
+<hr />
+<h2 id="10-resumo-do-fluxo-request-response">10. Resumo do fluxo request → response<a class="headerlink" href="#10-resumo-do-fluxo-request-response" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Request</strong> chega ao FastAPI.</li>
+<li><strong>Parsing</strong>: body JSON lido pelo FastAPI.</li>
+<li><strong>Validação (única)</strong>: FastAPI valida o body com o schema de input do Serializer (ou do ViewSet) → instância validada ou 422.</li>
+<li><strong>Handler</strong>: ViewSet recebe <code>data</code> já como instância do schema (não revalida). Obtém dict com <code>data.model_dump()</code> e chama <code>validate_data(...)</code> para regras de negócio.</li>
+<li><strong>Lógica</strong>: create/update usam o dict validado; hooks <code>perform_create_validation</code> / <code>perform_update_validation</code> e <code>after_create</code> / <code>after_update</code> quando definidos.</li>
+<li><strong>Serialização</strong>: um único caminho via <code>_serialize_for_response(obj)</code> (usa Serializer quando existir).</li>
+<li><strong>Response</strong>: FastAPI serializa o resultado para JSON.</li>
+</ol>
+<p>Nenhuma segunda validação Pydantic dentro do ViewSet; campos extras no body são ignorados por padrão (<code>extra="ignore"</code>).</p>
+<hr />
+<h2 id="proximos-passos">Próximos passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Doc</th>
+<th>Assunto</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../01-quickstart/">Quickstart</a></td>
+<td>Primeira API em 5 minutos</td>
+</tr>
+<tr>
+<td><a href="../02-settings/">Settings</a></td>
+<td>Todas as opções de configuração</td>
+</tr>
+<tr>
+<td><a href="../03-models/">Models</a></td>
+<td>Campos e relacionamentos</td>
+</tr>
+<tr>
+<td><a href="../04-viewsets/">ViewSets</a></td>
+<td>Actions, hooks e permissões</td>
+</tr>
+<tr>
+<td><a href="../13-serializers/">Serializers</a></td>
+<td>Input/Output e Serializer único</td>
+</tr>
+<tr>
+<td><a href="../23-routing/">Routing</a></td>
+<td>URLs e registro de rotas</td>
+</tr>
+<tr>
+<td><a href="../25-realtime/">Real-time</a></td>
+<td>WebSocket, SSE e Channels</td>
+</tr>
+<tr>
+<td><a href="../14-validators/">Validators</a></td>
+<td>Validação de dados e unicidade</td>
+</tr>
+<tr>
+<td><a href="../99-faq-troubleshooting/">FAQ</a></td>
+<td>Erros comuns e solução</td>
+</tr>
+</tbody>
+</table>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

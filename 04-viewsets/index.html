@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/04-viewsets/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>ViewSets - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "ViewSets";
+        var mkdocs_page_input_path = "04-viewsets.md";
+        var mkdocs_page_url = "/core-framework/04-viewsets/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">ViewSets</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/04-viewsets.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="viewsets">ViewSets<a class="headerlink" href="#viewsets" title="Permanent link">&para;</a></h1>
+<p>Auto-generate CRUD endpoints from models.</p>
+<h2 id="request-lifecycle">Request Lifecycle<a class="headerlink" href="#request-lifecycle" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">flowchart</span><span class="w"> </span><span class="n">TB</span>
+<span class="w">    </span><span class="n">REQ</span><span class="o">[</span><span class="n">Request</span><span class="o">]</span><span class="w"> </span><span class="c1">--&gt; PERM{Permission&lt;br/&gt;Check}</span>
+<span class="w">    </span><span class="n">PERM</span><span class="w"> </span><span class="c1">--&gt;|Denied| R403[403 Forbidden]</span>
+<span class="w">    </span><span class="n">PERM</span><span class="w"> </span><span class="c1">--&gt;|OK| ACTION{Action Type}</span>
+
+<span class="w">    </span><span class="k">ACTION</span><span class="w"> </span><span class="c1">--&gt;|list| LIST[get_queryset → serialize_list]</span>
+<span class="w">    </span><span class="k">ACTION</span><span class="w"> </span><span class="c1">--&gt;|create| CREATE[validate → perform_create → serialize]</span>
+<span class="w">    </span><span class="k">ACTION</span><span class="w"> </span><span class="c1">--&gt;|retrieve| GET[get_object → serialize]</span>
+<span class="w">    </span><span class="k">ACTION</span><span class="w"> </span><span class="c1">--&gt;|update| UPDATE[get_object → validate → perform_update]</span>
+<span class="w">    </span><span class="k">ACTION</span><span class="w"> </span><span class="c1">--&gt;|destroy| DELETE[get_object → perform_destroy]</span>
+
+<span class="w">    </span><span class="n">LIST</span><span class="w"> </span><span class="c1">--&gt; RESP[Response]</span>
+<span class="w">    </span><span class="k">CREATE</span><span class="w"> </span><span class="c1">--&gt; RESP</span>
+<span class="w">    </span><span class="k">GET</span><span class="w"> </span><span class="c1">--&gt; RESP</span>
+<span class="w">    </span><span class="k">UPDATE</span><span class="w"> </span><span class="c1">--&gt; RESP</span>
+<span class="w">    </span><span class="k">DELETE</span><span class="w"> </span><span class="c1">--&gt; RESP</span>
+
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">PERM</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#fff3e0</span>
+<span class="w">    </span><span class="n">style</span><span class="w"> </span><span class="n">RESP</span><span class="w"> </span><span class="nl">fill</span><span class="p">:</span><span class="n">#c8e6c9</span>
+</code></pre></div>
+
+<h2 id="basic-viewset">Basic ViewSet<a class="headerlink" href="#basic-viewset" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+</code></pre></div>
+
+<p>Generated endpoints:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td>/posts/</td>
+<td><code>list</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td>/posts/</td>
+<td><code>create</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td>/posts/{id}</td>
+<td><code>retrieve</code></td>
+</tr>
+<tr>
+<td>PUT</td>
+<td>/posts/{id}</td>
+<td><code>update</code></td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td>/posts/{id}</td>
+<td><code>partial_update</code></td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td>/posts/{id}</td>
+<td><code>destroy</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="schemas-e-serializer">Schemas e Serializer<a class="headerlink" href="#schemas-e-serializer" title="Permanent link">&para;</a></h2>
+<p>Controle de entrada/saída: use <strong>serializer_class</strong> (recomendado) ou <strong>input_schema</strong>/<strong>output_schema</strong> direto no ViewSet. O Serializer é o ponto único de contrato; o Router obtém os schemas dele.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">PostSerializer</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">PostSerializer</span>
+</code></pre></div>
+
+<p>Sem Serializer:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span><span class="p">,</span> <span class="n">InputSchema</span><span class="p">,</span> <span class="n">OutputSchema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Post</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">content</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">published</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostOutput</span><span class="p">(</span><span class="n">OutputSchema</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">content</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">published</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">datetime</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">input_schema</span> <span class="o">=</span> <span class="n">PostInput</span>
+    <span class="n">output_schema</span> <span class="o">=</span> <span class="n">PostOutput</span>
+</code></pre></div>
+
+<p>Ver <a href="../13-serializers/">Serializers</a>.</p>
+<h2 id="permissions">Permissions<a class="headerlink" href="#permissions" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AllowAny</span><span class="p">,</span> <span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsAdminUser</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+
+    <span class="c1"># Default for all actions</span>
+    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">]</span>
+
+    <span class="c1"># Override por ação</span>
+    <span class="n">permission_classes_by_action</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;list&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span>
+        <span class="s2">&quot;retrieve&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">AllowAny</span><span class="p">],</span>
+        <span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">],</span>
+        <span class="s2">&quot;update&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAuthenticated</span><span class="p">],</span>
+        <span class="s2">&quot;destroy&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">IsAdminUser</span><span class="p">],</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<h2 id="custom-actions">Custom Actions<a class="headerlink" href="#custom-actions" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelViewSet</span><span class="p">,</span> <span class="n">action</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Response</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+
+    <span class="nd">@action</span><span class="p">(</span><span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;POST&quot;</span><span class="p">],</span> <span class="n">detail</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;POST /posts/{id}/publish/&quot;&quot;&quot;</span>
+        <span class="n">post</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span><span class="n">db</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">post</span><span class="o">.</span><span class="n">published</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">await</span> <span class="n">post</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_for_response</span><span class="p">(</span><span class="n">post</span><span class="p">)</span>
+
+    <span class="nd">@action</span><span class="p">(</span><span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;GET&quot;</span><span class="p">],</span> <span class="n">detail</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">recent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">db</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;GET /posts/recent/&quot;&quot;&quot;</span>
+        <span class="n">qs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_queryset</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+        <span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">qs</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">published</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;-created_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_many_for_response</span><span class="p">(</span><span class="n">posts</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="opcoes-do-action">Opções do @action<a class="headerlink" href="#opcoes-do-action" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="nd">@action</span><span class="p">(</span>
+    <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;POST&quot;</span><span class="p">],</span>
+    <span class="n">detail</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>            <span class="c1"># True: /posts/{id}/action/, False: /posts/action/</span>
+    <span class="n">url_path</span><span class="o">=</span><span class="s2">&quot;custom-path&quot;</span><span class="p">,</span> <span class="c1"># Caminho customizado</span>
+    <span class="n">url_name</span><span class="o">=</span><span class="s2">&quot;custom_name&quot;</span><span class="p">,</span> <span class="c1"># Nome da rota</span>
+    <span class="n">permission_classes</span><span class="o">=</span><span class="p">[</span><span class="n">IsAdminUser</span><span class="p">],</span>
+    <span class="n">input_schema</span><span class="o">=</span><span class="n">MyInput</span><span class="p">,</span>   <span class="c1"># Schema do body (opcional)</span>
+    <span class="n">output_schema</span><span class="o">=</span><span class="n">MyOutput</span><span class="p">,</span> <span class="c1"># Schema da response (opcional)</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="automatic-route-resolution-no-manual-priority">Automatic Route Resolution (No Manual Priority)<a class="headerlink" href="#automatic-route-resolution-no-manual-priority" title="Permanent link">&para;</a></h3>
+<p>Custom actions are now registered with an automatic specificity sorter:</p>
+<ul>
+<li>static paths first (<code>/posts/list</code>)</li>
+<li>dynamic paths later (<code>/posts/{slug}</code>)</li>
+<li>wildcard/regex patterns last (<code>/posts/{path:path}</code>)</li>
+</ul>
+<p>This avoids common collisions like <code>list</code> being captured by a dynamic <code>{name}</code> route.</p>
+<p>Optional ViewSet knobs:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="c1"># warn | raise | ignore</span>
+    <span class="n">route_conflict_policy</span> <span class="o">=</span> <span class="s2">&quot;warn&quot;</span>
+
+    <span class="c1"># Optional custom sorter:</span>
+    <span class="c1"># (action_name, url_path, detail) -&gt; tuple</span>
+    <span class="n">custom_action_sort_key</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">action_name</span><span class="p">,</span> <span class="n">url_path</span><span class="p">,</span> <span class="n">detail</span><span class="p">:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">action_name</span><span class="p">)</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<h2 id="hooks">Hooks<a class="headerlink" href="#hooks" title="Permanent link">&para;</a></h2>
+<p>Hooks do ciclo de vida:</p>
+<table>
+<thead>
+<tr>
+<th>Hook</th>
+<th>Quando</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>perform_create_validation(data, db)</code></td>
+<td>Antes de criar; pode alterar <code>data</code>.</td>
+</tr>
+<tr>
+<td><code>after_create(obj, db)</code></td>
+<td>Depois de criar e salvar.</td>
+</tr>
+<tr>
+<td><code>perform_update_validation(data, instance, db)</code></td>
+<td>Antes de atualizar.</td>
+</tr>
+<tr>
+<td><code>after_update(obj, db)</code></td>
+<td>Depois de atualizar e salvar.</td>
+</tr>
+</tbody>
+</table>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">serializer_class</span> <span class="o">=</span> <span class="n">PostSerializer</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">perform_create_validation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="n">data</span><span class="p">[</span><span class="s2">&quot;author_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+        <span class="k">return</span> <span class="n">data</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">after_create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">send_notification</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Post </span><span class="si">{</span><span class="n">obj</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> criado&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">perform_update_validation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+        <span class="n">data</span><span class="p">[</span><span class="s2">&quot;updated_by_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+        <span class="k">return</span> <span class="n">data</span>
+</code></pre></div>
+
+<h2 id="queryset-filtering">QuerySet Filtering<a class="headerlink" href="#queryset-filtering" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_queryset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Filter queryset based on request.&quot;&quot;&quot;</span>
+        <span class="n">qs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">get_queryset</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+
+        <span class="c1"># Only show user&#39;s own posts</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">is_staff</span><span class="p">:</span>
+            <span class="n">qs</span> <span class="o">=</span> <span class="n">qs</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">author_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">qs</span>
+</code></pre></div>
+
+<h2 id="paginacao">Paginação<a class="headerlink" href="#paginacao" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="n">page_size</span> <span class="o">=</span> <span class="mi">20</span>   <span class="c1"># padrão por página</span>
+    <span class="n">max_page_size</span> <span class="o">=</span> <span class="mi">100</span>  <span class="c1"># teto para page_size</span>
+</code></pre></div>
+
+<p>Query params: <code>?page=1&amp;page_size=20</code></p>
+<p>Resposta:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;items&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;total&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;page&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;page_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;pages&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h2 id="read-only-viewset">Read-Only ViewSet<a class="headerlink" href="#read-only-viewset" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReadOnlyModelViewSet</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">ReadOnlyModelViewSet</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+    <span class="c1"># Only list and retrieve, no create/update/delete</span>
+</code></pre></div>
+
+<h2 id="rotas">Rotas<a class="headerlink" href="#rotas" title="Permanent link">&para;</a></h2>
+<p>Com auto-discovery (recomendado), crie <code>urls.py</code> em cada app:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/posts/urls.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.views</span><span class="w"> </span><span class="kn">import</span> <span class="n">PostViewSet</span>
+
+<span class="n">urlpatterns</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">path</span><span class="p">(</span><span class="s2">&quot;posts&quot;</span><span class="p">,</span> <span class="n">PostViewSet</span><span class="p">),</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/main.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrideApp</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">StrideApp</span><span class="p">()</span>  <span class="c1"># Carrega installed_apps e urls automaticamente</span>
+</code></pre></div>
+
+<p>Com Router explícito:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># src/apps/posts/routes.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Router</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.views</span><span class="w"> </span><span class="kn">import</span> <span class="n">PostViewSet</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">Router</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/posts&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Posts&quot;</span><span class="p">])</span>
+<span class="n">router</span><span class="o">.</span><span class="n">register_viewset</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">PostViewSet</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Ver <a href="../23-routing/">Routing</a>.</p>
+<h2 id="proximos-passos">Próximos passos<a class="headerlink" href="#proximos-passos" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../00-criar-aplicacao/">Criar uma aplicação</a> — Guia completo</li>
+<li><a href="../13-serializers/">Serializers</a> — Input/Output e Serializer único</li>
+<li><a href="../05-auth/">Auth</a> — Autenticação</li>
+<li><a href="../08-permissions/">Permissions</a> — Controle de acesso</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

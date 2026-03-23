@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/11-relations/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Relations - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Relations";
+        var mkdocs_page_input_path = "11-relations.md";
+        var mkdocs_page_url = "/core-framework/11-relations/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Relations</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/11-relations.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="relations">Relations<a class="headerlink" href="#relations" title="Permanent link">&para;</a></h1>
+<p>Relationship helpers for models.</p>
+<h2 id="rel-class">Rel Class<a class="headerlink" href="#rel-class" title="Permanent link">&para;</a></h2>
+<p>All relationships use the <code>Rel</code> class from <code>core/relations.py</code>.</p>
+<h2 id="foreign-key">Foreign Key<a class="headerlink" href="#foreign-key" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">Rel</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span>
+    <span class="n">target</span><span class="o">=</span><span class="s2">&quot;table.column&quot;</span><span class="p">,</span>
+    <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">ondelete</span><span class="o">=</span><span class="s2">&quot;CASCADE&quot;</span><span class="p">,</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">type_</span><span class="o">=</span><span class="s2">&quot;int&quot;</span><span class="p">,</span>  <span class="c1"># &quot;int&quot;, &quot;uuid&quot;, &quot;bigint&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.relations</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rel</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="c1"># Integer FK (default)</span>
+    <span class="n">author_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span><span class="s2">&quot;users.id&quot;</span><span class="p">)</span>
+
+    <span class="c1"># UUID FK</span>
+    <span class="n">workspace_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">UUID</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span>
+        <span class="s2">&quot;workspaces.id&quot;</span><span class="p">,</span>
+        <span class="n">type_</span><span class="o">=</span><span class="s2">&quot;uuid&quot;</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Nullable FK</span>
+    <span class="n">category_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span>
+        <span class="s2">&quot;categories.id&quot;</span><span class="p">,</span>
+        <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">ondelete</span><span class="o">=</span><span class="s2">&quot;SET NULL&quot;</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<h2 id="many-to-one-belongs_to">Many-to-One (belongs_to)<a class="headerlink" href="#many-to-one-belongs_to" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">Rel</span><span class="o">.</span><span class="n">many_to_one</span><span class="p">(</span>
+    <span class="n">target</span><span class="o">=</span><span class="s2">&quot;TargetModel&quot;</span><span class="p">,</span>
+    <span class="n">back_populates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">backref</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">lazy</span><span class="o">=</span><span class="s2">&quot;selectin&quot;</span><span class="p">,</span>
+    <span class="n">foreign_keys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">uselist</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="n">author_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span><span class="s2">&quot;users.id&quot;</span><span class="p">)</span>
+    <span class="n">author</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="s2">&quot;User&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">many_to_one</span><span class="p">(</span>
+        <span class="s2">&quot;User&quot;</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;posts&quot;</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<p>Alias: <code>Rel.belongs_to()</code></p>
+<h2 id="one-to-many-has_many">One-to-Many (has_many)<a class="headerlink" href="#one-to-many-has_many" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">Rel</span><span class="o">.</span><span class="n">one_to_many</span><span class="p">(</span>
+    <span class="n">target</span><span class="o">=</span><span class="s2">&quot;TargetModel&quot;</span><span class="p">,</span>
+    <span class="n">back_populates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">backref</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">lazy</span><span class="o">=</span><span class="s2">&quot;selectin&quot;</span><span class="p">,</span>
+    <span class="n">foreign_keys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">cascade</span><span class="o">=</span><span class="s2">&quot;all, delete-orphan&quot;</span><span class="p">,</span>
+    <span class="n">passive_deletes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">order_by</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+
+    <span class="n">posts</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Post&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">one_to_many</span><span class="p">(</span>
+        <span class="s2">&quot;Post&quot;</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;author&quot;</span><span class="p">,</span>
+        <span class="n">order_by</span><span class="o">=</span><span class="s2">&quot;created_at&quot;</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<p>Alias: <code>Rel.has_many()</code></p>
+<h2 id="one-to-one-has_one">One-to-One (has_one)<a class="headerlink" href="#one-to-one-has_one" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">Rel</span><span class="o">.</span><span class="n">one_to_one</span><span class="p">(</span>
+    <span class="n">target</span><span class="o">=</span><span class="s2">&quot;TargetModel&quot;</span><span class="p">,</span>
+    <span class="n">back_populates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">backref</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">lazy</span><span class="o">=</span><span class="s2">&quot;selectin&quot;</span><span class="p">,</span>
+    <span class="n">foreign_keys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">cascade</span><span class="o">=</span><span class="s2">&quot;all, delete-orphan&quot;</span><span class="p">,</span>
+    <span class="n">uselist</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+
+    <span class="n">profile</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="s2">&quot;Profile&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">one_to_one</span><span class="p">(</span>
+        <span class="s2">&quot;Profile&quot;</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;user&quot;</span>
+    <span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Profile</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;profiles&quot;</span>
+
+    <span class="n">user_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span><span class="s2">&quot;users.id&quot;</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">user</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="s2">&quot;User&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">one_to_one</span><span class="p">(</span>
+        <span class="s2">&quot;User&quot;</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;profile&quot;</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<p>Alias: <code>Rel.has_one()</code></p>
+<h2 id="many-to-many">Many-to-Many<a class="headerlink" href="#many-to-many" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">Rel</span><span class="o">.</span><span class="n">many_to_many</span><span class="p">(</span>
+    <span class="n">target</span><span class="o">=</span><span class="s2">&quot;TargetModel&quot;</span><span class="p">,</span>
+    <span class="n">secondary</span><span class="o">=</span><span class="s2">&quot;association_table&quot;</span><span class="p">,</span>
+    <span class="n">back_populates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">backref</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">lazy</span><span class="o">=</span><span class="s2">&quot;selectin&quot;</span><span class="p">,</span>
+    <span class="n">cascade</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">,</span>
+    <span class="n">passive_deletes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">order_by</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Table</span><span class="p">,</span> <span class="n">Column</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">metadata</span>
+
+<span class="c1"># Association table</span>
+<span class="n">post_tags</span> <span class="o">=</span> <span class="n">Table</span><span class="p">(</span>
+    <span class="s2">&quot;post_tags&quot;</span><span class="p">,</span>
+    <span class="n">metadata</span><span class="p">,</span>
+    <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;post_id&quot;</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s2">&quot;posts.id&quot;</span><span class="p">),</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;tag_id&quot;</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s2">&quot;tags.id&quot;</span><span class="p">),</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="n">tags</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Tag&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">many_to_many</span><span class="p">(</span>
+        <span class="s2">&quot;Tag&quot;</span><span class="p">,</span>
+        <span class="n">secondary</span><span class="o">=</span><span class="n">post_tags</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;posts&quot;</span>
+    <span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Tag</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;tags&quot;</span>
+
+    <span class="n">posts</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Post&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">many_to_many</span><span class="p">(</span>
+        <span class="s2">&quot;Post&quot;</span><span class="p">,</span>
+        <span class="n">secondary</span><span class="o">=</span><span class="n">post_tags</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;tags&quot;</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<h2 id="self-referential">Self-Referential<a class="headerlink" href="#self-referential" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">Rel</span><span class="o">.</span><span class="n">self_referential</span><span class="p">(</span>
+    <span class="n">back_populates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">remote_side</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">lazy</span><span class="o">=</span><span class="s2">&quot;selectin&quot;</span><span class="p">,</span>
+    <span class="n">cascade</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">,</span>
+    <span class="n">foreign_keys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">uselist</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">Category</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;categories&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+    <span class="n">parent_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span>
+        <span class="s2">&quot;categories.id&quot;</span><span class="p">,</span>
+        <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Parent relationship</span>
+    <span class="n">parent</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="s2">&quot;Category | None&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">self_referential</span><span class="p">(</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;children&quot;</span><span class="p">,</span>
+        <span class="n">remote_side</span><span class="o">=</span><span class="s2">&quot;Category.id&quot;</span><span class="p">,</span>
+        <span class="n">uselist</span><span class="o">=</span><span class="kc">False</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Children relationship</span>
+    <span class="n">children</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Category&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">self_referential</span><span class="p">(</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;parent&quot;</span><span class="p">,</span>
+        <span class="n">foreign_keys</span><span class="o">=</span><span class="s2">&quot;Category.parent_id&quot;</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<h2 id="lazy-loading-options">Lazy Loading Options<a class="headerlink" href="#lazy-loading-options" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"selectin"</code></td>
+<td>Separate SELECT IN query (default, recommended)</td>
+</tr>
+<tr>
+<td><code>"joined"</code></td>
+<td>JOIN in same query</td>
+</tr>
+<tr>
+<td><code>"subquery"</code></td>
+<td>Subquery for loading</td>
+</tr>
+<tr>
+<td><code>"raise"</code></td>
+<td>Raise error if accessed without explicit load</td>
+</tr>
+<tr>
+<td><code>"noload"</code></td>
+<td>Never load</td>
+</tr>
+</tbody>
+</table>
+<h2 id="cascade-options">Cascade Options<a class="headerlink" href="#cascade-options" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"all"</code></td>
+<td>All operations</td>
+</tr>
+<tr>
+<td><code>"save-update"</code></td>
+<td>Cascade save/update</td>
+</tr>
+<tr>
+<td><code>"merge"</code></td>
+<td>Cascade merge</td>
+</tr>
+<tr>
+<td><code>"delete"</code></td>
+<td>Cascade delete</td>
+</tr>
+<tr>
+<td><code>"delete-orphan"</code></td>
+<td>Delete orphaned children</td>
+</tr>
+<tr>
+<td><code>"all, delete-orphan"</code></td>
+<td>All + delete orphan (default for one-to-many)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="ondelete-options">OnDelete Options<a class="headerlink" href="#ondelete-options" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"CASCADE"</code></td>
+<td>Delete children when parent deleted (default)</td>
+</tr>
+<tr>
+<td><code>"SET NULL"</code></td>
+<td>Set FK to NULL when parent deleted</td>
+</tr>
+<tr>
+<td><code>"RESTRICT"</code></td>
+<td>Prevent deletion if children exist</td>
+</tr>
+<tr>
+<td><code>"NO ACTION"</code></td>
+<td>Database default behavior</td>
+</tr>
+</tbody>
+</table>
+<h2 id="complete-example">Complete Example<a class="headerlink" href="#complete-example" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.relations</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider.datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">DateTime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Table</span><span class="p">,</span> <span class="n">Column</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">metadata</span>
+
+<span class="c1"># Association table for many-to-many</span>
+<span class="n">post_tags</span> <span class="o">=</span> <span class="n">Table</span><span class="p">(</span>
+    <span class="s2">&quot;post_tags&quot;</span><span class="p">,</span>
+    <span class="n">metadata</span><span class="p">,</span>
+    <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;post_id&quot;</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s2">&quot;posts.id&quot;</span><span class="p">),</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;tag_id&quot;</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s2">&quot;tags.id&quot;</span><span class="p">),</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;users&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+
+    <span class="c1"># One-to-many: User has many posts</span>
+    <span class="n">posts</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Post&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">has_many</span><span class="p">(</span>
+        <span class="s2">&quot;Post&quot;</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;author&quot;</span>
+    <span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">title</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+
+    <span class="c1"># Many-to-one: Post belongs to User</span>
+    <span class="n">author_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">foreign_key</span><span class="p">(</span><span class="s2">&quot;users.id&quot;</span><span class="p">)</span>
+    <span class="n">author</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="s2">&quot;User&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">belongs_to</span><span class="p">(</span>
+        <span class="s2">&quot;User&quot;</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;posts&quot;</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Many-to-many: Post has many tags</span>
+    <span class="n">tags</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Tag&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">many_to_many</span><span class="p">(</span>
+        <span class="s2">&quot;Tag&quot;</span><span class="p">,</span>
+        <span class="n">secondary</span><span class="o">=</span><span class="n">post_tags</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;posts&quot;</span>
+    <span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Tag</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;tags&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">pk</span><span class="p">()</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Many-to-many: Tag has many posts</span>
+    <span class="n">posts</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Post&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Rel</span><span class="o">.</span><span class="n">many_to_many</span><span class="p">(</span>
+        <span class="s2">&quot;Post&quot;</span><span class="p">,</span>
+        <span class="n">secondary</span><span class="o">=</span><span class="n">post_tags</span><span class="p">,</span>
+        <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;tags&quot;</span>
+    <span class="p">)</span>
+</code></pre></div>
+
+<h2 id="eager-loading-in-queries">Eager Loading in Queries<a class="headerlink" href="#eager-loading-in-queries" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Load author with posts</span>
+<span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">select_related</span><span class="p">(</span><span class="s2">&quot;posts&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Load post with author and tags</span>
+<span class="n">post</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">select_related</span><span class="p">(</span><span class="s2">&quot;author&quot;</span><span class="p">,</span> <span class="s2">&quot;tags&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../12-querysets/">QuerySets</a> — Querying data</li>
+<li><a href="../10-fields/">Fields</a> — Field types</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="canonical" href="https://sorputi.github.io/core-framework/33-choices/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Choices - Stride Framework</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Choices";
+        var mkdocs_page_input_path = "33-choices.md";
+        var mkdocs_page_url = "/core-framework/33-choices/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Stride Framework
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../core-concepts/">Core Concepts</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Modules</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../modules/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../examples/">Overview</a>
+                  </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../troubleshooting/">Troubleshooting</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Stride Framework</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Choices</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/SorPuti/core-framework/edit/master/docs/33-choices.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="choices">Choices<a class="headerlink" href="#choices" title="Permanent link">&para;</a></h1>
+<p>Django-style TextChoices and IntegerChoices.</p>
+<p><strong>Important:</strong> Use <code>TextChoices</code>/<code>IntegerChoices</code> instead of Python <code>Enum</code>.</p>
+<h2 id="textchoices">TextChoices<a class="headerlink" href="#textchoices" title="Permanent link">&para;</a></h2>
+<p>For string values.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextChoices</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Status</span><span class="p">(</span><span class="n">TextChoices</span><span class="p">):</span>
+    <span class="n">DRAFT</span> <span class="o">=</span> <span class="s2">&quot;draft&quot;</span><span class="p">,</span> <span class="s2">&quot;Draft&quot;</span>
+    <span class="n">PUBLISHED</span> <span class="o">=</span> <span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;Published&quot;</span>
+    <span class="n">ARCHIVED</span> <span class="o">=</span> <span class="s2">&quot;archived&quot;</span><span class="p">,</span> <span class="s2">&quot;Archived&quot;</span>
+</code></pre></div>
+
+<h2 id="integerchoices">IntegerChoices<a class="headerlink" href="#integerchoices" title="Permanent link">&para;</a></h2>
+<p>For integer values.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntegerChoices</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Priority</span><span class="p">(</span><span class="n">IntegerChoices</span><span class="p">):</span>
+    <span class="n">LOW</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Low Priority&quot;</span>
+    <span class="n">MEDIUM</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;Medium Priority&quot;</span>
+    <span class="n">HIGH</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;High Priority&quot;</span>
+    <span class="n">CRITICAL</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;Critical&quot;</span>
+</code></pre></div>
+
+<h2 id="usage-in-models">Usage in Models<a class="headerlink" href="#usage-in-models" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Status</span><span class="p">(</span><span class="n">TextChoices</span><span class="p">):</span>
+    <span class="n">DRAFT</span> <span class="o">=</span> <span class="s2">&quot;draft&quot;</span><span class="p">,</span> <span class="s2">&quot;Draft&quot;</span>
+    <span class="n">PUBLISHED</span> <span class="o">=</span> <span class="s2">&quot;published&quot;</span><span class="p">,</span> <span class="s2">&quot;Published&quot;</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;posts&quot;</span>
+
+    <span class="n">status</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">Status</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">Status</span><span class="o">.</span><span class="n">DRAFT</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="native-postgresql-enum">Native PostgreSQL ENUM<a class="headerlink" href="#native-postgresql-enum" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="n">status</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span>
+    <span class="n">Status</span><span class="p">,</span>
+    <span class="n">default</span><span class="o">=</span><span class="n">Status</span><span class="o">.</span><span class="n">DRAFT</span><span class="p">,</span>
+    <span class="n">use_native_enum</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># Uses PostgreSQL ENUM type</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="accessing-values">Accessing Values<a class="headerlink" href="#accessing-values" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Value</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">DRAFT</span><span class="o">.</span><span class="n">value</span>      <span class="c1"># &quot;draft&quot;</span>
+<span class="n">Priority</span><span class="o">.</span><span class="n">HIGH</span><span class="o">.</span><span class="n">value</span>     <span class="c1"># 3</span>
+
+<span class="c1"># Label</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">DRAFT</span><span class="o">.</span><span class="n">label</span>      <span class="c1"># &quot;Draft&quot;</span>
+<span class="n">Priority</span><span class="o">.</span><span class="n">HIGH</span><span class="o">.</span><span class="n">label</span>     <span class="c1"># &quot;High Priority&quot;</span>
+
+<span class="c1"># All choices (for forms/API)</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">choices</span>          <span class="c1"># [(&quot;draft&quot;, &quot;Draft&quot;), (&quot;published&quot;, &quot;Published&quot;), ...]</span>
+
+<span class="c1"># All values</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">values</span>           <span class="c1"># [&quot;draft&quot;, &quot;published&quot;, &quot;archived&quot;]</span>
+
+<span class="c1"># All labels</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">labels</span>           <span class="c1"># [&quot;Draft&quot;, &quot;Published&quot;, &quot;Archived&quot;]</span>
+
+<span class="c1"># Max length (for database column)</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">max_length</span>       <span class="c1"># 9 (length of &quot;published&quot;)</span>
+</code></pre></div>
+
+<h2 id="lookup-methods">Lookup Methods<a class="headerlink" href="#lookup-methods" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Get by value</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">from_value</span><span class="p">(</span><span class="s2">&quot;draft&quot;</span><span class="p">)</span>  <span class="c1"># Status.DRAFT</span>
+
+<span class="c1"># Get label for value</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">get_label</span><span class="p">(</span><span class="s2">&quot;draft&quot;</span><span class="p">)</span>   <span class="c1"># &quot;Draft&quot;</span>
+
+<span class="c1"># Check if valid</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">is_valid</span><span class="p">(</span><span class="s2">&quot;draft&quot;</span><span class="p">)</span>    <span class="c1"># True</span>
+<span class="n">Status</span><span class="o">.</span><span class="n">is_valid</span><span class="p">(</span><span class="s2">&quot;invalid&quot;</span><span class="p">)</span>  <span class="c1"># False</span>
+</code></pre></div>
+
+<h2 id="comparison">Comparison<a class="headerlink" href="#comparison" title="Permanent link">&para;</a></h2>
+<p>Works with both enum members and raw values:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">post</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">Status</span><span class="o">.</span><span class="n">PUBLISHED</span>   <span class="c1"># True</span>
+<span class="n">post</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;published&quot;</span>        <span class="c1"># True</span>
+
+<span class="n">post</span><span class="o">.</span><span class="n">priority</span> <span class="o">==</span> <span class="n">Priority</span><span class="o">.</span><span class="n">HIGH</span>    <span class="c1"># True</span>
+<span class="n">post</span><span class="o">.</span><span class="n">priority</span> <span class="o">==</span> <span class="mi">3</span>                <span class="c1"># True</span>
+</code></pre></div>
+
+<h2 id="built-in-choices">Built-in Choices<a class="headerlink" href="#built-in-choices" title="Permanent link">&para;</a></h2>
+<h3 id="commonstatus">CommonStatus<a class="headerlink" href="#commonstatus" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">CommonStatus</span>
+
+<span class="n">CommonStatus</span><span class="o">.</span><span class="n">ACTIVE</span>      <span class="c1"># &quot;active&quot;</span>
+<span class="n">CommonStatus</span><span class="o">.</span><span class="n">INACTIVE</span>    <span class="c1"># &quot;inactive&quot;</span>
+<span class="n">CommonStatus</span><span class="o">.</span><span class="n">PENDING</span>     <span class="c1"># &quot;pending&quot;</span>
+<span class="n">CommonStatus</span><span class="o">.</span><span class="n">SUSPENDED</span>   <span class="c1"># &quot;suspended&quot;</span>
+</code></pre></div>
+
+<h3 id="publishstatus">PublishStatus<a class="headerlink" href="#publishstatus" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">PublishStatus</span>
+
+<span class="n">PublishStatus</span><span class="o">.</span><span class="n">DRAFT</span>           <span class="c1"># &quot;draft&quot;</span>
+<span class="n">PublishStatus</span><span class="o">.</span><span class="n">PENDING_REVIEW</span>  <span class="c1"># &quot;pending_review&quot;</span>
+<span class="n">PublishStatus</span><span class="o">.</span><span class="n">PUBLISHED</span>       <span class="c1"># &quot;published&quot;</span>
+<span class="n">PublishStatus</span><span class="o">.</span><span class="n">ARCHIVED</span>        <span class="c1"># &quot;archived&quot;</span>
+</code></pre></div>
+
+<h3 id="orderstatus">OrderStatus<a class="headerlink" href="#orderstatus" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">OrderStatus</span>
+
+<span class="n">OrderStatus</span><span class="o">.</span><span class="n">PENDING</span>     <span class="c1"># &quot;pending&quot;</span>
+<span class="n">OrderStatus</span><span class="o">.</span><span class="n">PROCESSING</span>  <span class="c1"># &quot;processing&quot;</span>
+<span class="n">OrderStatus</span><span class="o">.</span><span class="n">COMPLETED</span>   <span class="c1"># &quot;completed&quot;</span>
+<span class="n">OrderStatus</span><span class="o">.</span><span class="n">CANCELLED</span>   <span class="c1"># &quot;cancelled&quot;</span>
+<span class="n">OrderStatus</span><span class="o">.</span><span class="n">REFUNDED</span>    <span class="c1"># &quot;refunded&quot;</span>
+</code></pre></div>
+
+<h3 id="paymentstatus">PaymentStatus<a class="headerlink" href="#paymentstatus" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">PaymentStatus</span>
+
+<span class="n">PaymentStatus</span><span class="o">.</span><span class="n">PENDING</span>     <span class="c1"># &quot;pending&quot;</span>
+<span class="n">PaymentStatus</span><span class="o">.</span><span class="n">PROCESSING</span>  <span class="c1"># &quot;processing&quot;</span>
+<span class="n">PaymentStatus</span><span class="o">.</span><span class="n">PAID</span>        <span class="c1"># &quot;paid&quot;</span>
+<span class="n">PaymentStatus</span><span class="o">.</span><span class="n">FAILED</span>      <span class="c1"># &quot;failed&quot;</span>
+<span class="n">PaymentStatus</span><span class="o">.</span><span class="n">REFUNDED</span>    <span class="c1"># &quot;refunded&quot;</span>
+<span class="n">PaymentStatus</span><span class="o">.</span><span class="n">CANCELLED</span>   <span class="c1"># &quot;cancelled&quot;</span>
+</code></pre></div>
+
+<h3 id="taskpriority">TaskPriority<a class="headerlink" href="#taskpriority" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskPriority</span>
+
+<span class="n">TaskPriority</span><span class="o">.</span><span class="n">LOW</span>       <span class="c1"># 1</span>
+<span class="n">TaskPriority</span><span class="o">.</span><span class="n">MEDIUM</span>    <span class="c1"># 2</span>
+<span class="n">TaskPriority</span><span class="o">.</span><span class="n">HIGH</span>      <span class="c1"># 3</span>
+<span class="n">TaskPriority</span><span class="o">.</span><span class="n">CRITICAL</span>  <span class="c1"># 4</span>
+</code></pre></div>
+
+<h3 id="weekday">Weekday<a class="headerlink" href="#weekday" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">Weekday</span>
+
+<span class="n">Weekday</span><span class="o">.</span><span class="n">MONDAY</span>     <span class="c1"># 1</span>
+<span class="n">Weekday</span><span class="o">.</span><span class="n">TUESDAY</span>    <span class="c1"># 2</span>
+<span class="c1"># ... through</span>
+<span class="n">Weekday</span><span class="o">.</span><span class="n">SUNDAY</span>     <span class="c1"># 7</span>
+</code></pre></div>
+
+<h3 id="month">Month<a class="headerlink" href="#month" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">Month</span>
+
+<span class="n">Month</span><span class="o">.</span><span class="n">JANUARY</span>   <span class="c1"># 1</span>
+<span class="n">Month</span><span class="o">.</span><span class="n">FEBRUARY</span>  <span class="c1"># 2</span>
+<span class="c1"># ... through</span>
+<span class="n">Month</span><span class="o">.</span><span class="n">DECEMBER</span>  <span class="c1"># 12</span>
+</code></pre></div>
+
+<h3 id="gender">Gender<a class="headerlink" href="#gender" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">Gender</span>
+
+<span class="n">Gender</span><span class="o">.</span><span class="n">MALE</span>          <span class="c1"># &quot;M&quot;</span>
+<span class="n">Gender</span><span class="o">.</span><span class="n">FEMALE</span>        <span class="c1"># &quot;F&quot;</span>
+<span class="n">Gender</span><span class="o">.</span><span class="n">OTHER</span>         <span class="c1"># &quot;O&quot;</span>
+<span class="n">Gender</span><span class="o">.</span><span class="n">NOT_INFORMED</span>  <span class="c1"># &quot;N&quot;</span>
+</code></pre></div>
+
+<h3 id="visibility">Visibility<a class="headerlink" href="#visibility" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">Visibility</span>
+
+<span class="n">Visibility</span><span class="o">.</span><span class="n">PUBLIC</span>    <span class="c1"># &quot;public&quot;</span>
+<span class="n">Visibility</span><span class="o">.</span><span class="n">PRIVATE</span>   <span class="c1"># &quot;private&quot;</span>
+<span class="n">Visibility</span><span class="o">.</span><span class="n">UNLISTED</span>  <span class="c1"># &quot;unlisted&quot;</span>
+<span class="n">Visibility</span><span class="o">.</span><span class="n">MEMBERS</span>   <span class="c1"># &quot;members&quot;</span>
+</code></pre></div>
+
+<h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
+<h3 id="in-serializers">In Serializers<a class="headerlink" href="#in-serializers" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.serializers</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSchema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">field_validator</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PostInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">status</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_status</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">Status</span><span class="o">.</span><span class="n">is_valid</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid status. Must be one of: </span><span class="si">{</span><span class="n">Status</span><span class="o">.</span><span class="n">values</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+</code></pre></div>
+
+<h3 id="with-choicevalidator">With ChoiceValidator<a class="headerlink" href="#with-choicevalidator" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.validators</span><span class="w"> </span><span class="kn">import</span> <span class="n">ChoiceValidator</span>
+
+<span class="n">validator</span> <span class="o">=</span> <span class="n">ChoiceValidator</span><span class="p">(</span><span class="n">choices</span><span class="o">=</span><span class="n">Status</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;draft&quot;</span><span class="p">)</span>    <span class="c1"># OK</span>
+<span class="n">validator</span><span class="p">(</span><span class="s2">&quot;invalid&quot;</span><span class="p">)</span>  <span class="c1"># Raises ValidationError</span>
+</code></pre></div>
+
+<h2 id="querying">Querying<a class="headerlink" href="#querying" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Filter by choice</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="n">Status</span><span class="o">.</span><span class="n">PUBLISHED</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Or by value</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;published&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># Multiple values</span>
+<span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">status__in</span><span class="o">=</span><span class="p">[</span><span class="n">Status</span><span class="o">.</span><span class="n">DRAFT</span><span class="p">,</span> <span class="n">Status</span><span class="o">.</span><span class="n">PUBLISHED</span><span class="p">]</span>
+<span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+
+<h2 id="openapi-documentation">OpenAPI Documentation<a class="headerlink" href="#openapi-documentation" title="Permanent link">&para;</a></h2>
+<p>Choices are automatically documented in OpenAPI:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PostInput</span><span class="p">(</span><span class="n">InputSchema</span><span class="p">):</span>
+    <span class="n">status</span><span class="p">:</span> <span class="n">Status</span>  <span class="c1"># Shows enum values in Swagger</span>
+</code></pre></div>
+
+<h2 id="custom-choices">Custom Choices<a class="headerlink" href="#custom-choices" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">strider.choices</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextChoices</span><span class="p">,</span> <span class="n">IntegerChoices</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TicketType</span><span class="p">(</span><span class="n">TextChoices</span><span class="p">):</span>
+    <span class="n">BUG</span> <span class="o">=</span> <span class="s2">&quot;bug&quot;</span><span class="p">,</span> <span class="s2">&quot;Bug Report&quot;</span>
+    <span class="n">FEATURE</span> <span class="o">=</span> <span class="s2">&quot;feature&quot;</span><span class="p">,</span> <span class="s2">&quot;Feature Request&quot;</span>
+    <span class="n">SUPPORT</span> <span class="o">=</span> <span class="s2">&quot;support&quot;</span><span class="p">,</span> <span class="s2">&quot;Support Request&quot;</span>
+    <span class="n">QUESTION</span> <span class="o">=</span> <span class="s2">&quot;question&quot;</span><span class="p">,</span> <span class="s2">&quot;Question&quot;</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">SeverityLevel</span><span class="p">(</span><span class="n">IntegerChoices</span><span class="p">):</span>
+    <span class="n">TRIVIAL</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Trivial&quot;</span>
+    <span class="n">MINOR</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;Minor&quot;</span>
+    <span class="n">MAJOR</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;Major&quot;</span>
+    <span class="n">BLOCKER</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;Blocker&quot;</span>
+</code></pre></div>
+
+<h2 id="why-not-python-enum">Why Not Python Enum?<a class="headerlink" href="#why-not-python-enum" title="Permanent link">&para;</a></h2>
+<p>TextChoices/IntegerChoices provide:</p>
+<ol>
+<li><strong>Labels</strong> — Human-readable names</li>
+<li><strong><code>.choices</code></strong> — Ready for forms/dropdowns</li>
+<li><strong><code>.values</code></strong> — List of valid values</li>
+<li><strong><code>.max_length</code></strong> — For database column sizing</li>
+<li><strong>Direct comparison</strong> — Works with raw values</li>
+<li><strong>Django compatibility</strong> — Familiar API</li>
+</ol>
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../10-fields/">Fields</a> — Field types</li>
+<li><a href="../03-models/">Models</a> — Model basics</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/SorPuti/core-framework" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
