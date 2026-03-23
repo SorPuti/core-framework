@@ -174,6 +174,25 @@ function toolError(message: string, details?: unknown): { isError: true; content
   };
 }
 
+/**
+ * Retorna resposta CLARA para agentes: operação está bloqueada e agente deve executar localmente
+ * Usa flags booleanas óbvias para agentes não ambiguarem a intenção
+ */
+function blockedExecutionResponse(operation: string, details: Record<string, unknown> = {}): { isError: true; content: Array<{ type: "text"; text: string }> } {
+  return textResult({
+    blocked: true,
+    agent_action_required: true,
+    execute_locally: true,
+    operation,
+    reason: "MCP remoto não pode executar operações críticas. Você (agente local) deve fazer isto.",
+    next_step: "1. Peça confirmação ao usuário antes de executar\n2. Execute localmente com run_in_terminal ou run_notebook_cell\n3. Valide saída e reporte resultado",
+    ...details,
+  }) as {
+    isError: true;
+    content: Array<{ type: "text"; text: string }>;
+  };
+}
+
 function normalizeToken(text: string): string {
   return text
     .toLowerCase()
@@ -627,15 +646,10 @@ function executionMode(): "local-client" | "remote-server" {
 function blockRemoteExecution(toolName: string): { isError: true; content: Array<{ type: "text"; text: string }> } | null {
   if (executionMode() === "local-client") return null;
 
-  return toolError("Execucao remota bloqueada por politica de seguranca", {
+  return blockedExecutionResponse(toolName, {
     tool: toolName,
     mode: executionMode(),
-    reason:
-      "Comandos devem ser executados apenas no computador local do desenvolvedor para refletir o codigo real em edicao.",
-    allowed: [
-      "Validar comandos e gerar instrucoes no MCP remoto",
-      "Executar comandos somente em MCP local (stdio)",
-    ],
+    is_remote_execution: activeTransport !== "stdio",
   });
 }
 
@@ -724,18 +738,26 @@ function toolListCapabilities() {
     can_create: snapshot.models.length > 0 || snapshot.views.length > 0,
     can_update: snapshot.models.length > 0 || snapshot.views.length > 0,
     can_delete: snapshot.models.length > 0,
-    can_execute_workers: snapshot.workers.length > 0,
-    can_execute_runners: snapshot.runners.length > 0,
+    can_execute_workers: false, // ALWAYS blocked for remote
+    can_execute_runners: false, // ALWAYS blocked for remote
     can_dispatch_tasks: snapshot.tasks.length > 0,
     has_permissions_layer: snapshot.permissions.length > 0,
   };
 
   return textResult({
     capabilities,
+    execution_policy: {
+      workers_blocked: true,
+      workers_execute_location: "agent_local",
+      runners_blocked: true,
+      runners_execute_location: "agent_local",
+      cli_blocked: activeTransport !== "stdio",
+      cli_execute_location: activeTransport === "stdio" ? "mcp_local" : "agent_local",
+    },
     recommendations: [
       "Use validate_action antes de qualquer operacao de escrita/execucao.",
       "Use generate_safe_query para gerar padroes ORM sem SQL manual.",
-      "Para comandos criticos de CLI, exija confirmacao explicita.",
+      "Para workers/runners/CLI: agente local deve executar (veja execution_policy acima).",
     ],
   });
 }
@@ -787,16 +809,21 @@ function toolValidateAction(args: ToolCallArgs) {
 
   const valid = exists && warnings.filter((item) => item.includes("desconhecido")).length === 0;
 
+  const writeLikeAction = ["create", "update", "delete", "execute", "run", "dispatch"].includes(normalizeToken(action));
+  const executionLocation = writeLikeAction ? "must_execute_with_framework_orm" : "mcp_can_validate";
+
   return textResult({
     action,
     resource_type: resourceType,
     resource_name: resourceName,
     valid,
+    execution_location: executionLocation,
     checks,
     warnings,
     guidance: [
-      "Bloqueie execucao se valid=false.",
-      "Em operacoes criticas, solicite confirmacao humana antes de executar.",
+      "Se valid=false: NÃO execute.",
+      "Se valid=true E é write-like (create/update/delete/execute): use Model.objects.* via agente",
+      "Solicite confirmação humana explícita antes de qualquer operação de escrita.",
     ],
   });
 }
@@ -936,11 +963,12 @@ function toolCliExecute(args: ToolCallArgs) {
   }
 
   if (confirm !== CRITICAL_CONFIRMATION_TOKEN) {
-    return toolError("Execucao local bloqueada sem confirmacao explicita", {
-      required_confirm: CRITICAL_CONFIRMATION_TOKEN,
+    return blockedExecutionResponse("cli_execute", {
       command,
       args: commandArgs,
-      reason: "Toda execucao local precisa de confirmacao do usuario.",
+      required_confirmation_token: CRITICAL_CONFIRMATION_TOKEN,
+      confirmation_provided: confirm || null,
+      instruction: "Agente: você deve executar este comando localmente após obter confirmação do usuário",
     });
   }
 
@@ -962,6 +990,7 @@ function toolCliExecute(args: ToolCallArgs) {
   }
 
   return textResult({
+    executed_at_mcp_local: true,
     critical,
     confirmation_used: confirm || null,
     result: formatCommandResult(result),
@@ -974,10 +1003,10 @@ function toolCliRegistryHealth(args: ToolCallArgs) {
 
   const confirm = asString(args.confirm);
   if (confirm !== CRITICAL_CONFIRMATION_TOKEN) {
-    return toolError("Execucao local bloqueada sem confirmacao explicita", {
-      required_confirm: CRITICAL_CONFIRMATION_TOKEN,
-      tool: "cli_registry_health",
-      reason: "Toda execucao local precisa de confirmacao do usuario.",
+    return blockedExecutionResponse("cli_registry_health", {
+      required_confirmation_token: CRITICAL_CONFIRMATION_TOKEN,
+      confirmation_provided: confirm || null,
+      instruction: "Agente: você deve diagnosticar a saúde do registro localmente após obter confirmação do usuário",
     });
   }
 
@@ -1023,6 +1052,7 @@ function toolCliRegistryHealth(args: ToolCallArgs) {
   const ok = checks.every((item) => item.ok === true || item.name === "showmigrations");
 
   return textResult({
+    executed_at_mcp_local: true,
     ok,
     checks,
     guidance: [

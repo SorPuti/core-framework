@@ -1,9 +1,12 @@
 # Core Framework MCP Server
 
-Servidor MCP (Model Context Protocol) via stdio para busca semantica em:
+Servidor MCP (Model Context Protocol) via stdio para busca semantica e validação segura em:
 
 - `docs/**/*.md`
 - `strider/**/*.py`
+
+**Responsabilidade do MCP:** Validar, buscar, instruir (nunca executar operações críticas).
+**Responsabilidade do Agente Local:** Executar, confirmar, validar resultado.
 
 Sem API REST. Este projeto e MCP puro para integrar com VS Code Copilot e Cursor.
 
@@ -53,6 +56,37 @@ curl -X POST http://localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
 ```
 
+## 🔄 Padrão de Delegação (MCP Remoto ↔ Agente Local)
+
+### Fluxo Operacional
+
+```
+MCP Remoto (Core Framework)         Agente Local (você)
+═══════════════════════════════════  ════════════════════════════════
+✅ Validar ações (validate_action)  🔄 Requerer confirmação explícita
+✅ Busca semântica (search)          ✅ Executar em seu computador
+✅ Queries ORM seguras (generate)    ✅ Validar saída + reportar
+✅ Instrução de fluxo (explain)      ⚠️ Nunca SQL manual
+❌ CLI BLOQUEADO (executa localmente)
+❌ Workers BLOQUEADO (agente executa)
+❌ Runners BLOQUEADO (agente executa)
+```
+
+### Quando o MCP retorna "bloqueado" ou "execute você"
+
+Se receber resposta do MCP como:
+- `"can_execute_workers": false`
+- `"can_execute_runners": false`
+- `ERROR: cli_execute não está disponível remotamente`
+
+**Isto é correto!** O MCP está instruindo: **você (agente local) deve executar localmente**.
+
+**Seu fluxo:**
+1. ✅ Leia a instrução/recomendação do MCP
+2. ✅ Peça confirmação ao usuário
+3. ✅ Execute localmente com `run_in_terminal` ou `run_notebook_cell`
+4. ✅ Valide saída e reporte resultado
+
 ## Tools MCP expostas
 
 - `search_framework`
@@ -89,17 +123,10 @@ Fluxo operacional obrigatorio para agentes:
 3. Agente local executa no projeto local do cliente.
 4. Agente local valida saida e reporta resultado.
 
-- `cli_list_commands`
-: Lista comandos operacionais e classifica comandos criticos.
-- `cli_execute`
-: Executa CLI no projeto local. Para comandos criticos, exige confirmacao explicita:
-`confirm=CONFIRMO_EXECUCAO_CRITICA`.
-- `cli_registry_health` e `cli_run_tests`
-: Tambem exigem `confirm=CONFIRMO_EXECUCAO_CRITICA` para qualquer execucao local.
-- `cli_registry_health`
-: Roda checks de saude e valida registries de workers/runners/tasks.
-- `cli_run_tests`
-: Executa testes via CLI local (alvo e cobertura opcionais).
+- `cli_list_commands`: Lista comandos operacionais e classifica comandos criticos.
+- `cli_execute`: Retorna instrução + bloqueio "execute você localmente". Para comandos críticos, agente exige confirmacao: `confirm=CONFIRMO_EXECUCAO_CRITICA`.
+- `cli_run_tests`: Instruções de teste; execução bloqueada (agente local executa).
+- `cli_registry_health`: Health checks bloqueados; agente local valida registries de workers/runners/tasks.
 
 ## Configurar no VS Code Copilot Chat
 
@@ -150,6 +177,20 @@ No arquivo de MCP do Cursor (normalmente `.cursor/mcp.json` no projeto), use:
 ```
 
 Reinicie o Cursor apos salvar.
+
+## 🛡️ Guardrails Obrigatórios para Agentes
+
+**Quando o MCP retorna resposta com "bloqueado" ou "execute você":**
+
+- ✅ **FAÇA:** Retorne a instrução ao agente local com clareza
+- ✅ **FAÇA:** Peça confirmação explícita do usuário antes de executar
+- ✅ **FAÇA:** Execute localmente com `run_in_terminal` ou `run_notebook_cell`
+- ✅ **FAÇA:** Valide saída e reporte resultado ao usuário
+
+- ❌ **NUNCA:** Ignore responses "bloqueado" do MCP
+- ❌ **NUNCA:** Execute comandos críticos sem confirmação do usuário
+- ❌ **NUNCA:** Use SQL manual (sempre `Model.objects.*`)
+- ❌ **NUNCA:** Hardcode credenciais (use `.env` e `settings.py`)
 
 ## Notas de operacao
 

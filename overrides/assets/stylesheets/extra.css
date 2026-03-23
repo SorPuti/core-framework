@@ -5,10 +5,10 @@
   --stride-radius: 6px;
   --stride-purple: #9c27b0;
   --stride-purple-soft: rgba(156, 39, 176, 0.18);
-  /* Corpo: nunca acima de 15px; títulos em px para hierarquia estável em qualquer viewport */
+  /* Tipografia otimizada: legibilidade + compactação */
   --stride-text: 15px;
-  --stride-h1: 20px;
-  --stride-h2: 17px;
+  --stride-h1: 22px;
+  --stride-h2: 18px;
   --stride-h3: 16px;
   --stride-h4: 15px;
   /* Material usa estas variáveis para escalar o artigo inteiro */
