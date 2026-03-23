@@ -11,6 +11,7 @@ export interface QueryOptions {
   sourcePrefixes?: string[];
   excludeSources?: Set<string>;
   boostPrefixes?: string[];
+  intentTerms?: string[];
 }
 
 export interface CodeReference {
@@ -38,6 +39,7 @@ export interface AnswerPayload {
 
 interface DomainProfile {
   name: string;
+  strongKeywords: string[];
   keywords: string[];
   docPrefixes: string[];
   codePrefixes: string[];
@@ -50,7 +52,8 @@ interface DomainProfile {
 const DOMAIN_PROFILES: DomainProfile[] = [
   {
     name: "routing",
-    keywords: ["rota", "router", "endpoint", "viewset", "action", "url", "custom action", "basename", "register_viewset"],
+    strongKeywords: ["viewset", "custom action", "register_viewset", "router", "basename"],
+    keywords: ["rota", "endpoint", "action", "url"],
     docPrefixes: ["docs/23-routing", "docs/01-quickstart", "docs/04-viewsets"],
     codePrefixes: ["code/routing.py", "code/views.py", "code/urls.py"],
     implementationSteps: [
@@ -71,7 +74,8 @@ const DOMAIN_PROFILES: DomainProfile[] = [
   },
   {
     name: "auth",
-    keywords: ["auth", "jwt", "login", "logout", "token", "refresh", "permission", "permissao", "autentic"],
+    strongKeywords: ["jwt", "login", "logout", "refresh", "permission", "permissao", "autentic"],
+    keywords: ["auth", "token"],
     docPrefixes: ["docs/05-auth", "docs/06-auth-backends", "docs/08-permissions"],
     codePrefixes: ["code/auth/", "code/permissions.py", "code/auth/views.py"],
     implementationSteps: [
@@ -92,12 +96,10 @@ const DOMAIN_PROFILES: DomainProfile[] = [
   },
   {
     name: "data",
-    keywords: [
-      "queryset", "filtro", "orden", "pagin", "model", "relation", "migrat", "tenant", "tenancy",
-      "subdominio", "subdominio", "isolamento", "workspace", "schema drift",
-    ],
-    docPrefixes: ["docs/03-models", "docs/12-querysets", "docs/11-relations", "docs/41-migrations", "docs/32-tenancy"],
-    codePrefixes: ["code/models.py", "code/querysets.py", "code/relations.py", "code/migrations/", "code/tenancy.py"],
+    strongKeywords: ["queryset", "tenancy", "tenant", "relation", "relations", "paginacao"],
+    keywords: ["filtro", "orden", "model", "workspace", "isolamento", "schema"],
+    docPrefixes: ["docs/03-models", "docs/12-querysets", "docs/11-relations", "docs/32-tenancy"],
+    codePrefixes: ["code/models.py", "code/querysets.py", "code/relations.py", "code/tenancy.py"],
     implementationSteps: [
       "Modele entidades com chaves e relações explícitas.",
       "Implemente filtros/ordenação/paginação via QuerySet.",
@@ -115,8 +117,75 @@ const DOMAIN_PROFILES: DomainProfile[] = [
     ],
   },
   {
+    name: "migrations",
+    strongKeywords: ["migration", "migrations", "migracao", "migracoes", "schema drift", "alembic"],
+    keywords: ["ddl", "backfill", "rollback", "downgrade", "upgrade", "coluna", "indice"],
+    docPrefixes: ["docs/41-migrations", "docs/03-models", "docs/99-faq-troubleshooting"],
+    codePrefixes: ["code/migrations/", "code/models.py", "code/database.py"],
+    implementationSteps: [
+      "Defina a alteracao de schema e avalie impacto em dados existentes.",
+      "Crie migracao incremental com plano de rollback/backfill quando necessario.",
+      "Execute migrate em base limpa e em base com dados para validar compatibilidade.",
+    ],
+    filesToTouch: ["strider/migrations/", "strider/models.py", "strider/database.py"],
+    validationChecks: [
+      "Testar upgrade e downgrade em ambiente de homologacao.",
+      "Validar tempo de execucao e locks em tabelas grandes.",
+      "Garantir compatibilidade com replicas durante rollout.",
+    ],
+    pitfalls: [
+      "Aplicar alteracao destrutiva sem backfill/rollback planejado.",
+      "Assumir que migracao funciona sem testar com dados reais.",
+    ],
+  },
+  {
+    name: "dependencies",
+    strongKeywords: ["dependency", "dependencies", "injecao", "inject", "provider", "container"],
+    keywords: ["di", "bind", "resolver", "factory", "wiring", "inversao de controle"],
+    docPrefixes: ["docs/24-dependencies", "docs/01-quickstart", "docs/02-settings"],
+    codePrefixes: ["code/dependencies.py", "code/config.py", "code/views.py"],
+    implementationSteps: [
+      "Defina a dependencia como provider/factory com contrato claro.",
+      "Registre a dependencia no ponto de composicao da aplicacao.",
+      "Injete no endpoint/servico e cubra override em testes.",
+    ],
+    filesToTouch: ["strider/dependencies.py", "strider/config.py", "strider/views.py"],
+    validationChecks: [
+      "Validar ciclo de vida (singleton/request/transient) quando aplicavel.",
+      "Garantir que testes conseguem sobrescrever providers.",
+      "Verificar falhas de resolucao com mensagens claras.",
+    ],
+    pitfalls: [
+      "Criar dependencia com estado global nao controlado.",
+      "Acoplar regra de negocio ao container em vez de contrato.",
+    ],
+  },
+  {
+    name: "exceptions",
+    strongKeywords: ["exception", "exceptions", "erro", "errors", "raise", "handler", "traceback"],
+    keywords: ["status code", "422", "400", "500", "custom exception", "validation error"],
+    docPrefixes: ["docs/34-exceptions", "docs/14-validators", "docs/99-faq-troubleshooting"],
+    codePrefixes: ["code/exceptions.py", "code/validation.py", "code/validators.py"],
+    implementationSteps: [
+      "Modele excecoes de dominio com mensagens e codigos consistentes.",
+      "Mapeie excecoes para respostas HTTP no handler central.",
+      "Cubra erros esperados com testes de contrato e observabilidade.",
+    ],
+    filesToTouch: ["strider/exceptions.py", "strider/validation.py", "strider/validators.py"],
+    validationChecks: [
+      "Confirmar payload de erro (code/message/details) em todos os endpoints.",
+      "Garantir que erros de validacao retornem 4xx, nao 5xx.",
+      "Verificar logs com contexto sem expor dados sensiveis.",
+    ],
+    pitfalls: [
+      "Lancar excecoes genericas sem mapeamento para HTTP adequado.",
+      "Vazar stacktrace ou dados sensiveis para o cliente.",
+    ],
+  },
+  {
     name: "realtime-workers",
-    keywords: ["websocket", "sse", "worker", "task", "kafka", "messaging", "queue", "stream", "consumer", "producer"],
+    strongKeywords: ["websocket", "sse", "worker", "kafka", "messaging", "queue"],
+    keywords: ["task", "stream", "consumer", "producer"],
     docPrefixes: ["docs/25-realtime", "docs/30-messaging", "docs/31-workers"],
     codePrefixes: ["code/realtime.py", "code/messaging/", "code/tasks/", "code/cli/main.py"],
     implementationSteps: [
@@ -137,7 +206,8 @@ const DOMAIN_PROFILES: DomainProfile[] = [
   },
   {
     name: "testing",
-    keywords: ["teste", "test", "pytest", "client", "authenticatedclient", "mock", "fixture", "permission test"],
+    strongKeywords: ["pytest", "authenticatedclient", "fixture", "mock", "permission test"],
+    keywords: ["teste", "test", "client"],
     docPrefixes: ["docs/testing", "docs/05-auth", "docs/08-permissions", "docs/04-viewsets"],
     codePrefixes: ["code/testing/", "code/auth/", "code/permissions.py", "code/views.py"],
     implementationSteps: [
@@ -160,6 +230,7 @@ const DOMAIN_PROFILES: DomainProfile[] = [
 
 const DEFAULT_PROFILE: DomainProfile = {
   name: "general",
+  strongKeywords: [],
   keywords: [],
   docPrefixes: ["docs/01-quickstart", "docs/core-concepts", "docs/introduction"],
   codePrefixes: ["code/views.py", "code/routing.py", "code/config.py"],
@@ -186,6 +257,9 @@ function detectDomainProfile(question: string): DomainProfile {
 
   for (const profile of DOMAIN_PROFILES) {
     let score = 0;
+    for (const keyword of profile.strongKeywords) {
+      if (normalized.includes(normalizeSearchText(keyword))) score += 3;
+    }
     for (const keyword of profile.keywords) {
       if (normalized.includes(normalizeSearchText(keyword))) score += 1;
     }
@@ -218,6 +292,37 @@ function sourceBoost(source: string, boostPrefixes: string[] | undefined): numbe
   return matchesPrefix(source, boostPrefixes) ? 1.4 : 0.9;
 }
 
+function extractIntentTerms(question: string): string[] {
+  const stopWords = new Set([
+    "como", "para", "com", "sem", "uma", "um", "das", "dos", "que", "this", "that", "when", "where",
+    "qual", "quais", "sobre", "de", "do", "da", "the", "and", "with", "from", "into", "entre", "no", "na",
+    "nos", "nas", "por", "porque", "why", "how", "what", "quero", "preciso", "implementar", "configurar",
+  ]);
+
+  const terms = normalizeSearchText(question)
+    .split(/[^a-z0-9]+/i)
+    .filter((token) => token.length >= 4 && !stopWords.has(token));
+
+  return Array.from(new Set(terms)).slice(0, 12);
+}
+
+function intentBoost(source: string, text: string, intentTerms: string[] | undefined): number {
+  if (!intentTerms || intentTerms.length === 0) return 1;
+
+  const sourceNorm = normalizeSearchText(source);
+  const textNorm = normalizeSearchText(text);
+  let hits = 0;
+
+  for (const term of intentTerms) {
+    if (sourceNorm.includes(term) || textNorm.includes(term)) {
+      hits += 1;
+    }
+  }
+
+  if (hits === 0) return 0.86;
+  return 1 + Math.min(0.48, hits * 0.08);
+}
+
 export function queryIndex(index: IndexData, question: string, options: QueryOptions = {}): QueryResult[] {
   const topK = options.topK ?? 3;
   const queryVector = buildQueryVector(question, index.idf);
@@ -234,7 +339,10 @@ export function queryIndex(index: IndexData, question: string, options: QueryOpt
       continue;
     }
 
-    const score = cosineSimilarity(queryVector, chunk.vector) * sourceBoost(chunk.source, options.boostPrefixes);
+    const score =
+      cosineSimilarity(queryVector, chunk.vector) *
+      sourceBoost(chunk.source, options.boostPrefixes) *
+      intentBoost(chunk.source, chunk.text, options.intentTerms);
     if (score > 0) {
       hits.push({ chunk, score });
     }
@@ -246,13 +354,15 @@ export function queryIndex(index: IndexData, question: string, options: QueryOpt
 
 export function buildAnswerPayload(index: IndexData, question: string, topK = 5): AnswerPayload {
   const profile = detectDomainProfile(question);
+  const intentTerms = extractIntentTerms(question);
 
   const docResults = queryIndex(index, question, {
     topK,
     sourcePrefix: "docs/",
     boostPrefixes: profile.docPrefixes,
+    intentTerms,
   });
-  const results = docResults.length > 0 ? docResults : queryIndex(index, question, { topK });
+  const results = docResults.length > 0 ? docResults : queryIndex(index, question, { topK, intentTerms });
 
   return {
     question,
@@ -270,6 +380,7 @@ export function buildAnswerPayload(index: IndexData, question: string, topK = 5)
           topK: 8,
           sourcePrefix: "code/",
           boostPrefixes: profile.codePrefixes,
+          intentTerms,
         });
 
         // Prefer unique code files to reduce repetition and improve actionable guidance.
