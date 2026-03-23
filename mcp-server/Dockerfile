@@ -8,13 +8,13 @@ COPY package.json ./
 COPY package-lock.json* ./
 COPY tsconfig.json ./
 
-# Instala dependências
-RUN npm ci
-
 # Copia código fonte
 COPY src ./src
 
-# Build TypeScript
+# Instala dependências (prepare rodará a build com src disponível)
+RUN npm ci
+
+# Build TypeScript (fallback caso prepare não execute)
 RUN npm run build
 
 # Runtime image
