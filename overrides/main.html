@@ -63,59 +63,103 @@
       }
 
       for (const diagram of diagrams) {
-        // Converter code.language-mermaid em div.mermaid se necessário
-        if (diagram.classList.contains('language-mermaid')) {
-          const parent = diagram.parentElement;
-          if (parent && parent.tagName === 'PRE') {
-            const mermaidDiv = document.createElement('div');
-            mermaidDiv.className = 'mermaid';
-            mermaidDiv.textContent = diagram.textContent;
-            parent.replaceWith(mermaidDiv);
-            diagram = mermaidDiv;
-          }
-        }
-
         try {
-          diagram.setAttribute('data-processed', 'true');
-          await mermaid.run();
+          let mermaidDiv;
           
-          // Aguardar renderização do SVG
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          // Adicionar zoom/pan ao SVG
-          const svg = diagram.querySelector('svg');
-          if (svg) {
-            // Remover viewBox para permitir pan-zoom
-            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-            svg.style.width = '100%';
-            svg.style.height = 'auto';
-            svg.style.cursor = 'grab';
+          // Converter code.language-mermaid em div.mermaid se necessário
+          if (diagram.classList.contains('language-mermaid')) {
+            const parent = diagram.parentElement;
+            if (parent && parent.tagName === 'PRE') {
+              mermaidDiv = document.createElement('div');
+              mermaidDiv.className = 'mermaid';
+              
+              // IMPORTANTE: Extrair apenas texto puro, removendo tags HTML
+              let plainText = diagram.textContent || '';
+              
+              // Se houver tags HTML no conteúdo, remover (fallback)
+              plainText = plainText.replace(/<[^>]*>/g, '').trim();
+              
+              mermaidDiv.textContent = plainText;
+              parent.replaceWith(mermaidDiv);
+            } else {
+              continue;
+            }
+          } else {
+            mermaidDiv = diagram;
             
-            // Inicializar svg-pan-zoom
-            try {
-              svgPanZoom(svg, {
-                zoomEnabled: true,
-                controlIconsEnabled: true,
-                fit: true,
-                center: true,
-                minZoom: 0.5,
-                maxZoom: 10,
-                zoomScaleSensitivity: 0.2,
-                onZoom: () => svg.style.cursor = 'grab',
-                beforePan: () => svg.style.cursor = 'grabbing'
-              });
-            } catch (e) {
-              console.log('[Mermaid] SVG pan-zoom not available, rendering static');
+            // Limpar conteúdo com tags HTML se necessário
+            let content = mermaidDiv.textContent || '';
+            if (mermaidDiv.innerHTML && mermaidDiv.innerHTML.includes('<')) {
+              content = mermaidDiv.innerHTML.replace(/<[^>]*>/g, '').trim();
+              mermaidDiv.textContent = content;
             }
           }
+
+          mermaidDiv.setAttribute('data-processed', 'true');
+          
+          // Renderizar com Mermaid
+          try {
+            await mermaid.run();
+            
+            // Aguardar renderização do SVG
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Adicionar zoom/pan ao SVG
+            const svg = mermaidDiv.querySelector('svg');
+            if (svg) {
+              svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+              svg.style.width = '100%';
+              svg.style.height = 'auto';
+              svg.style.cursor = 'grab';
+              
+              // Inicializar svg-pan-zoom
+              try {
+                if (typeof svgPanZoom !== 'undefined') {
+                  svgPanZoom(svg, {
+                    zoomEnabled: true,
+                    controlIconsEnabled: true,
+                    fit: true,
+                    center: true,
+                    minZoom: 0.5,
+                    maxZoom: 10,
+                    zoomScaleSensitivity: 0.2,
+                    onZoom: () => svg.style.cursor = 'grab',
+                    beforePan: () => svg.style.cursor = 'grabbing'
+                  });
+                }
+              } catch (e) {
+                console.log('[Mermaid] SVG pan-zoom not available');
+              }
+            }
+          } catch (renderError) {
+            // Se falhar na renderização, mostrar conteúdo como erro gracioso
+            console.warn('[Mermaid] Rendering failed, showing fallback');
+            
+            // Criar fallback: mostrar código em um card de erro
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'mermaid-error-fallback';
+            errorDiv.innerHTML = `
+              <div style="padding: 1rem; background: rgba(200, 100, 100, 0.1); border: 1px solid rgba(200, 100, 100, 0.3); border-radius: 8px; margin: 1rem 0;">
+                <p style="color: #ff9999; font-weight: 600; margin: 0 0 0.5rem 0;">⚠️ Diagrama não suportado</p>
+                <pre style="background: #161616; color: #999; padding: 0.75rem; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; margin: 0;"><code>${escapeHtml(mermaidDiv.textContent)}</code></pre>
+              </div>
+            `;
+            mermaidDiv.replaceWith(errorDiv);
+          }
         } catch (error) {
-          console.warn('[Mermaid] Rendering error:', error);
-          diagram.removeAttribute('data-processed');
+          console.warn('[Mermaid] Processing error:', error);
         }
       }
 
       // Aplicar estilos aos diagramas renderizados
       applyMermaidStyles();
+    }
+    
+    // Helper para escapar HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
 
     // ============================================================================
