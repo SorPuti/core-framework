@@ -50,7 +50,7 @@ interface DomainProfile {
 const DOMAIN_PROFILES: DomainProfile[] = [
   {
     name: "routing",
-    keywords: ["rota", "router", "endpoint", "viewset", "action", "url"],
+    keywords: ["rota", "router", "endpoint", "viewset", "action", "url", "custom action", "basename", "register_viewset"],
     docPrefixes: ["docs/23-routing", "docs/01-quickstart", "docs/04-viewsets"],
     codePrefixes: ["code/routing.py", "code/views.py", "code/urls.py"],
     implementationSteps: [
@@ -71,7 +71,7 @@ const DOMAIN_PROFILES: DomainProfile[] = [
   },
   {
     name: "auth",
-    keywords: ["auth", "jwt", "login", "logout", "token", "refresh", "permission"],
+    keywords: ["auth", "jwt", "login", "logout", "token", "refresh", "permission", "permissao", "autentic"],
     docPrefixes: ["docs/05-auth", "docs/06-auth-backends", "docs/08-permissions"],
     codePrefixes: ["code/auth/", "code/permissions.py", "code/auth/views.py"],
     implementationSteps: [
@@ -92,7 +92,10 @@ const DOMAIN_PROFILES: DomainProfile[] = [
   },
   {
     name: "data",
-    keywords: ["queryset", "filtro", "orden", "pagin", "model", "relation", "migrat", "tenant"],
+    keywords: [
+      "queryset", "filtro", "orden", "pagin", "model", "relation", "migrat", "tenant", "tenancy",
+      "subdominio", "subdominio", "isolamento", "workspace", "schema drift",
+    ],
     docPrefixes: ["docs/03-models", "docs/12-querysets", "docs/11-relations", "docs/41-migrations", "docs/32-tenancy"],
     codePrefixes: ["code/models.py", "code/querysets.py", "code/relations.py", "code/migrations/", "code/tenancy.py"],
     implementationSteps: [
@@ -113,7 +116,7 @@ const DOMAIN_PROFILES: DomainProfile[] = [
   },
   {
     name: "realtime-workers",
-    keywords: ["websocket", "sse", "worker", "task", "kafka", "messaging", "queue"],
+    keywords: ["websocket", "sse", "worker", "task", "kafka", "messaging", "queue", "stream", "consumer", "producer"],
     docPrefixes: ["docs/25-realtime", "docs/30-messaging", "docs/31-workers"],
     codePrefixes: ["code/realtime.py", "code/messaging/", "code/tasks/", "code/cli/main.py"],
     implementationSteps: [
@@ -130,6 +133,27 @@ const DOMAIN_PROFILES: DomainProfile[] = [
     pitfalls: [
       "Processamento não idempotente em retries.",
       "Acoplamento forte entre payload de evento e implementação interna.",
+    ],
+  },
+  {
+    name: "testing",
+    keywords: ["teste", "test", "pytest", "client", "authenticatedclient", "mock", "fixture", "permission test"],
+    docPrefixes: ["docs/testing", "docs/05-auth", "docs/08-permissions", "docs/04-viewsets"],
+    codePrefixes: ["code/testing/", "code/auth/", "code/permissions.py", "code/views.py"],
+    implementationSteps: [
+      "Monte fixtures de app, banco e usuário autenticado.",
+      "Cubra casos de sucesso, autenticação e autorização (401/403).",
+      "Valide payload, contrato de resposta e efeitos colaterais.",
+    ],
+    filesToTouch: ["tests/", "strider/testing/", "strider/auth/"],
+    validationChecks: [
+      "Executar suite com e sem autenticação para o mesmo endpoint.",
+      "Garantir asserts de permissões por ação e por papel.",
+      "Validar regressões em endpoints críticos com smoke tests.",
+    ],
+    pitfalls: [
+      "Testes acoplados a estado global sem reset de contexto.",
+      "Cobrir apenas caminho feliz sem validar 401/403/422.",
     ],
   },
 ];
@@ -156,14 +180,14 @@ const DEFAULT_PROFILE: DomainProfile = {
 };
 
 function detectDomainProfile(question: string): DomainProfile {
-  const normalized = question.toLowerCase();
+  const normalized = normalizeSearchText(question);
   let best: DomainProfile = DEFAULT_PROFILE;
   let bestScore = 0;
 
   for (const profile of DOMAIN_PROFILES) {
     let score = 0;
     for (const keyword of profile.keywords) {
-      if (normalized.includes(keyword)) score += 1;
+      if (normalized.includes(normalizeSearchText(keyword))) score += 1;
     }
     if (score > bestScore) {
       best = profile;
@@ -172,6 +196,14 @@ function detectDomainProfile(question: string): DomainProfile {
   }
 
   return best;
+}
+
+function normalizeSearchText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function matchesPrefix(source: string, prefixes: string[]): boolean {
@@ -183,7 +215,7 @@ function matchesPrefix(source: string, prefixes: string[]): boolean {
 
 function sourceBoost(source: string, boostPrefixes: string[] | undefined): number {
   if (!boostPrefixes || boostPrefixes.length === 0) return 1;
-  return matchesPrefix(source, boostPrefixes) ? 1.35 : 1;
+  return matchesPrefix(source, boostPrefixes) ? 1.4 : 0.9;
 }
 
 export function queryIndex(index: IndexData, question: string, options: QueryOptions = {}): QueryResult[] {
