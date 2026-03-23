@@ -11,6 +11,16 @@ COPY tsconfig.json ./
 # Copia código fonte
 COPY src ./src
 
+# Se não houver docs/strider no contexto (root_dir=mcp-server), baixa do GitHub
+RUN if [ ! -d /app/docs ] || [ ! -d /app/strider ]; then \
+  apk add --no-cache git && \
+  git clone --depth 1 https://github.com/SorPuti/core-framework.git /tmp/core-framework && \
+  cp -R /tmp/core-framework/docs /app/docs && \
+  cp -R /tmp/core-framework/strider /app/strider && \
+  rm -rf /tmp/core-framework && \
+  apk del git; \
+  fi
+
 # Instala dependências (prepare rodará a build com src disponível)
 RUN npm ci
 
