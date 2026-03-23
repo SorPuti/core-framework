@@ -5,7 +5,7 @@ Sistema de armazenamento de arquivos plug-and-play: **local** (disco) ou **Googl
 ## Visão geral
 
 - **Configuração**: em [Settings](02-settings.md#storage--file-uploads) você define `storage_backend` (`local` ou `gcs`) e os parâmetros do backend (bucket, credenciais, etc.).
-- **Admin**: modelos com campos que armazenam path/URL de arquivo ganham o widget [file_upload no Admin](40-admin.md#campos-de-arquivo-storage-e-exclusão) (drag-and-drop, preview) e, ao deletar, a opção de apagar o arquivo físico do storage.
+- **Admin**: modelos com campos que armazenam path/URL de arquivo ganham o widget [file_upload no Admin](40-admin.md#campos-de-arquivo-storage-e-exclusao) (drag-and-drop, preview) e, ao deletar, a opção de apagar o arquivo físico do storage.
 - **API programática**: use `core.storage` para salvar/remover arquivos fora do admin (jobs, APIs customizadas, etc.).
 - **Signed URLs**: suporte nativo para buckets privados via signed URLs — seguro e temporário.
 
@@ -343,4 +343,4 @@ for path in paths:
 ## Ver também
 
 - [Settings — Storage / File Uploads](02-settings.md#storage--file-uploads) — configuração completa
-- [Admin — Campos de arquivo e exclusão](40-admin.md#campos-de-arquivo-storage-e-exclusão) — widget file_upload
+- [Admin — Campos de arquivo e exclusão](40-admin.md#campos-de-arquivo-storage-e-exclusao) — widget file_upload

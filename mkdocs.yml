@@ -89,6 +89,7 @@ theme:
   features:
     - navigation.tabs
     - navigation.tabs.sticky
+    - navigation.sections
     - navigation.top
     - navigation.footer
     - navigation.instant.loading

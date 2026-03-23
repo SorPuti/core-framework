@@ -2,7 +2,9 @@
 
 Painel administrativo estilo Django com tipagem genérica para autocomplete no PyCharm.
 
-## Habilitação
+## Fundamentos
+
+### Habilitação
 
 Admin é habilitado por padrão. Acesse em `/admin/`.
 
@@ -16,7 +18,7 @@ class AppSettings(Settings):
     admin_primary_color: str = "#3B82F6"  # blue-500
 ```
 
-## Registrar Models
+### Registrar Models
 
 ```python
 # src/apps/posts/admin.py
@@ -35,7 +37,7 @@ class PostAdmin(ModelAdmin[Post]):  # Tipagem genérica para autocomplete
     ordering = ("-created_at",)
 ```
 
-## Tipagem Genérica
+### Tipagem Genérica
 
 Use `ModelAdmin[Model]` para autocomplete no PyCharm:
 
@@ -59,7 +61,7 @@ class DomainAdmin(ModelAdmin[Domain]):
     }
 ```
 
-## Opções Completas
+### Opções Completas
 
 ```python
 @admin.register(Post)
@@ -117,7 +119,9 @@ class PostAdmin(ModelAdmin[Post]):
     exclude_actions = ()  # Actions a desabilitar
 ```
 
-## Widgets Disponíveis
+## Interface e widgets
+
+### Widgets Disponíveis
 
 | Widget | Descrição |
 |--------|-----------|
@@ -146,7 +150,7 @@ class PostAdmin(ModelAdmin[Post]):
 | `m2m_select` | Many-to-many select |
 | `file_upload` | Upload de arquivo (storage local ou GCS); drag-and-drop, preview |
 
-## Campos de arquivo (Storage) e exclusão
+### Campos de arquivo (Storage) e exclusão
 
 Quando o model tem campos que armazenam **path ou URL de arquivo** (ex.: `image`, `avatar`, `file_path`, `attachment_url`), o admin detecta automaticamente e exibe o widget **file_upload**:
 
@@ -156,7 +160,7 @@ Quando o model tem campos que armazenam **path ou URL de arquivo** (ex.: `image`
 
 Configure o storage em `src/settings.py` (veja [Settings — Storage](02-settings.md#storage--file-uploads)). Documentação completa da API e fluxo: [Storage (37-storage.md)](37-storage.md).
 
-### Exclusão e arquivos físicos
+#### Exclusão e arquivos físicos
 
 Ao **deletar** um registro (botão "Delete" na tela de edição):
 
@@ -166,7 +170,7 @@ Ao **deletar** um registro (botão "Delete" na tela de edição):
 
 Assim você evita arquivo órfão no storage. Em **bulk delete** (listagem), o body da requisição pode incluir `"delete_physical_files": true` para o mesmo efeito.
 
-### Forçar widget file_upload em um campo
+#### Forçar widget file_upload em um campo
 
 Se o nome da coluna não for detectado automaticamente, use `widgets`:
 
@@ -178,7 +182,7 @@ class ProfileAdmin(ModelAdmin[Profile]):
     }
 ```
 
-## Ícones (Lucide)
+### Ícones (Lucide)
 
 ```python
 # Ícones mais comuns
@@ -239,7 +243,9 @@ icon = "terminal"    # Terminal
 icon = "git-branch"  # Git
 ```
 
-## Actions Customizadas
+## Lógica do ModelAdmin
+
+### Actions Customizadas
 
 ```python
 @admin.register(Post)
@@ -260,7 +266,7 @@ class PostAdmin(ModelAdmin[Post]):
             await post.save(db)
 ```
 
-## Hooks de Ciclo de Vida
+### Hooks de Ciclo de Vida
 
 ```python
 @admin.register(Post)
@@ -284,7 +290,7 @@ class PostAdmin(ModelAdmin[Post]):
         await clear_cache(f"post:{obj.id}")
 ```
 
-## Queryset Customizado
+### Queryset Customizado
 
 ```python
 @admin.register(Post)
@@ -295,7 +301,7 @@ class PostAdmin(ModelAdmin[Post]):
         return Post.objects.using(db).filter(workspace_id=self.request.user.workspace_id)
 ```
 
-## Password Virtual
+### Password Virtual
 
 Para models com `set_password()`, o admin detecta automaticamente e cria um campo virtual de senha:
 
@@ -317,7 +323,7 @@ class UserAdmin(ModelAdmin[User]):
     }
 ```
 
-## Many-to-Many
+### Many-to-Many
 
 Relacionamentos M2M são detectados automaticamente:
 
@@ -333,7 +339,7 @@ class UserAdmin(ModelAdmin[User]):
     ]
 ```
 
-## Permissões
+### Permissões
 
 Acesso ao admin requer `is_staff=True`.
 
@@ -347,7 +353,9 @@ class PostAdmin(ModelAdmin[Post]):
     exclude_actions = ("delete_selected",)
 ```
 
-## Configurações do Admin
+## Painel, ops e acesso
+
+### Configurações do Admin
 
 ```python
 # src/settings.py
@@ -372,7 +380,7 @@ class AppSettings(Settings):
     admin_cookie_secure: bool = None  # None = auto-detect HTTPS
 ```
 
-## Operations Center
+### Operations Center
 
 O admin inclui um centro de operações para monitorar:
 
@@ -397,7 +405,7 @@ class AppSettings(Settings):
     ops_infrastructure_poll_interval: int = 60  # Métricas (segundos)
 ```
 
-## Login
+### Login
 
 Admin usa autenticação por sessão (separada do JWT da API).
 
@@ -408,7 +416,7 @@ core createsuperuser
 
 Login padrão: `/admin/login`
 
-## Auto-Discovery
+### Auto-Discovery
 
 Módulos admin são descobertos automaticamente de arquivos `admin.py`:
 
@@ -422,7 +430,7 @@ src/apps/
     └── admin.py  # Auto-descoberto
 ```
 
-## Tipos para Autocomplete
+### Tipos para Autocomplete
 
 ```python
 from strider.admin import (
@@ -435,7 +443,9 @@ from strider.admin import (
 )
 ```
 
-## Próximos Passos
+## Referência
+
+### Próximos Passos
 
 - [CLI](07-cli.md) — Comandos disponíveis
 - [Permissions](08-permissions.md) — Controle de acesso
