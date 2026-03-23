@@ -77,8 +77,56 @@ A API expõe:
 - `cd mcp-server && npm install && npm run build && npm run index-docs`
 - `NPM Start Command`: `cd mcp-server && npm start`
 
+## Deploy no Railway
+
+### 1. Criar projeto
+
+- Acesse https://railway.app
+- New Project -> Deploy from GitHub repo
+
+### 2. Root Directory
+
+- Se seu repo contém o MCP em subpasta, informe:
+
+```
+Root Directory: mcp-server
+```
+
+### 3. Build & Start Variables
+
+- Build command:
+
+```
+npm install && npm run build && npm run index-docs
+```
+
+- Start command:
+
+```
+npm start
+```
+
+- Environment variables:
+
+```
+NODE_ENV=production
+```
+
+(se usar embeddings, adicione `OPENAI_API_KEY` etc.)
+
+### 4. Docker (opcional)
+
+- Railway suporta Dockerfile no diretório raiz (`mcp-server/Dockerfile`).
+- Ao deploy, Railway detecta automaticamente.
+
+### 5. Teste
+
+```
+curl https://<YOUR_APP>.up.railway.app/status
+curl -X POST https://<YOUR_APP>.up.railway.app/query -H 'Content-Type: application/json' -d '{"question":"como funciona?"}'
+```
+
 ### Observações
 
-- A indexação é feita a partir de `../docs` (pasta do framework), não do runtime principal.
-- Não há lógica hardcoded em `/query`; usa TF-IDF/semântica textual.
-- API e docs são separados, alinhado com o requisito.
+- A indexação lê também `../strider/**/*.py` e `../docs/**/*.md`.
+- `/query` usa TF-IDF + cosine sem hardcoded.
