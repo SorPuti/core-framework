@@ -110,6 +110,8 @@ npm start
 
 ```
 NODE_ENV=production
+DOCS_ROOT=/app/docs   # opcional, se os docs estiverem disponíveis no container
+DATA_DIR=/app/data
 ```
 
 (se usar embeddings, adicione `OPENAI_API_KEY` etc.)

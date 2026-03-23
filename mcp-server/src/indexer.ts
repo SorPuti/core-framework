@@ -15,8 +15,10 @@ export interface IndexData {
   idf: Record<string, number>;
 }
 
-const DOCS_DIR = path.resolve(__dirname, "..", "..", "..", "docs");
-const DATA_DIR = path.resolve(__dirname, "..", "..", "data");
+const DOCS_DIR = path.resolve(
+  process.env.DOCS_ROOT || path.resolve(__dirname, "..", "..", "docs")
+);
+const DATA_DIR = path.resolve(process.env.DATA_DIR || path.resolve(__dirname, "..", "..", "data"));
 const INDEX_FILE = path.join(DATA_DIR, "index.json");
 
 function normalizeText(raw: string): string {

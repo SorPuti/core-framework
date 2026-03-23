@@ -25,7 +25,7 @@ async function initialize(): Promise<void> {
 app.get("/status", async (req: Request, res: Response) => {
   res.json({
     status: "ready",
-    docs_root: DOCS_ROOT,
+    docs_root: process.env.DOCS_ROOT || DOCS_ROOT,
     indexed_chunks: indexData?.chunks.length ?? 0,
     available: Boolean(indexData),
   });
