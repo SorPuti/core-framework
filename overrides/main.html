@@ -3,8 +3,9 @@
 {% block content %}
   {{ super() }}
 
-  <!-- Mermaid Diagram Support with Robust Rendering -->
+  <!-- Mermaid Diagram Support with Zoom & Pan -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
   
   <script>
     // ============================================================================
@@ -73,6 +74,36 @@
         try {
           diagram.setAttribute('data-processed', 'true');
           await mermaid.run();
+          
+          // Aguardar renderização do SVG
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Adicionar zoom/pan ao SVG
+          const svg = diagram.querySelector('svg');
+          if (svg) {
+            // Remover viewBox para permitir pan-zoom
+            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            svg.style.width = '100%';
+            svg.style.height = 'auto';
+            svg.style.cursor = 'grab';
+            
+            // Inicializar svg-pan-zoom
+            try {
+              svgPanZoom(svg, {
+                zoomEnabled: true,
+                controlIconsEnabled: true,
+                fit: true,
+                center: true,
+                minZoom: 0.5,
+                maxZoom: 10,
+                zoomScaleSensitivity: 0.2,
+                onZoom: () => svg.style.cursor = 'grab',
+                beforePan: () => svg.style.cursor = 'grabbing'
+              });
+            } catch (e) {
+              console.log('[Mermaid] SVG pan-zoom not available, rendering static');
+            }
+          }
         } catch (error) {
           console.warn('[Mermaid] Rendering error:', error);
           diagram.removeAttribute('data-processed');
