@@ -63,6 +63,18 @@ async function loadDocsAndCode(): Promise<SourceDoc[]> {
   const striderDir = path.resolve(__dirname, "..", "..", "strider");
   const codeFiles = await globby(codePatterns, { cwd: striderDir, absolute: true });
 
+  if (docFiles.length === 0) {
+    console.warn(`No docs files found in ${DOCS_DIR}`);
+  } else {
+    console.log(`Loaded ${docFiles.length} docs files from ${DOCS_DIR}`);
+  }
+
+  if (codeFiles.length === 0) {
+    console.warn(`No code files found in ${striderDir}`);
+  } else {
+    console.log(`Loaded ${codeFiles.length} code files from ${striderDir}`);
+  }
+
   const files: SourceDoc[] = [];
 
   for (const file of docFiles) {
