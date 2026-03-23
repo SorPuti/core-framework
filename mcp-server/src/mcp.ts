@@ -309,7 +309,7 @@ async function main(): Promise<void> {
   const forceStdio = args.includes("--stdio");
   const portArg = args.find((arg) => arg.startsWith("--port="));
   const argPort = portArg ? Number(portArg.split("=")[1]) : 0;
-  const transport = (process.env.MCP_TRANSPORT || "stdio").toLowerCase();
+  const transport = (process.env.MCP_TRANSPORT || "").toLowerCase();
   const port = argPort || Number(process.env.PORT || 0);
 
   if (forceStdio) {
@@ -322,13 +322,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (transport === "stdio") {
-    runStdio();
+  if (transport === "http" || port > 0) {
+    runHttp(port || 8080);
     return;
   }
 
-  if (transport === "http" || port > 0) {
-    runHttp(port || 8080);
+  if (transport === "stdio") {
+    runStdio();
     return;
   }
 
