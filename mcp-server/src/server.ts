@@ -41,13 +41,19 @@ app.post("/query", async (req: Request, res: Response) => {
   if (!indexData) {
     return res.status(503).json({ error: "Index not initialized" });
   }
+  const currentIndex = indexData;
 
   const question = (req.body?.question || "").toString().trim();
   if (!question) {
     return res.status(400).json({ error: "question is required" });
   }
 
-  const results = queryIndex(indexData, question, 5);
+  const docResults = queryIndex(currentIndex, question, { topK: 5, sourcePrefix: "docs/" });
+
+  const results =
+    docResults.length > 0
+      ? docResults
+      : queryIndex(currentIndex, question, { topK: 5 });
 
   if (results.length === 0) {
     return res.status(404).json({
@@ -62,6 +68,14 @@ app.post("/query", async (req: Request, res: Response) => {
       score: hit.score,
       source: hit.chunk.source,
       text: hit.chunk.text.slice(0, 1200),
+      code_references: queryIndex(currentIndex, `${question}\n${hit.chunk.text.slice(0, 800)}`, {
+        topK: 3,
+        sourcePrefix: "code/",
+      }).map((codeHit) => ({
+        score: codeHit.score,
+        source: codeHit.chunk.source,
+        text: codeHit.chunk.text.slice(0, 400),
+      })),
     })),
   });
 });
