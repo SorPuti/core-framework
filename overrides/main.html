@@ -14,11 +14,12 @@
     
     // Configurar Mermaid globalmente
     window.mermaidConfig = {
-      startOnLoad: false, // Desabilitar auto-load para ter controle manual
+      startOnLoad: false,
       theme: 'dark',
       securityLevel: 'loose',
       fontFamily: 'Inter, sans-serif',
-      logLevel: 'warn',
+      logLevel: 'error',
+      suppressErrors: true, // Suprimir erros para não quebrar a página
       flowchart: {
         useMaxWidth: true,
         htmlLabels: true,
@@ -42,6 +43,9 @@
         useWidth: undefined,
         fontSize: 16,
         fontFamily: 'Inter, sans-serif'
+      },
+      errorDiagram: {
+        useMaxWidth: true
       }
     };
     
