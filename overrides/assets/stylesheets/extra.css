@@ -25,64 +25,85 @@
 }
 
 /* ============================================================================
-   HEADER E NAVEGAÇÃO
+   HEADER E NAVEGAÇÃO - ESTADOS LIMPOS E PROFISSIONAIS
    ============================================================================ */
 
-/* Header com Gradient */
+/* Header Principal */
 .md-header {
   background: linear-gradient(135deg, #0a0a0a 0%, #1a0033 100%);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(156, 39, 176, 0.2);
-  box-shadow: 0 4px 30px rgba(156, 39, 176, 0.1);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
 }
 
-.md-header:hover {
-  border-bottom-color: rgba(156, 39, 176, 0.4);
-  box-shadow: 0 4px 30px rgba(156, 39, 176, 0.2);
-}
-
-/* Navegação em Abas */
+/* Navegação em Abas - Sem Animações Excessivas */
 .md-tabs {
-  background: linear-gradient(90deg, #0a0a0a 0%, #0d1b2a 50%, #0a0a0a 100%);
-  border-bottom: 2px solid rgba(156, 39, 176, 0.15);
-  padding: 0.5rem 0;
-  transition: all 0.3s ease;
+  background: rgba(10, 10, 10, 0.8);
+  border-bottom: 1px solid rgba(156, 39, 176, 0.15);
+  padding: 0;
+  margin: 0;
+  height: 3rem;
+  display: flex;
+  align-items: center;
 }
 
 .md-tabs__list {
   padding: 0 1rem;
+  display: flex;
+  gap: 0;
+  align-items: center;
 }
 
+/* Tab Individual - Estado Normal */
 .md-tabs__item {
-  margin: 0 0.5rem;
-  border-radius: 8px 8px 0 0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  transition: background-color 0.15s ease;
+  border-bottom: 2px solid transparent;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  position: relative;
 }
 
-.md-tabs__item:hover {
-  background: rgba(156, 39, 176, 0.1);
-  transform: translateY(-2px);
-}
-
+/* Tab Ativo */
 .md-tabs__item--active {
-  background: rgba(156, 39, 176, 0.25) !important;
-  border-bottom: 3px solid #e0aaff !important;
+  background-color: rgba(156, 39, 176, 0.15) !important;
+  border-bottom: 2px solid #e0aaff !important;
+}
+
+.md-tabs__item--active .md-tabs__link {
   color: #e0aaff !important;
   font-weight: 600;
 }
 
+/* Tab Hover */
+.md-tabs__item:not(.md-tabs__item--active):hover {
+  background-color: rgba(156, 39, 176, 0.08);
+}
+
+/* Link da Tab */
 .md-tabs__link {
-  padding: 0.75rem 1.25rem;
-  border-radius: 8px;
+  padding: 0 1.25rem;
+  height: 100%;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: all 0.2s ease;
+  transition: color 0.15s ease;
+  color: #a0a0a0;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
 }
 
-.md-tabs__link:hover {
-  color: #e0aaff;
+.md-tabs__item:hover .md-tabs__link {
+  color: #c77dff;
 }
 
 /* ============================================================================
@@ -154,83 +175,93 @@
   background: linear-gradient(180deg, #0a0a0a 0%, #1a0a2a 50%, #0a0a0a 100%);
 }
 
-/* Container Principal - 100% Width */
+/* Container Principal - 100% Width SEM LIMITAÇÕES */
 .md-content {
   padding: 1.5rem 2rem;
-  max-width: 100%;
-  width: 100%;
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;
 }
 
 .md-main {
-  width: 100%;
+  width: 100% !important;
+  max-width: none !important;
 }
 
-/* Expandir layout */
+.md-main__inner {
+  background: linear-gradient(180deg, #0a0a0a 0%, #1a0a2a 50%, #0a0a0a 100%);
+  width: 100%;
+  max-width: none;
+}
+
 .md-grid {
-  grid-template-columns: auto 1fr; /* Manter sidebar mas dar mais espaço ao conteúdo */
-  gap: 0;
+  grid-template-columns: auto 1fr !important;
+  gap: 0 !important;
 }
 
 @media (min-width: 1216px) {
   .md-sidebar--secondary {
-    width: 200px; /* Reduzir sidebar secundária */
+    width: 200px;
   }
 }
 
-/* Títulos com Gradient */
-/* Tipografia Semântica com Redução de 45% */
+/* Tipografia Semântica - REDUZIDA 50% MAIS (Total 90% abaixo do original) */
 .md-content h1 {
   background: linear-gradient(135deg, #e0aaff 0%, #9c27b0 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   font-weight: 800;
-  font-size: 1.75rem; /* Reduzido de 2.5rem */
-  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
   margin-top: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   line-height: 1.3;
 }
 
 .md-content h2 {
   color: #c77dff;
-  border-bottom: 2px solid rgba(156, 39, 176, 0.3);
-  padding-bottom: 0.5rem;
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
-  font-size: 1.31rem; /* Reduzido de ~1.8rem */
+  border-bottom: 1px solid rgba(156, 39, 176, 0.3);
+  padding-bottom: 0.4rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  line-height: 1.4;
-  transition: all 0.2s ease;
-}
-
-.md-content h2:hover {
-  border-bottom-color: #9c27b0;
-  color: #e0aaff;
+  line-height: 1.3;
 }
 
 .md-content h3 {
   color: #c77dff;
-  font-size: 1.125rem; /* Reduzido de ~1.5rem */
+  font-size: 0.7rem;
   font-weight: 700;
-  margin-top: 1.25rem;
-  margin-bottom: 0.5rem;
-  line-height: 1.4;
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+  line-height: 1.3;
 }
 
 .md-content h4 {
   color: #c77dff;
-  font-size: 1rem; /* Reduzido de ~1.2rem */
+  font-size: 0.65rem;
   font-weight: 700;
-  margin-top: 1rem;
-  margin-bottom: 0.5rem;
-  line-height: 1.4;
+  margin-top: 0.75rem;
+  margin-bottom: 0.3rem;
+  line-height: 1.3;
 }
 
 .md-content p {
-  font-size: 0.95rem;
-  line-height: 1.6;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+}
+
+.md-content ul,
+.md-content ol {
+  font-size: 0.75rem;
   margin-bottom: 0.75rem;
+}
+
+.md-content li {
+  margin-bottom: 0.3rem;
 }
 
 /* ============================================================================
@@ -567,8 +598,8 @@ a:hover::after {
 /* Estilos para elementos Mermaid */
 .mermaid svg {
   display: flex;
-  justify-content: center;
-  margin: 0 auto;
+  justify-content: flex-start;
+  margin: 0;
   max-width: 100%;
   height: auto;
 }
