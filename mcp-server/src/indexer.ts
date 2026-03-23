@@ -49,39 +49,50 @@ function buildTF(tokens: string[]): Record<string, number> {
   return tf;
 }
 
-async function loadDocsAndCode(): Promise<{ path: string; text: string }[]> {
+interface SourceDoc {
+  path: string;
+  text: string;
+  kind: "docs" | "code";
+}
+
+async function loadDocsAndCode(): Promise<SourceDoc[]> {
   const docsPatterns = ["**/*.md"];
   const codePatterns = ["**/*.py"];
 
   const docFiles = await globby(docsPatterns, { cwd: DOCS_DIR, absolute: true });
-  const codeFiles = await globby(codePatterns, { cwd: path.resolve(__dirname, "..", "..", "strider"), absolute: true });
+  const striderDir = path.resolve(__dirname, "..", "..", "strider");
+  const codeFiles = await globby(codePatterns, { cwd: striderDir, absolute: true });
 
-  const files: { path: string; text: string }[] = [];
+  const files: SourceDoc[] = [];
 
   for (const file of docFiles) {
     const text = await fs.promises.readFile(file, "utf-8");
-    files.push({ path: path.relative(DOCS_DIR, file), text });
+    files.push({ path: path.relative(DOCS_DIR, file), text, kind: "docs" });
   }
 
   for (const file of codeFiles) {
     const text = await fs.promises.readFile(file, "utf-8");
-    files.push({ path: path.relative(path.resolve(__dirname, "..", "..", "strider"), file), text });
+    files.push({ path: path.relative(striderDir, file), text, kind: "code" });
   }
 
   return files;
 }
 
-function buildDocChunks(docs: { path: string; text: string }[]): DocChunk[] {
+function buildDocChunks(docs: SourceDoc[]): DocChunk[] {
   const chunks: DocChunk[] = [];
 
   for (const doc of docs) {
+    const isCode = doc.kind === "code";
     const normalized = normalizeText(doc.text);
-    const sections = normalized.split(/\n##?\s+/g); // split by headings
+
+    const sections = isCode
+      ? normalized.split(/\n(?=(?:def|class)\s+)/g) // split by top-level python declarations
+      : normalized.split(/\n##?\s+/g); // split by headings for markdown
 
     for (let i = 0; i < sections.length; i++) {
       const text = sections[i].trim();
       if (!text) continue;
-      const source = `docs/${doc.path}`;
+      const source = isCode ? `code/${doc.path}` : `docs/${doc.path}`;
       const id = `${source}#section_${i}`;
 
       const tokens = tokenize(text);

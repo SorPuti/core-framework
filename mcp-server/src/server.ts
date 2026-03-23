@@ -23,10 +23,16 @@ async function initialize(): Promise<void> {
 }
 
 app.get("/status", async (req: Request, res: Response) => {
+  const total = indexData?.chunks.length ?? 0;
+  const docsChunks = indexData?.chunks.filter((chunk) => chunk.source.startsWith("docs/")).length ?? 0;
+  const codeChunks = indexData?.chunks.filter((chunk) => chunk.source.startsWith("code/")).length ?? 0;
+
   res.json({
     status: "ready",
     docs_root: process.env.DOCS_ROOT || DOCS_ROOT,
-    indexed_chunks: indexData?.chunks.length ?? 0,
+    indexed_chunks: total,
+    docs_chunks: docsChunks,
+    code_chunks: codeChunks,
     available: Boolean(indexData),
   });
 });
