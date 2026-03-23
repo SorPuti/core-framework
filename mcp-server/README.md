@@ -119,6 +119,16 @@ NODE_ENV=production
 - Railway suporta Dockerfile no diretório raiz (`mcp-server/Dockerfile`).
 - Ao deploy, Railway detecta automaticamente.
 
+#### Docker build local (fallback)
+
+```bash
+# context no repo root
+docker build -t mcp-server --build-arg APP_DIR=mcp-server -f mcp-server/Dockerfile .
+
+# context direto em mcp-server
+docker build -t mcp-server --build-arg APP_DIR=. -f mcp-server/Dockerfile mcp-server
+```
+
 ### 5. Teste
 
 ```

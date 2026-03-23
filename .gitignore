@@ -12,6 +12,7 @@ data
 .pytest_cache/
 .vscode/
 test_project/
+*.lock
 
 # C extensions
 *.so
