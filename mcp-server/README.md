@@ -26,6 +26,33 @@ npm run build
 npm start
 ```
 
+Para forcar modo stdio:
+
+```bash
+MCP_TRANSPORT=stdio npm start
+```
+
+## Rodar remoto (MCP HTTP)
+
+No Railway, `PORT` e injetada automaticamente. O servidor sobe em:
+
+- `POST /mcp` (JSON-RPC MCP)
+- `GET /status` (health/debug)
+
+Para forcar localmente:
+
+```bash
+MCP_TRANSPORT=http PORT=8080 npm start
+```
+
+Handshake de validacao:
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
+```
+
 ## Tools MCP expostas
 
 - `search_framework`
