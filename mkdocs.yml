@@ -80,8 +80,6 @@ plugins:
   - search:
       lang: pt
       separator: '[\s\-\.]+'
-      prebuild_index: true
-      min_search_length: 2
 
 theme:
   name: material

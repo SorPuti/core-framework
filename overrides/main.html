@@ -1,278 +1,207 @@
 {% extends "base.html" %}
 
-{% block content %}
+{% block scripts %}
   {{ super() }}
-
-  <!-- Mermaid Diagram Support with Zoom & Pan -->
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
-  
   <script>
-    // ============================================================================
-    // MERMAID CONFIGURATION & INITIALIZATION
-    // ============================================================================
-    
-    // Configurar Mermaid globalmente
-    window.mermaidConfig = {
-      startOnLoad: false,
-      theme: 'dark',
-      securityLevel: 'loose',
-      fontFamily: 'Inter, sans-serif',
-      logLevel: 'error',
-      suppressErrors: true, // Suprimir erros para não quebrar a página
-      flowchart: {
-        useMaxWidth: true,
-        htmlLabels: true,
-        curve: 'linear'
-      },
-      sequence: {
-        useMaxWidth: true,
-        htmlLabels: true,
-        mirrorActors: true,
-        messageAlign: 'center'
-      },
-      classDiagram: {
-        useMaxWidth: true,
-        htmlLabels: true
-      },
-      stateDiagram: {
-        useMaxWidth: true,
-        htmlLabels: true
-      },
-      gantt: {
-        useWidth: undefined,
-        fontSize: 16,
-        fontFamily: 'Inter, sans-serif'
-      },
-      errorDiagram: {
-        useMaxWidth: true
-      }
+    window.__STRIDE_DOCS__ = {
+      repoUrl: {{ config.repo_url | tojson }},
+      mdPath: {% if page %}{{ page.file.src_path | replace("\\", "/") | tojson }}{% else %}""{% endif %},
+      branch: "main"
     };
-    
-    mermaid.initialize(window.mermaidConfig);
-
-    // ============================================================================
-    // FUNÇÃO PARA RENDERIZAR MERMAID
-    // ============================================================================
-    
-    async function renderMermaidDiagrams() {
-      const diagrams = document.querySelectorAll('code.language-mermaid, .mermaid:not([data-processed])');
-      
-      if (diagrams.length === 0) {
-        return;
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    (function () {
+      function githubMarkdownUrl() {
+        var c = window.__STRIDE_DOCS__;
+        if (!c || !c.repoUrl || !c.mdPath) return "";
+        var base = c.repoUrl.replace(/\/$/, "");
+        return base + "/blob/" + c.branch + "/docs/" + c.mdPath;
       }
 
-      for (const diagram of diagrams) {
-        try {
-          let mermaidDiv;
-          
-          // Converter code.language-mermaid em div.mermaid se necessário
-          if (diagram.classList.contains('language-mermaid')) {
-            const parent = diagram.parentElement;
-            if (parent && parent.tagName === 'PRE') {
-              mermaidDiv = document.createElement('div');
-              mermaidDiv.className = 'mermaid';
-              
-              // IMPORTANTE: Extrair apenas texto puro, removendo tags HTML
-              let plainText = diagram.textContent || '';
-              
-              // Se houver tags HTML no conteúdo, remover (fallback)
-              plainText = plainText.replace(/<[^>]*>/g, '').trim();
-              
-              mermaidDiv.textContent = plainText;
-              parent.replaceWith(mermaidDiv);
-            } else {
-              continue;
-            }
-          } else {
-            mermaidDiv = diagram;
-            
-            // Limpar conteúdo com tags HTML se necessário
-            let content = mermaidDiv.textContent || '';
-            if (mermaidDiv.innerHTML && mermaidDiv.innerHTML.includes('<')) {
-              content = mermaidDiv.innerHTML.replace(/<[^>]*>/g, '').trim();
-              mermaidDiv.textContent = content;
-            }
-          }
+      function escapeHtml(text) {
+        var div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
 
-          mermaidDiv.setAttribute('data-processed', 'true');
-          
-          // Renderizar com Mermaid
+      function mermaidTheme() {
+        var scheme = document.documentElement.getAttribute("data-md-color-scheme");
+        return scheme === "slate" ? "dark" : "default";
+      }
+
+      function configureMermaid() {
+        if (typeof mermaid === "undefined") return;
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: mermaidTheme(),
+          securityLevel: "loose",
+          fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+          logLevel: "error",
+          flowchart: {
+            useMaxWidth: true,
+            htmlLabels: true,
+            curve: "basis"
+          },
+          sequence: {
+            useMaxWidth: true,
+            htmlLabels: true
+          }
+        });
+      }
+
+      function ensureSourceAttr(el) {
+        var t = (el.textContent || "").trim();
+        if (t && !el.getAttribute("data-mermaid-src")) {
+          el.setAttribute("data-mermaid-src", t);
+        }
+      }
+
+      /** MkDocs + pymdownx emitem <pre class="mermaid"><code> — precisa virar div.mermaid */
+      function normalizeMermaidBlocks() {
+        document.querySelectorAll("pre.mermaid").forEach(function (pre) {
+          var code = pre.querySelector("code");
+          var text = (code ? code.textContent : pre.textContent || "").trim();
+          if (!text) return;
+          var div = document.createElement("div");
+          div.className = "mermaid";
+          div.textContent = text;
+          div.setAttribute("data-mermaid-src", text);
+          pre.replaceWith(div);
+        });
+
+        document.querySelectorAll("pre > code.language-mermaid").forEach(function (code) {
+          var pre = code.parentElement;
+          if (!pre || pre.tagName !== "PRE" || pre.classList.contains("mermaid")) return;
+          var text = (code.textContent || "").trim();
+          if (!text) return;
+          var div = document.createElement("div");
+          div.className = "mermaid";
+          div.textContent = text;
+          div.setAttribute("data-mermaid-src", text);
+          pre.replaceWith(div);
+        });
+
+        document.querySelectorAll(".mermaid").forEach(ensureSourceAttr);
+      }
+
+      function showMermaidFallback(node, err) {
+        var src = node.getAttribute("data-mermaid-src") || (node.textContent || "").trim();
+        var mdUrl = githubMarkdownUrl();
+        var wrap = document.createElement("div");
+        wrap.className = "mermaid-error-fallback";
+        wrap.setAttribute("role", "alert");
+        var msg =
+          "<p class=\"mermaid-error-fallback__title\">Não foi possível renderizar este diagrama aqui.</p>" +
+          "<p class=\"mermaid-error-fallback__hint\">Abra o arquivo Markdown no repositório para ver o diagrama no contexto original.</p>";
+        if (mdUrl) {
+          msg +=
+            "<p class=\"mermaid-error-fallback__link\"><a href=\"" +
+            escapeHtml(mdUrl) +
+            "\" target=\"_blank\" rel=\"noopener\">Ver <code>docs/" +
+            escapeHtml((window.__STRIDE_DOCS__ && window.__STRIDE_DOCS__.mdPath) || "") +
+            "</code> no GitHub</a></p>";
+        }
+        msg +=
+          "<details class=\"mermaid-error-fallback__details\"><summary>Código Mermaid</summary>" +
+          "<pre><code>" +
+          escapeHtml(src) +
+          "</code></pre></details>";
+        if (err && err.message) {
+          msg +=
+            "<p class=\"mermaid-error-fallback__tech\"><small>" +
+            escapeHtml(String(err.message)) +
+            "</small></p>";
+        }
+        wrap.innerHTML = msg;
+        node.replaceWith(wrap);
+      }
+
+      async function renderMermaidDiagrams() {
+        if (typeof mermaid === "undefined") return;
+
+        normalizeMermaidBlocks();
+
+        var nodes = [].slice.call(
+          document.querySelectorAll(".mermaid:not([data-mermaid-done])")
+        );
+        if (nodes.length === 0) return;
+
+        configureMermaid();
+
+        for (var i = 0; i < nodes.length; i++) {
+          var node = nodes[i];
           try {
-            await mermaid.run();
-            
-            // Aguardar renderização do SVG
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Adicionar zoom/pan ao SVG
-            const svg = mermaidDiv.querySelector('svg');
-            if (svg) {
-              svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-              svg.style.width = '100%';
-              svg.style.height = 'auto';
-              svg.style.cursor = 'grab';
-              
-              // Inicializar svg-pan-zoom
-              try {
-                if (typeof svgPanZoom !== 'undefined') {
-                  svgPanZoom(svg, {
-                    zoomEnabled: true,
-                    controlIconsEnabled: true,
-                    fit: true,
-                    center: true,
-                    minZoom: 0.5,
-                    maxZoom: 10,
-                    zoomScaleSensitivity: 0.2,
-                    onZoom: () => svg.style.cursor = 'grab',
-                    beforePan: () => svg.style.cursor = 'grabbing'
-                  });
-                }
-              } catch (e) {
-                console.log('[Mermaid] SVG pan-zoom not available');
-              }
-            }
-          } catch (renderError) {
-            // Se falhar na renderização, mostrar conteúdo como erro gracioso
-            console.warn('[Mermaid] Rendering failed, showing fallback');
-            
-            // Criar fallback: mostrar código em um card de erro
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'mermaid-error-fallback';
-            errorDiv.innerHTML = `
-              <div style="padding: 1rem; background: rgba(200, 100, 100, 0.1); border: 1px solid rgba(200, 100, 100, 0.3); border-radius: 8px; margin: 1rem 0;">
-                <p style="color: #ff9999; font-weight: 600; margin: 0 0 0.5rem 0;">⚠️ Diagrama não suportado</p>
-                <pre style="background: #161616; color: #999; padding: 0.75rem; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; margin: 0;"><code>${escapeHtml(mermaidDiv.textContent)}</code></pre>
-              </div>
-            `;
-            mermaidDiv.replaceWith(errorDiv);
-          }
-        } catch (error) {
-          console.warn('[Mermaid] Processing error:', error);
-        }
-      }
-
-      // Aplicar estilos aos diagramas renderizados
-      applyMermaidStyles();
-    }
-    
-    // Helper para escapar HTML
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // ============================================================================
-    // APLICAR ESTILOS AOS DIAGRAMAS
-    // ============================================================================
-    
-    function applyMermaidStyles() {
-      document.querySelectorAll('.mermaid').forEach(diagram => {
-        if (!diagram.parentElement.classList.contains('mermaid-wrapper')) {
-          const wrapper = document.createElement('div');
-          wrapper.className = 'mermaid-wrapper';
-          diagram.parentElement.insertBefore(wrapper, diagram);
-          wrapper.appendChild(diagram);
-        }
-      });
-    }
-
-    // ============================================================================
-    // MUTATION OBSERVER PARA NAVEGAÇÃO DINÂMICA
-    // ============================================================================
-    
-    const observer = new MutationObserver(async (mutations) => {
-      // Verificar se há novo conteúdo .mermaid adicionado
-      for (const mutation of mutations) {
-        if (mutation.addedNodes.length > 0) {
-          const hasNewMermaid = Array.from(mutation.addedNodes).some(node => 
-            (node.nodeType === Node.ELEMENT_NODE && 
-            (node.classList.contains('mermaid') || node.querySelector('.mermaid'))) ||
-            (node.nodeType === Node.ELEMENT_NODE && 
-            (node.classList.contains('language-mermaid') || node.querySelector('.language-mermaid')))
-          );
-          
-          if (hasNewMermaid) {
-            // Pequeno delay para garantir que o DOM foi atualizado
-            await new Promise(resolve => setTimeout(resolve, 100));
-            await renderMermaidDiagrams();
-            break;
+            await mermaid.run({ nodes: [node] });
+            node.setAttribute("data-mermaid-done", "true");
+          } catch (e) {
+            showMermaidFallback(node, e);
           }
         }
+
+        document.querySelectorAll(".mermaid[data-mermaid-done]").forEach(function (diagram) {
+          if (!diagram.parentElement || !diagram.parentElement.classList.contains("mermaid-wrapper")) {
+            var wrapper = document.createElement("div");
+            wrapper.className = "mermaid-wrapper";
+            diagram.parentElement.insertBefore(wrapper, diagram);
+            wrapper.appendChild(diagram);
+          }
+          var svg = diagram.querySelector("svg");
+          if (svg) {
+            svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+            svg.style.width = "100%";
+            svg.style.height = "auto";
+            svg.style.maxWidth = "100%";
+          }
+        });
       }
-    });
 
-    // ============================================================================
-    // INICIALIZAÇÃO
-    // ============================================================================
-    
-    document.addEventListener('DOMContentLoaded', async function() {
-      // Render inicial
-      await renderMermaidDiagrams();
-
-      // Iniciar observação
-      const contentArea = document.querySelector('.md-content');
-      if (contentArea) {
-        observer.observe(contentArea, {
-          childList: true,
-          subtree: true,
-          addedNodes: true
+      function resetDiagramsForTheme() {
+        var list = document.querySelectorAll(".mermaid[data-mermaid-done]");
+        list.forEach(function (el) {
+          var src = el.getAttribute("data-mermaid-src");
+          if (!src) return;
+          el.removeAttribute("data-mermaid-done");
+          el.innerHTML = "";
+          el.textContent = src;
         });
       }
 
-      // Animação suave ao carregar a página
-      const content = document.querySelector('.md-content');
-      if (content) {
-        content.style.animationDelay = '0.1s';
-      }
+      document.addEventListener("DOMContentLoaded", function () {
+        configureMermaid();
+        renderMermaidDiagrams().catch(function () {});
 
-      // Smooth scroll para links internos
-      document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function(e) {
-          e.preventDefault();
-          const target = document.querySelector(this.getAttribute('href'));
-          if (target) {
-            target.scrollIntoView({
-              behavior: 'smooth',
-              block: 'start'
-            });
-          }
+        var contentArea = document.querySelector(".md-content");
+        var debounceTimer = null;
+        function scheduleMermaidRender() {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(function () {
+            debounceTimer = null;
+            renderMermaidDiagrams().catch(function () {});
+          }, 120);
+        }
+        if (contentArea) {
+          var obs = new MutationObserver(function () {
+            scheduleMermaidRender();
+          });
+          obs.observe(contentArea, { childList: true, subtree: true });
+        }
+
+        var schemeObs = new MutationObserver(function () {
+          resetDiagramsForTheme();
+          renderMermaidDiagrams().catch(function () {});
+        });
+        schemeObs.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["data-md-color-scheme"]
         });
       });
-    });
 
-    // ============================================================================
-    // SUPORTE PARA INSTANT LOADING (MATERIAL THEME)
-    // ============================================================================
-    
-    // Material theme dispara eventos quando a página é carregada dinamicamente
-    if (document.documentElement.dataset.md === 'material') {
-      // Usar o hook de navegação do Material
-      document.addEventListener('pjax:success', async function() {
-        await new Promise(resolve => setTimeout(resolve, 200));
-        await renderMermaidDiagrams();
+      document.addEventListener("pjax:success", function () {
+        setTimeout(function () {
+          renderMermaidDiagrams().catch(function () {});
+        }, 50);
       });
-
-      // Alternativa: turbo (se estiver usando turbo)
-      document.addEventListener('turbo:load', async function() {
-        await new Promise(resolve => setTimeout(resolve, 200));
-        await renderMermaidDiagrams();
-      });
-    }
-
-    // ============================================================================
-    // CLEANUP E RERENDER EM CERTOS EVENTOS
-    // ============================================================================
-    
-    window.addEventListener('resize', () => {
-      // Re-renderizar diagramas em resize para responsividade
-      const mermaidSvgs = document.querySelectorAll('.mermaid svg');
-      if (mermaidSvgs.length > 0) {
-        mermaidSvgs.forEach(svg => {
-          svg.style.width = '100%';
-          svg.style.height = 'auto';
-        });
-      }
-    });
+    })();
   </script>
 {% endblock %}

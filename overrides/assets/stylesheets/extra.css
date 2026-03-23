@@ -1,911 +1,250 @@
-/* ============================================================================
-   Stride Framework - Documentação com Design Moderno
-   Preto + Roxo Gradient com Animações
-   ============================================================================ */
+/* Stride — documentação: legível, compacta e consistente com MkDocs Material */
 
-/* Variáveis de Cores */
 :root {
-  --color-dark-bg: #0a0a0a;
-  --color-dark-card: #1a1a1a;
-  --color-purple-primary: #9c27b0;
-  --color-purple-light: #c77dff;
-  --color-purple-dark: #5a189a;
-  --color-accent: #e0aaff;
+  --stride-doc-max: 44rem;
+  --stride-radius: 6px;
+  --stride-purple: #9c27b0;
+  --stride-purple-soft: rgba(156, 39, 176, 0.18);
 }
 
-/* Tema Dark - Paleta Principal */
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #9c27b0;
-  --md-primary-fg-color--light: #c77dff;
-  --md-primary-fg-color--dark: #5a189a;
-  --md-accent-fg-color: #e0aaff;
-  --md-default-bg-color: #0a0a0a;
-  --md-code-bg-color: #161616;
-  --md-code-fg-color: #e0aaff;
+  --md-default-bg-color: #0c0c10;
+  --md-code-bg-color: #14141a;
 }
 
-/* ============================================================================
-   HEADER E NAVEGAÇÃO - ESTADOS LIMPOS E PROFISSIONAIS
-   ============================================================================ */
-
-/* Header Principal */
-.md-header {
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a0033 100%);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(156, 39, 176, 0.2);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  height: 3.5rem;
-  display: flex;
-  align-items: center;
+/* --- Tipografia do artigo (Material usa .md-typeset) --- */
+.md-typeset {
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Navegação em Abas - Sem Animações Excessivas */
-.md-tabs {
-  background: rgba(10, 10, 10, 0.8);
-  border-bottom: 1px solid rgba(156, 39, 176, 0.15);
-  padding: 0;
-  margin: 0;
-  height: 3rem;
-  display: flex;
-  align-items: center;
+.md-typeset h1 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.75rem;
+  color: var(--md-default-fg-color);
+  background: none;
+  -webkit-text-fill-color: currentColor;
 }
 
-.md-tabs__list {
-  padding: 0 1rem;
-  display: flex;
-  gap: 0;
-  align-items: center;
+.md-typeset h2 {
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.3;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--stride-purple-soft);
+  color: var(--md-default-fg-color);
 }
 
-/* Tab Individual - Estado Normal */
-.md-tabs__item {
-  margin: 0;
-  padding: 0;
-  border-radius: 0;
-  transition: background-color 0.15s ease;
-  border-bottom: 2px solid transparent;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-
-/* Tab Ativo */
-.md-tabs__item--active {
-  background-color: rgba(156, 39, 176, 0.15) !important;
-  border-bottom: 2px solid #e0aaff !important;
-}
-
-.md-tabs__item--active .md-tabs__link {
-  color: #e0aaff !important;
+.md-typeset h3 {
+  font-size: 1rem;
   font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.4rem;
 }
 
-/* Tab Hover */
-.md-tabs__item:not(.md-tabs__item--active):hover {
-  background-color: rgba(156, 39, 176, 0.08);
+.md-typeset h4 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.35rem;
 }
 
-/* Link da Tab */
+.md-typeset p,
+.md-typeset ul,
+.md-typeset ol {
+  font-size: inherit;
+}
+
+.md-typeset blockquote {
+  font-size: inherit;
+}
+
+/* Largura confortável para leitura (evita linhas intermináveis) */
+.md-content__inner {
+  max-width: var(--stride-doc-max);
+}
+
+/* --- Cabeçalho e abas: compactos --- */
+.md-header {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+}
+
+.md-tabs {
+  min-height: 2.25rem;
+}
+
 .md-tabs__link {
-  padding: 0 1.25rem;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: color 0.15s ease;
-  color: #a0a0a0;
-  white-space: nowrap;
-  font-size: 0.9rem;
+  font-size: 0.8125rem;
   font-weight: 500;
-  text-decoration: none;
-}
-
-.md-tabs__item:hover .md-tabs__link {
-  color: #c77dff;
-}
-
-/* ============================================================================
-   BUSCA AVANÇADA
-   ============================================================================ */
-
-/* Caixa de Busca */
-.md-search__form {
-  border-radius: 12px;
-  background: rgba(26, 26, 26, 0.8);
-  backdrop-filter: blur(10px);
-  border: 2px solid rgba(156, 39, 176, 0.2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.md-search__form:hover,
-.md-search__form:focus-within {
-  border-color: #9c27b0;
-  background: rgba(26, 26, 26, 0.95);
-  box-shadow: 0 0 20px rgba(156, 39, 176, 0.3);
+  padding: 0.4rem 0.85rem;
 }
 
 .md-search__input {
-  border-radius: 12px;
-  color: #e0e0e0;
-  padding: 0.75rem 1rem;
-  font-size: 0.95rem;
-  transition: all 0.2s ease;
+  font-size: 0.8125rem;
 }
 
-.md-search__input::placeholder {
-  color: rgba(224, 224, 224, 0.5);
+/* --- Índice (TOC) à direita: menor e alinhado à hierarquia --- */
+.md-nav--secondary .md-nav__title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
-.md-search__input:focus {
-  outline: none;
-  color: #e0aaff;
-}
-
-/* Resultados da Página de Busca */
-.md-search__scrollwrap {
-  background: linear-gradient(135deg, rgba(10, 10, 10, 0.95) 0%, rgba(26, 0, 51, 0.95) 100%);
-  border: 1px solid rgba(156, 39, 176, 0.2);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(156, 39, 176, 0.15);
-}
-
-.md-search-result__item {
-  border-left: 3px solid transparent;
-  transition: all 0.3s ease;
-  border-radius: 4px;
-  margin-bottom: 0.5rem;
-}
-
-.md-search-result__item--active,
-.md-search-result__item:hover {
-  border-left-color: #9c27b0;
-  background: rgba(156, 39, 176, 0.15);
-  transform: translateX(4px);
-}
-
-/* ============================================================================
-   CONTEÚDO PRINCIPAL
-   ============================================================================ */
-
-/* Fundo do Conteúdo */
-.md-main__inner {
-  background: linear-gradient(180deg, #0a0a0a 0%, #1a0a2a 50%, #0a0a0a 100%);
-}
-
-/* Container Principal - 100% Width SEM LIMITAÇÕES */
-.md-content {
-  padding: 1.5rem 2rem;
-  max-width: none !important;
-  width: 100% !important;
-  margin: 0 !important;
-}
-
-.md-main {
-  width: 100% !important;
-  max-width: none !important;
-}
-
-.md-main__inner {
-  background: linear-gradient(180deg, #0a0a0a 0%, #1a0a2a 50%, #0a0a0a 100%);
-  width: 100%;
-  max-width: none;
-}
-
-.md-grid {
-  grid-template-columns: auto 1fr !important;
-  gap: 0 !important;
-}
-
-@media (min-width: 1216px) {
-  .md-sidebar--secondary {
-    width: 200px;
-  }
-}
-
-/* Tipografia Semântica - REDUZIDA 50% MAIS (Total 90% abaixo do original) */
-.md-content h1 {
-  background: linear-gradient(135deg, #e0aaff 0%, #9c27b0 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-weight: 800;
-  font-size: 0.875rem;
-  margin-bottom: 0.75rem;
-  margin-top: 0;
-  letter-spacing: -0.01em;
-  line-height: 1.3;
-}
-
-.md-content h2 {
-  color: #c77dff;
-  border-bottom: 1px solid rgba(156, 39, 176, 0.3);
-  padding-bottom: 0.4rem;
-  margin-top: 1.25rem;
-  margin-bottom: 0.5rem;
+.md-sidebar--secondary .md-nav__link {
   font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
 }
 
-.md-content h3 {
-  color: #c77dff;
-  font-size: 0.7rem;
-  font-weight: 700;
-  margin-top: 1rem;
-  margin-bottom: 0.4rem;
-  line-height: 1.3;
+.md-sidebar--secondary .md-nav .md-nav__link--passed {
+  color: var(--md-default-fg-color--lighter);
 }
 
-.md-content h4 {
-  color: #c77dff;
-  font-size: 0.65rem;
-  font-weight: 700;
-  margin-top: 0.75rem;
-  margin-bottom: 0.3rem;
-  line-height: 1.3;
+/* --- Sidebar primária --- */
+.md-nav--primary .md-nav__link {
+  font-size: 0.8125rem;
 }
 
-.md-content p {
+/* --- Código --- */
+.md-typeset code {
+  font-size: 0.8em;
+}
+
+.md-typeset pre > code {
   font-size: 0.75rem;
   line-height: 1.5;
-  margin-bottom: 0.5rem;
 }
 
-.md-content ul,
-.md-content ol {
-  font-size: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.md-content li {
-  margin-bottom: 0.3rem;
-}
-
-/* ============================================================================
-   CARDS E BOXES
-   ============================================================================ */
-
-/* Admonições */
-.admonition {
-  background: linear-gradient(135deg, rgba(26, 26, 26, 0.5) 0%, rgba(42, 0, 84, 0.5) 100%);
-  border-left: 4px solid #9c27b0;
-  border-radius: 8px;
-  padding: 1.25rem;
-  margin: 1.5rem 0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(5px);
-}
-
-.admonition:hover {
-  background: linear-gradient(135deg, rgba(26, 26, 26, 0.7) 0%, rgba(42, 0, 84, 0.7) 100%);
-  box-shadow: 0 4px 20px rgba(156, 39, 176, 0.2);
-  transform: translateX(4px);
-}
-
-.admonition-title {
-  color: #e0aaff;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-/* Code Blocks */
 .highlight {
-  background: linear-gradient(135deg, rgba(22, 22, 22, 0.8) 0%, rgba(42, 0, 84, 0.3) 100%);
-  border: 1px solid rgba(156, 39, 176, 0.2);
-  border-radius: 8px;
-  padding: 1rem;
-  margin: 1rem 0;
-  overflow-x: auto;
-  transition: all 0.3s ease;
+  border-radius: var(--stride-radius);
+  border: 1px solid var(--stride-purple-soft);
 }
 
-.highlight:hover {
-  border-color: #9c27b0;
-  box-shadow: 0 4px 15px rgba(156, 39, 176, 0.15);
+/* --- Admonitions: menos “efeito” --- */
+.md-typeset .admonition {
+  font-size: inherit;
+  border-radius: var(--stride-radius);
+  border-left-width: 3px;
+  box-shadow: none;
+  transform: none;
 }
 
-.highlight code {
-  color: #e0aaff;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.9rem;
+.md-typeset .admonition:hover {
+  transform: none;
+  box-shadow: none;
 }
 
-/* Inline Code */
-code {
-  background: rgba(156, 39, 176, 0.1);
-  color: #e0aaff;
-  border-radius: 4px;
-  padding: 0.2rem 0.4rem;
-  font-family: 'JetBrains Mono', monospace;
+/* --- Links só no conteúdo (evita sublinhado animado em nav/header) --- */
+.md-typeset a:not(.headerlink) {
+  text-decoration: underline;
+  text-decoration-color: rgba(156, 39, 176, 0.35);
+  text-underline-offset: 2px;
 }
 
-/* ============================================================================
-   SIDEBAR E NAVEGAÇÃO LATERAL
-   ============================================================================ */
-
-.md-sidebar {
-  background: linear-gradient(180deg, #0a0a0a 0%, #1a0a2a 100%);
+.md-typeset a:not(.headerlink):hover {
+  text-decoration-color: var(--stride-purple);
 }
 
-.md-nav {
-  padding: 1rem 0;
-}
-
-.md-nav__link {
-  padding: 0.5rem 1rem;
-  color: #b0b0b0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 6px;
-  position: relative;
-}
-
-.md-nav__link:hover {
-  color: #e0aaff;
-  background: rgba(156, 39, 176, 0.1);
-  padding-left: 1.25rem;
-}
-
-.md-nav__link--active {
-  color: #e0aaff !important;
-  background: rgba(156, 39, 176, 0.25) !important;
-  font-weight: 600;
-  border-left: 3px solid #e0aaff !important;
-  padding-left: 1.07rem;
-}
-
-/* ============================================================================
-   TABELAS
-   ============================================================================ */
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 1.5rem 0;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 15px rgba(156, 39, 176, 0.1);
-}
-
-thead {
-  background: linear-gradient(135deg, rgba(156, 39, 176, 0.3) 0%, rgba(90, 24, 154, 0.3) 100%);
-}
-
-th {
-  color: #e0aaff;
-  font-weight: 700;
-  padding: 1rem;
-  text-align: left;
-  border-bottom: 2px solid rgba(156, 39, 176, 0.3);
-}
-
-td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(156, 39, 176, 0.1);
-}
-
-tr:hover {
-  background: rgba(156, 39, 176, 0.05);
-}
-
-/* ============================================================================
-   LINKS
-   ============================================================================ */
-
-a {
-  color: #9c27b0;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-a:hover {
-  color: #e0aaff;
-}
-
-a::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  width: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #9c27b0, #e0aaff);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-a:hover::after {
-  width: 100%;
-}
-
-/* ============================================================================
-   FOOTER
-   ============================================================================ */
-
-.md-footer {
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a0033 100%);
-  border-top: 1px solid rgba(156, 39, 176, 0.2);
-}
-
-.md-footer__inner {
-  padding: 2rem 1rem;
-}
-
+/* --- Rodapé --- */
 .md-footer-meta {
-  color: #b0b0b0;
+  font-size: 0.75rem;
 }
 
-.md-footer-meta a {
-  color: #9c27b0;
-}
-
-/* ============================================================================
-   ANIMAÇÕES
-   ============================================================================ */
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes gradientShift {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-.md-content > *:first-child {
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Animação no hover de elementos */
-.md-nav__link {
-  position: relative;
-  overflow: hidden;
-}
-
-.md-nav__link::before {
-  content: '';
-  position: absolute;
-  left: -100%;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(156, 39, 176, 0.1);
-  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: -1;
-}
-
-.md-nav__link:hover::before {
-  left: 0;
-}
-
-/* ============================================================================
-   RESPONSIVIDADE
-   ============================================================================ */
-
-@media (max-width: 768px) {
-  .md-content {
-    padding: 1.5rem 1rem;
-  }
-
-  .md-content h1 {
-    font-size: 1.75rem;
-  }
-
-  .md-tabs {
-    padding: 0.25rem 0;
-  }
-
-  .md-tabs__item {
-    margin: 0 0.25rem;
-  }
-
-  .md-tabs__link {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.85rem;
-  }
-
-  .admonition {
-    margin: 1rem 0;
-    padding: 1rem;
-  }
-}
-
-/* ============================================================================
-   MODO CLARO (OPCIONAL)
-   ============================================================================ */
-
-[data-md-color-scheme="light"] {
-  --md-default-bg-color: #f5f5f5;
-  --md-default-fg-color: #212121;
-  --md-code-bg-color: #f5f5f5;
-  --md-code-fg-color: #5a189a;
-}
-
-[data-md-color-scheme="light"] .md-header {
-  border-bottom-color: rgba(156, 39, 176, 0.15);
-}
-
-[data-md-color-scheme="light"] .md-tabs {
-  border-bottom-color: rgba(156, 39, 176, 0.1);
-}
-
-[data-md-color-scheme="light"] .md-content h1 {
-  background: linear-gradient(135deg, #5a189a 0%, #9c27b0 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-[data-md-color-scheme="light"] code {
-  background: rgba(156, 39, 176, 0.1);
-  color: #5a189a;
-}
-
-/* ============================================================================
-   MERMAID DIAGRAMS
-   ============================================================================ */
-
+/* --- Mermaid --- */
 .mermaid-wrapper {
-  margin: 2rem 0;
-  padding: 1.5rem;
-  background: linear-gradient(135deg, rgba(26, 26, 26, 0.5) 0%, rgba(42, 0, 84, 0.3) 100%);
-  border: 1px solid rgba(156, 39, 176, 0.2);
-  border-radius: 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(5px);
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border-radius: var(--stride-radius);
+  border: 1px solid var(--stride-purple-soft);
+  background: rgba(0, 0, 0, 0.2);
+  overflow-x: auto;
 }
 
-.mermaid-wrapper:hover {
-  background: linear-gradient(135deg, rgba(26, 26, 26, 0.7) 0%, rgba(42, 0, 84, 0.5) 100%);
-  border-color: rgba(156, 39, 176, 0.4);
-  box-shadow: 0 8px 32px rgba(156, 39, 176, 0.2);
-}
-
-.mermaid-styled {
-  font-family: 'Inter', sans-serif !important;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
-/* Estilos para elementos Mermaid */
 .mermaid svg {
-  display: flex;
-  justify-content: flex-start;
-  margin: 0;
   max-width: 100%;
-  height: auto;
+  height: auto !important;
 }
-
-/* Nós do Mermaid em modo dark */
-.mermaid .flowchart-v2 .node {
-  stroke: rgba(156, 39, 176, 0.5);
-  fill: rgba(26, 26, 26, 0.8);
-  stroke-width: 2px;
-}
-
-.mermaid .flowchart-v2 .node rect,
-.mermaid .flowchart-v2 .node circle,
-.mermaid .flowchart-v2 .node polygon {
-  stroke: rgba(156, 39, 176, 0.6);
-  fill: rgba(26, 26, 26, 0.8);
-  stroke-width: 2px;
-}
-
-.mermaid text {
-  fill: #e0e0e0 !important;
-  font-family: 'Inter', sans-serif !important;
-  font-size: 14px !important;
-}
-
-/* Linhas/Conectores */
-.mermaid .flowchart-v2 .edgePath path {
-  stroke: rgba(156, 39, 176, 0.6);
-  stroke-width: 2px;
-}
-
-.mermaid .arrowheadPath {
-  fill: rgba(156, 39, 176, 0.8);
-}
-
-/* Classe para nós ativos/destaque */
-.mermaid .active > rect,
-.mermaid .active > circle {
-  stroke: #e0aaff !important;
-  stroke-width: 3px !important;
-}
-
-/* Sequence Diagrams */
-.mermaid .sequenceDiagram .actor {
-  stroke: rgba(156, 39, 176, 0.6);
-  fill: rgba(26, 26, 26, 0.8);
-}
-
-.mermaid .sequenceDiagram .actor text {
-  fill: #e0aaff;
-}
-
-.mermaid .sequenceDiagram .messageLine0 {
-  stroke: rgba(156, 39, 176, 0.6);
-  stroke-width: 1.5px;
-}
-
-/* Class Diagrams */
-.mermaid .classDiagram .classBox {
-  stroke: rgba(156, 39, 176, 0.6);
-  fill: rgba(26, 26, 26, 0.8);
-}
-
-.mermaid .classDiagram line {
-  stroke: rgba(156, 39, 176, 0.6);
-}
-
-/* Estado Diagrams */
-.mermaid .stateDiagram-v2 .state {
-  stroke: rgba(156, 39, 176, 0.6);
-  fill: rgba(26, 26, 26, 0.8);
-}
-
-/* Gantt Charts */
-.mermaid .taskText {
-  fill: #e0e0e0 !important;
-}
-
-.mermaid .taskTextOutsideRight {
-  fill: #e0e0e0 !important;
-}
-
-/* Pi Charts */
-.mermaid .pieTitle {
-  fill: #e0aaff !important;
-}
-
-/* Entity Relationship Diagram */
-.mermaid .entityBox {
-  stroke: rgba(156, 39, 176, 0.6);
-  fill: rgba(26, 26, 26, 0.8);
-}
-
-.mermaid .relationshipLabel {
-  fill: #e0aaff;
-}
-
-/* Responsividade para Mermaid */
-@media (max-width: 768px) {
-  .mermaid-wrapper {
-    padding: 1rem;
-    margin: 1.5rem 0;
-  }
-
-  .mermaid-wrapper svg {
-    width: 100% !important;
-    height: auto !important;
-  }
-}
-
-/* ============================================================================
-   SVG PAN-ZOOM INTERACTIVITY
-   ============================================================================ */
-
-.mermaid svg {
-  touch-action: manipulation;
-  user-select: none;
-  cursor: grab;
-}
-
-.mermaid svg:active {
-  cursor: grabbing;
-}
-
-/* Controles SVG Pan-Zoom */
-.svg-pan-zoom-control {
-  background: rgba(156, 39, 176, 0.2) !important;
-  border: 1px solid rgba(156, 39, 176, 0.4) !important;
-  border-radius: 6px;
-}
-
-.svg-pan-zoom-control button {
-  background: rgba(156, 39, 176, 0.15) !important;
-  border: none;
-  color: #e0aaff !important;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.svg-pan-zoom-control button:hover {
-  background: rgba(156, 39, 176, 0.3) !important;
-  color: #e0aaff !important;
-}
-
-/* ============================================================================
-   MERMAID ERROR FALLBACK
-   ============================================================================ */
 
 .mermaid-error-fallback {
-  margin: 1.5rem 0;
-  animation: fadeInUp 0.3s ease-out;
+  margin: 1.25rem 0;
+  padding: 1rem 1.1rem;
+  border-radius: var(--stride-radius);
+  border: 1px solid rgba(200, 120, 120, 0.35);
+  background: rgba(80, 20, 20, 0.15);
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 
-.mermaid-error-fallback p {
-  margin: 0 0 0.5rem 0;
-  color: #ff9999;
+.mermaid-error-fallback__title {
+  margin: 0 0 0.35rem;
   font-weight: 600;
+  color: var(--md-default-fg-color);
+}
+
+.mermaid-error-fallback__hint {
+  margin: 0 0 0.75rem;
+  opacity: 0.9;
+}
+
+.mermaid-error-fallback__link {
+  margin: 0 0 0.75rem;
+}
+
+.mermaid-error-fallback__link a {
+  font-weight: 500;
+}
+
+.mermaid-error-fallback__details {
+  margin: 0;
+}
+
+.mermaid-error-fallback__details summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .mermaid-error-fallback pre {
-  background: #161616;
-  color: #999;
-  padding: 0.75rem;
-  border-radius: 4px;
-  overflow-x: auto;
-  font-size: 0.85rem;
   margin: 0;
-  border: 1px solid rgba(200, 100, 100, 0.2);
-}
-
-.mermaid-error-fallback code {
-  color: #999 !important;
-  background: transparent !important;
-  padding: 0 !important;
-}
-
-/* ============================================================================
-   HOVER STATES - FIXED AND PRIORITIZED
-   ============================================================================ */
-
-/* Navegação - Estados Corrigidos */
-.md-nav__link {
-  padding: 0.5rem 1rem;
-  color: #b0b0b0 !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 6px;
-  position: relative;
-  border-left: 3px solid transparent;
-}
-
-.md-nav__link:hover {
-  color: #e0aaff !important;
-  background: rgba(156, 39, 176, 0.15) !important;
-  padding-left: 1.25rem;
-  border-left-color: rgba(156, 39, 176, 0.8);
-}
-
-/* Tabs */
-.md-tabs__link {
-  padding: 0.75rem 1.25rem;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s ease;
-  color: inherit !important;
-}
-
-.md-tabs__link:hover {
-  color: #e0aaff !important;
-  background: rgba(156, 39, 176, 0.15) !important;
-}
-
-.md-tabs__item:hover {
-  background: rgba(156, 39, 176, 0.12) !important;
-  transform: translateY(-2px);
-}
-
-/* Links em Conteúdo */
-a {
-  color: #9c27b0;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-a:hover {
-  color: #e0aaff;
-}
-
-/* Admonições - Hover Melhorado */
-.admonition {
-  background: linear-gradient(135deg, rgba(26, 26, 26, 0.5) 0%, rgba(42, 0, 84, 0.5) 100%);
-  border-left: 4px solid #9c27b0;
-  border-radius: 8px;
-  padding: 1.25rem;
-  margin: 1.5rem 0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(5px);
-}
-
-.admonition:hover {
-  background: linear-gradient(135deg, rgba(26, 26, 26, 0.8) 0%, rgba(42, 0, 84, 0.8) 100%) !important;
-  box-shadow: 0 4px 20px rgba(156, 39, 176, 0.3) !important;
-  transform: translateX(4px);
-  border-left-color: #e0aaff !important;
-}
-
-/* Code Blocks - Hover State */
-.highlight {
-  background: linear-gradient(135deg, rgba(22, 22, 22, 0.8) 0%, rgba(42, 0, 84, 0.3) 100%);
-  border: 1px solid rgba(156, 39, 176, 0.2);
-  border-radius: 8px;
-  padding: 1rem;
-  margin: 1rem 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 4px;
+  background: var(--md-code-bg-color);
   overflow-x: auto;
-  transition: all 0.3s ease;
+  font-size: 0.7rem;
+  line-height: 1.45;
 }
 
-.highlight:hover {
-  border-color: #9c27b0 !important;
-  box-shadow: 0 4px 15px rgba(156, 39, 176, 0.2) !important;
+.mermaid-error-fallback__tech {
+  margin: 0.5rem 0 0;
+  opacity: 0.75;
 }
 
-/* ============================================================================
-   FOCUS STATES - KEYBOARD NAVIGATION
-   ============================================================================ */
-
-.md-nav__link:focus,
-.md-tabs__link:focus,
-a:focus {
-  outline: 2px solid #e0aaff;
-  outline-offset: 2px;
+/* --- Responsivo --- */
+@media (max-width: 76.1875em) {
+  .md-content__inner {
+    max-width: 100%;
+  }
 }
 
-/* ============================================================================
-   RESPONSIVE TYPOGRAPHY MOBILE
-   ============================================================================ */
-
-@media (max-width: 768px) {
-  .md-content h1 {
-    font-size: 1.5rem;
+@media (max-width: 48em) {
+  .md-typeset {
+    font-size: 0.875rem;
   }
 
-  .md-content h2 {
-    font-size: 1.125rem;
+  .md-typeset h1 {
+    font-size: 1.25rem;
   }
 
-  .md-content h3 {
-    font-size: 1rem;
-  }
-
-  .md-content h4 {
-    font-size: 0.9rem;
-  }
-
-  .md-content {
-    padding: 1rem 1.5rem;
-  }
-
-  .md-tabs {
-    padding: 0.25rem 0;
-  }
-
-  .md-tabs__link {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.85rem;
+  .md-typeset h2 {
+    font-size: 1.05rem;
   }
 }
