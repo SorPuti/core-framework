@@ -3,22 +3,37 @@
 {% block content %}
   {{ super() }}
 
-  <!-- Mermaid Diagram Support -->
+  <!-- Mermaid Diagram Support with Robust Rendering -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   
   <script>
-    // Configurar Mermaid
-    mermaid.initialize({
-      startOnLoad: true,
+    // ============================================================================
+    // MERMAID CONFIGURATION & INITIALIZATION
+    // ============================================================================
+    
+    // Configurar Mermaid globalmente
+    window.mermaidConfig = {
+      startOnLoad: false, // Desabilitar auto-load para ter controle manual
       theme: 'dark',
       securityLevel: 'loose',
       fontFamily: 'Inter, sans-serif',
+      logLevel: 'warn',
       flowchart: {
         useMaxWidth: true,
         htmlLabels: true,
         curve: 'linear'
       },
       sequence: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        mirrorActors: true,
+        messageAlign: 'center'
+      },
+      classDiagram: {
+        useMaxWidth: true,
+        htmlLabels: true
+      },
+      stateDiagram: {
         useMaxWidth: true,
         htmlLabels: true
       },
@@ -27,11 +42,104 @@
         fontSize: 16,
         fontFamily: 'Inter, sans-serif'
       }
+    };
+    
+    mermaid.initialize(window.mermaidConfig);
+
+    // ============================================================================
+    // FUNÇÃO PARA RENDERIZAR MERMAID
+    // ============================================================================
+    
+    async function renderMermaidDiagrams() {
+      const diagrams = document.querySelectorAll('code.language-mermaid, .mermaid:not([data-processed])');
+      
+      if (diagrams.length === 0) {
+        return;
+      }
+
+      for (const diagram of diagrams) {
+        // Converter code.language-mermaid em div.mermaid se necessário
+        if (diagram.classList.contains('language-mermaid')) {
+          const parent = diagram.parentElement;
+          if (parent && parent.tagName === 'PRE') {
+            const mermaidDiv = document.createElement('div');
+            mermaidDiv.className = 'mermaid';
+            mermaidDiv.textContent = diagram.textContent;
+            parent.replaceWith(mermaidDiv);
+            diagram = mermaidDiv;
+          }
+        }
+
+        try {
+          diagram.setAttribute('data-processed', 'true');
+          await mermaid.run();
+        } catch (error) {
+          console.warn('[Mermaid] Rendering error:', error);
+          diagram.removeAttribute('data-processed');
+        }
+      }
+
+      // Aplicar estilos aos diagramas renderizados
+      applyMermaidStyles();
+    }
+
+    // ============================================================================
+    // APLICAR ESTILOS AOS DIAGRAMAS
+    // ============================================================================
+    
+    function applyMermaidStyles() {
+      document.querySelectorAll('.mermaid').forEach(diagram => {
+        if (!diagram.parentElement.classList.contains('mermaid-wrapper')) {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'mermaid-wrapper';
+          diagram.parentElement.insertBefore(wrapper, diagram);
+          wrapper.appendChild(diagram);
+        }
+      });
+    }
+
+    // ============================================================================
+    // MUTATION OBSERVER PARA NAVEGAÇÃO DINÂMICA
+    // ============================================================================
+    
+    const observer = new MutationObserver(async (mutations) => {
+      // Verificar se há novo conteúdo .mermaid adicionado
+      for (const mutation of mutations) {
+        if (mutation.addedNodes.length > 0) {
+          const hasNewMermaid = Array.from(mutation.addedNodes).some(node => 
+            (node.nodeType === Node.ELEMENT_NODE && 
+            (node.classList.contains('mermaid') || node.querySelector('.mermaid'))) ||
+            (node.nodeType === Node.ELEMENT_NODE && 
+            (node.classList.contains('language-mermaid') || node.querySelector('.language-mermaid')))
+          );
+          
+          if (hasNewMermaid) {
+            // Pequeno delay para garantir que o DOM foi atualizado
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await renderMermaidDiagrams();
+            break;
+          }
+        }
+      }
     });
 
-    // Renderizar Mermaid após carregamento da página
-    document.addEventListener('DOMContentLoaded', function() {
-      mermaid.contentLoaded();
+    // ============================================================================
+    // INICIALIZAÇÃO
+    // ============================================================================
+    
+    document.addEventListener('DOMContentLoaded', async function() {
+      // Render inicial
+      await renderMermaidDiagrams();
+
+      // Iniciar observação
+      const contentArea = document.querySelector('.md-content');
+      if (contentArea) {
+        observer.observe(contentArea, {
+          childList: true,
+          subtree: true,
+          addedNodes: true
+        });
+      }
 
       // Animação suave ao carregar a página
       const content = document.querySelector('.md-content');
@@ -52,27 +160,40 @@
           }
         });
       });
-
-      // Highlight de código com copy button já incluído no Material
-      // Adiciona classe para melhor estilo
-      document.querySelectorAll('pre > code').forEach(code => {
-        code.parentElement.classList.add('highlight-block');
-      });
-
-      // Aplicar estilo aos diagramas Mermaid
-      document.querySelectorAll('.mermaid').forEach(diagram => {
-        diagram.classList.add('mermaid-styled');
-        // Envolver em container com melhor apresentação
-        const wrapper = document.createElement('div');
-        wrapper.className = 'mermaid-wrapper';
-        diagram.parentNode.insertBefore(wrapper, diagram);
-        wrapper.appendChild(diagram);
-      });
     });
 
-    // Para navegação dinâmica (Instant Loading)
-    document.addEventListener('turbo:load', function() {
-      mermaid.contentLoaded();
+    // ============================================================================
+    // SUPORTE PARA INSTANT LOADING (MATERIAL THEME)
+    // ============================================================================
+    
+    // Material theme dispara eventos quando a página é carregada dinamicamente
+    if (document.documentElement.dataset.md === 'material') {
+      // Usar o hook de navegação do Material
+      document.addEventListener('pjax:success', async function() {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        await renderMermaidDiagrams();
+      });
+
+      // Alternativa: turbo (se estiver usando turbo)
+      document.addEventListener('turbo:load', async function() {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        await renderMermaidDiagrams();
+      });
+    }
+
+    // ============================================================================
+    // CLEANUP E RERENDER EM CERTOS EVENTOS
+    // ============================================================================
+    
+    window.addEventListener('resize', () => {
+      // Re-renderizar diagramas em resize para responsividade
+      const mermaidSvgs = document.querySelectorAll('.mermaid svg');
+      if (mermaidSvgs.length > 0) {
+        mermaidSvgs.forEach(svg => {
+          svg.style.width = '100%';
+          svg.style.height = 'auto';
+        });
+      }
     });
   </script>
 {% endblock %}
