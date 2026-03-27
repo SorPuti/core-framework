@@ -9,11 +9,11 @@ from __future__ import annotations
 import time
 import uuid as uuid_module
 from datetime import datetime, timedelta
-from typing import Any, TYPE_CHECKING, Generic, TypeVar, overload
+from typing import Any, TYPE_CHECKING, Generic, TypeVar, final, overload
 from uuid import UUID
 
 from sqlalchemy import Uuid, String, Text, TypeDecorator, JSON
-from sqlalchemy.orm import mapped_column, Mapped
+from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
 from sqlalchemy.dialects.postgresql import JSONB
 
 if TYPE_CHECKING:
@@ -102,6 +102,7 @@ def get_default_uuid() -> UUID:
 # File Field - Django-style file handling
 # =============================================================================
 
+@final
 class FieldFile:
     """
     Representa um arquivo armazenado em um FileField.
@@ -262,7 +263,7 @@ class FileFieldDescriptor:
     def __get__(self, instance: None, owner: type[Any]) -> FileFieldDescriptor: ...
 
     @overload
-    def __get__(self, instance: Any, owner: type[Any]) -> FieldFile: ...
+    def __get__(self, instance: DeclarativeBase, owner: type[Any]) -> FieldFile: ...
 
     def __get__(self, instance: Any, owner: type[Any]) -> FieldFile | FileFieldDescriptor:
         if instance is None:
@@ -581,7 +582,13 @@ class AdvancedField:
         
         Note:
             Em instâncias, type checkers inferem o atributo como ``FieldFile`` (overload de
-            ``__get__``), para autocompletar ``.save()``, ``.url``, ``.delete()``, etc.
+            ``__get__`` com ``DeclarativeBase``), para autocompletar ``.save()``, ``.url``,
+            ``.delete()``, etc. O pacote inclui ``py.typed`` (PEP 561) para o Pylance.
+
+            Se o IDE ainda não sugerir membros após ``bug.attachment.``, anote explicitamente
+            (o valor continua sendo o descriptor em runtime)::
+
+                attachment: FieldFile = AdvancedField.file("attachment_path", ...)  # type: ignore[assignment]
         
         Example:
             class Course(Model):

@@ -662,32 +662,44 @@ def _build_binding_hint(
 ) -> str:
     sig = inspect.signature(fn)
     names = [n for n, p in sig.parameters.items() if n != "self" and p.kind != inspect.Parameter.VAR_POSITIONAL]
-    lines = [
+    orig_msg = str(original.args[0]) if original.args else str(original)
+    multi = "multiple values for argument" in orig_msg.lower()
+
+    lines: list[str] = [
         f"Handler: {getattr(fn, '__qualname__', repr(fn))}",
         f"Parâmetros na assinatura (exc. self): {names}",
         f"Contexto de URL / path: {path_like}",
         f"Chaves em kwargs na chamada: {sorted(kwargs.keys())}",
     ]
     if args:
-        lines.append(f"args posicionais (além do que o router injeta): {len(args)} elemento(s)")
-    if viewset_class is not None:
+        lines.append(f"args posicionais passados ao handler: {len(args)} (só use com método não ligado; CRUD usa args=())")
+
+    if multi:
+        lines.insert(
+            1,
+            "O que significa: o Python recebeu o mesmo parâmetro duas vezes (ex.: `request` como "
+            "posicional e também em **kwargs). No Stride, métodos do ViewSet já vêm ligados "
+            "(`vs.create`): chame apenas `await vs.create(**kwargs)`, sem passar `vs` outra vez.",
+        )
+    elif viewset_class is not None:
         url_kw = getattr(viewset_class, "lookup_url_kwarg", None) or getattr(
             viewset_class, "lookup_field", "id"
         )
         lf = getattr(viewset_class, "lookup_field", "id")
         lines.append(
-            f"ViewSet: lookup_field={lf!r}, nome do segmento na rota={url_kw!r}. "
-            f"Declare o mesmo nome, ou `pk`, ou `{lf}`, ou omita o lookup e use get_object()."
+            f"ViewSet: lookup_field={lf!r}, segmento na URL={url_kw!r}. "
+            f"Alinhe o nome na assinatura (`{url_kw}`, `pk`, `{lf}`) ou use só get_object()."
         )
     else:
         lines.append(
-            "APIView: cada {{nome}} na rota deve corresponder a um parâmetro na assinatura "
+            "APIView: cada {{nome}} na rota deve existir na assinatura do método "
             "(ou use **kwargs no handler)."
         )
-    lines.append(
-        "Dica: valores de path chegam como str; use anotações como pk: int ou id: uuid.UUID "
-        "para coerção automática no Stride."
-    )
+
+    if not multi:
+        lines.append(
+            "Path: valores chegam como str; use `pk: int` ou `id: uuid.UUID` para coerção automática."
+        )
     return "\n".join(lines)
 
 
@@ -699,6 +711,12 @@ async def _call_viewset_handler_with_hint(
     path_like: dict[str, Any],
     viewset_class: type | None,
 ) -> Any:
+    """
+    Chama o handler e, em TypeError, levanta StridePathParamBindingError com dicas.
+
+    - ``args=()`` quando ``fn`` é método **ligado** (ex.: ``vs.create``, ``vs.list``).
+    - ``args=(vs,)`` quando ``fn`` é a função **da classe** (ex.: ``BugViewSet.create`` em @action).
+    """
     try:
         return await fn(*args, **kwargs)
     except TypeError as e:
@@ -1247,7 +1265,7 @@ class Router(APIRouter):
             )
             return await _call_viewset_handler_with_hint(
                 vs.list,
-                args=(vs,),
+                args=(),
                 kwargs=full,
                 path_like=path_like,
                 viewset_class=viewset_class,
@@ -1311,7 +1329,7 @@ class Router(APIRouter):
             )
             return await _call_viewset_handler_with_hint(
                 vs.create,
-                args=(vs,),
+                args=(),
                 kwargs=full,
                 path_like=dict(request.path_params),
                 viewset_class=viewset_class,
@@ -1374,7 +1392,7 @@ class Router(APIRouter):
             )
             return await _call_viewset_handler_with_hint(
                 vs.retrieve,
-                args=(vs,),
+                args=(),
                 kwargs=full,
                 path_like=path_params,
                 viewset_class=viewset_class,
@@ -1432,7 +1450,7 @@ class Router(APIRouter):
             )
             return await _call_viewset_handler_with_hint(
                 vs.update,
-                args=(vs,),
+                args=(),
                 kwargs=full,
                 path_like=path_params,
                 viewset_class=viewset_class,
@@ -1498,7 +1516,7 @@ class Router(APIRouter):
             )
             return await _call_viewset_handler_with_hint(
                 vs.partial_update,
-                args=(vs,),
+                args=(),
                 kwargs=full,
                 path_like=path_params,
                 viewset_class=viewset_class,
@@ -1557,7 +1575,7 @@ class Router(APIRouter):
             )
             return await _call_viewset_handler_with_hint(
                 vs.destroy,
-                args=(vs,),
+                args=(),
                 kwargs=full,
                 path_like=path_params,
                 viewset_class=viewset_class,
