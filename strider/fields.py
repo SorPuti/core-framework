@@ -6,6 +6,7 @@ Provides UUID7, JSON, FileField, and optimized field definitions.
 
 from __future__ import annotations
 
+import mimetypes
 import time
 import uuid as uuid_module
 from datetime import datetime, timedelta
@@ -112,6 +113,7 @@ class FieldFile:
     Attributes:
         name: Path relativo do arquivo (ex: "uploads/foto.jpg")
         url: URL de acesso (signed URL para bucket privado)
+        content_type: MIME inferido pelo sufixo do path (ou None); não persiste no BD
     
     Example:
         course.cover.name  # "uploads/cover.jpg"
@@ -152,6 +154,20 @@ class FieldFile:
             return ""
         from strider.storage import get_file_url
         return get_file_url(self._name, self._field.url_expiration)
+
+    @property
+    def content_type(self) -> str | None:
+        """
+        MIME type inferido a partir do nome/path (extensão).
+
+        O Stride guarda só o path na coluna do model; o tipo usado em ``save(..., content_type=)``
+        não é armazenado. Para MIME fiável por registo, usa uma coluna extra no model
+        (ex.: ``attachment_mime: Mapped[str | None]``) e preenche-a no upload.
+        """
+        if not self._name:
+            return None
+        guessed, _ = mimetypes.guess_type(self._name)
+        return guessed
     
     def save(self, filename: str, content: bytes, content_type: str | None = None) -> str:
         """

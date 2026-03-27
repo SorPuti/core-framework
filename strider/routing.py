@@ -1113,6 +1113,230 @@ async def _stride_detail_no_body(
     return ep
 
 
+def _create_crud_viewset_retrieve_endpoint(
+    viewset_class: type,
+    lookup_url_kwarg: str,
+) -> Callable[..., Any]:
+    """GET /{{lookup}} com Path() no OpenAPI (Swagger mostra o parâmetro)."""
+    lp = _require_lookup_url_identifier(lookup_url_kwarg)
+    ns: dict[str, Any] = {
+        "Request": Request,
+        "Depends": Depends,
+        "get_db": get_db,
+        "get_optional_user": get_optional_user,
+        "Path": Path,
+        "AsyncSession": AsyncSession,
+        "Any": Any,
+        "viewset_class": viewset_class,
+        "_build_viewset_call_kwargs": _build_viewset_call_kwargs,
+        "_call_viewset_handler_with_hint": _call_viewset_handler_with_hint,
+    }
+    src = f"""
+async def _crud_retrieve(
+    request: Request,
+    {lp}: str = Path(..., description="Identificador do recurso (lookup) na URL"),
+    db: AsyncSession = Depends(get_db),
+    _user: Any = Depends(get_optional_user),
+):
+    vs = viewset_class()
+    path_params = dict(request.path_params)
+    full = _build_viewset_call_kwargs(
+        vs.retrieve,
+        request=request,
+        db=db,
+        _user=_user,
+        extra_kwargs=path_params,
+        viewset_class=viewset_class,
+    )
+    return await _call_viewset_handler_with_hint(
+        vs.retrieve,
+        args=(),
+        kwargs=full,
+        path_like=path_params,
+        viewset_class=viewset_class,
+    )
+"""
+    exec(src, ns)
+    ep: Callable[..., Any] = ns["_crud_retrieve"]
+    ep.__name__ = "retrieve_route"
+    return ep
+
+
+def _create_crud_viewset_update_endpoint(
+    viewset_class: type,
+    lookup_url_kwarg: str,
+    input_schema: type | None,
+) -> Callable[..., Any]:
+    lp = _require_lookup_url_identifier(lookup_url_kwarg)
+    ns: dict[str, Any] = {
+        "Request": Request,
+        "Depends": Depends,
+        "get_db": get_db,
+        "get_optional_user": get_optional_user,
+        "Body": Body,
+        "Path": Path,
+        "AsyncSession": AsyncSession,
+        "Any": Any,
+        "viewset_class": viewset_class,
+        "_build_body_call_kwargs": _build_body_call_kwargs,
+        "_build_viewset_call_kwargs": _build_viewset_call_kwargs,
+        "_call_viewset_handler_with_hint": _call_viewset_handler_with_hint,
+    }
+    if input_schema:
+        ns["data_type"] = input_schema
+    else:
+        ns["data_type"] = dict[str, Any]
+    src = f"""
+async def _crud_update(
+    request: Request,
+    {lp}: str = Path(..., description="Identificador do recurso (lookup) na URL"),
+    data: data_type = Body(...),
+    db: AsyncSession = Depends(get_db),
+    _user: Any = Depends(get_optional_user),
+):
+    vs = viewset_class()
+    path_params = dict(request.path_params)
+    call_kwargs = _build_body_call_kwargs(
+        vs.update,
+        path_params=path_params,
+        body=data,
+        viewset_class=viewset_class,
+    )
+    full = _build_viewset_call_kwargs(
+        vs.update,
+        request=request,
+        db=db,
+        _user=_user,
+        extra_kwargs=call_kwargs,
+        viewset_class=viewset_class,
+    )
+    return await _call_viewset_handler_with_hint(
+        vs.update,
+        args=(),
+        kwargs=full,
+        path_like=path_params,
+        viewset_class=viewset_class,
+    )
+"""
+    exec(src, ns)
+    ep: Callable[..., Any] = ns["_crud_update"]
+    ep.__name__ = "update_route"
+    return ep
+
+
+def _create_crud_viewset_partial_update_endpoint(
+    viewset_class: type,
+    lookup_url_kwarg: str,
+    partial_input_schema: type | None,
+    fallback_input_schema: type | None,
+) -> Callable[..., Any]:
+    lp = _require_lookup_url_identifier(lookup_url_kwarg)
+    ns: dict[str, Any] = {
+        "Request": Request,
+        "Depends": Depends,
+        "get_db": get_db,
+        "get_optional_user": get_optional_user,
+        "Body": Body,
+        "Path": Path,
+        "AsyncSession": AsyncSession,
+        "Any": Any,
+        "viewset_class": viewset_class,
+        "_build_body_call_kwargs": _build_body_call_kwargs,
+        "_build_viewset_call_kwargs": _build_viewset_call_kwargs,
+        "_call_viewset_handler_with_hint": _call_viewset_handler_with_hint,
+    }
+    schema = partial_input_schema or fallback_input_schema
+    if schema:
+        ns["data_type"] = schema
+    else:
+        ns["data_type"] = dict[str, Any]
+    src = f"""
+async def _crud_partial_update(
+    request: Request,
+    {lp}: str = Path(..., description="Identificador do recurso (lookup) na URL"),
+    data: data_type = Body(...),
+    db: AsyncSession = Depends(get_db),
+    _user: Any = Depends(get_optional_user),
+):
+    vs = viewset_class()
+    path_params = dict(request.path_params)
+    call_kwargs = _build_body_call_kwargs(
+        vs.partial_update,
+        path_params=path_params,
+        body=data,
+        exclude_unset=True,
+        viewset_class=viewset_class,
+    )
+    full = _build_viewset_call_kwargs(
+        vs.partial_update,
+        request=request,
+        db=db,
+        _user=_user,
+        extra_kwargs=call_kwargs,
+        viewset_class=viewset_class,
+    )
+    return await _call_viewset_handler_with_hint(
+        vs.partial_update,
+        args=(),
+        kwargs=full,
+        path_like=path_params,
+        viewset_class=viewset_class,
+    )
+"""
+    exec(src, ns)
+    ep: Callable[..., Any] = ns["_crud_partial_update"]
+    ep.__name__ = "partial_update_route"
+    return ep
+
+
+def _create_crud_viewset_destroy_endpoint(
+    viewset_class: type,
+    lookup_url_kwarg: str,
+) -> Callable[..., Any]:
+    lp = _require_lookup_url_identifier(lookup_url_kwarg)
+    ns: dict[str, Any] = {
+        "Request": Request,
+        "Depends": Depends,
+        "get_db": get_db,
+        "get_optional_user": get_optional_user,
+        "Path": Path,
+        "AsyncSession": AsyncSession,
+        "Any": Any,
+        "viewset_class": viewset_class,
+        "_build_viewset_call_kwargs": _build_viewset_call_kwargs,
+        "_call_viewset_handler_with_hint": _call_viewset_handler_with_hint,
+    }
+    src = f"""
+async def _crud_destroy(
+    request: Request,
+    {lp}: str = Path(..., description="Identificador do recurso (lookup) na URL"),
+    db: AsyncSession = Depends(get_db),
+    _user: Any = Depends(get_optional_user),
+):
+    vs = viewset_class()
+    path_params = dict(request.path_params)
+    full = _build_viewset_call_kwargs(
+        vs.destroy,
+        request=request,
+        db=db,
+        _user=_user,
+        extra_kwargs=path_params,
+        viewset_class=viewset_class,
+    )
+    return await _call_viewset_handler_with_hint(
+        vs.destroy,
+        args=(),
+        kwargs=full,
+        path_like=path_params,
+        viewset_class=viewset_class,
+    )
+"""
+    exec(src, ns)
+    ep: Callable[..., Any] = ns["_crud_destroy"]
+    ep.__name__ = "destroy_route"
+    return ep
+
+
 # =============================================================================
 # Router
 # =============================================================================
@@ -1415,32 +1639,10 @@ class Router(APIRouter):
         # ==================================================================
         # 4. RETRIEVE (GET detail) - Detalhes com response tipado
         # ==================================================================
-        async def retrieve_route(
-            request, db=Depends(get_db), _user=Depends(get_optional_user),
-        ):
-            vs = viewset_class()
-            path_params = dict(request.path_params)
-            full = _build_viewset_call_kwargs(
-                vs.retrieve,
-                request=request,
-                db=db,
-                _user=_user,
-                extra_kwargs=path_params,
-                viewset_class=viewset_class,
-            )
-            return await _call_viewset_handler_with_hint(
-                vs.retrieve,
-                args=(),
-                kwargs=full,
-                path_like=path_params,
-                viewset_class=viewset_class,
-            )
-        
-        retrieve_route.__annotations__ = {
-            "request": Request,
-            "db": AsyncSession,
-            "_user": Any,
-        }
+        retrieve_route = _create_crud_viewset_retrieve_endpoint(
+            viewset_class,
+            lookup_url_kwarg,
+        )
         
         retrieve_openapi_extra, retrieve_success_responses = _build_openapi_examples(
             output_schema=detail_response_model,
@@ -1466,40 +1668,11 @@ class Router(APIRouter):
         # ==================================================================
         # 5. UPDATE (PUT) - Atualização completa com schema tipado
         # ==================================================================
-        async def update_route(
-            request, data=Body(...), db=Depends(get_db),
-            _user=Depends(get_optional_user),
-        ):
-            vs = viewset_class()
-            path_params = dict(request.path_params)
-            call_kwargs = _build_body_call_kwargs(
-                vs.update,
-                path_params=path_params,
-                body=data,
-                viewset_class=viewset_class,
-            )
-            full = _build_viewset_call_kwargs(
-                vs.update,
-                request=request,
-                db=db,
-                _user=_user,
-                extra_kwargs=call_kwargs,
-                viewset_class=viewset_class,
-            )
-            return await _call_viewset_handler_with_hint(
-                vs.update,
-                args=(),
-                kwargs=full,
-                path_like=path_params,
-                viewset_class=viewset_class,
-            )
-        
-        update_route.__annotations__ = {
-            "request": Request,
-            "data": input_schema if input_schema else dict[str, Any],
-            "db": AsyncSession,
-            "_user": Any,
-        }
+        update_route = _create_crud_viewset_update_endpoint(
+            viewset_class,
+            lookup_url_kwarg,
+            input_schema,
+        )
         
         update_openapi_extra, update_success_responses = _build_openapi_examples(
             input_schema=input_schema,
@@ -1531,41 +1704,12 @@ class Router(APIRouter):
         # ==================================================================
         # 6. PARTIAL UPDATE (PATCH) - Atualização parcial com modelo parcial
         # ==================================================================
-        async def partial_update_route(
-            request, data=Body(...), db=Depends(get_db),
-            _user=Depends(get_optional_user),
-        ):
-            vs = viewset_class()
-            path_params = dict(request.path_params)
-            call_kwargs = _build_body_call_kwargs(
-                vs.partial_update,
-                path_params=path_params,
-                body=data,
-                exclude_unset=True,
-                viewset_class=viewset_class,
-            )
-            full = _build_viewset_call_kwargs(
-                vs.partial_update,
-                request=request,
-                db=db,
-                _user=_user,
-                extra_kwargs=call_kwargs,
-                viewset_class=viewset_class,
-            )
-            return await _call_viewset_handler_with_hint(
-                vs.partial_update,
-                args=(),
-                kwargs=full,
-                path_like=path_params,
-                viewset_class=viewset_class,
-            )
-        
-        partial_update_route.__annotations__ = {
-            "request": Request,
-            "data": partial_input_schema if partial_input_schema else dict[str, Any],
-            "db": AsyncSession,
-            "_user": Any,
-        }
+        partial_update_route = _create_crud_viewset_partial_update_endpoint(
+            viewset_class,
+            lookup_url_kwarg,
+            partial_input_schema,
+            input_schema,
+        )
         
         patch_openapi_extra, patch_success_responses = _build_openapi_examples(
             input_schema=partial_input_schema if partial_input_schema else input_schema,
@@ -1598,32 +1742,10 @@ class Router(APIRouter):
         # ==================================================================
         # 7. DELETE - Deleção com response tipado
         # ==================================================================
-        async def destroy_route(
-            request, db=Depends(get_db), _user=Depends(get_optional_user),
-        ):
-            vs = viewset_class()
-            path_params = dict(request.path_params)
-            full = _build_viewset_call_kwargs(
-                vs.destroy,
-                request=request,
-                db=db,
-                _user=_user,
-                extra_kwargs=path_params,
-                viewset_class=viewset_class,
-            )
-            return await _call_viewset_handler_with_hint(
-                vs.destroy,
-                args=(),
-                kwargs=full,
-                path_like=path_params,
-                viewset_class=viewset_class,
-            )
-        
-        destroy_route.__annotations__ = {
-            "request": Request,
-            "db": AsyncSession,
-            "_user": Any,
-        }
+        destroy_route = _create_crud_viewset_destroy_endpoint(
+            viewset_class,
+            lookup_url_kwarg,
+        )
         
         delete_openapi_extra, delete_success_responses = _build_openapi_examples(
             output_schema=DeleteResponse,

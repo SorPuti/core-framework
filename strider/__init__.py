@@ -323,7 +323,7 @@ from strider.views import (
     action,
 )
 
-__version__ = "0.18.57"
+__version__ = "0.18.58"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
