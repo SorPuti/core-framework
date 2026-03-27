@@ -662,44 +662,44 @@ def _build_binding_hint(
 ) -> str:
     sig = inspect.signature(fn)
     names = [n for n, p in sig.parameters.items() if n != "self" and p.kind != inspect.Parameter.VAR_POSITIONAL]
-    orig_msg = str(original.args[0]) if original.args else str(original)
-    multi = "multiple values for argument" in orig_msg.lower()
-
-    lines: list[str] = [
+    lines = [
         f"Handler: {getattr(fn, '__qualname__', repr(fn))}",
         f"Parâmetros na assinatura (exc. self): {names}",
         f"Contexto de URL / path: {path_like}",
         f"Chaves em kwargs na chamada: {sorted(kwargs.keys())}",
     ]
     if args:
-        lines.append(f"args posicionais passados ao handler: {len(args)} (só use com método não ligado; CRUD usa args=())")
-
-    if multi:
-        lines.insert(
-            1,
-            "O que significa: o Python recebeu o mesmo parâmetro duas vezes (ex.: `request` como "
-            "posicional e também em **kwargs). No Stride, métodos do ViewSet já vêm ligados "
-            "(`vs.create`): chame apenas `await vs.create(**kwargs)`, sem passar `vs` outra vez.",
+        lines.append(f"args posicionais extras: {len(args)} elemento(s)")
+    orig_msg = str(original.args[0]) if original.args else str(original)
+    if "multiple values" in orig_msg.lower():
+        lines.append(
+            "O que fazer: em rotas CRUD o Stride chama o método já ligado (ex.: `vs.create(**kwargs)`). "
+            "Se você ver este erro com o framework atualizado, reporte; não deve ser necessário passar `vs`/`self` à mão."
         )
-    elif viewset_class is not None:
+    if viewset_class is not None:
         url_kw = getattr(viewset_class, "lookup_url_kwarg", None) or getattr(
             viewset_class, "lookup_field", "id"
         )
         lf = getattr(viewset_class, "lookup_field", "id")
         lines.append(
-            f"ViewSet: lookup_field={lf!r}, segmento na URL={url_kw!r}. "
-            f"Alinhe o nome na assinatura (`{url_kw}`, `pk`, `{lf}`) ou use só get_object()."
+            f"ViewSet: lookup_field={lf!r}, nome do segmento na rota={url_kw!r}. "
+            f"Declare o mesmo nome, ou `pk`, ou `{lf}`, ou use só `**kwargs` e "
+            f"`await self.get_object(db, **kwargs)` (o lookup da URL entra em kwargs)."
         )
+        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+            lines.append(
+                "Assinatura com `**kwargs`: os placeholders da rota são repassados em kwargs; "
+                "não é obrigatório tipar `pk: int` — `get_object` usa `lookup_url_kwarg`."
+            )
     else:
         lines.append(
-            "APIView: cada {{nome}} na rota deve existir na assinatura do método "
+            "APIView: cada {{nome}} na rota deve corresponder a um parâmetro na assinatura "
             "(ou use **kwargs no handler)."
         )
-
-    if not multi:
-        lines.append(
-            "Path: valores chegam como str; use `pk: int` ou `id: uuid.UUID` para coerção automática."
-        )
+    lines.append(
+        "Dica: valores de path chegam como str; use anotações como pk: int ou id: uuid.UUID "
+        "para coerção automática no Stride."
+    )
     return "\n".join(lines)
 
 
@@ -711,12 +711,6 @@ async def _call_viewset_handler_with_hint(
     path_like: dict[str, Any],
     viewset_class: type | None,
 ) -> Any:
-    """
-    Chama o handler e, em TypeError, levanta StridePathParamBindingError com dicas.
-
-    - ``args=()`` quando ``fn`` é método **ligado** (ex.: ``vs.create``, ``vs.list``).
-    - ``args=(vs,)`` quando ``fn`` é a função **da classe** (ex.: ``BugViewSet.create`` em @action).
-    """
     try:
         return await fn(*args, **kwargs)
     except TypeError as e:
