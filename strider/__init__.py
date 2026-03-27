@@ -248,6 +248,7 @@ from strider.serializers import (
     ValidationErrorResponse,
     NotFoundResponse,
     ConflictResponse,
+    DatabaseIntegrityResponse,
     computed_orm_field,
 )
 # Storage - File storage (local or GCS with signed URLs)
@@ -323,7 +324,7 @@ from strider.views import (
     action,
 )
 
-__version__ = "0.18.58"
+__version__ = "0.18.60"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
@@ -349,6 +350,7 @@ __all__ = [
     "ValidationErrorResponse",
     "NotFoundResponse",
     "ConflictResponse",
+    "DatabaseIntegrityResponse",
     # Views
     "APIView",
     "ViewSet",

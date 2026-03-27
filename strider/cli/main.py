@@ -2485,7 +2485,7 @@ from strider import timezone, DateTime
 #     created_at: Mapped[DateTime] = Field.datetime(auto_now_add=True)
 #     updated_at: Mapped[DateTime | None] = Field.datetime(auto_now=True)
 ''',
-        app_dir / "schemas.py": f'''"""
+        app_dir / "serializers.py": f'''"""
 Schemas Pydantic do app {app_name}.
 
 Defina seus schemas de entrada/saída aqui.
@@ -2597,7 +2597,7 @@ from httpx import AsyncClient
     print()
     print(info("Next steps:"))
     print(f"  1. Edit {app_dir.relative_to(cwd)}/models.py to define your models")
-    print(f"  2. Edit {app_dir.relative_to(cwd)}/schemas.py to define your schemas")
+    print(f"  2. Edit {app_dir.relative_to(cwd)}/serializers.py to define your serializers")
     print(f"  3. Edit {app_dir.relative_to(cwd)}/views.py to create your ViewSets")
     print(f"  4. Defina rotas em {app_dir.relative_to(cwd)}/urls.py (convenção obrigatória)")
     print()

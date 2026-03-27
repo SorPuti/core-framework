@@ -711,6 +711,23 @@ class ConflictResponse(OutputSchema):
     value: str | None = None
 
 
+class DatabaseIntegrityResponse(OutputSchema):
+    """
+    Resposta estável para erros de integridade (handler global de IntegrityError).
+
+    Códigos comuns: ``foreign_key_violation``, ``unique_constraint``,
+    ``required_field``, ``integrity_error``. O texto bruto do SGBD não é exposto;
+    opcionalmente vêm ``field``, ``hint``, ``constraint``, ``value`` (único).
+    """
+
+    detail: str
+    code: str
+    field: str | None = None
+    constraint: str | None = None
+    hint: str | None = None
+    value: str | None = None
+
+
 class SuccessResponse(OutputSchema):
     """Schema padrão para respostas de sucesso simples."""
     
@@ -775,6 +792,7 @@ __all__ = [
     "ValidationErrorDetail",
     "NotFoundResponse",
     "ConflictResponse",
+    "DatabaseIntegrityResponse",
     "SuccessResponse",
     "DeleteResponse",
     "computed_field",

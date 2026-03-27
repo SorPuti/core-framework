@@ -217,6 +217,37 @@ All exceptions return consistent JSON:
 }
 ```
 
+### Integridade na base (SQLAlchemy `IntegrityError`)
+
+O `StrideApp` converte erros do motor (PostgreSQL/asyncpg, SQLite, etc.) para uma **resposta estável**:
+não envia SQL, stack nem mensagem bruta do driver. O detalhe técnico fica **só nos logs** do servidor.
+
+Códigos possíveis:
+
+| `code` | Significado típico | HTTP |
+|--------|---------------------|------|
+| `foreign_key_violation` | FK: registo referenciado não existe | 400 |
+| `unique_constraint` | Valor duplicado (único) | 409 |
+| `required_field` | NOT NULL violado | 422 |
+| `integrity_error` | Outro (genérico) | 400 |
+
+Exemplo (FK — texto em português no handler):
+
+```json
+{
+  "detail": "Referência inválida: o registo associado não existe ou não pode ser usado.",
+  "code": "foreign_key_violation",
+  "field": "author_id",
+  "hint": "Confirme que o identificador enviado existe na entidade referenciada (ex.: utilizador / recurso pai)."
+}
+```
+
+Schema Pydantic para documentar no OpenAPI (respostas 400/409/422):
+
+```python
+from strider import DatabaseIntegrityResponse
+```
+
 ## Exception Handlers
 
 StrideApp auto-registers handlers for:
@@ -225,7 +256,7 @@ StrideApp auto-registers handlers for:
 - Core `ValidationError` → 422
 - `MultipleValidationErrors` → 422
 - `UniqueValidationError` → 409
-- SQLAlchemy `IntegrityError` → 409/400/422
+- SQLAlchemy `IntegrityError` → 400/409/422 (resposta sanitizada; ver secção acima)
 - SQLAlchemy `DataError` → 422
 - SQLAlchemy `OperationalError` → 503
 - Generic `Exception` → 500
