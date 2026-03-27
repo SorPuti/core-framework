@@ -130,3 +130,34 @@ class TestPathParamMergeAndCoercion:
 
         with pytest.raises(StridePathParamBindingError):
             _merge_path_params_for_signature(handler, {"id": "not-int"}, viewset_class=_VS)
+
+    def test_merge_pk_with_var_kw_maps_id_without_duplicating_id(self):
+        from strider.routing import _merge_path_params_for_signature
+
+        class _VS:
+            lookup_field = "id"
+            lookup_url_kwarg = "id"
+
+        async def handler(self, request, db, file, pk: int, **kwargs):
+            return pk
+
+        out = _merge_path_params_for_signature(
+            handler, {"id": "7"}, viewset_class=_VS
+        )
+        assert out == {"pk": 7}
+        assert "id" not in out
+
+    def test_merge_var_kw_only_keeps_lookup_segment_for_get_object(self):
+        from strider.routing import _merge_path_params_for_signature
+
+        class _VS:
+            lookup_field = "id"
+            lookup_url_kwarg = "id"
+
+        async def handler(self, request, db, file, **kwargs):
+            return kwargs
+
+        out = _merge_path_params_for_signature(
+            handler, {"id": "99"}, viewset_class=_VS
+        )
+        assert out == {"id": "99"}

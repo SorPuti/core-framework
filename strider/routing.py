@@ -703,6 +703,29 @@ def _build_binding_hint(
     return "\n".join(lines)
 
 
+def _is_signature_binding_typeerror(exc: TypeError) -> bool:
+    """
+    Só TypeErrors típicos de assinatura viram StridePathParamBindingError.
+    Outros (ex.: await em str) propagam sem mascarar.
+    """
+    msg = str(exc).lower()
+    if "can't be used in 'await'" in msg:
+        return False
+    if "await" in msg and "expression" in msg:
+        return False
+    markers = (
+        "unexpected keyword argument",
+        "got an unexpected keyword argument",
+        "got multiple values for argument",
+        "missing",
+        "required positional argument",
+        "positional argument",
+        "takes",
+        "no arguments",
+    )
+    return any(m in msg for m in markers)
+
+
 async def _call_viewset_handler_with_hint(
     fn: Callable[..., Any],
     *,
@@ -712,8 +735,13 @@ async def _call_viewset_handler_with_hint(
     viewset_class: type | None,
 ) -> Any:
     try:
-        return await fn(*args, **kwargs)
+        result = fn(*args, **kwargs)
+        if inspect.isawaitable(result):
+            return await result
+        return result
     except TypeError as e:
+        if not _is_signature_binding_typeerror(e):
+            raise
         hint = _build_binding_hint(fn, path_like, viewset_class, kwargs, args, e)
         orig = e.args[0] if e.args else str(e)
         full = f"{orig}\n\n--- Stride (assinatura e path) ---\n{hint}"
@@ -734,8 +762,9 @@ def _merge_path_params_for_signature(
     """
     sig = inspect.signature(fn)
     param_names = {n for n in sig.parameters if n != "self"}
-    if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
-        return _apply_path_coercions(fn, dict(path_like))
+    has_var_kw = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
 
     out: dict[str, Any] = {}
     for k, v in path_like.items():
@@ -762,6 +791,21 @@ def _merge_path_params_for_signature(
             and "pk" not in out
         ):
             out["pk"] = path_like["id"]
+
+    # Com `**kwargs`, encaminha segmentos que não viraram parâmetros explícitos (ex.: id → pk).
+    # Evita duplicar o segmento de lookup se já mapeamos para `pk`.
+    if has_var_kw:
+        uw = None
+        if viewset_class is not None:
+            uw = getattr(viewset_class, "lookup_url_kwarg", None) or getattr(
+                viewset_class, "lookup_field", "id"
+            )
+        for k, v in path_like.items():
+            if k in out:
+                continue
+            if uw is not None and k == uw and "pk" in out:
+                continue
+            out[k] = v
 
     return _apply_path_coercions(fn, out)
 
