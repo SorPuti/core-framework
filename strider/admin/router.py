@@ -174,7 +174,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             return RedirectResponse(f"{prefix}/", status_code=302)
         
         ctx = _base_context(request, error=request.query_params.get("error"))
-        return _templates.TemplateResponse("admin/login.html", ctx)
+        return _templates.TemplateResponse(request, "admin/login.html", ctx)
     
     @router.post("/login")
     async def login_action(
@@ -289,7 +289,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             return RedirectResponse(f"{prefix}/login", status_code=302)
         
         ctx = _base_context(request, user=user)
-        return _templates.TemplateResponse("admin/dashboard.html", ctx)
+        return _templates.TemplateResponse(request, "admin/dashboard.html", ctx)
     
     # =========================================================================
     # Operations Center Routes (HTML) — BEFORE model routes
@@ -320,7 +320,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/dashboard.html", ctx)
+            return _templates.TemplateResponse(request, "admin/ops/dashboard.html", ctx)
         
         @router.get("/ops/infrastructure/", response_class=HTMLResponse)
         async def ops_infrastructure(request: Request) -> Response:
@@ -331,7 +331,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/infrastructure.html", ctx)
+            return _templates.TemplateResponse(request, "admin/ops/infrastructure.html", ctx)
         
         @router.get("/ops/tasks/", response_class=HTMLResponse)
         async def ops_tasks(request: Request) -> Response:
@@ -342,7 +342,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/tasks.html", ctx)
+            return _templates.TemplateResponse(request, "admin/ops/tasks.html", ctx)
         
         @router.get("/ops/workers/", response_class=HTMLResponse)
         async def ops_workers(request: Request) -> Response:
@@ -353,7 +353,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/workers.html", ctx)
+            return _templates.TemplateResponse(request, "admin/ops/workers.html", ctx)
 
         @router.get("/ops/runners/", response_class=HTMLResponse)
         async def ops_runners(request: Request) -> Response:
@@ -364,7 +364,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/runners.html", ctx)
+            return _templates.TemplateResponse(request, "admin/ops/runners.html", ctx)
         
         @router.get("/ops/logs/", response_class=HTMLResponse)
         async def ops_logs(request: Request) -> Response:
@@ -375,7 +375,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/logs.html", ctx)
+            return _templates.TemplateResponse(request, "admin/ops/logs.html", ctx)
         
         @router.get("/ops/periodic/", response_class=HTMLResponse)
         async def ops_periodic(request: Request) -> Response:
@@ -397,7 +397,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/kafka.html", ctx)
+            return _templates.TemplateResponse(request, "admin/ops/kafka.html", ctx)
         
         @router.get("/ops/events/", response_class=HTMLResponse)
         async def ops_events(request: Request) -> Response:
@@ -408,7 +408,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             if result is False:
                 return Response("Forbidden: Operations Center requires superuser access", status_code=403)
             ctx = _base_context(request, user=result)
-            return _templates.TemplateResponse("admin/ops/events.html", ctx)
+            return _templates.TemplateResponse(request, "admin/ops/events.html", ctx)
     
     # =========================================================================
     # Data Importer Route (HTML) — BEFORE model routes to avoid path conflict
@@ -421,7 +421,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
         if not user or not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
             return RedirectResponse(f"{prefix}/login", status_code=302)
         ctx = _base_context(request, user=user)
-        return _templates.TemplateResponse("admin/importer.html", ctx)
+        return _templates.TemplateResponse(request, "admin/importer.html", ctx)
 
     # =========================================================================
     # Model Routes (HTML)
@@ -480,7 +480,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             filter_types_json=_json.dumps(filter_types),
             user_perms=user_perms,
         )
-        return _templates.TemplateResponse("admin/list.html", ctx)
+        return _templates.TemplateResponse(request, "admin/list.html", ctx)
     
     @router.get("/{app_label}/{model_name}/{pk}/", response_class=HTMLResponse)
     async def model_detail(
@@ -519,7 +519,7 @@ def create_admin_router(site: "AdminSite", settings: "Settings") -> APIRouter:
             editable_fields_json=editable_fields_data,
             user_perms=user_perms,
         )
-        return _templates.TemplateResponse("admin/detail.html", ctx)
+        return _templates.TemplateResponse(request, "admin/detail.html", ctx)
     
     return router
 
