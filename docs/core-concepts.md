@@ -25,7 +25,7 @@
   - `partial_update`: `PATCH /resource/{id}`
   - `destroy`: `DELETE /resource/{id}`
 - Hooks:
-  - `perform_create_validation`, `after_create`, `perform_update_validation`, `after_update`
+  - `perform_create_validation`, `perform_create` (persistência), `after_create`, `perform_update_validation`, `after_update`
   - `validate_data`, `validate_field`, `validate_unique_fields`.
 - Ações customizadas com `@action(methods=[...], detail=True|False, ... )`.
 

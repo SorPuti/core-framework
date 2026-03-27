@@ -252,6 +252,7 @@ class PostViewSet(ModelViewSet):
 | Hook | Quando é chamado |
 |------|-------------------|
 | `perform_create_validation(data, db)` | Antes de criar o objeto (validação extra) |
+| `perform_create(instance, validated_data, db)` | Persistir a criação (`save`); recomendado incluir `db` |
 | `after_create(obj, db)` | Depois de criar e salvar |
 | `perform_update_validation(data, instance, db)` | Antes de atualizar |
 | `after_update(obj, db)` | Depois de atualizar e salvar |
@@ -536,7 +537,7 @@ Documentação completa: [Validators](14-validators.md).
 2. **Parsing**: body JSON lido pelo FastAPI.
 3. **Validação (única)**: FastAPI valida o body com o schema de input do Serializer (ou do ViewSet) → instância validada ou 422.
 4. **Handler**: ViewSet recebe `data` já como instância do schema (não revalida). Obtém dict com `data.model_dump()` e chama `validate_data(...)` para regras de negócio.
-5. **Lógica**: create/update usam o dict validado; hooks `perform_create_validation` / `perform_update_validation` e `after_create` / `after_update` quando definidos.
+5. **Lógica**: create/update usam o dict validado; hooks `perform_create_validation`, `perform_create` (persistência opcional), `perform_update_validation` e `after_create` / `after_update` quando definidos.
 6. **Serialização**: um único caminho via `_serialize_for_response(obj)` (usa Serializer quando existir).
 7. **Response**: FastAPI serializa o resultado para JSON.
 

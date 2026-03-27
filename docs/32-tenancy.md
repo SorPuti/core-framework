@@ -204,6 +204,8 @@ class ProjectViewSet(ModelViewSet):
         await instance.save(db)
 ```
 
+Nas actions CRUD, o ViewSet expõe `self.request` (e `self.action` / `self.kwargs`); a assinatura recomendada de `perform_create` inclui `db` para `save` com a sessão async correta.
+
 ## Tenancy por Subdomínio
 
 ```python

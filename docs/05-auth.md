@@ -247,16 +247,22 @@ class PostViewSet(ModelViewSet):
 
 ## Acessar Usuário Atual
 
+Durante `create` / `update` / `destroy` / `list` / `retrieve` (e variantes), o ViewSet expõe **`self.request`**, **`self.action`** e **`self.kwargs`**, para poder usar `self.request.user` nos hooks.
+
+Assinatura recomendada de `perform_create` (recebe a sessão async do ORM):
+
 ```python
 from strider import ModelViewSet
 
 class PostViewSet(ModelViewSet):
     model = Post
     
-    async def perform_create(self, instance, validated_data):
+    async def perform_create(self, instance, validated_data, db):
         instance.author_id = self.request.user.id
-        await instance.save()
+        await instance.save(db)
 ```
+
+Compatibilidade: ainda é aceita a assinatura legada `perform_create(self, instance, validated_data)` sem `db`; nesse caso o default chama `await instance.save()` sem passar `db` explicitamente.
 
 Ou em qualquer rota:
 

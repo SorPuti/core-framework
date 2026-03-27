@@ -11,7 +11,7 @@ flowchart TB
     PERM -->|OK| ACTION{Action Type}
     
     ACTION -->|list| LIST[get_queryset → serialize_list]
-    ACTION -->|create| CREATE[validate → perform_create → serialize]
+    ACTION -->|create| CREATE[validate_data → perform_create → after_create → serialize]
     ACTION -->|retrieve| GET[get_object → serialize]
     ACTION -->|update| UPDATE[get_object → validate → perform_update]
     ACTION -->|destroy| DELETE[get_object → perform_destroy]
@@ -179,10 +179,13 @@ Hooks do ciclo de vida:
 
 | Hook | Quando |
 |------|--------|
-| `perform_create_validation(data, db)` | Antes de criar; pode alterar `data`. |
+| `perform_create_validation(data, db)` | Antes de instanciar o model; pode alterar `data`. |
+| `perform_create(instance, validated_data, db)` | **Persistência** da criação: após `Model(**validated_data)`, antes de `after_create`. Recomendado incluir `db` e usar `await instance.save(db)`. |
 | `after_create(obj, db)` | Depois de criar e salvar. |
 | `perform_update_validation(data, instance, db)` | Antes de atualizar. |
 | `after_update(obj, db)` | Depois de atualizar e salvar. |
+
+**Request no ViewSet:** em `list`, `retrieve`, `create`, `update`, `partial_update`, `destroy` e `bulk_create`, o framework define `self.request`, `self.action` e `self.kwargs`, para uso em hooks como `perform_create_validation` e `perform_create`.
 
 ```python
 class PostViewSet(ModelViewSet):
@@ -200,6 +203,8 @@ class PostViewSet(ModelViewSet):
         data["updated_by_id"] = self.request.user.id
         return data
 ```
+
+Assinatura legada sem `db`: `perform_create(self, instance, validated_data)` continua suportada.
 
 ## QuerySet Filtering
 
