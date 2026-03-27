@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import inspect as py_inspect
 from typing import Any, ClassVar, Generic, TypeVar, get_type_hints
 from collections.abc import Sequence, Callable, Awaitable
 
@@ -871,6 +872,9 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Lista todos os objetos com paginação."""
+        self.request = request
+        self.action = "list"
+        self.kwargs = dict(kwargs)
         await self.check_permissions(request, "list")
         
         page_size = min(page_size or self.page_size, self.max_page_size)
@@ -897,6 +901,9 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Retorna um objeto específico."""
+        self.request = request
+        self.action = "retrieve"
+        self.kwargs = dict(kwargs)
         await self.check_permissions(request, "retrieve")
         
         obj = await self.get_object(db, **kwargs)
@@ -912,6 +919,9 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Cria um novo objeto."""
+        self.request = request
+        self.action = "create"
+        self.kwargs = dict(kwargs)
         await self.check_permissions(request, "create")
         
         # 1. Dados já validados (FastAPI) ou dict a validar (ex.: action sem schema)
@@ -934,7 +944,11 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         
         # 4. Cria o objeto
         obj = self.model(**validated_data)
-        await obj.save(db)
+        perform_create_sig = py_inspect.signature(self.perform_create)
+        if "db" in perform_create_sig.parameters:
+            await self.perform_create(obj, validated_data, db)
+        else:
+            await self.perform_create(obj, validated_data)
         
         # 5. Hook após criar
         await self.after_create(obj, db)
@@ -952,6 +966,21 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         Sobrescreva para adicionar lógica customizada.
         """
         return data
+
+    async def perform_create(
+        self,
+        instance: ModelT,
+        validated_data: dict[str, Any],
+        db: AsyncSession,
+    ) -> None:
+        """
+        Hook para persistir criação.
+
+        Compatibilidade:
+        - Novo formato recomendado: perform_create(instance, validated_data, db)
+        - Formato legado aceito: perform_create(instance, validated_data)
+        """
+        await instance.save(db)
     
     async def after_create(self, obj: ModelT, db: AsyncSession) -> None:
         """
@@ -970,6 +999,9 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Atualiza um objeto existente."""
+        self.request = request
+        self.action = "update"
+        self.kwargs = dict(kwargs)
         await self.check_permissions(request, "update")
         
         obj = await self.get_object(db, **kwargs)
@@ -1054,6 +1086,9 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Atualização parcial (PATCH)."""
+        self.request = request
+        self.action = "partial_update"
+        self.kwargs = dict(kwargs)
         return await self.update(request, db, data, partial=True, **kwargs)
     
     async def destroy(
@@ -1063,6 +1098,9 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Deleta um objeto."""
+        self.request = request
+        self.action = "destroy"
+        self.kwargs = dict(kwargs)
         await self.check_permissions(request, "destroy")
         
         obj = await self.get_object(db, **kwargs)
@@ -1405,6 +1443,9 @@ class BulkModelViewSet(ModelViewSet[ModelT, InputT, OutputT]):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Cria múltiplos objetos de uma vez."""
+        self.request = request
+        self.action = "bulk_create"
+        self.kwargs = dict(kwargs)
         await self.check_permissions(request, "create")
         
         if not data:
