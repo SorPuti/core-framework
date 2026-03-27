@@ -43,6 +43,32 @@ InputT = TypeVar("InputT", bound=InputSchema)
 OutputT = TypeVar("OutputT", bound=OutputSchema)
 
 
+def _require_mapping_after_hook(
+    value: Any,
+    *,
+    hook_name: str,
+    viewset_name: str,
+) -> dict[str, Any]:
+    """
+    Garante que hooks de validação devolvem um dict.
+    Evita TypeError opaco em model(**None) quando validate() esquece o return.
+    """
+    if value is None:
+        raise ValidationError(
+            f"{viewset_name}: {hook_name} devolveu None. "
+            "Devolva o dicionário de dados (ex.: `return data` ou `return validated_data`).",
+            code="validation_hook_returned_none",
+            field=None,
+        )
+    if not isinstance(value, dict):
+        raise ValidationError(
+            f"{viewset_name}: {hook_name} deve devolver dict, obteve {type(value).__name__!r}.",
+            code="validation_hook_invalid_type",
+            field=None,
+        )
+    return value
+
+
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Merge recursivo: override sobrescreve base; dicts aninhados são mesclados (listas substituem)."""
     out = dict(base)
@@ -806,6 +832,11 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
                 raise errors[0]
             raise MultipleValidationErrors(errors)
         
+        validated_data = _require_mapping_after_hook(
+            validated_data,
+            hook_name="validate()",
+            viewset_name=self.__class__.__name__,
+        )
         return validated_data
     
     async def validate(
@@ -895,6 +926,11 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         
         # 3. Hook antes de criar
         validated_data = await self.perform_create_validation(validated_data, db)
+        validated_data = _require_mapping_after_hook(
+            validated_data,
+            hook_name="perform_create_validation()",
+            viewset_name=self.__class__.__name__,
+        )
         
         # 4. Cria o objeto
         obj = self.model(**validated_data)
@@ -962,6 +998,11 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
         
         # 3. Hook antes de atualizar
         validated_data = await self.perform_update_validation(validated_data, obj, db)
+        validated_data = _require_mapping_after_hook(
+            validated_data,
+            hook_name="perform_update_validation()",
+            viewset_name=self.__class__.__name__,
+        )
         
         # 4. Merge profundo para struct_merge_fields (PUT/PATCH não perdem dados aninhados)
         struct_merge_fields = getattr(self, "struct_merge_fields", []) or []
@@ -1385,6 +1426,11 @@ class BulkModelViewSet(ModelViewSet[ModelT, InputT, OutputT]):
                 validated = input_schema.model_validate(item_data)
                 data_dict = validated.model_dump()
                 validated_data = await self.validate_data(data_dict, db, instance=None)
+                validated_data = _require_mapping_after_hook(
+                    validated_data,
+                    hook_name="validate()",
+                    viewset_name=self.__class__.__name__,
+                )
                 
                 obj = self.model(**validated_data)
                 await obj.save(db)
