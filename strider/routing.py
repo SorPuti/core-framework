@@ -16,14 +16,17 @@ from __future__ import annotations
 import inspect
 import logging
 import os
+import types
+from uuid import UUID
 from collections.abc import Callable
-from typing import Any, Optional, TYPE_CHECKING, TypeVar as TypingTypeVar, get_args, get_origin
+from typing import Any, Optional, TYPE_CHECKING, TypeVar as TypingTypeVar, Union, get_args, get_origin
 
-from fastapi import APIRouter, Request, Depends, Body, File, UploadFile
+from fastapi import APIRouter, Request, Depends, Body, File, UploadFile, Path
 from pydantic import BaseModel, ValidationError as PydanticValidationError, create_model
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from strider.dependencies import get_db, get_optional_user
+from strider.exceptions import StridePathParamBindingError
 from strider.openapi_examples import build_schema_example, build_response_example
 from strider.serializers import (
     InputSchema,
@@ -570,6 +573,187 @@ def _pick_body_param_name(
     return None, has_var_kwargs, method_params
 
 
+def _unwrap_optional(annotation: Any) -> Any:
+    """Resolve Optional[T] / T | None para T quando há um único tipo não-None."""
+    origin = get_origin(annotation)
+    if origin is Union or origin is types.UnionType:
+        args = [a for a in get_args(annotation) if a is not type(None)]
+        if len(args) == 1:
+            return args[0]
+    return annotation
+
+
+def _coerce_path_string(value: str, annotation: Any, *, param_name: str) -> Any:
+    """
+    Converte segmentos de path (sempre str na origem) para tipos anotados na assinatura.
+    """
+    ann = _unwrap_optional(annotation)
+    if ann is str:
+        return value
+    if ann is int:
+        try:
+            return int(value, 10)
+        except ValueError as e:
+            raise StridePathParamBindingError(
+                f"Parâmetro de path {param_name!r}: não foi possível converter {value!r} para int.",
+                hint=(
+                    f"Use um número inteiro válido na URL ou declare `{param_name}: str` "
+                    "se o identificador não for numérico."
+                ),
+                original=e,
+            ) from e
+    if ann is bool:
+        lv = value.strip().lower()
+        if lv in ("true", "1", "yes", "on"):
+            return True
+        if lv in ("false", "0", "no", "off"):
+            return False
+        raise StridePathParamBindingError(
+            f"Parâmetro de path {param_name!r}: valor booleano inválido {value!r}.",
+            hint="Use true/false, 1/0 ou yes/no.",
+        )
+    if ann is float:
+        try:
+            return float(value)
+        except ValueError as e:
+            raise StridePathParamBindingError(
+                f"Parâmetro de path {param_name!r}: não foi possível converter {value!r} para float.",
+                hint=f"Declare `{param_name}: str` ou envie um número válido.",
+                original=e,
+            ) from e
+    if ann is UUID:
+        try:
+            return UUID(value)
+        except ValueError as e:
+            raise StridePathParamBindingError(
+                f"Parâmetro de path {param_name!r}: não foi possível converter {value!r} para UUID.",
+                hint="Use um UUID válido no segmento da URL ou declare o parâmetro como str.",
+                original=e,
+            ) from e
+    return value
+
+
+def _apply_path_coercions(fn: Callable[..., Any], merged: dict[str, Any]) -> dict[str, Any]:
+    """Aplica coerção str → int/bool/float/UUID conforme anotações explícitas na assinatura."""
+    sig = inspect.signature(fn)
+    out = dict(merged)
+    for name in list(out.keys()):
+        if name not in sig.parameters:
+            continue
+        p = sig.parameters[name]
+        if p.kind == inspect.Parameter.VAR_KEYWORD:
+            continue
+        val = out[name]
+        if not isinstance(val, str):
+            continue
+        if p.annotation is inspect.Parameter.empty:
+            continue
+        out[name] = _coerce_path_string(val, p.annotation, param_name=name)
+    return out
+
+
+def _build_binding_hint(
+    fn: Callable[..., Any],
+    path_like: dict[str, Any],
+    viewset_class: type | None,
+    kwargs: dict[str, Any],
+    args: tuple[Any, ...],
+    original: TypeError,
+) -> str:
+    sig = inspect.signature(fn)
+    names = [n for n, p in sig.parameters.items() if n != "self" and p.kind != inspect.Parameter.VAR_POSITIONAL]
+    lines = [
+        f"Handler: {getattr(fn, '__qualname__', repr(fn))}",
+        f"Parâmetros na assinatura (exc. self): {names}",
+        f"Contexto de URL / path: {path_like}",
+        f"Chaves em kwargs na chamada: {sorted(kwargs.keys())}",
+    ]
+    if args:
+        lines.append(f"args posicionais (além do que o router injeta): {len(args)} elemento(s)")
+    if viewset_class is not None:
+        url_kw = getattr(viewset_class, "lookup_url_kwarg", None) or getattr(
+            viewset_class, "lookup_field", "id"
+        )
+        lf = getattr(viewset_class, "lookup_field", "id")
+        lines.append(
+            f"ViewSet: lookup_field={lf!r}, nome do segmento na rota={url_kw!r}. "
+            f"Declare o mesmo nome, ou `pk`, ou `{lf}`, ou omita o lookup e use get_object()."
+        )
+    else:
+        lines.append(
+            "APIView: cada {{nome}} na rota deve corresponder a um parâmetro na assinatura "
+            "(ou use **kwargs no handler)."
+        )
+    lines.append(
+        "Dica: valores de path chegam como str; use anotações como pk: int ou id: uuid.UUID "
+        "para coerção automática no Stride."
+    )
+    return "\n".join(lines)
+
+
+async def _call_viewset_handler_with_hint(
+    fn: Callable[..., Any],
+    *,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    path_like: dict[str, Any],
+    viewset_class: type | None,
+) -> Any:
+    try:
+        return await fn(*args, **kwargs)
+    except TypeError as e:
+        hint = _build_binding_hint(fn, path_like, viewset_class, kwargs, args, e)
+        orig = e.args[0] if e.args else str(e)
+        full = f"{orig}\n\n--- Stride (assinatura e path) ---\n{hint}"
+        raise StridePathParamBindingError(full, hint=hint, original=e) from e
+
+
+def _merge_path_params_for_signature(
+    fn: Callable[..., Any],
+    path_like: dict[str, Any],
+    viewset_class: type | None = None,
+) -> dict[str, Any]:
+    """
+    Repassa só chaves que a função aceita; mapeia o segmento de lookup da URL
+    (ex.: `id`) para nomes comuns na assinatura (`pk`, `lookup_field`).
+
+    Evita ``unexpected keyword argument 'id'`` quando a action declara só ``pk``
+    ou não declara o lookup (usa só ``get_object()``).
+    """
+    sig = inspect.signature(fn)
+    param_names = {n for n in sig.parameters if n != "self"}
+    if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+        return _apply_path_coercions(fn, dict(path_like))
+
+    out: dict[str, Any] = {}
+    for k, v in path_like.items():
+        if k in param_names:
+            out[k] = v
+
+    if viewset_class is not None:
+        url_kw = getattr(viewset_class, "lookup_url_kwarg", None) or getattr(
+            viewset_class, "lookup_field", "id"
+        )
+        lf = getattr(viewset_class, "lookup_field", "id")
+        if url_kw in path_like and url_kw not in out:
+            val = path_like[url_kw]
+            for alias in (lf, "pk", url_kw):
+                if alias in param_names and alias not in out:
+                    out[alias] = val
+                    break
+    else:
+        # Sem ViewSet: alias genérico id → pk (estilo DRF)
+        if (
+            "id" in path_like
+            and "id" not in out
+            and "pk" in param_names
+            and "pk" not in out
+        ):
+            out["pk"] = path_like["id"]
+
+    return _apply_path_coercions(fn, out)
+
+
 def _build_body_call_kwargs(
     target_callable: Callable,
     *,
@@ -577,15 +761,19 @@ def _build_body_call_kwargs(
     body: Any,
     default_name: str = "data",
     exclude_unset: bool = False,
+    viewset_class: type | None = None,
 ) -> dict[str, Any]:
     """Build kwargs for a callable, injecting body into the most suitable parameter."""
-    kwargs: dict[str, Any] = dict(path_params)
+    merged_path = _merge_path_params_for_signature(
+        target_callable, path_params, viewset_class
+    )
+    kwargs: dict[str, Any] = dict(merged_path)
     if body is None:
         return kwargs
 
     target_param, has_var_kwargs, method_params = _pick_body_param_name(
         target_callable,
-        path_params=path_params,
+        path_params=merged_path,
     )
 
     body_value = body
@@ -621,6 +809,8 @@ def _build_viewset_call_kwargs(
     db: AsyncSession,
     _user: Any,
     extra_kwargs: dict[str, Any] | None = None,
+    *,
+    viewset_class: type | None = None,
 ) -> dict[str, Any]:
     """Build kwargs for a ViewSet method based on its signature.
 
@@ -637,8 +827,234 @@ def _build_viewset_call_kwargs(
     if "_user" in params:
         kwargs["_user"] = _user
     if extra_kwargs:
-        kwargs.update(extra_kwargs)
+        merged = _merge_path_params_for_signature(fn, extra_kwargs, viewset_class)
+        kwargs.update(merged)
     return kwargs
+
+
+def _require_lookup_url_identifier(lookup_url_kwarg: str) -> str:
+    """
+    O placeholder na URL ({id}) precisa ser um identificador Python válido: o FastAPI
+    só inclui parâmetros de path no OpenAPI (Swagger / ChatGPT / Postman) quando
+    eles aparecem na assinatura com o mesmo nome do segmento da rota.
+    """
+    if not lookup_url_kwarg.isidentifier():
+        raise ValueError(
+            "ViewSet.lookup_url_kwarg / lookup_field deve ser um identificador Python válido "
+            "(ex.: id, pk, bug_id). Valor inválido para OpenAPI: "
+            f"{lookup_url_kwarg!r}"
+        )
+    return lookup_url_kwarg
+
+
+def _create_detail_action_endpoint_upload(
+    viewset_class: type,
+    action_method: Callable[..., Any],
+    lookup_url_kwarg: str,
+    perm_classes: list | None,
+) -> Callable[..., Any]:
+    """Action detail com multipart: expõe {lookup} no OpenAPI."""
+    lp = _require_lookup_url_identifier(lookup_url_kwarg)
+    ns: dict[str, Any] = {
+        "Request": Request,
+        "Depends": Depends,
+        "get_db": get_db,
+        "get_optional_user": get_optional_user,
+        "UploadFile": UploadFile,
+        "File": File,
+        "Path": Path,
+        "AsyncSession": AsyncSession,
+        "Any": Any,
+        "viewset_class": viewset_class,
+        "action_method": action_method,
+        "perm_classes": perm_classes or [],
+        "_build_viewset_call_kwargs": _build_viewset_call_kwargs,
+        "_call_viewset_handler_with_hint": _call_viewset_handler_with_hint,
+    }
+    src = f"""
+async def _stride_detail_upload(
+    request: Request,
+    {lp}: str = Path(..., description="Identificador do recurso na URL"),
+    db: AsyncSession = Depends(get_db),
+    _user: Any = Depends(get_optional_user),
+    file: UploadFile = File(...),
+):
+    vs = viewset_class()
+    pc = perm_classes
+    if pc:
+        from strider.permissions import check_permissions
+        perms = [p() if isinstance(p, type) else p for p in pc]
+        await check_permissions(perms, request, vs)
+    extra = dict(request.path_params)
+    extra["file"] = file
+    path_params = dict(request.path_params)
+    full = _build_viewset_call_kwargs(
+        action_method,
+        request=request,
+        db=db,
+        _user=_user,
+        extra_kwargs=extra,
+        viewset_class=viewset_class,
+    )
+    return await _call_viewset_handler_with_hint(
+        action_method,
+        args=(vs,),
+        kwargs=full,
+        path_like=path_params,
+        viewset_class=viewset_class,
+    )
+"""
+    exec(src, ns)
+    ep: Callable[..., Any] = ns["_stride_detail_upload"]
+    ep.__name__ = getattr(action_method, "__name__", "detail_upload_action")
+    return ep
+
+
+def _create_detail_action_endpoint_body(
+    viewset_class: type,
+    action_method: Callable[..., Any],
+    lookup_url_kwarg: str,
+    perm_classes: list | None,
+    a_input_schema: type | None,
+) -> Callable[..., Any]:
+    """Action detail com JSON body."""
+    lp = _require_lookup_url_identifier(lookup_url_kwarg)
+    ns: dict[str, Any] = {
+        "Request": Request,
+        "Depends": Depends,
+        "get_db": get_db,
+        "get_optional_user": get_optional_user,
+        "Body": Body,
+        "Path": Path,
+        "AsyncSession": AsyncSession,
+        "Any": Any,
+        "Optional": Optional,
+        "viewset_class": viewset_class,
+        "action_method": action_method,
+        "perm_classes": perm_classes or [],
+        "_build_body_call_kwargs": _build_body_call_kwargs,
+        "_build_viewset_call_kwargs": _build_viewset_call_kwargs,
+        "_call_viewset_handler_with_hint": _call_viewset_handler_with_hint,
+    }
+    if a_input_schema:
+        ns["data_type"] = Optional[a_input_schema]
+    else:
+        ns["data_type"] = Optional[dict[str, Any]]
+    src = f"""
+async def _stride_detail_body(
+    request: Request,
+    {lp}: str = Path(..., description="Identificador do recurso na URL"),
+    db: AsyncSession = Depends(get_db),
+    _user: Any = Depends(get_optional_user),
+    data: data_type = Body(None),
+):
+    vs = viewset_class()
+    pc = perm_classes
+    if pc:
+        from strider.permissions import check_permissions
+        perms = [p() if isinstance(p, type) else p for p in pc]
+        await check_permissions(perms, request, vs)
+    path_params = dict(request.path_params)
+    if data is not None:
+        call_kwargs = _build_body_call_kwargs(
+            action_method,
+            path_params=path_params,
+            body=data,
+            viewset_class=viewset_class,
+        )
+        full = _build_viewset_call_kwargs(
+            action_method,
+            request=request,
+            db=db,
+            _user=_user,
+            extra_kwargs=call_kwargs,
+            viewset_class=viewset_class,
+        )
+        return await _call_viewset_handler_with_hint(
+            action_method,
+            args=(vs,),
+            kwargs=full,
+            path_like=path_params,
+            viewset_class=viewset_class,
+        )
+    full = _build_viewset_call_kwargs(
+        action_method,
+        request=request,
+        db=db,
+        _user=_user,
+        extra_kwargs=path_params,
+        viewset_class=viewset_class,
+    )
+    return await _call_viewset_handler_with_hint(
+        action_method,
+        args=(vs,),
+        kwargs=full,
+        path_like=path_params,
+        viewset_class=viewset_class,
+    )
+"""
+    exec(src, ns)
+    ep: Callable[..., Any] = ns["_stride_detail_body"]
+    ep.__name__ = getattr(action_method, "__name__", "detail_body_action")
+    return ep
+
+
+def _create_detail_action_endpoint_no_body(
+    viewset_class: type,
+    action_method: Callable[..., Any],
+    lookup_url_kwarg: str,
+    perm_classes: list | None,
+) -> Callable[..., Any]:
+    """Action detail sem body (GET/DELETE)."""
+    lp = _require_lookup_url_identifier(lookup_url_kwarg)
+    ns: dict[str, Any] = {
+        "Request": Request,
+        "Depends": Depends,
+        "get_db": get_db,
+        "get_optional_user": get_optional_user,
+        "Path": Path,
+        "AsyncSession": AsyncSession,
+        "Any": Any,
+        "viewset_class": viewset_class,
+        "action_method": action_method,
+        "perm_classes": perm_classes or [],
+        "_build_viewset_call_kwargs": _build_viewset_call_kwargs,
+        "_call_viewset_handler_with_hint": _call_viewset_handler_with_hint,
+    }
+    src = f"""
+async def _stride_detail_no_body(
+    request: Request,
+    {lp}: str = Path(..., description="Identificador do recurso na URL"),
+    db: AsyncSession = Depends(get_db),
+    _user: Any = Depends(get_optional_user),
+):
+    vs = viewset_class()
+    pc = perm_classes
+    if pc:
+        from strider.permissions import check_permissions
+        perms = [p() if isinstance(p, type) else p for p in pc]
+        await check_permissions(perms, request, vs)
+    path_params = dict(request.path_params)
+    full = _build_viewset_call_kwargs(
+        action_method,
+        request=request,
+        db=db,
+        _user=_user,
+        extra_kwargs=path_params,
+        viewset_class=viewset_class,
+    )
+    return await _call_viewset_handler_with_hint(
+        action_method,
+        args=(vs,),
+        kwargs=full,
+        path_like=path_params,
+        viewset_class=viewset_class,
+    )
+"""
+    exec(src, ns)
+    ep: Callable[..., Any] = ns["_stride_detail_no_body"]
+    ep.__name__ = getattr(action_method, "__name__", "detail_no_body_action")
+    return ep
 
 
 # =============================================================================
@@ -820,14 +1236,21 @@ class Router(APIRouter):
             page=1, page_size=viewset_class.page_size,
         ):
             vs = viewset_class()
-            return await vs.list(
-                **_build_viewset_call_kwargs(
-                    vs.list,
-                    request=request,
-                    db=db,
-                    _user=_user,
-                    extra_kwargs={"page": page, "page_size": page_size},
-                )
+            path_like = {**dict(request.path_params), "page": page, "page_size": page_size}
+            full = _build_viewset_call_kwargs(
+                vs.list,
+                request=request,
+                db=db,
+                _user=_user,
+                extra_kwargs={"page": page, "page_size": page_size},
+                viewset_class=viewset_class,
+            )
+            return await _call_viewset_handler_with_hint(
+                vs.list,
+                args=(vs,),
+                kwargs=full,
+                path_like=path_like,
+                viewset_class=viewset_class,
             )
         
         # Annotations programáticas (bypass de __future__.annotations)
@@ -876,15 +1299,22 @@ class Router(APIRouter):
                 vs.create,
                 path_params={},
                 body=data,
+                viewset_class=viewset_class,
             )
-            return await vs.create(
-                **_build_viewset_call_kwargs(
-                    vs.create,
-                    request=request,
-                    db=db,
-                    _user=_user,
-                    extra_kwargs=call_kwargs,
-                )
+            full = _build_viewset_call_kwargs(
+                vs.create,
+                request=request,
+                db=db,
+                _user=_user,
+                extra_kwargs=call_kwargs,
+                viewset_class=viewset_class,
+            )
+            return await _call_viewset_handler_with_hint(
+                vs.create,
+                args=(vs,),
+                kwargs=full,
+                path_like=dict(request.path_params),
+                viewset_class=viewset_class,
             )
         
         create_route.__annotations__ = {
@@ -933,15 +1363,21 @@ class Router(APIRouter):
             request, db=Depends(get_db), _user=Depends(get_optional_user),
         ):
             vs = viewset_class()
-            path_params = request.path_params
-            return await vs.retrieve(
-                **_build_viewset_call_kwargs(
-                    vs.retrieve,
-                    request=request,
-                    db=db,
-                    _user=_user,
-                    extra_kwargs=path_params,
-                )
+            path_params = dict(request.path_params)
+            full = _build_viewset_call_kwargs(
+                vs.retrieve,
+                request=request,
+                db=db,
+                _user=_user,
+                extra_kwargs=path_params,
+                viewset_class=viewset_class,
+            )
+            return await _call_viewset_handler_with_hint(
+                vs.retrieve,
+                args=(vs,),
+                kwargs=full,
+                path_like=path_params,
+                viewset_class=viewset_class,
             )
         
         retrieve_route.__annotations__ = {
@@ -979,20 +1415,27 @@ class Router(APIRouter):
             _user=Depends(get_optional_user),
         ):
             vs = viewset_class()
-            path_params = request.path_params
+            path_params = dict(request.path_params)
             call_kwargs = _build_body_call_kwargs(
                 vs.update,
                 path_params=path_params,
                 body=data,
+                viewset_class=viewset_class,
             )
-            return await vs.update(
-                **_build_viewset_call_kwargs(
-                    vs.update,
-                    request=request,
-                    db=db,
-                    _user=_user,
-                    extra_kwargs=call_kwargs,
-                )
+            full = _build_viewset_call_kwargs(
+                vs.update,
+                request=request,
+                db=db,
+                _user=_user,
+                extra_kwargs=call_kwargs,
+                viewset_class=viewset_class,
+            )
+            return await _call_viewset_handler_with_hint(
+                vs.update,
+                args=(vs,),
+                kwargs=full,
+                path_like=path_params,
+                viewset_class=viewset_class,
             )
         
         update_route.__annotations__ = {
@@ -1037,21 +1480,28 @@ class Router(APIRouter):
             _user=Depends(get_optional_user),
         ):
             vs = viewset_class()
-            path_params = request.path_params
+            path_params = dict(request.path_params)
             call_kwargs = _build_body_call_kwargs(
                 vs.partial_update,
                 path_params=path_params,
                 body=data,
                 exclude_unset=True,
+                viewset_class=viewset_class,
             )
-            return await vs.partial_update(
-                **_build_viewset_call_kwargs(
-                    vs.partial_update,
-                    request=request,
-                    db=db,
-                    _user=_user,
-                    extra_kwargs=call_kwargs,
-                )
+            full = _build_viewset_call_kwargs(
+                vs.partial_update,
+                request=request,
+                db=db,
+                _user=_user,
+                extra_kwargs=call_kwargs,
+                viewset_class=viewset_class,
+            )
+            return await _call_viewset_handler_with_hint(
+                vs.partial_update,
+                args=(vs,),
+                kwargs=full,
+                path_like=path_params,
+                viewset_class=viewset_class,
             )
         
         partial_update_route.__annotations__ = {
@@ -1096,15 +1546,21 @@ class Router(APIRouter):
             request, db=Depends(get_db), _user=Depends(get_optional_user),
         ):
             vs = viewset_class()
-            path_params = request.path_params
-            return await vs.destroy(
-                **_build_viewset_call_kwargs(
-                    vs.destroy,
-                    request=request,
-                    db=db,
-                    _user=_user,
-                    extra_kwargs=path_params,
-                )
+            path_params = dict(request.path_params)
+            full = _build_viewset_call_kwargs(
+                vs.destroy,
+                request=request,
+                db=db,
+                _user=_user,
+                extra_kwargs=path_params,
+                viewset_class=viewset_class,
+            )
+            return await _call_viewset_handler_with_hint(
+                vs.destroy,
+                args=(vs,),
+                kwargs=full,
+                path_like=path_params,
+                viewset_class=viewset_class,
             )
         
         destroy_route.__annotations__ = {
@@ -1266,11 +1722,19 @@ class Router(APIRouter):
                     perm_classes: list | None = None,
                     a_input_schema: type | None = None,
                     with_body: bool = True,
+                    detail: bool = False,
                 ) -> Callable:
                     accepts_file = _method_accepts_upload_file(action_method) or getattr(action_method, "accepts_upload", False)
                     
                     if accepts_file:
-                        # Endpoint COM upload de arquivo (multipart/form-data)
+                        if detail:
+                            return _create_detail_action_endpoint_upload(
+                                viewset_class,
+                                action_method,
+                                lookup_url_kwarg,
+                                perm_classes,
+                            )
+                        # Endpoint COM upload (sem segmento {lookup} na URL)
                         async def action_endpoint(
                             request,
                             db=Depends(get_db),
@@ -1284,9 +1748,24 @@ class Router(APIRouter):
                                 perms = [p() if isinstance(p, type) else p for p in perm_classes]
                                 await check_permissions(perms, request, vs)
                             
-                            path_params = request.path_params
+                            path_params = dict(request.path_params)
                             path_params["file"] = file
-                            return await action_method(vs, request, db, **path_params)
+                            pl = dict(request.path_params)
+                            full = _build_viewset_call_kwargs(
+                                action_method,
+                                request=request,
+                                db=db,
+                                _user=_user,
+                                extra_kwargs=path_params,
+                                viewset_class=viewset_class,
+                            )
+                            return await _call_viewset_handler_with_hint(
+                                action_method,
+                                args=(vs,),
+                                kwargs=full,
+                                path_like=pl,
+                                viewset_class=viewset_class,
+                            )
                         
                         action_endpoint.__annotations__ = {
                             "request": Request,
@@ -1295,6 +1774,14 @@ class Router(APIRouter):
                             "file": UploadFile,
                         }
                     elif with_body:
+                        if detail:
+                            return _create_detail_action_endpoint_body(
+                                viewset_class,
+                                action_method,
+                                lookup_url_kwarg,
+                                perm_classes,
+                                a_input_schema,
+                            )
                         # Endpoint COM body JSON (POST, PUT, PATCH)
                         async def action_endpoint(
                             request,
@@ -1309,15 +1796,44 @@ class Router(APIRouter):
                                 perms = [p() if isinstance(p, type) else p for p in perm_classes]
                                 await check_permissions(perms, request, vs)
                             
-                            path_params = request.path_params
+                            path_params = dict(request.path_params)
                             if data is not None:
                                 call_kwargs = _build_body_call_kwargs(
                                     action_method,
                                     path_params=path_params,
                                     body=data,
+                                    viewset_class=viewset_class,
                                 )
-                                return await action_method(vs, request, db, **call_kwargs)
-                            return await action_method(vs, request, db, **path_params)
+                                full = _build_viewset_call_kwargs(
+                                    action_method,
+                                    request=request,
+                                    db=db,
+                                    _user=_user,
+                                    extra_kwargs=call_kwargs,
+                                    viewset_class=viewset_class,
+                                )
+                                return await _call_viewset_handler_with_hint(
+                                    action_method,
+                                    args=(vs,),
+                                    kwargs=full,
+                                    path_like=path_params,
+                                    viewset_class=viewset_class,
+                                )
+                            full = _build_viewset_call_kwargs(
+                                action_method,
+                                request=request,
+                                db=db,
+                                _user=_user,
+                                extra_kwargs=path_params,
+                                viewset_class=viewset_class,
+                            )
+                            return await _call_viewset_handler_with_hint(
+                                action_method,
+                                args=(vs,),
+                                kwargs=full,
+                                path_like=path_params,
+                                viewset_class=viewset_class,
+                            )
                         
                         # Typed annotations para OpenAPI
                         if a_input_schema:
@@ -1332,7 +1848,14 @@ class Router(APIRouter):
                             "data": data_type,
                         }
                     else:
-                        # Endpoint SEM body (GET, DELETE) - limpo no OpenAPI
+                        if detail:
+                            return _create_detail_action_endpoint_no_body(
+                                viewset_class,
+                                action_method,
+                                lookup_url_kwarg,
+                                perm_classes,
+                            )
+                        # Endpoint SEM body (GET, DELETE)
                         async def action_endpoint(
                             request,
                             db=Depends(get_db),
@@ -1345,16 +1868,21 @@ class Router(APIRouter):
                                 perms = [p() if isinstance(p, type) else p for p in perm_classes]
                                 await check_permissions(perms, request, vs)
                             
-                            path_params = request.path_params
-                            return await action_method(
-                                vs,
-                                **_build_viewset_call_kwargs(
-                                    action_method,
-                                    request=request,
-                                    db=db,
-                                    _user=_user,
-                                    extra_kwargs=path_params,
-                                ),
+                            path_params = dict(request.path_params)
+                            full = _build_viewset_call_kwargs(
+                                action_method,
+                                request=request,
+                                db=db,
+                                _user=_user,
+                                extra_kwargs=path_params,
+                                viewset_class=viewset_class,
+                            )
+                            return await _call_viewset_handler_with_hint(
+                                action_method,
+                                args=(vs,),
+                                kwargs=full,
+                                path_like=path_params,
+                                viewset_class=viewset_class,
                             )
                         
                         action_endpoint.__annotations__ = {
@@ -1374,8 +1902,11 @@ class Router(APIRouter):
                 self.add_api_route(
                     path,
                     make_action_endpoint(
-                        method, action_permission_classes,
-                        action_input_schema, with_body=method_has_body,
+                        method,
+                        action_permission_classes,
+                        action_input_schema,
+                        with_body=method_has_body,
+                        detail=detail,
                     ),
                     methods=[method_upper],
                     tags=tags,
@@ -1423,15 +1954,44 @@ class Router(APIRouter):
                 raise HTTPException(status_code=405, detail="Method not allowed")
             
             await view.check_permissions(request, method)
-            path_params = request.path_params
+            path_params = dict(request.path_params)
             if request.method.upper() in {"POST", "PUT", "PATCH"} and data is not None:
                 call_kwargs = _build_body_call_kwargs(
                     handler,
                     path_params=path_params,
                     body=data,
+                    viewset_class=None,
                 )
-                return await handler(request, db=db, **call_kwargs)
-            return await handler(request, db=db, **path_params)
+                full = _build_viewset_call_kwargs(
+                    handler,
+                    request=request,
+                    db=db,
+                    _user=_user,
+                    extra_kwargs=call_kwargs,
+                    viewset_class=None,
+                )
+                return await _call_viewset_handler_with_hint(
+                    handler,
+                    args=(),
+                    kwargs=full,
+                    path_like=path_params,
+                    viewset_class=None,
+                )
+            full = _build_viewset_call_kwargs(
+                handler,
+                request=request,
+                db=db,
+                _user=_user,
+                extra_kwargs=path_params,
+                viewset_class=None,
+            )
+            return await _call_viewset_handler_with_hint(
+                handler,
+                args=(),
+                kwargs=full,
+                path_like=path_params,
+                viewset_class=None,
+            )
         
         view_openapi_extra, view_success_responses = _build_openapi_examples(
             input_schema=input_schema,

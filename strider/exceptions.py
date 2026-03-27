@@ -730,6 +730,29 @@ class MissingDependency(ConfigurationError):
         super().__init__(message=msg, details={"package": package, "install_cmd": install_cmd})
 
 
+class StridePathParamBindingError(TypeError):
+    """
+    Falha ao montar a chamada do handler (ViewSet/APIView) a partir da URL e dependências.
+
+    Herda de ``TypeError`` para compatibilidade com código que já captura erros de assinatura.
+    O atributo ``hint`` traz contexto (parâmetros aceitos, path_params, lookup do ViewSet).
+
+    Pode ser levantada também quando a coerção de um segmento de path (ex.: ``str`` → ``int``)
+    falha de forma inequívoca.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        hint: str = "",
+        original: BaseException | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.hint = hint
+        self.original = original
+
+
 # Backward compatibility
 CoreException = StrideException
 
@@ -788,4 +811,6 @@ __all__ = [
     # Configuration
     "ConfigurationError",
     "MissingDependency",
+    # Routing / handler binding
+    "StridePathParamBindingError",
 ]

@@ -182,6 +182,7 @@ from strider.exceptions import (
     # Configuration
     ConfigurationError,
     MissingDependency,
+    StridePathParamBindingError,
 )
 # Advanced Fields (UUID7, JSON, FileField, etc.)
 from strider.fields import (
@@ -322,7 +323,7 @@ from strider.views import (
     action,
 )
 
-__version__ = "0.18.52"
+__version__ = "0.18.54"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
@@ -601,6 +602,8 @@ __all__ = [
     # Exceptions - Configuration
     "ConfigurationError",
     "MissingDependency",
+    # Exceptions - Routing
+    "StridePathParamBindingError",
 ]
 
 

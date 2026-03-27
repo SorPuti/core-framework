@@ -257,11 +257,17 @@ class FileFieldDescriptor:
     
     def __set_name__(self, owner: type, name: str) -> None:
         self.attr_name = name
-    
-    def __get__(self, instance: Any, owner: type) -> "FieldFile | FileFieldDescriptor":
+
+    @overload
+    def __get__(self, instance: None, owner: type[Any]) -> FileFieldDescriptor: ...
+
+    @overload
+    def __get__(self, instance: Any, owner: type[Any]) -> FieldFile: ...
+
+    def __get__(self, instance: Any, owner: type[Any]) -> FieldFile | FileFieldDescriptor:
         if instance is None:
             return self
-        
+
         # Obtém o valor bruto do campo de banco de dados
         raw_value = getattr(instance, self.db_column, None)
         return FieldFile(raw_value, self, instance)
@@ -572,6 +578,10 @@ class AdvancedField:
         
         Returns:
             FileFieldDescriptor que fornece interface FieldFile.
+        
+        Note:
+            Em instâncias, type checkers inferem o atributo como ``FieldFile`` (overload de
+            ``__get__``), para autocompletar ``.save()``, ``.url``, ``.delete()``, etc.
         
         Example:
             class Course(Model):

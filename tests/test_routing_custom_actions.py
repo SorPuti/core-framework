@@ -99,3 +99,34 @@ class TestViewSetRoutingSignatureHandling:
 
         assert kwargs["db"] is db_obj
         assert kwargs["body"] == {"foo": "bar"}
+
+
+class TestPathParamMergeAndCoercion:
+    def test_merge_maps_id_to_pk_and_coerces_int(self):
+        from strider.routing import _merge_path_params_for_signature
+
+        class _VS:
+            lookup_field = "id"
+            lookup_url_kwarg = "id"
+
+        async def handler(self, request, db, pk: int):
+            return pk
+
+        out = _merge_path_params_for_signature(
+            handler, {"id": "42"}, viewset_class=_VS
+        )
+        assert out == {"pk": 42}
+
+    def test_merge_invalid_int_raises_stride_error(self):
+        from strider.exceptions import StridePathParamBindingError
+        from strider.routing import _merge_path_params_for_signature
+
+        class _VS:
+            lookup_field = "id"
+            lookup_url_kwarg = "id"
+
+        async def handler(self, request, db, pk: int):
+            return pk
+
+        with pytest.raises(StridePathParamBindingError):
+            _merge_path_params_for_signature(handler, {"id": "not-int"}, viewset_class=_VS)

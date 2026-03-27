@@ -27,6 +27,7 @@ nav:
       - Relations: 11-relations.md
       - Middleware: 20-middleware.md
       - Routing: 23-routing.md
+      - Handlers e path params: 43-handler-signatures-path-params.md
       - Dependencies: 24-dependencies.md
       - Real-time: 25-realtime.md
       - Choices: 33-choices.md
