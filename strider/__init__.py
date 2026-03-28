@@ -219,7 +219,14 @@ from strider.migrations import (
     MigrationEngine,
     Migration,
 )
-from strider.models import Model, Field, SoftDeleteMixin, SoftDeleteManager, TenantSoftDeleteManager
+from strider.models import (
+    Model,
+    UUIDModel,
+    Field,
+    SoftDeleteMixin,
+    SoftDeleteManager,
+    TenantSoftDeleteManager,
+)
 from strider.permissions import Permission, IsAuthenticated, AllowAny, IsAdmin, IsOwner, HasRole
 # Advanced QuerySets
 from strider.querysets import (
@@ -324,7 +331,7 @@ from strider.views import (
     action,
 )
 
-__version__ = "0.18.62"
+__version__ = "0.18.63"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
@@ -332,6 +339,7 @@ __all__ = [
     "configure_logging",
     # Models
     "Model",
+    "UUIDModel",
     "Field",
     "SoftDeleteMixin",
     "SoftDeleteManager",

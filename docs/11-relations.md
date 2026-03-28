@@ -1,324 +1,229 @@
-# Relations
+# Relations (`Rel`)
 
-Relationship helpers for models.
+Helpers em `strider/relations.py` para colunas de chave estrangeira e `relationship()` do SQLAlchemy com convenções próximas ao Django.
 
-## Rel Class
+## Dois formatos de string (não confundir)
 
-All relationships use the `Rel` class from `core/relations.py`.
+| Uso | Formato | Exemplo | Onde |
+|-----|---------|---------|------|
+| Coluna FK SQL | `tabela.coluna` (≥ um ponto; com schema, usam-se os **dois últimos** segmentos como tabela e coluna) | `"users.id"`, `"public.accounts.id"` | `Rel.foreign_key` |
+| Alvo de `relationship` | `app_label.ModelName` (regex: um ponto, identificadores válidos) | `"core.User"` | `many_to_one`, `one_to_many`, `one_to_one`, `many_to_many` |
 
-## Foreign Key
+- **`app_label`**: pasta do app em `src/apps` (ex.: `core`, `strategies`).
+- **`ModelName`**: nome da classe no módulo `src.apps.<app_label>.models`.
+- Resolução: `importlib.import_module("src.apps.<app_label>.models")` e `getattr(..., ModelName)`.
+
+### Erros na resolução do modelo (`relationship`)
+
+- `ValueError`: `target` não coincide com o padrão `app_label.ModelName`.
+- `ImportError`: módulo `src.apps.<app_label>.models` não importável.
+- `AttributeError`: classe não existe nesse módulo.
+
+### Validação estrita (`sys.exit(0)`)
+
+Se usar `foreign_keys=[...]` como **lista de nomes de atributos** (strings) em `many_to_one` / `one_to_many` / `one_to_one`, o framework instala um descriptor que chama `_validate_relationship_target`. Se `target` **não** for `app_label.ModelName`, imprime-se uma mensagem em stderr e o processo termina com **código 0** (falha explícita em desenvolvimento).
+
+## `Rel.foreign_key`
 
 ```python
 Rel.foreign_key(
-    target="table.column",
-    nullable=False,
-    ondelete="CASCADE",
-    index=True,
-    type_="int",  # "int", "uuid", "bigint"
+    target: str,               # "tabela.coluna"
+    *,
+    nullable: bool = False,
+    ondelete: str = "CASCADE",
+    index: bool = True,
+    type_: str | None = None,  # None = inferir int / uuid / bigint
 )
 ```
 
+- **`type_`**: `None` (padrão) infere o tipo SQLAlchemy a partir de um `Model` cujo `__tablename__` seja a tabela referenciada (PK ou coluna). O modelo alvo deve estar **já definido** quando a classe que declara a FK é construída (ordem de declaração / imports). Se não for encontrado, assume-se **inteiro**.
+- Valores explícitos: `"int"`, `"uuid"`, `"bigint"` sobrescrevem a inferência.
+- `ondelete` típicos: `CASCADE`, `SET NULL` (combinar com `nullable=True`), `RESTRICT`, `NO ACTION`.
+
 ```python
+from uuid import UUID
+from sqlalchemy.orm import Mapped
+from strider import Model, Field
 from strider.relations import Rel
 
 class Post(Model):
     __tablename__ = "posts"
-    
-    # Integer FK (default)
+
     author_id: Mapped[int] = Rel.foreign_key("users.id")
-    
-    # UUID FK
-    workspace_id: Mapped[UUID] = Rel.foreign_key(
-        "workspaces.id",
-        type_="uuid"
-    )
-    
-    # Nullable FK
+    workspace_id: Mapped[UUID] = Rel.foreign_key("workspaces.id")  # inferência UUID se o modelo workspaces tiver PK UUID
+
     category_id: Mapped[int | None] = Rel.foreign_key(
         "categories.id",
         nullable=True,
-        ondelete="SET NULL"
+        ondelete="SET NULL",
     )
 ```
 
-## Many-to-One (belongs_to)
+## `Rel.many_to_one` / `Rel.belongs_to`
+
+Lado **N** de N:1. `target` = `"app_label.ModelName"`.
 
 ```python
 Rel.many_to_one(
-    target="TargetModel",
-    back_populates=None,
-    backref=None,
-    lazy="selectin",
-    foreign_keys=None,
-    uselist=False,
+    target: str,
+    *,
+    back_populates: str | None = None,
+    backref: str | None = None,
+    lazy: str = "selectin",
+    foreign_keys: list[str] | None = None,
+    uselist: bool = False,
 )
 ```
 
-```python
-class Post(Model):
-    __tablename__ = "posts"
-    
-    author_id: Mapped[int] = Rel.foreign_key("users.id")
-    author: Mapped["User"] = Rel.many_to_one(
-        "User",
-        back_populates="posts"
-    )
-```
+## `Rel.one_to_many` / `Rel.has_many`
 
-Alias: `Rel.belongs_to()`
-
-## One-to-Many (has_many)
+Lado **1** de 1:N.
 
 ```python
 Rel.one_to_many(
-    target="TargetModel",
-    back_populates=None,
-    backref=None,
-    lazy="selectin",
-    foreign_keys=None,
-    cascade="all, delete-orphan",
-    passive_deletes=True,
-    order_by=None,
+    target: str,
+    *,
+    back_populates: str | None = None,
+    backref: str | None = None,
+    lazy: str = "selectin",
+    foreign_keys: list[str] | None = None,
+    cascade: str = "all, delete-orphan",
+    passive_deletes: bool = True,
+    order_by: str | None = None,
 )
 ```
 
-```python
-class User(Model):
-    __tablename__ = "users"
-    
-    posts: Mapped[list["Post"]] = Rel.one_to_many(
-        "Post",
-        back_populates="author",
-        order_by="created_at"
-    )
-```
+## `Rel.one_to_one` / `Rel.has_one`
 
-Alias: `Rel.has_many()`
+1:1; no lado que possui a FK, use `unique=True` na coluna (ou equivalente) para garantir unicidade.
 
-## One-to-One (has_one)
-
-```python
-Rel.one_to_one(
-    target="TargetModel",
-    back_populates=None,
-    backref=None,
-    lazy="selectin",
-    foreign_keys=None,
-    cascade="all, delete-orphan",
-    uselist=False,
-)
-```
-
-```python
-class User(Model):
-    __tablename__ = "users"
-    
-    profile: Mapped["Profile"] = Rel.one_to_one(
-        "Profile",
-        back_populates="user"
-    )
-
-class Profile(Model):
-    __tablename__ = "profiles"
-    
-    user_id: Mapped[int] = Rel.foreign_key("users.id", unique=True)
-    user: Mapped["User"] = Rel.one_to_one(
-        "User",
-        back_populates="profile"
-    )
-```
-
-Alias: `Rel.has_one()`
-
-## Many-to-Many
+## `Rel.many_to_many`
 
 ```python
 Rel.many_to_many(
-    target="TargetModel",
-    secondary="association_table",
-    back_populates=None,
-    backref=None,
-    lazy="selectin",
-    cascade="all",
-    passive_deletes=True,
-    order_by=None,
+    target: str,
+    *,
+    secondary: str | Table,
+    back_populates: str | None = None,
+    backref: str | None = None,
+    lazy: str = "selectin",
+    cascade: str = "all",
+    passive_deletes: bool = True,
+    order_by: str | None = None,
 )
 ```
 
-```python
-from sqlalchemy import Table, Column, Integer, ForeignKey
-from strider import metadata
+- `secondary`: nome da tabela (string) ou objeto `Table`. Se a tabela foi criada com `AssociationTable.create` e está em cache, o nome pode resolver para essa instância.
 
-# Association table
-post_tags = Table(
-    "post_tags",
-    metadata,
-    Column("post_id", Integer, ForeignKey("posts.id"), primary_key=True),
-    Column("tag_id", Integer, ForeignKey("tags.id"), primary_key=True),
-)
+## `Rel.self_referential`
 
-class Post(Model):
-    __tablename__ = "posts"
-    
-    tags: Mapped[list["Tag"]] = Rel.many_to_many(
-        "Tag",
-        secondary=post_tags,
-        back_populates="posts"
-    )
-
-class Tag(Model):
-    __tablename__ = "tags"
-    
-    posts: Mapped[list["Post"]] = Rel.many_to_many(
-        "Post",
-        secondary=post_tags,
-        back_populates="tags"
-    )
-```
-
-## Self-Referential
-
-```python
-Rel.self_referential(
-    back_populates=None,
-    remote_side=None,
-    lazy="selectin",
-    cascade="all",
-    foreign_keys=None,
-    uselist=True,
-)
-```
+Relação na **mesma** classe. `foreign_keys` e `remote_side` são **nomes de atributos Python** na classe (ex.: `"parent_id"`, `"id"`), não strings qualificadas com o nome da classe.
 
 ```python
 class Category(Model):
     __tablename__ = "categories"
-    
+
     id: Mapped[int] = Field.pk()
-    name: Mapped[str] = Field.string(max_length=100)
     parent_id: Mapped[int | None] = Rel.foreign_key(
         "categories.id",
-        nullable=True
+        nullable=True,
+        ondelete="SET NULL",
     )
-    
-    # Parent relationship
+
     parent: Mapped["Category | None"] = Rel.self_referential(
         back_populates="children",
-        remote_side="Category.id",
-        uselist=False
+        remote_side="id",
+        uselist=False,
     )
-    
-    # Children relationship
     children: Mapped[list["Category"]] = Rel.self_referential(
         back_populates="parent",
-        foreign_keys="Category.parent_id"
+        foreign_keys="parent_id",
     )
 ```
 
-## Lazy Loading Options
+## `AssociationTable`
 
-| Value | Behavior |
-|-------|----------|
-| `"selectin"` | Separate SELECT IN query (default, recommended) |
-| `"joined"` | JOIN in same query |
-| `"subquery"` | Subquery for loading |
-| `"raise"` | Raise error if accessed without explicit load |
-| `"noload"` | Never load |
+Cria tabelas de junção para N:N com **duas FKs inteiras** por defeito. Para PKs UUID/`bigint` nas entidades, construa a `Table` manualmente com os tipos correctos.
 
-## Cascade Options
+```python
+post_tags = AssociationTable.create(
+    "post_tags",
+    left=("post_id", "posts.id"),
+    right=("tag_id", "tags.id"),
+)
+```
 
-| Value | Behavior |
-|-------|----------|
-| `"all"` | All operations |
-| `"save-update"` | Cascade save/update |
-| `"merge"` | Cascade merge |
-| `"delete"` | Cascade delete |
-| `"delete-orphan"` | Delete orphaned children |
-| `"all, delete-orphan"` | All + delete orphan (default for one-to-many) |
+- `get("post_tags")` — obtém tabela em cache.
+- `clear_cache()` — limpa o cache (testes).
 
-## OnDelete Options
+## `clear_model_cache`
 
-| Value | Behavior |
-|-------|----------|
-| `"CASCADE"` | Delete children when parent deleted (default) |
-| `"SET NULL"` | Set FK to NULL when parent deleted |
-| `"RESTRICT"` | Prevent deletion if children exist |
-| `"NO ACTION"` | Database default behavior |
+Limpa cache interno de importação de models em `relations.py` (uso principal: testes).
 
-## Complete Example
+## Lazy loading
+
+| Valor | Comportamento |
+|-------|----------------|
+| `"selectin"` | `SELECT IN` separado (recomendado, padrão) |
+| `"joined"` | `JOIN` na mesma query |
+| `"subquery"` | Subquery |
+| `"select"` | Lazy clássico |
+| `"raise"` / `"noload"` | Conforme SQLAlchemy |
+
+## Cascade (SQLAlchemy)
+
+| Valor | Comportamento |
+|-------|----------------|
+| `"all"` | Operações em cascata amplas |
+| `"save-update"` | Propaga save/update |
+| `"merge"` | Propaga merge |
+| `"delete"` | Propaga delete |
+| `"delete-orphan"` | Remove órfãos |
+| `"all, delete-orphan"` | Comum em 1:N (padrão em `one_to_many`) |
+
+## `ON DELETE` (FK / `foreign_key`)
+
+| Valor | Comportamento |
+|-------|----------------|
+| `"CASCADE"` | Apaga filhos quando o pai é apagado (padrão) |
+| `"SET NULL"` | Põe FK a `NULL` (requer coluna anulável) |
+| `"RESTRICT"` / `"NO ACTION"` | Impede ou delega ao motor |
+
+## Exemplo completo (targets `app_label.ModelName`)
 
 ```python
 from strider import Model, Field
 from strider.relations import Rel
-from strider.datetime import DateTime
 from sqlalchemy.orm import Mapped
-from sqlalchemy import Table, Column, Integer, ForeignKey
-from strider import metadata
-
-# Association table for many-to-many
-post_tags = Table(
-    "post_tags",
-    metadata,
-    Column("post_id", Integer, ForeignKey("posts.id"), primary_key=True),
-    Column("tag_id", Integer, ForeignKey("tags.id"), primary_key=True),
-)
 
 class User(Model):
     __tablename__ = "users"
-    
     id: Mapped[int] = Field.pk()
-    name: Mapped[str] = Field.string(max_length=100)
-    
-    # One-to-many: User has many posts
-    posts: Mapped[list["Post"]] = Rel.has_many(
-        "Post",
-        back_populates="author"
+    posts: Mapped[list["Post"]] = Rel.one_to_many(
+        "core.Post",
+        back_populates="author",
     )
 
 class Post(Model):
     __tablename__ = "posts"
-    
     id: Mapped[int] = Field.pk()
-    title: Mapped[str] = Field.string(max_length=200)
-    
-    # Many-to-one: Post belongs to User
     author_id: Mapped[int] = Rel.foreign_key("users.id")
-    author: Mapped["User"] = Rel.belongs_to(
-        "User",
-        back_populates="posts"
-    )
-    
-    # Many-to-many: Post has many tags
-    tags: Mapped[list["Tag"]] = Rel.many_to_many(
-        "Tag",
-        secondary=post_tags,
-        back_populates="posts"
-    )
-
-class Tag(Model):
-    __tablename__ = "tags"
-    
-    id: Mapped[int] = Field.pk()
-    name: Mapped[str] = Field.string(max_length=50, unique=True)
-    
-    # Many-to-many: Tag has many posts
-    posts: Mapped[list["Post"]] = Rel.many_to_many(
-        "Post",
-        secondary=post_tags,
-        back_populates="tags"
+    author: Mapped["User"] = Rel.many_to_one(
+        "core.User",
+        back_populates="posts",
     )
 ```
 
-## Eager Loading in Queries
+(Ajuste `core` ao `app_label` real do projecto.)
+
+## Eager loading em queries
 
 ```python
-# Load author with posts
 user = await User.objects.using(db).select_related("posts").get(id=1)
-
-# Load post with author and tags
-post = await Post.objects.using(db).select_related("author", "tags").get(id=1)
+post = await Post.objects.using(db).select_related("author").get(id=1)
 ```
 
-## Next
+## Seguinte
 
-- [QuerySets](12-querysets.md) — Querying data
-- [Fields](10-fields.md) — Field types
+- [QuerySets](12-querysets.md)
+- [Fields](10-fields.md)

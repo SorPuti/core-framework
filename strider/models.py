@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Self, TYPE_CHECKING
 from collections.abc import Sequence
+from uuid import UUID
 
 from pydantic import BaseModel as PydanticBaseModel, ConfigDict
 from sqlalchemy import MetaData, Column, Integer, String, Boolean, DateTime as SADateTime, Float, Text, ForeignKey
@@ -23,6 +24,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from strider.datetime import timezone, DateTime
+from strider.fields import AdvancedField
 
 if TYPE_CHECKING:
     from strider.querysets import QuerySet, SoftDeleteQuerySet, TenantSoftDeleteQuerySet
@@ -629,6 +631,19 @@ class Model(Base, metaclass=ModelMeta):
     """
     
     __abstract__ = True
+
+
+class UUIDModel(Model):
+    """
+    Modelo abstrato com chave primária UUID (mesmo papel de ``Model`` + ``Field.pk()``,
+    mas com ``AdvancedField.uuid_pk()`` já definido).
+
+    Evita repetir imports e a declaração de ``id`` em entidades que usam UUID.
+    """
+
+    __abstract__ = True
+
+    id: Mapped[UUID] = AdvancedField.uuid_pk()
 
     # Manager será adicionado pela metaclass
     objects: ClassVar[Manager[Self]]

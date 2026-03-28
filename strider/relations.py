@@ -1,58 +1,61 @@
 """
-Relationship helpers for SQLAlchemy models.
+Helpers de relacionamento para modelos SQLAlchemy (``Rel``, ``AssociationTable``).
 
-Padrão obrigatório para targets de relacionamento: app_label.ModelName (estilo Django).
-- app_label = nome da pasta do app em src.apps (ex: core, strategies)
-- ModelName = nome da classe do model em src.apps.<app_label>.models
+Dois formatos de string distintos
+================================
 
-Exemplo:
-    Rel.many_to_one("core.User", ...)
-    Rel.one_to_many("strategies.Strategy", ...)
+1. **Coluna FK (SQL):** ``Rel.foreign_key("tabela.coluna")``
 
-Se o target não seguir esse padrão, o app interrompe (exit 0) com mensagem explicativa.
+   - Formato: ``nome_da_tabela.nome_da_coluna`` (ex.: ``users.id``, ``public.users.id`` —
+     usa-se o par ``(tabela, coluna)`` extraído do final da string).
+   - Deve coincidir com ``__tablename__`` e o nome da coluna referenciada no banco.
+   - **Inferência de tipo:** se ``type_`` for omitido, o tipo SQLAlchemy da FK
+     (``Integer``, UUID PostgreSQL, ``BigInteger``) é inferido procurando uma
+     subclasse de ``Model`` com esse ``__tablename__`` e inspecionando a PK ou a
+     coluna. O modelo referenciado deve **já estar definido** como classe (tipicamente
+     declarado **antes** no mesmo módulo ou importado antes). Se não for encontrado,
+     assume-se **inteiro** (``int``).
 
-Example:
+2. **Alvo de ``relationship()`` (app Django-style):** ``"app_label.ModelName"``
+
+   - Padrão obrigatório para ``Rel.many_to_one``, ``one_to_many``, ``one_to_one``,
+     ``many_to_many`` quando o target é resolvido via ``_resolve_target_to_class``.
+   - Regex: ``RELATIONSHIP_TARGET_PATTERN`` — exatamente **um** ponto, identificadores
+     ``[a-zA-Z_][a-zA-Z0-9_]*`` em ambos os lados (ex.: ``core.User``, ``strategies.Strategy``).
+   - Resolução: import dinâmico de ``src.apps.<app_label>.models`` e obtenção do
+     atributo ``ModelName``. Falhas levantam ``ValueError`` (formato), ``ImportError``
+     (módulo inexistente) ou ``AttributeError`` (classe ausente no módulo).
+
+3. **Validação rígida com encerramento do processo**
+
+   Ao usar ``foreign_keys=[...]`` como **nomes de atributos** em ``many_to_one`` /
+   ``one_to_many`` / ``one_to_one``, o framework usa um descriptor que, em
+   ``__set_name__``, chama ``_validate_relationship_target``. Se o ``target`` **não**
+   seguir ``app_label.ModelName``, uma mensagem é impressa em stderr e o processo
+   termina com ``sys.exit(0)`` (comportamento intencional para falha visível em dev).
+
+Exemplo mínimo::
+
     from strider import Model, Field
     from strider.relations import Rel
-    
+
     class Author(Model):
         __tablename__ = "authors"
-        
         id: Mapped[int] = Field.pk()
         name: Mapped[str] = Field.string(max_length=100)
-        
-        # One-to-Many: Author has many Posts
         posts: Mapped[list["Post"]] = Rel.one_to_many(
-            "Post",
+            "core.Post",
             back_populates="author",
         )
-    
+
     class Post(Model):
         __tablename__ = "posts"
-        
         id: Mapped[int] = Field.pk()
         title: Mapped[str] = Field.string(max_length=200)
-        
-        # Foreign Key
         author_id: Mapped[int] = Rel.foreign_key("authors.id")
-        
-        # Many-to-One: Post belongs to Author
         author: Mapped["Author"] = Rel.many_to_one(
-            "Author",
+            "core.Author",
             back_populates="posts",
-        )
-    
-    class Tag(Model):
-        __tablename__ = "tags"
-        
-        id: Mapped[int] = Field.pk()
-        name: Mapped[str] = Field.string(max_length=50)
-        
-        # Many-to-Many: Tag has many Posts
-        posts: Mapped[list["Post"]] = Rel.many_to_many(
-            "Post",
-            secondary="post_tags",
-            back_populates="tags",
         )
 """
 
@@ -75,8 +78,112 @@ T = TypeVar("T", bound="Model")
 
 logger = logging.getLogger("strider.relations")
 
-# Padrão obrigatório para targets de relacionamento: app_label.ModelName
-# Corresponde a src.apps.<app_label>.models.<ModelName>
+
+def _parse_fk_target(target: str) -> tuple[str, str] | None:
+    """Extrai (tabela, coluna) de ``table.column`` ou ``schema.table.column``."""
+    parts = target.split(".")
+    if len(parts) < 2:
+        return None
+    return parts[-2], parts[-1]
+
+
+def _find_model_class_by_tablename(table_name: str) -> type | None:
+    """
+    Encontra uma classe Model cuja ``__tablename__`` coincide com ``table_name``.
+
+    Percorre a árvore de subclasses de ``Model``; em último caso tenta o registry
+    do SQLAlchemy (útil quando o mapper já foi configurado).
+    """
+    from strider.models import Model
+
+    found: list[type] = []
+    seen: set[int] = set()
+
+    def walk(base: type) -> None:
+        for sub in base.__subclasses__():
+            sid = id(sub)
+            if sid in seen:
+                continue
+            seen.add(sid)
+            if getattr(sub, "__abstract__", False):
+                walk(sub)
+                continue
+            if getattr(sub, "__tablename__", None) == table_name:
+                found.append(sub)
+            walk(sub)
+
+    walk(Model)
+    if found:
+        return found[0]
+
+    try:
+        for mapper in Model.registry.mappers:
+            cls = mapper.class_
+            if getattr(cls, "__tablename__", None) == table_name:
+                return cls
+    except Exception:
+        pass
+    return None
+
+
+def _infer_fk_type_kind(target: str) -> str:
+    """
+    Deduz ``uuid`` / ``bigint`` / ``int`` a partir do modelo e coluna referenciados.
+
+    Usa a mesma detecção de PK que ``_get_pk_column_type`` (auth) para ``.id``;
+    para outras colunas, inspeciona ``__table__`` ou anotações quando possível.
+    Se não houver modelo ou não for possível inferir, retorna ``int``.
+    """
+    from sqlalchemy import BigInteger, Integer
+    from sqlalchemy import Uuid as SAUuid
+    from sqlalchemy.dialects.postgresql import UUID as PgUUID
+
+    parsed = _parse_fk_target(target)
+    if not parsed:
+        return "int"
+
+    table_name, column_name = parsed
+    model_class = _find_model_class_by_tablename(table_name)
+    if model_class is None:
+        return "int"
+
+    from strider.auth.models import _get_pk_column_type
+
+    if column_name == "id":
+        dt = _get_pk_column_type(model_class)
+        if dt == PgUUID:
+            return "uuid"
+        if dt == BigInteger:
+            return "bigint"
+        return "int"
+
+    if hasattr(model_class, "__table__") and model_class.__table__ is not None:
+        try:
+            col = model_class.__table__.columns.get(column_name)
+            if col is not None:
+                ct = col.type
+                if isinstance(ct, (PgUUID, SAUuid)) or "UUID" in type(ct).__name__.upper():
+                    return "uuid"
+                if isinstance(ct, BigInteger):
+                    return "bigint"
+                if isinstance(ct, Integer):
+                    return "int"
+        except Exception:
+            pass
+
+    for base in model_class.__mro__:
+        annotations = getattr(base, "__annotations__", {})
+        if column_name not in annotations:
+            continue
+        ann_s = str(annotations[column_name])
+        if "UUID" in ann_s or "Uuid" in ann_s or "uuid" in ann_s:
+            return "uuid"
+
+    return "int"
+
+
+# Alvo de relationship: exatamente "app_label.ModelName" (um ponto, dois identificadores).
+# Resolução: importlib.import_module("src.apps.<app_label>.models") → getattr(ModelName).
 RELATIONSHIP_TARGET_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
@@ -86,25 +193,31 @@ RELATIONSHIP_TARGET_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-
 
 class AssociationTable:
     """
-    Helper for creating many-to-many association tables.
-    
-    Example:
-        # Simple association
+    Construtor de tabelas de junção (N para N) no ``metadata`` do ``Model``.
+
+    **Formato dos lados**
+
+    - ``left`` / ``right``: tupla ``(nome_coluna_local, alvo_fk_sql)``, onde
+      ``alvo_fk_sql`` segue o mesmo formato que ``Rel.foreign_key``:
+      ``"tabela.coluna"`` (ex.: ``"posts.id"``).
+
+    **Limitação atual**
+
+    As duas FKs da tabela gerada usam tipo **Integer** internamente. Para PKs UUID
+    ou ``bigint``, crie a ``Table`` manualmente com os tipos corretos ou estenda
+    este helper no futuro.
+
+    **Cache**
+
+    Tabelas criadas ficam em cache por nome; ``get(name)`` retorna a instância
+    existente; ``clear_cache()`` esvazia (útil em testes).
+
+    Exemplo::
+
         post_tags = AssociationTable.create(
             "post_tags",
             left=("post_id", "posts.id"),
             right=("tag_id", "tags.id"),
-        )
-        
-        # With extra columns
-        user_roles = AssociationTable.create(
-            "user_roles",
-            left=("user_id", "users.id"),
-            right=("role_id", "roles.id"),
-            extra_columns=[
-                Column("assigned_at", DateTime, default=func.now()),
-                Column("assigned_by", Integer, nullable=True),
-            ],
         )
     """
     
@@ -122,25 +235,24 @@ class AssociationTable:
         ondelete: str = "CASCADE",
     ) -> Table:
         """
-        Create or get an association table for many-to-many relationships.
-        
-        Args:
-            name: Table name
-            left: Tuple of (column_name, foreign_key_target) for left side
-            right: Tuple of (column_name, foreign_key_target) for right side
-            metadata: SQLAlchemy metadata (uses Model.metadata if not provided)
-            extra_columns: Additional columns for the association table
-            ondelete: ON DELETE action (default: CASCADE)
-        
-        Returns:
-            SQLAlchemy Table object
-        
-        Example:
-            post_tags = AssociationTable.create(
-                "post_tags",
-                left=("post_id", "posts.id"),
-                right=("tag_id", "tags.id"),
-            )
+        Cria (ou reutiliza do cache) uma ``Table`` de associação com duas FKs inteiras.
+
+        Parâmetros
+        ----------
+        name:
+            Nome da tabela SQL.
+        left, right:
+            ``(nome_coluna, "tabela_referenciada.coluna")`` para cada lado.
+        metadata:
+            ``MetaData`` SQLAlchemy; o padrão é ``Model.metadata``.
+        extra_columns:
+            Colunas extras (ex.: timestamp de vínculo).
+        ondelete:
+            Ação ``ON DELETE`` nas FKs (padrão ``CASCADE``).
+
+        Retorno
+        -------
+        Instância ``sqlalchemy.Table`` registrada no metadata.
         """
         if name in cls._tables:
             return cls._tables[name]
@@ -182,12 +294,12 @@ class AssociationTable:
     
     @classmethod
     def get(cls, name: str) -> Table | None:
-        """Get an existing association table by name."""
+        """Retorna a ``Table`` em cache pelo nome, ou ``None``."""
         return cls._tables.get(name)
     
     @classmethod
     def clear_cache(cls) -> None:
-        """Clear the table cache (useful for testing)."""
+        """Remove todas as tabelas do cache interno (útil em testes)."""
         cls._tables.clear()
 
 
@@ -378,7 +490,9 @@ class _SelfReferentialDescriptor:
 
 def _resolve_target(target: str) -> str:
     """
-    (Deprecated) Mantido para compatibilidade. Use _resolve_target_to_class.
+    Compatibilidade: ``_resolve_target_to_class(target).__name__``.
+
+    Preferir ``_resolve_target_to_class`` para obter a classe.
     """
     cls = _resolve_target_to_class(target)
     return cls.__name__
@@ -386,8 +500,13 @@ def _resolve_target(target: str) -> str:
 
 def _resolve_target_to_class(target: str) -> type:
     """
-    Resolve target no formato app_label.ModelName para a classe do model.
-    Convenção: model em src.apps.<app_label>.models.<ModelName>.
+    Resolve ``"app_label.ModelName"`` para a classe Python do modelo.
+
+    - Valida o formato com ``RELATIONSHIP_TARGET_PATTERN``; caso contrário,
+      ``ValueError``.
+    - Importa ``src.apps.<app_label>.models`` e faz ``getattr(module, ModelName)``.
+    - ``ImportError`` se o módulo não existir; ``AttributeError`` se a classe não
+      estiver definida no módulo.
     """
     if not RELATIONSHIP_TARGET_PATTERN.match(target):
         raise ValueError(
@@ -414,7 +533,11 @@ def _resolve_target_to_class(target: str) -> type:
 
 
 def _target_to_lazy_string(target: str) -> str:
-    """Converte app_label.ModelName em path completo para resolução tardia do SQLAlchemy."""
+    """
+    Se ``target`` for ``app_label.ModelName``, devolve
+    ``"src.apps.<app_label>.models.<ModelName>"`` para o SQLAlchemy resolver mais tarde;
+    caso contrário devolve ``target`` inalterado.
+    """
     if not RELATIONSHIP_TARGET_PATTERN.match(target):
         return target
     app_label, model_name = target.split(".", 1)
@@ -427,9 +550,9 @@ _model_import_cache: dict[str, bool] = {}
 
 def clear_model_cache() -> None:
     """
-    Limpa o cache de importação de models.
-    
-    Útil para testes ou quando models são recarregados dinamicamente.
+    Limpa ``_model_import_cache`` (cache interno reservado para importação de models).
+
+    Hoje pouco populado pelo restante do módulo; mantido para testes e evolução futura.
     """
     global _model_import_cache
     _model_import_cache.clear()
@@ -438,33 +561,29 @@ def clear_model_cache() -> None:
 
 class Rel:
     """
-    Relationship helper class providing Django-like relationship definitions.
-    
-    This class provides static methods for defining relationships between models
-    with sensible defaults and clear naming conventions.
-    
-    Relationship Types:
-        - foreign_key: Define a foreign key column
-        - many_to_one: Many records point to one (belongs_to)
-        - one_to_many: One record has many (has_many)
-        - one_to_one: One-to-one relationship
-        - many_to_many: Many-to-many with association table
-    
-    Example:
-        class Post(Model):
-            __tablename__ = "posts"
-            
-            # Foreign key column
-            author_id: Mapped[int] = Rel.foreign_key("authors.id")
-            
-            # Relationship to Author
-            author: Mapped["Author"] = Rel.many_to_one("Author", back_populates="posts")
-            
-            # Relationship to Comments
-            comments: Mapped[list["Comment"]] = Rel.one_to_many("Comment", back_populates="post")
-            
-            # Many-to-many with Tags
-            tags: Mapped[list["Tag"]] = Rel.many_to_many("Tag", secondary="post_tags")
+    API estática estilo Django para colunas FK e ``relationship()`` do SQLAlchemy.
+
+    **Resumo**
+
+    ========================  ======================================
+    Método                    Papel
+    ========================  ======================================
+    ``foreign_key``           Coluna mapeada + ``ForeignKey`` (string SQL)
+    ``many_to_one``           N:1 no lado "muitos" (``belongs_to``)
+    ``one_to_many``           1:N no lado "um" (``has_many``)
+    ``one_to_one``            1:1
+    ``many_to_many``          N:N via tabela ``secondary``
+    ``self_referential``      Mesma tabela (árvore, etc.)
+    ========================  ======================================
+
+    **Targets**
+
+    - ``foreign_key``: apenas ``"tabela.coluna"`` (ver docstring do método).
+    - Demais métodos: ``target`` deve ser ``"app_label.ModelName"`` salvo uso avançado
+      com ``foreign_keys`` como lista de nomes de atributos (ver cada método).
+
+    **Aliases:** ``belongs_to`` = ``many_to_one``; ``has_many`` = ``one_to_many``;
+    ``has_one`` = ``one_to_one``.
     """
     
     # -------------------------------------------------------------------------
@@ -478,49 +597,53 @@ class Rel:
         nullable: bool = False,
         ondelete: str = "CASCADE",
         index: bool = True,
-        type_: str = "int",
+        type_: str | None = None,
     ) -> Mapped[int] | Mapped[int | None] | Mapped[UUID] | Mapped[UUID | None]:
         """
-        Create a foreign key column.
-        
-        Args:
-            target: Target column in format "table.column" (e.g., "users.id")
-            nullable: Whether the FK can be NULL (default: False)
-            ondelete: ON DELETE action - CASCADE, SET NULL, RESTRICT, NO ACTION
-            index: Whether to create an index (default: True, recommended for FKs)
-            type_: Column type - "int" (default), "uuid", "bigint"
-        
-        Returns:
-            Mapped column with foreign key constraint
-        
-        Example:
-            # Integer FK (most common)
-            author_id: Mapped[int] = Rel.foreign_key("authors.id")
-            
-            # Nullable FK
-            parent_id: Mapped[int | None] = Rel.foreign_key(
-                "categories.id",
-                nullable=True,
-                ondelete="SET NULL",
-            )
-            
-            # UUID FK
-            workspace_id: Mapped[UUID] = Rel.foreign_key(
-                "workspaces.id",
-                type_="uuid",
-            )
+        Declara uma coluna com ``ForeignKey`` para ``target``.
+
+        **Formato de ``target``**
+
+        - Obrigatório: ``"<tabela>.<coluna>"`` com pelo menos um ponto. Aceita esquema
+          no prefixo (ex.: ``"public.users.id"``): a tabela e a coluna usadas são os
+          **dois últimos** segmentos (``users``, ``id``).
+        - Deve coincidir com o nome físico da tabela/coluna referenciada.
+
+        **Parâmetros**
+
+        - ``nullable``: se ``True``, a coluna permite ``NULL`` (use ``Mapped[T | None]``).
+        - ``ondelete``: repasse ao PostgreSQL/SQLAlchemy (``CASCADE``, ``SET NULL``,
+          ``RESTRICT``, ``NO ACTION``, …). Com ``SET NULL`` costuma-se ``nullable=True``.
+        - ``index``: cria índice na coluna da FK (recomendado ``True``).
+        - ``type_``:
+            - ``None`` (padrão): infere ``int``, ``uuid`` ou ``bigint`` conforme o
+              modelo referenciado (via ``__tablename__``) e a coluna; ver módulo.
+            - ``"int"`` | ``"uuid"`` | ``"bigint"``: força o tipo (sobrescreve a inferência).
+
+        **Validação / limitações**
+
+        - Não há regex além de poder partir ``target`` em tabela/coluna; nomes inválidos
+          falham na criação do schema ou em runtime no banco.
+        - Se o modelo alvo não for encontrado na árvore de ``Model``, a inferência cai
+          em **inteiro**.
+
+        **Retorno**
+
+        ``MappedColumn`` compatível com anotações ``Mapped[int]``, ``Mapped[UUID]``, etc.
         """
         from sqlalchemy import BigInteger
         from sqlalchemy.dialects.postgresql import UUID as PgUUID
+
+        effective = type_ if type_ is not None else _infer_fk_type_kind(target)
         
-        if type_ == "uuid":
+        if effective == "uuid":
             return mapped_column(
                 PgUUID(as_uuid=True),
                 ForeignKey(target, ondelete=ondelete),
                 nullable=nullable,
                 index=index,
             )
-        elif type_ == "bigint":
+        elif effective == "bigint":
             return mapped_column(
                 BigInteger,
                 ForeignKey(target, ondelete=ondelete),
@@ -550,34 +673,33 @@ class Rel:
         uselist: bool = False,
     ) -> Mapped[Any]:
         """
-        Create a many-to-one relationship (belongs_to).
-        
-        Use this on the "many" side of a relationship, where multiple records
-        point to a single record in another table.
-        
-        Args:
-            target: Target model class name (string for forward reference)
-            back_populates: Name of the reverse relationship on the target model
-            backref: Auto-create reverse relationship (alternative to back_populates)
-            lazy: Loading strategy - "selectin" (default), "joined", "subquery", "select"
-            foreign_keys: Explicit foreign key columns (for ambiguous relationships)
-            uselist: Always False for many-to-one (returns single object)
-        
-        Returns:
-            Mapped relationship
-        
-        Example:
-            class Post(Model):
-                author_id: Mapped[int] = Rel.foreign_key("authors.id")
-                
-                # Many posts belong to one author
-                author: Mapped["Author"] = Rel.many_to_one(
-                    "Author",
-                    back_populates="posts",
-                )
-        
-        Note:
-            Also known as: belongs_to, ForeignKey relationship
+        Relacionamento **muitos-para-um** (lado "N" aponta para um registo do alvo).
+
+        **Formato de ``target``**
+
+        - Caminho normal: ``"app_label.ModelName"`` (ex.: ``"core.Author"``). Tem de
+          casar com ``RELATIONSHIP_TARGET_PATTERN``. O modelo é carregado de
+          ``src.apps.<app_label>.models``.
+        - Se ``foreign_keys`` for uma **lista de strings** (nomes de atributos na
+          classe actual que são colunas FK), usa-se um descriptor interno: aí
+          ``target`` também deve ser ``app_label.ModelName`` e, se inválido,
+          ``_validate_relationship_target`` pode terminar o processo com ``sys.exit(0)``.
+
+        **Parâmetros**
+
+        - ``back_populates``: nome do atributo ``relationship`` no modelo **alvo**.
+        - ``backref``: atalho SQLAlchemy para criar o lado inverso (alternativa a
+          ``back_populates``).
+        - ``lazy``: ``"selectin"`` (padrão), ``"joined"``, ``"subquery"``, ``"select"``, etc.
+        - ``foreign_keys``: lista de colunas FK quando há ambiguidade; ver strings acima.
+        - ``uselist``: para muitos-para-um deve ser ``False`` (padrão).
+
+        **Erros comuns**
+
+        - ``ValueError``: ``target`` não está no formato ``app_label.ModelName``.
+        - ``ImportError`` / ``AttributeError``: módulo ou classe do modelo inexistente.
+
+        **Alias:** ``Rel.belongs_to``.
         """
         if foreign_keys and isinstance(foreign_keys, list) and all(
             isinstance(x, str) for x in foreign_keys
@@ -623,35 +745,26 @@ class Rel:
         order_by: str | None = None,
     ) -> Mapped[list[Any]]:
         """
-        Create a one-to-many relationship (has_many).
-        
-        Use this on the "one" side of a relationship, where a single record
-        has multiple related records in another table.
-        
-        Args:
-            target: Target model class name (string for forward reference)
-            back_populates: Name of the reverse relationship on the target model
-            backref: Auto-create reverse relationship (alternative to back_populates)
-            lazy: Loading strategy - "selectin" (default), "joined", "subquery", "select"
-            foreign_keys: Explicit foreign key columns (for ambiguous relationships)
-            cascade: Cascade options (default: "all, delete-orphan")
-            passive_deletes: Let database handle cascades (default: True)
-            order_by: Column to order related records by
-        
-        Returns:
-            Mapped relationship (list)
-        
-        Example:
-            class Author(Model):
-                # One author has many posts
-                posts: Mapped[list["Post"]] = Rel.one_to_many(
-                    "Post",
-                    back_populates="author",
-                    order_by="created_at",
-                )
-        
-        Note:
-            Also known as: has_many, reverse ForeignKey
+        Relacionamento **um-para-muitos** (lado "1" possui coleção do modelo filho).
+
+        **Formato de ``target``**
+
+        Igual a ``many_to_one``: ``"app_label.ModelName"``, resolvido via
+        ``_resolve_target_to_class``. Com ``foreign_keys`` como lista de strings,
+        aplicam-se o descriptor e a validação estrita (possível ``sys.exit(0)`` se
+        o formato do ``target`` estiver errado).
+
+        **Parâmetros**
+
+        - ``cascade``: política SQLAlchemy (padrão ``"all, delete-orphan"``).
+        - ``passive_deletes``: quando ``True``, deletes em cascata podem ser tratados
+          pelo banco (``ON DELETE``) em conjunto com as FKs.
+        - ``order_by``: string com nome de coluna no modelo **alvo** para ordenar a
+          coleção (repasse ao ``relationship``).
+
+        **Erros:** os mesmos de ``many_to_one`` na resolução do ``target``.
+
+        **Alias:** ``Rel.has_many``.
         """
         if foreign_keys and isinstance(foreign_keys, list) and all(
             isinstance(x, str) for x in foreign_keys
@@ -703,39 +816,18 @@ class Rel:
         uselist: bool = False,
     ) -> Mapped[Any]:
         """
-        Create a one-to-one relationship.
-        
-        Use this when each record in one table corresponds to exactly one
-        record in another table.
-        
-        Args:
-            target: Target model class name (string for forward reference)
-            back_populates: Name of the reverse relationship on the target model
-            backref: Auto-create reverse relationship (alternative to back_populates)
-            lazy: Loading strategy - "selectin" (default), "joined", "subquery", "select"
-            foreign_keys: Explicit foreign key columns (for ambiguous relationships)
-            cascade: Cascade options (default: "all, delete-orphan")
-            uselist: Always False for one-to-one
-        
-        Returns:
-            Mapped relationship (single object)
-        
-        Example:
-            class User(Model):
-                # One user has one profile
-                profile: Mapped["Profile"] = Rel.one_to_one(
-                    "Profile",
-                    back_populates="user",
-                )
-            
-            class Profile(Model):
-                user_id: Mapped[int] = Rel.foreign_key("users.id", unique=True)
-                
-                # One profile belongs to one user
-                user: Mapped["User"] = Rel.one_to_one(
-                    "User",
-                    back_populates="profile",
-                )
+        Relacionamento **um-para-um**.
+
+        **Formato de ``target``**
+
+        Como nos outros métodos: ``"app_label.ModelName"``. No modelo que guarda a FK,
+        use ``unique=True`` na coluna FK (ou restrição equivalente) para garantir 1:1
+        ao nível da base de dados.
+
+        **Implementação:** o ramo com ``foreign_keys`` como lista de strings reutiliza
+        o descriptor com ``side="many_to_one"`` (API SQLAlchemy para 1:1 no lado FK).
+
+        **Alias:** ``Rel.has_one``.
         """
         if foreign_keys and isinstance(foreign_keys, list) and all(
             isinstance(x, str) for x in foreign_keys
@@ -783,51 +875,25 @@ class Rel:
         order_by: str | None = None,
     ) -> Mapped[list[Any]]:
         """
-        Create a many-to-many relationship.
-        
-        Use this when records in both tables can be related to multiple
-        records in the other table (requires an association table).
-        
-        Args:
-            target: Target model class name (string for forward reference)
-            secondary: Association table name (string) or Table object
-            back_populates: Name of the reverse relationship on the target model
-            backref: Auto-create reverse relationship (alternative to back_populates)
-            lazy: Loading strategy - "selectin" (default), "joined", "subquery", "select"
-            cascade: Cascade options (default: "all")
-            passive_deletes: Let database handle cascades (default: True)
-            order_by: Column to order related records by
-        
-        Returns:
-            Mapped relationship (list)
-        
-        Example:
-            # First, create the association table
-            post_tags = AssociationTable.create(
-                "post_tags",
-                left=("post_id", "posts.id"),
-                right=("tag_id", "tags.id"),
-            )
-            
-            class Post(Model):
-                # Many posts have many tags
-                tags: Mapped[list["Tag"]] = Rel.many_to_many(
-                    "Tag",
-                    secondary=post_tags,  # or "post_tags"
-                    back_populates="posts",
-                )
-            
-            class Tag(Model):
-                # Many tags have many posts
-                posts: Mapped[list["Post"]] = Rel.many_to_many(
-                    "Post",
-                    secondary=post_tags,
-                    back_populates="tags",
-                )
-        
-        Note:
-            The association table must have foreign keys to both tables.
-            Use AssociationTable.create() for easy table creation.
+        Relacionamento **muitos-para-muitos** com tabela ``secondary``.
+
+        **Formato de ``target``**
+
+        - ``"app_label.ModelName"`` do outro extremo da associação (o mesmo padrão
+          que ``_resolve_target_to_class``).
+
+        **Parâmetro ``secondary``**
+
+        - ``str``: nome da tabela. Se existir em ``AssociationTable`` (criada antes com
+          ``AssociationTable.create``), a instância em cache é usada; caso contrário o
+          SQLAlchemy trata a string conformo o metadata do registry.
+        - ``Table``: objeto ``sqlalchemy.Table`` (ex.: retorno de ``AssociationTable.create``).
+
+        A tabela de junção deve declarar FKs para **ambas** as entidades (tipicamente
+        chave composta com as duas FKs).
+
+        **Parâmetros adicionais:** ``cascade``, ``passive_deletes``, ``order_by`` —
+        mesmo espírito que em ``one_to_many``.
         """
         # If secondary is a string, try to get it from cache or use as-is
         if isinstance(secondary, str):
@@ -865,43 +931,41 @@ class Rel:
         uselist: bool = True,
     ) -> Mapped[Any]:
         """
-        Create a self-referential relationship (e.g., parent-child in same table).
-        
-        Args:
-            back_populates: Name of the reverse relationship
-            remote_side: Column that identifies the "one" side (usually "id")
-            lazy: Loading strategy
-            cascade: Cascade options
-            foreign_keys: Foreign key column name
-            uselist: True for one-to-many, False for many-to-one
-        
-        Returns:
-            Mapped relationship
-        
-        Example:
+        ``relationship`` na **mesma classe** (hierarquia, árvore, grafo sobre uma tabela).
+
+        **Parâmetros (nomes de atributos na classe)**
+
+        - ``foreign_keys``: string com o **nome do atributo** Python da coluna FK
+          (ex.: ``"parent_id"``), não ``"Category.parent_id"``.
+        - ``remote_side``: string com o **nome do atributo** do lado "pai"
+          (normalmente ``"id"``).
+        - ``uselist``: ``True`` para coleção de filhos (1:N), ``False`` para referência
+          ao pai (N:1).
+
+        Quando ``foreign_keys`` ou ``remote_side`` são strings, usa-se
+        ``_SelfReferentialDescriptor`` para converter nomes em objetos ``Column``.
+
+        **Validação:** não passa por ``app_label.ModelName``; o alvo é sempre a
+        própria classe.
+
+        Exemplo::
+
             class Category(Model):
                 __tablename__ = "categories"
-                
                 id: Mapped[int] = Field.pk()
                 name: Mapped[str] = Field.string(max_length=100)
                 parent_id: Mapped[int | None] = Rel.foreign_key(
-                    "categories.id",
-                    nullable=True,
-                    ondelete="SET NULL",
+                    "categories.id", nullable=True, ondelete="SET NULL",
                 )
-                
-                # Children (one-to-many)
                 children: Mapped[list["Category"]] = Rel.self_referential(
-                    back_populates="parent",
-                    foreign_keys="parent_id",
+                    back_populates="parent", foreign_keys="parent_id",
                 )
-                
-                # Parent (many-to-one)
                 parent: Mapped["Category | None"] = Rel.self_referential(
-                    back_populates="children",
-                    remote_side="id",
-                    uselist=False,
+                    back_populates="children", remote_side="id", uselist=False,
                 )
+
+        Relações auto-referenciadas complexas podem exigir ``relationship()`` directo
+        do SQLAlchemy com ``remote_side`` / ``foreign_keys`` mais explícitos.
         """
         # Note: This is a simplified helper. For complex self-referential
         # relationships, you may need to use relationship() directly with
