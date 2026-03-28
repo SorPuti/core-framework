@@ -2589,7 +2589,7 @@ from httpx import AsyncClient
     }
     
     for filepath, content in files.items():
-        filepath.write_text(content)
+        filepath.write_text(content, encoding="utf-8")
         print(f"  📄 {filepath.relative_to(cwd)}")
     
     print()
