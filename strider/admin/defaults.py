@@ -113,18 +113,20 @@ def register_core_models(site: "AdminSite") -> None:
         # faz ModelAdmin() de novo. Usamos subclasse com atributos de classe filtrados.
         if hasattr(User, "__table__"):
             columns = [col.name for col in User.__table__.columns]
-            list_display = tuple(f for f in UserAdmin.list_display if f in columns) or ("id",)
-            search_fields = tuple(f for f in UserAdmin.search_fields if f in columns)
-            list_filter = tuple(f for f in UserAdmin.list_filter if f in columns)
-            readonly_fields = tuple(f for f in UserAdmin.readonly_fields if f in columns)
-            exclude = tuple(f for f in UserAdmin.exclude if f in columns)
+            # Nomes distintos dos atributos da classe: no corpo da class, ``x = x`` não
+            # vê o ``x`` da função — o compilador trata ``x`` como local da classe.
+            _ld = tuple(f for f in UserAdmin.list_display if f in columns) or ("id",)
+            _sf = tuple(f for f in UserAdmin.search_fields if f in columns)
+            _lf = tuple(f for f in UserAdmin.list_filter if f in columns)
+            _ro = tuple(f for f in UserAdmin.readonly_fields if f in columns)
+            _ex = tuple(f for f in UserAdmin.exclude if f in columns)
 
             class AdaptedUserAdmin(UserAdmin):
-                list_display = list_display
-                search_fields = search_fields
-                list_filter = list_filter
-                readonly_fields = readonly_fields
-                exclude = exclude
+                list_display = _ld
+                search_fields = _sf
+                list_filter = _lf
+                readonly_fields = _ro
+                exclude = _ex
 
             site.register(User, AdaptedUserAdmin)
         else:
