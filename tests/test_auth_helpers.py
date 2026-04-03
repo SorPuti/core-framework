@@ -332,3 +332,52 @@ class TestBaseUserOutputUuidPk:
         out = BaseUserOutput.model_validate(FakeUser())
         assert out.id == str(uid)
         assert out.email == "user@example.com"
+
+
+class TestAuthViewSetTokenResponseHooks:
+    """finalize_token_response e encadeamento com super().login()."""
+
+    @pytest.mark.asyncio
+    async def test_finalize_token_response_default_returns_payload(self):
+        from unittest.mock import MagicMock
+
+        from strider.auth.views import AuthViewSet
+
+        vs = AuthViewSet()
+        req = MagicMock()
+        payload = {
+            "access_token": "a",
+            "refresh_token": "r",
+            "token_type": "bearer",
+            "expires_in": 60,
+        }
+        out = await vs.finalize_token_response(req, payload)
+        assert out is payload
+
+    @pytest.mark.asyncio
+    async def test_subclass_finalize_returns_json_response_with_cookie(self):
+        from unittest.mock import MagicMock
+
+        from fastapi.responses import JSONResponse
+        from strider.auth.views import AuthViewSet
+
+        class CookieAuth(AuthViewSet):
+            async def finalize_token_response(self, request, payload):
+                r = JSONResponse(content=payload)
+                r.set_cookie("refresh_token", payload["refresh_token"], httponly=True)
+                return r
+
+        vs = CookieAuth()
+        req = MagicMock()
+        payload = {
+            "access_token": "a",
+            "refresh_token": "r",
+            "token_type": "bearer",
+            "expires_in": 60,
+        }
+        out = await vs.finalize_token_response(req, payload)
+        assert isinstance(out, JSONResponse)
+        assert any(
+            h[0] == b"set-cookie" and b"refresh_token" in h[1].lower()
+            for h in out.raw_headers
+        )

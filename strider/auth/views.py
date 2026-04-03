@@ -16,6 +16,9 @@ Exemplo:
         user_model = User
     
     router.register_viewset("/auth", MyAuthViewSet, basename="auth")
+
+Cookies / resposta HTTP: ver ``AuthViewSet.finalize_token_response`` e métodos
+``perform_user_registration``, ``authenticate_login_user``, ``resolve_user_for_refresh``.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from uuid import UUID
 
 from fastapi import Request, HTTPException
 from pydantic import create_model
+from starlette.responses import Response
 
 from strider.views import ViewSet, action
 from strider.permissions import AllowAny, IsAuthenticated
@@ -57,6 +61,47 @@ class AuthViewSet(ViewSet):
         access_token_expire_minutes: Expiração do access token (default: 30)
         refresh_token_expire_days: Expiração do refresh token (default: 7)
     
+    Customização (cookies, corpo da resposta, headers):
+        - ``finalize_token_response(request, payload)``: ponto único após
+          ``register`` / ``login`` / ``refresh``; por padrão devolve o ``dict``.
+          Sobrescreva para devolver ``JSONResponse`` (ou outro ``Response``) e
+          chamar ``set_cookie``, omitir tokens do JSON, etc.
+        - ``perform_user_registration(db, data)``: cria o utilizador (sem
+          ``commit``); útil para estender registo antes do commit.
+        - ``authenticate_login_user(db, data)``: valida credenciais e devolve
+          o utilizador (sem ``commit``).
+        - ``resolve_user_for_refresh(db, data)``: valida refresh token e
+          carrega o utilizador.
+
+        Exemplo com cookies (refresh só no cookie, corpo igual ao default)::
+
+            from fastapi.responses import JSONResponse
+            from strider.auth.views import AuthViewSet
+
+            class CookieAuthViewSet(AuthViewSet):
+                user_model = User
+
+                async def finalize_token_response(self, request, payload):
+                    response = JSONResponse(content=payload)
+                    response.set_cookie(
+                        key="refresh_token",
+                        value=payload["refresh_token"],
+                        httponly=True,
+                        secure=True,
+                        samesite="lax",
+                        max_age=self.refresh_token_expire_days * 86400,
+                        path="/",
+                    )
+                    return response
+
+        Exemplo com ``super().login()`` para lógica antes/depois::
+
+            async def login(self, request, db, data=None, **kwargs):
+                # pré-login opcional
+                result = await super().login(request, db, data, **kwargs)
+                # se super() devolver dict, ainda pode embrulhar aqui
+                return result
+
     Exemplo:
         from strider.auth.views import AuthViewSet
         
@@ -343,6 +388,106 @@ class AuthViewSet(ViewSet):
             "token_type": "bearer",
             "expires_in": self.access_token_expire_minutes * 60,
         }
+
+    async def finalize_token_response(
+        self,
+        request: Request,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | Response:
+        """
+        Chamado no fim de ``register``, ``login`` e ``refresh`` com o dicionário
+        tipado como ``TokenResponse``. Por padrão devolve o mesmo ``dict``;
+        sobrescreva para devolver ``JSONResponse`` / ``Response`` e definir cookies,
+        cabeçalhos ou omitir campos sensíveis do corpo JSON.
+        """
+        return payload
+
+    async def perform_user_registration(
+        self,
+        db: "AsyncSession",
+        data: dict[str, Any] | None,
+    ) -> Any:
+        """
+        Executa validação + criação de utilizador. Não faz ``commit``.
+
+        Sobrescreva para anexar lógica (ex.: perfil predefinido) e chame
+        ``return await super().perform_user_registration(db, data)``.
+        """
+        User = self._get_user_model()
+        schema = self._get_register_schema()
+        validated = schema.model_validate(data)
+
+        existing = await User.get_by_email(validated.email, db)
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail="User with this email already exists",
+            )
+
+        extra_field_names = self.extra_register_fields or self._get_extra_field_names()
+        extra_fields: dict[str, Any] = {}
+        for field_name in extra_field_names:
+            value = getattr(validated, field_name, None)
+            if value is not None:
+                extra_fields[field_name] = value
+
+        return await User.create_user(
+            email=validated.email,
+            password=validated.password,
+            db=db,
+            **extra_fields,
+        )
+
+    async def authenticate_login_user(
+        self,
+        db: "AsyncSession",
+        data: dict[str, Any] | None,
+    ) -> Any:
+        """
+        Valida o corpo com ``login_schema`` e autentica. Não faz ``commit``.
+
+        Levanta ``HTTPException(401)`` se as credenciais forem inválidas.
+        """
+        User = self._get_user_model()
+        validated = self.login_schema.model_validate(data)
+        user = await User.authenticate(
+            email=validated.email,
+            password=validated.password,
+            db=db,
+        )
+        if user is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid email or password",
+            )
+        return user
+
+    async def resolve_user_for_refresh(
+        self,
+        db: "AsyncSession",
+        data: dict[str, Any] | None,
+    ) -> Any:
+        """
+        Valida ``refresh_token`` no corpo e carrega o utilizador ativo.
+        Levanta ``HTTPException(401)`` se o token ou utilizador forem inválidos.
+        """
+        User = self._get_user_model()
+        validated = RefreshTokenInput.model_validate(data)
+        payload = verify_token(validated.refresh_token, token_type="refresh")
+        if payload is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired refresh token",
+            )
+        user_id_str = payload.get("sub")
+        user_id = self._convert_user_id(user_id_str, User)
+        user = await User.objects.using(db).filter(id=user_id).first()
+        if user is None or not user.is_active:
+            raise HTTPException(
+                status_code=401,
+                detail="User not found or inactive",
+            )
+        return user
     
     def _convert_user_id(self, user_id: str, User: type) -> Any:
         """
@@ -387,7 +532,7 @@ class AuthViewSet(ViewSet):
         db: "AsyncSession",
         data: dict[str, Any] | None = None,
         **kwargs,
-    ) -> dict:
+    ) -> dict[str, Any] | Response:
         """
         Register a new user.
         
@@ -395,43 +540,10 @@ class AuthViewSet(ViewSet):
         
         Returns tokens on successful registration.
         """
-        User = self._get_user_model()
-        
-        # Bug #5 Fix: Use dynamic schema that includes extra fields
-        schema = self._get_register_schema()
-        validated = schema.model_validate(data)
-        
-        # Check if user exists
-        existing = await User.get_by_email(validated.email, db)
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail="User with this email already exists"
-            )
-        
-        # Extract extra fields for user creation
-        # Auto-detect from schema if extra_register_fields not explicitly defined
-        extra_field_names = self.extra_register_fields or self._get_extra_field_names()
-        
-        extra_fields = {}
-        for field_name in extra_field_names:
-            value = getattr(validated, field_name, None)
-            if value is not None:
-                extra_fields[field_name] = value
-        
-        # Create user with extra fields
-        user = await User.create_user(
-            email=validated.email,
-            password=validated.password,
-            db=db,
-            **extra_fields,
-        )
-        
-        # Commit the transaction
+        user = await self.perform_user_registration(db, data)
         await db.commit()
-        
-        # Return tokens
-        return self._create_tokens(user)
+        payload = self._create_tokens(user)
+        return await self.finalize_token_response(request, payload)
     
     @action(
         methods=["POST"], detail=False, permission_classes=[AllowAny],
@@ -443,35 +555,16 @@ class AuthViewSet(ViewSet):
         db: "AsyncSession",
         data: dict[str, Any] | None = None,
         **kwargs,
-    ) -> dict:
+    ) -> dict[str, Any] | Response:
         """
         Login with email and password.
         
         Returns access and refresh tokens.
         """
-        User = self._get_user_model()
-        
-        # Validate input
-        validated = self.login_schema.model_validate(data)
-        
-        # Authenticate
-        user = await User.authenticate(
-            email=validated.email,
-            password=validated.password,
-            db=db,
-        )
-        
-        if user is None:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid email or password"
-            )
-        
-        # Commit any changes (last_login update)
+        user = await self.authenticate_login_user(db, data)
         await db.commit()
-        
-        # Return tokens
-        return self._create_tokens(user)
+        payload = self._create_tokens(user)
+        return await self.finalize_token_response(request, payload)
     
     @action(
         methods=["POST"], detail=False, permission_classes=[AllowAny],
@@ -483,39 +576,15 @@ class AuthViewSet(ViewSet):
         db: "AsyncSession",
         data: dict[str, Any] | None = None,
         **kwargs,
-    ) -> dict:
+    ) -> dict[str, Any] | Response:
         """
         Refresh access token using refresh token.
         
         Bug #7 Fix: Now correctly handles UUID user IDs.
         """
-        User = self._get_user_model()
-        
-        # Validate input
-        validated = RefreshTokenInput.model_validate(data)
-        
-        # Verify refresh token
-        payload = verify_token(validated.refresh_token, token_type="refresh")
-        if payload is None:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid or expired refresh token"
-            )
-        
-        # Bug #7 Fix: Convert user_id to correct type
-        user_id_str = payload.get("sub")
-        user_id = self._convert_user_id(user_id_str, User)
-        
-        user = await User.objects.using(db).filter(id=user_id).first()
-        
-        if user is None or not user.is_active:
-            raise HTTPException(
-                status_code=401,
-                detail="User not found or inactive"
-            )
-        
-        # Return new tokens
-        return self._create_tokens(user)
+        user = await self.resolve_user_for_refresh(db, data)
+        payload = self._create_tokens(user)
+        return await self.finalize_token_response(request, payload)
     
     @action(
         methods=["GET"], detail=False, permission_classes=[IsAuthenticated],

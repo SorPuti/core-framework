@@ -190,7 +190,9 @@ app = StrideApp(
 | POST | /auth/register | Criar conta |
 | POST | /auth/refresh | Renovar access token |
 | GET | /auth/me | Obter usuário atual |
-| POST | /auth/logout | Invalidar tokens |
+| POST | /auth/change-password | Alterar senha (autenticado) |
+
+> **Nota:** O `AuthViewSet` padrão não expõe `/auth/logout`. Logout com cookies costuma ser um `POST` que limpa cookies (podes acrescentar com `@action` ou uma rota à parte).
 
 ### Login
 
@@ -200,19 +202,18 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   -d '{"email": "user@example.com", "password": "secret123"}'
 ```
 
-Resposta:
+Resposta (schema `TokenResponse` padrão):
 
 ```json
 {
   "access_token": "eyJ...",
   "refresh_token": "eyJ...",
   "token_type": "bearer",
-  "user": {
-    "id": 1,
-    "email": "user@example.com"
-  }
+  "expires_in": 1800
 }
 ```
+
+Para devolver também o perfil do utilizador, estende `finalize_token_response` ou acrescenta um `@action` dedicado — não confundir com o contrato JSON padrão do login.
 
 ### Register
 
@@ -313,31 +314,156 @@ class AppSettings(Settings):
     auth_password_require_special: bool = True
 ```
 
-## AuthViewSet Customizado
+## AuthViewSet: hooks, cookies e respostas HTTP
+
+O `AuthViewSet` expõe **pontos de extensão** para personalizar o fluxo sem duplicar validação de passwords, emissão de JWT ou verificação de refresh. O caso mais comum é **enviar o refresh token num cookie HttpOnly** e manter o access token no corpo JSON (ou só em memória no cliente).
+
+### Tabela de extensão
+
+| Hook / método | Momento | Uso típico |
+|---------------|---------|------------|
+| `finalize_token_response(request, payload)` | Depois de `register`, `login` e `refresh` | Cookies (`Set-Cookie`), remover campos sensíveis do JSON, cabeçalhos de segurança, `JSONResponse` custom |
+| `perform_user_registration(db, data)` | Registo: antes do `commit` | Dados extra, convites, tenant default; chamar `super()` para a lógica base |
+| `authenticate_login_user(db, data)` | Login: antes do `commit` | Auditoria, bloqueio por IP, 2FA antes de emitir tokens |
+| `resolve_user_for_refresh(db, data)` | Refresh: validação do refresh token | Trocar fonte do token (ex.: ler também de cookie — ver abaixo) |
+
+Por omissão, `finalize_token_response` **devolve o mesmo `dict`** (`TokenResponse`). Se devolveres uma instância de `starlette.responses.Response` (por exemplo `JSONResponse`), o FastAPI usa essa resposta **tal como está** (incluindo cookies).
+
+### Exemplo seguro: refresh token em cookie HttpOnly
+
+Princípios:
+
+- **`HttpOnly`**: o JavaScript da página não lê o cookie (mitiga roubo via XSS).
+- **`Secure`**: só HTTPS em produção.
+- **`SameSite`**: `lax` costuma ser o equilíbrio certo para SPAs no mesmo site; `strict` é mais restritivo.
+- **`Path`**: restringe onde o browser envia o cookie (ex.: só rotas de auth).
+- **`max_age`**: alinha com `refresh_token_expire_days` (e com o TTL real do JWT de refresh).
 
 ```python
+# src/apps/users/views.py
+import os
+
+from fastapi.responses import JSONResponse
 from strider.auth import AuthViewSet
-from strider import action
+
+
+class AppAuthViewSet(AuthViewSet):
+    user_model = User  # o teu modelo
+
+    async def finalize_token_response(self, request, payload):
+        body = dict(payload)
+        response = JSONResponse(content=body)
+
+        is_prod = os.environ.get("ENV", "").lower() == "production"
+        response.set_cookie(
+            key="refresh_token",
+            value=payload["refresh_token"],
+            httponly=True,
+            secure=is_prod,
+            samesite="lax",
+            max_age=self.refresh_token_expire_days * 86400,
+            path="/api/v1/auth",  # ajusta ao prefixo real das rotas de auth
+        )
+        return response
+```
+
+**Produção:** usa sempre `secure=True` atrás de HTTPS. Em desenvolvimento local (HTTP), `secure=False` é inevitável para o browser aceitar o cookie; limita isso a `DEBUG` / ambiente não produtivo.
+
+### Remover o refresh do corpo JSON (só cookie)
+
+Se o cliente não deve ver o refresh token no JSON:
+
+```python
+async def finalize_token_response(self, request, payload):
+    body = {k: v for k, v in payload.items() if k != "refresh_token"}
+    response = JSONResponse(content=body)
+    response.set_cookie(
+        key="refresh_token",
+        value=payload["refresh_token"],
+        httponly=True,
+        secure=True,  # produção
+        samesite="lax",
+        max_age=self.refresh_token_expire_days * 86400,
+        path="/api/v1/auth",
+    )
+    return response
+```
+
+**Importante:** o endpoint `POST /auth/refresh` continua a esperar `RefreshTokenInput` no **body** por omissão. Se passares a enviar o refresh **só por cookie**, tens de **sobrescrever `refresh`** (e/ou `resolve_user_for_refresh`) para ler o token do cookie e montar o `data` esperado, ou alterar o schema da action. Mantém uma única fonte de verdade e documenta o contrato para o frontend.
+
+### Encadeamento com `super().login()`
+
+Útil para lógica antes ou depois do login **sem** reimplementar passwords:
+
+```python
+class AuditedAuthViewSet(AuthViewSet):
+    user_model = User
+
+    async def login(self, request, db, data=None, **kwargs):
+        # Pré-login: rate limit, logging, etc.
+        result = await super().login(request, db, data, **kwargs)
+        # Pós-login: se result for dict, ainda podes embrulhar em Response aqui
+        return result
+```
+
+Se sobrescreveres **apenas** `finalize_token_response`, normalmente **não precisas** de tocar em `login`/`register`/`refresh`.
+
+### `perform_user_registration` e `authenticate_login_user`
+
+```python
+class AuthWithProfile(AuthViewSet):
+    user_model = User
+
+    async def perform_user_registration(self, db, data):
+        user = await super().perform_user_registration(db, data)
+        # ex.: criar perfil default, enviar email assíncrono (job), etc.
+        return user
+```
+
+```python
+class AuthWithAudit(AuthViewSet):
+    user_model = User
+
+    async def authenticate_login_user(self, db, data):
+        user = await super().authenticate_login_user(db, data)
+        # ex.: registar último login, geolocalização consentida
+        return user
+```
+
+Lembra-te: `register` e `login` fazem `await db.commit()` **depois** destes métodos; qualquer alteração no `user` que deva persistir pode ser feita antes do `commit` no fluxo normal ou com flush explícito se necessário.
+
+### Boas práticas de segurança (resumo)
+
+1. **Access token**: TTL curto (já configurável em `access_token_expire_minutes`). Evita guardá-lo em cookie sem um plano claro para CSRF; muitas SPAs mantêm-no em memória e renovam com refresh.
+2. **Refresh token**: prefere **HttpOnly cookie** + **não** expor em `localStorage`. Rotação de refresh (one-time use) é uma melhoria forte em produção — hoje é responsabilidade da tua app se quiseres esse nível.
+3. **`Secure` + HTTPS** em produção; nunca reutilizar cookies sensíveis entre ambientes sem `domain`/`path` conscientes.
+4. **CORS**: com cookies, o browser envia credenciais só se o fetch usar `credentials: "include"` e o servidor permitir origem **concreta** com `allow_credentials=True` (evita `*` com credenciais).
+5. **SameSite**: `none` só com `Secure` e só quando precisas de cross-site intencional (ex.: subdomínios ou domínios diferentes); avalia CSRF extra.
+6. **OpenAPI / Swagger**: o contrato documentado pode continuar a mostrar `TokenResponse` completo; respostas reais que removem campos ou usam cookies devem estar alinhadas com o que o frontend implementa.
+
+### Antipadrões
+
+- Refresh token em **`localStorage`** ou **`sessionStorage`** (acessível a XSS).
+- **`secure=False`** em produção.
+- Cookie de refresh com **`path="/"`** sem necessidade (superfície de envio maior).
+- Esquecer que **`JSONResponse(content=dict)`** deve conter apenas tipos JSON-serializáveis (o payload de tokens já cumpre).
+
+### AuthViewSet: ações extra (`@action`)
+
+O `AuthViewSet` já inclui `change_password`. Para fluxos como *forgot password*, acrescenta métodos com `@action` (ver [ViewSets](04-viewsets.md)):
+
+```python
+from strider import AuthViewSet, action
+from strider.permissions import AllowAny
+
 
 class CustomAuthViewSet(AuthViewSet):
-    
-    @action(detail=False, methods=["POST"])
-    async def change_password(self, request) -> dict:
-        user = request.user
-        data = await request.json()
-        
-        if not user.check_password(data["old_password"]):
-            raise HTTPException(400, "Senha incorreta")
-        
-        user.set_password(data["new_password"])
-        await user.save()
-        return {"status": "ok"}
-    
-    @action(detail=False, methods=["POST"])
-    async def forgot_password(self, request) -> dict:
-        data = await request.json()
-        # Implementar lógica de reset
-        return {"status": "email enviado"}
+    user_model = User
+
+    @action(methods=["POST"], detail=False, permission_classes=[AllowAny])
+    async def forgot_password(self, request, db, data=None, **kwargs) -> dict:
+        # Validar email, enfileirar email, rate limit
+        return {"status": "ok", "message": "Se existir conta, enviámos instruções."}
 ```
 
 ## Middleware
