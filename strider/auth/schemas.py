@@ -17,11 +17,9 @@ Example:
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import EmailStr, field_validator
 
-from strider.serializers import InputSchema, OutputSchema
+from strider.serializers import InputSchema, OrmPrimaryKey, OutputSchema
 
 
 # =============================================================================
@@ -109,7 +107,8 @@ class BaseUserOutput(OutputSchema):
     
     For UUID users, the id will be automatically serialized to string.
     """
-    id: int | str  # Supports both INTEGER and UUID (serialized as string)
+
+    id: OrmPrimaryKey
     email: str
     is_active: bool = True
     is_staff: bool = False

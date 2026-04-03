@@ -310,3 +310,25 @@ class TestAuthViewSetExtraFields:
         assert "phone" in schema.model_fields
         assert "email" in schema.model_fields
         assert "password" in schema.model_fields
+
+
+class TestBaseUserOutputUuidPk:
+    """BaseUserOutput deve aceitar uuid.UUID vindo do ORM (evita 422 em GET /auth/me)."""
+
+    def test_model_validate_accepts_uuid_pk(self):
+        from uuid import uuid4
+
+        from strider.auth.schemas import BaseUserOutput
+
+        uid = uuid4()
+
+        class FakeUser:
+            id = uid
+            email = "user@example.com"
+            is_active = True
+            is_staff = False
+            is_superuser = False
+
+        out = BaseUserOutput.model_validate(FakeUser())
+        assert out.id == str(uid)
+        assert out.email == "user@example.com"

@@ -181,3 +181,24 @@ def test_output_schema_from_orm_list():
     assert len(outputs) == 2
     assert outputs[0].id == 1
     assert outputs[1].id == 2
+
+
+def test_orm_primary_key_accepts_uuid_from_orm():
+    """OrmPrimaryKey: uuid.UUID na PK do ORM vira str (evita 422 em responses)."""
+    from uuid import uuid4
+
+    from strider.serializers import OrmPrimaryKey, OutputSchema
+
+    class RowOut(OutputSchema):
+        id: OrmPrimaryKey
+        name: str
+
+    uid = uuid4()
+
+    class Row:
+        id = uid
+        name = "x"
+
+    out = RowOut.model_validate(Row())
+    assert out.id == str(uid)
+    assert out.name == "x"

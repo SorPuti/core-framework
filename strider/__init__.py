@@ -244,6 +244,7 @@ from strider.routing import Router, AutoRouter
 from strider.serializers import (
     InputSchema,
     OutputSchema,
+    OrmPrimaryKey,
     Serializer,
     ModelSerializer,
     UnifiedModelSerializer,
@@ -331,7 +332,7 @@ from strider.views import (
     action,
 )
 
-__version__ = "0.18.65"
+__version__ = "0.18.66"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
@@ -347,6 +348,7 @@ __all__ = [
     # Serializers
     "InputSchema",
     "OutputSchema",
+    "OrmPrimaryKey",
     "Serializer",
     "ModelSerializer",
     "UnifiedModelSerializer",

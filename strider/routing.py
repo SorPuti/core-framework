@@ -31,6 +31,7 @@ from strider.openapi_examples import build_schema_example, build_response_exampl
 from strider.serializers import (
     InputSchema,
     OutputSchema,
+    OrmPrimaryKey,
     PaginatedResponse,
     DeleteResponse,
     ValidationErrorResponse,
@@ -113,7 +114,7 @@ def _build_fallback_schemas_from_model(
         out = create_model(
             f"{getattr(model, '__name__', 'Model')}OutputFallback",
             __base__=OutputSchema,
-            id=(int, ...),
+            id=(OrmPrimaryKey, ...),
             data=(dict[str, Any], ...),
         )
         _fallback_schemas_cache[model] = (inp, out)
@@ -124,14 +125,18 @@ def _build_fallback_schemas_from_model(
     in_fields: dict[str, Any] = {}
 
     for col in table.columns:
-        py_type = _openapi_python_type_for_column(col)
-        ann = py_type if not col.nullable else Optional[py_type]
+        if getattr(col, "primary_key", False):
+            out_ann = OrmPrimaryKey if not col.nullable else Optional[OrmPrimaryKey]
+        else:
+            py_type = _openapi_python_type_for_column(col)
+            out_ann = py_type if not col.nullable else Optional[py_type]
         default = None if col.nullable else ...
-        out_fields[col.name] = (ann, default)
+        out_fields[col.name] = (out_ann, default)
 
         # Input: skip PK and autoincrement
         if getattr(col, "primary_key", False) or getattr(col, "autoincrement", False):
             continue
+        py_type = _openapi_python_type_for_column(col)
         in_ann = py_type if not col.nullable and col.default is None and col.server_default is None else Optional[py_type]
         in_default = None if (col.nullable or col.default is not None or col.server_default is not None) else ...
         in_fields[col.name] = (in_ann, in_default)

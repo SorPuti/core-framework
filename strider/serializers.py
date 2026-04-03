@@ -14,7 +14,7 @@ Características:
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Generic, TypeVar, get_type_hints, Callable, Optional
+from typing import Annotated, Any, ClassVar, Generic, TypeVar, get_type_hints, Callable, Optional
 from collections.abc import Sequence
 from functools import wraps
 
@@ -25,6 +25,29 @@ from pydantic.functional_validators import BeforeValidator, AfterValidator
 ModelT = TypeVar("ModelT")
 InputT = TypeVar("InputT", bound="InputSchema")
 OutputT = TypeVar("OutputT", bound="OutputSchema")
+
+
+def _coerce_orm_primary_key_value(v: Any) -> Any:
+    """
+    Normaliza uuid.UUID vindo do ORM para str antes da validação Pydantic.
+
+    Schemas com ``id: int | str`` (ou só ``int``) falham em ``model_validate(orm_obj)``
+    quando a PK é UUID: a união não coage UUID automaticamente, o que vira 422
+    com o handler global de ValidationError do StrideApp.
+    """
+    from uuid import UUID
+
+    if isinstance(v, UUID):
+        return str(v)
+    return v
+
+
+OrmPrimaryKey = Annotated[
+    int | str,
+    BeforeValidator(_coerce_orm_primary_key_value),
+]
+"""Tipo de saída recomendado para PK ao serializar ORM (int, str ou UUID→str)."""
+
 
 # Mapa tipo SQLAlchemy -> tipo Python (para schemas gerados a partir do model)
 _SA_TYPE_MAP: dict[str, type] = {
@@ -88,10 +111,13 @@ def build_schemas_from_model(
     in_fields: dict[str, tuple[Any, Any]] = {}
 
     for col_name, col in cols:
-        py_type = _py_type_for_column(col)
-        ann = py_type if not col.nullable else Optional[py_type]
+        if getattr(col, "primary_key", False):
+            out_ann = OrmPrimaryKey if not col.nullable else Optional[OrmPrimaryKey]
+        else:
+            py_type = _py_type_for_column(col)
+            out_ann = py_type if not col.nullable else Optional[py_type]
         default = None if col.nullable else ...
-        out_fields[col_name] = (ann, default)
+        out_fields[col_name] = (out_ann, default)
 
         if col_name in read_only:
             continue
@@ -782,6 +808,7 @@ def validate_model(mode: str = "after"):
 __all__ = [
     "InputSchema",
     "OutputSchema",
+    "OrmPrimaryKey",
     "Serializer",
     "ModelSerializer",
     "UnifiedModelSerializer",
