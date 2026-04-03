@@ -24,7 +24,7 @@ Cookies / resposta HTTP: ver ``AuthViewSet.finalize_token_response`` e métodos
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, ClassVar
 from uuid import UUID
 
 from fastapi import Request, HTTPException
@@ -35,6 +35,7 @@ from strider.views import ViewSet, action
 from strider.permissions import AllowAny, IsAuthenticated
 from strider.auth.tokens import create_access_token, create_refresh_token, verify_token
 from strider.auth.schemas import (
+    AUTH_USER_API_RESPONSE_BLOCKLIST,
     BaseRegisterInput,
     BaseLoginInput,
     RefreshTokenInput,
@@ -54,10 +55,19 @@ class AuthViewSet(ViewSet):
     
     Atributos configuráveis:
         user_model: Classe do modelo User (obrigatório)
-        register_schema: Schema de registro customizado
+        register_schema: Schema Pydantic do body de ``POST /auth/register`` (prioridade máxima)
+        input_schema: Atalho estilo ``ModelViewSet``: se definires **só** isto (sem mudar
+            ``register_schema`` de ``BaseRegisterInput``), o registo e o OpenAPI usam este
+            schema. Não precisas de ``output_schema`` — login/register continuam com
+            ``TokenResponse``.
         login_schema: Schema de login customizado  
         user_output_schema: Schema de output do usuário
-        extra_register_fields: Campos extras aceitos no registro
+        extra_register_fields: Campos extras no schema dinâmico de registo
+        register_block_privilege_extras: Se True (default), ``is_superuser``/``is_staff``
+            só vão para ``create_user`` se estiverem declarados no schema de registo
+        user_response_secret_keys: Nomes extra a nunca expor no JSON de ``/auth/me``
+            (unido a ``AUTH_USER_API_RESPONSE_BLOCKLIST``: ``password``,
+            ``password_hash``, ``hashed_password``).
         access_token_expire_minutes: Expiração do access token (default: 30)
         refresh_token_expire_days: Expiração do refresh token (default: 7)
     
@@ -129,6 +139,12 @@ class AuthViewSet(ViewSet):
     
     # Bug #5 Fix: Extra fields to accept on registration
     extra_register_fields: list[str] = []
+
+    #: Chaves removidas do dict de ``/auth/me`` além de ``AUTH_USER_API_RESPONSE_BLOCKLIST``.
+    user_response_secret_keys: ClassVar[frozenset[str]] = frozenset()
+
+    #: Impede escalação de privilégio via JSON extra não documentado no schema.
+    register_block_privilege_extras: ClassVar[bool] = True
     
     # ViewSet config
     tags: list[str] = ["auth"]
@@ -191,10 +207,23 @@ class AuthViewSet(ViewSet):
         # Try to get from global config
         from strider.auth.models import get_user_model
         return get_user_model()
+
+    def _effective_user_response_blocklist(self) -> frozenset[str]:
+        extra = getattr(type(self), "user_response_secret_keys", None) or frozenset()
+        return AUTH_USER_API_RESPONSE_BLOCKLIST | frozenset(extra)
+
+    def _serialize_user_for_public_response(self, user: Any) -> dict[str, Any]:
+        """
+        Serializa o utilizador para respostas públicas (ex.: GET /auth/me),
+        removendo hashes e passwords mesmo que ``user_output_schema`` os exponha por engano.
+        """
+        data = self.user_output_schema.model_validate(user).model_dump()
+        block = self._effective_user_response_blocklist()
+        return {k: v for k, v in data.items() if k not in block}
     
     def _get_register_schema(self) -> type:
         """
-        Get registration schema with STRICT extra fields support.
+        Resolve o schema Pydantic do body de registo (campos extra dinâmicos + ``extra="allow"`` no fluxo default).
         
         This method validates against the model to determine if fields are
         required (NOT NULL) or optional (nullable).
@@ -205,6 +234,15 @@ class AuthViewSet(ViewSet):
         
         Returns:
             Pydantic schema class for registration
+
+        Ordem de resolução:
+            1. ``register_schema`` se diferente de ``BaseRegisterInput``
+            2. ``input_schema`` da classe (atalho igual ao ``ModelViewSet``)
+            3. Schema dinâmico com ``extra_register_fields``
+            4. ``BaseRegisterInput``
+
+        Se definires ``input_schema`` e ``extra_register_fields`` ao mesmo tempo,
+        ``input_schema`` prevalece (os extras da lista são ignorados para o schema).
         """
         import logging
         import warnings
@@ -213,6 +251,11 @@ class AuthViewSet(ViewSet):
         # If register_schema was explicitly overridden, use it
         if self.register_schema != BaseRegisterInput:
             return self.register_schema
+
+        # Mesma convenção que ViewSet/ModelViewSet: só ``input_schema`` para o body de register
+        cls_input = getattr(type(self), "input_schema", None)
+        if cls_input is not None:
+            return cls_input
         
         # If no extra fields, use base schema
         if not self.extra_register_fields:
@@ -275,10 +318,10 @@ class AuthViewSet(ViewSet):
             **extra_fields,
         )
         
-        # Allow extra fields (ignore unknown)
+        # Alinhar com BaseRegisterInput: corpo pode trazer colunas extra (filtradas no ORM).
         self._dynamic_register_schema.model_config = {
             **BaseRegisterInput.model_config,
-            "extra": "ignore",
+            "extra": "allow",
         }
         
         return self._dynamic_register_schema
@@ -366,6 +409,65 @@ class AuthViewSet(ViewSet):
         extra = schema_fields - base_fields
         
         return list(extra)
+
+    _REGISTER_CREATE_USER_RESERVED: frozenset[str] = frozenset({
+        "email",
+        "password",
+        "password_hash",
+    })
+    _REGISTER_PRIVILEGE_KEYS: frozenset[str] = frozenset({"is_superuser", "is_staff"})
+
+    def _register_kwargs_for_create_user(self, User: type, validated: Any) -> dict[str, Any]:
+        """
+        Monta ``**kwargs`` para ``User.create_user`` a partir do body validado.
+
+        - Só inclui chaves que existem como colunas no mapper do ``User`` (não relações).
+        - Exclui PK, ``email``, ``password`` e ``password_hash``.
+        - Com ``register_block_privilege_extras`` (default True), ``is_superuser`` e
+          ``is_staff`` vindos só como extra JSON são ignorados a menos que declarados
+          no schema de registo.
+
+        Se ``inspect(User)`` falhar, cai no comportamento anterior: apenas campos listados
+        em ``extra_register_fields`` ou inferidos por ``_get_extra_field_names()``.
+        """
+        schema_cls = type(validated)
+        declared = set(schema_cls.model_fields.keys())
+        dump = validated.model_dump(exclude_unset=True)
+        reserved = self._REGISTER_CREATE_USER_RESERVED
+        block_priv = bool(getattr(type(self), "register_block_privilege_extras", True))
+        out: dict[str, Any] = {}
+
+        try:
+            from sqlalchemy import inspect as sa_inspect
+
+            mapper = sa_inspect(User)
+            pk_keys = {c.key for c in mapper.columns if c.primary_key}
+            col_keys = {c.key for c in mapper.columns}
+        except Exception:
+            names = list(self.extra_register_fields) or self._get_extra_field_names()
+            for field_name in names:
+                if field_name in reserved:
+                    continue
+                if field_name not in dump:
+                    continue
+                out[field_name] = dump[field_name]
+            return out
+
+        for key, value in dump.items():
+            if key in reserved:
+                continue
+            if key not in col_keys:
+                continue
+            if key in pk_keys:
+                continue
+            if (
+                block_priv
+                and key in self._REGISTER_PRIVILEGE_KEYS
+                and key not in declared
+            ):
+                continue
+            out[key] = value
+        return out
     
     def _create_tokens(self, user) -> dict:
         """
@@ -424,12 +526,7 @@ class AuthViewSet(ViewSet):
                 detail="User with this email already exists",
             )
 
-        extra_field_names = self.extra_register_fields or self._get_extra_field_names()
-        extra_fields: dict[str, Any] = {}
-        for field_name in extra_field_names:
-            value = getattr(validated, field_name, None)
-            if value is not None:
-                extra_fields[field_name] = value
+        extra_fields = self._register_kwargs_for_create_user(User, validated)
 
         return await User.create_user(
             email=validated.email,
@@ -608,12 +705,12 @@ class AuthViewSet(ViewSet):
             # user is an AuthenticatedUser wrapper - get underlying model
             if hasattr(user, "_user"):
                 user = user._user
-            return self.user_output_schema.model_validate(user).model_dump()
+            return self._serialize_user_for_public_response(user)
         
         # Fallback to request.state.user (legacy pattern)
         user = getattr(request.state, "user", None)
         if user is not None:
-            return self.user_output_schema.model_validate(user).model_dump()
+            return self._serialize_user_for_public_response(user)
         
         raise HTTPException(
             status_code=401,

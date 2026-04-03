@@ -105,6 +105,7 @@ from strider.auth.decorators import (
 
 # Schemas
 from strider.auth.schemas import (
+    AUTH_USER_API_RESPONSE_BLOCKLIST,
     BaseRegisterInput,
     BaseLoginInput,
     RefreshTokenInput,
@@ -195,6 +196,7 @@ __all__ = [
     "require_active",
     "login_required",
     # Schemas
+    "AUTH_USER_API_RESPONSE_BLOCKLIST",
     "BaseRegisterInput",
     "BaseLoginInput",
     "RefreshTokenInput",

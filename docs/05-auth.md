@@ -139,7 +139,7 @@ class User(AbstractUser, PermissionsMixin):
     __tablename__ = "users"
     
     # AbstractUser fornece:
-    # - id, email, password (hashed), is_active, is_staff, is_superuser
+    # - id, email, password_hash, is_active, is_staff, is_superuser
     
     # PermissionsMixin fornece:
     # - groups, user_permissions (relacionamentos M2M)
@@ -182,12 +182,39 @@ app = StrideApp(
 )
 ```
 
+### Preset default do CLI
+
+Corresponde ao `urls.py` gerado pelo projeto default do CLI (`core create`, template default): `path("auth", AuthViewSet)` junto de `path("users", UserViewSet)`.
+
+O `src/apps/users/urls.py` gerado costuma registar **ao mesmo tempo** auth e CRUD de utilizadores:
+
+```python
+from strider.urls import path
+from strider.auth import AuthViewSet
+from .views import UserViewSet
+
+urlpatterns = [
+    path("users", UserViewSet),
+    path("auth", AuthViewSet),
+]
+```
+
+Com prefixo de API `/api/v1`:
+
+| Pedido | ViewSet | Resposta típica |
+|--------|---------|------------------|
+| **`POST /api/v1/auth/register`** | `AuthViewSet` | **Tokens** (`TokenResponse`) — registo + JWT para sessão. |
+| **`POST /api/v1/users/`** | `UserViewSet` (ModelViewSet) | **Utilizador** serializado a partir do modelo (outro schema, **sem** `access_token` / `refresh_token`). |
+
+Se no Swagger vês corpo com `id`, `first_name`, etc., mas **sem** tokens, estás em **`POST /users/`**, não em **`POST /auth/register`**.
+
 ## Endpoints
 
 | Método | Path | Descrição |
 |--------|------|-----------|
 | POST | /auth/login | Login, obter tokens |
-| POST | /auth/register | Criar conta |
+| POST | /auth/register | Registo via **AuthViewSet** → resposta = **tokens** (`TokenResponse`) |
+| POST | /users/ | Criar utilizador via **ModelViewSet** (preset) → corpo **≠** register |
 | POST | /auth/refresh | Renovar access token |
 | GET | /auth/me | Obter usuário atual |
 | POST | /auth/change-password | Alterar senha (autenticado) |
@@ -202,7 +229,7 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   -d '{"email": "user@example.com", "password": "secret123"}'
 ```
 
-Resposta (schema `TokenResponse` padrão):
+Resposta: schema **`TokenResponse`**. O campo **`expires_in`** é **sempre** `auth_access_token_expire_minutes * 60` (Settings / atributo do `AuthViewSet`), não um valor fixo na doc — com o default de **30** minutos corresponde a **1800** segundos.
 
 ```json
 {
@@ -215,12 +242,185 @@ Resposta (schema `TokenResponse` padrão):
 
 Para devolver também o perfil do utilizador, estende `finalize_token_response` ou acrescenta um `@action` dedicado — não confundir com o contrato JSON padrão do login.
 
-### Register
+### Register (`POST /auth/register`)
+
+**Apenas** este endpoint no `AuthViewSet` (rotas sob `.../auth/…`, incluindo o preset `path("auth", AuthViewSet)`).
+
+Cria utilizador e devolve **o mesmo formato que o login**: **`TokenResponse`** com `access_token`, `refresh_token`, `token_type`, `expires_in` (com o mesmo cálculo de `expires_in` que em login). O corpo do pedido é validado pelo schema de registo efetivo (`BaseRegisterInput` ou o que definires com `register_schema` / `extra_register_fields`).
+
+> **Não confundir** com **`POST .../users/`** do `UserViewSet` no preset default: esse endpoint é CRUD do modelo e devolve outro JSON (utilizador serializado), **não** tokens. Ver tabela em [Preset default do CLI](#preset-default-do-cli).
+
+#### Input padrão (`BaseRegisterInput`)
+
+Sem customização, o body é exatamente:
+
+| Campo | Tipo | Obrigatório | Regras |
+|--------|------|-------------|--------|
+| `email` | string (formato email) | sim | `EmailStr` (Pydantic) |
+| `password` | string | sim | mínimo **8** caracteres (validador em `BaseRegisterInput`; sobrescreve o método `validate_password` na tua subclasse de schema para regras alinhadas com `Settings` de password) |
+
+#### Chaves extra no JSON (flexível, com filtro no ORM)
+
+O `BaseRegisterInput` usa **`extra="allow"`**: chaves a mais no body **não** geram 422. O `AuthViewSet` constrói os kwargs de `create_user` a partir do JSON validado e **só repassa nomes que existem como colunas** no modelo de utilizador (não relações), excluindo PK, `email`, `password` e `password_hash`. Chaves como `foo` que não são colunas **são ignoradas** para efeitos de persistência.
+
+Por defeito, **`is_superuser` e `is_staff` enviados só como extra** (sem estarem declarados no schema de registo) **não** são repassados ao `create_user` — evita escalação de privilégio via JSON. Declara-os no schema se o teu fluxo de registo os permitir de forma explícita, ou define `register_block_privilege_extras = False` no ViewSet (uso avançado, menos seguro).
+
+```json
+{
+  "email": "new@example.com",
+  "password": "secret12345",
+  "first_name": "Ada",
+  "is_superuser": true
+}
+```
+
+Se o modelo tiver coluna `first_name`, esse valor é aplicado; `is_superuser` no JSON **extra** é omitido (comportamento default acima).
+
+Para **rejeitar** qualquer chave não declarada no schema (422), define o teu `register_schema` com:
+
+```python
+from pydantic import ConfigDict
+from strider.auth.schemas import BaseRegisterInput
+
+class StrictRegisterInput(BaseRegisterInput):
+    model_config = ConfigDict(extra="forbid")
+```
+
+Exemplo mínimo:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email": "new@example.com", "password": "secret123"}'
+  -d '{"email": "new@example.com", "password": "secret12345"}'
+```
+
+Resposta: **igual ao login** — `TokenResponse` (quatro chaves acima). O valor numérico de `expires_in` segue `access_token_expire_minutes` do ViewSet / settings (ex.: 30 min → `1800`).
+
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "bearer",
+  "expires_in": 1800
+}
+```
+
+Se usares `finalize_token_response` (cookies, corpo parcial, etc.), a resposta HTTP pode diferir — o dict **antes** do hook é sempre o de tokens acima.
+
+#### Customizar campos de registo
+
+O runtime usa sempre `AuthViewSet._get_register_schema()`. Os exemplos devem usar **os mesmos nomes de campo** que o schema (**`snake_case`** no JSON).
+
+**Ordem de prioridade:** `register_schema` (se mudares de `BaseRegisterInput`) → **`input_schema`** (atalho) → `extra_register_fields` (schema dinâmico) → `BaseRegisterInput`. Não precisas de definir `output_schema`: **register** continua a responder com **`TokenResponse`**.
+
+**0. Atalho `input_schema` (como no `ModelViewSet`)**
+
+Útil quando queres documentar e validar o body de **`POST /auth/register`** com o mesmo padrão que nos outros ViewSets, **sem** tocar em `register_schema` nem em `output_schema`:
+
+```python
+from strider.auth import AuthViewSet
+from strider.auth.schemas import BaseRegisterInput
+
+class AppRegisterInput(BaseRegisterInput):
+    first_name: str
+    last_name: str | None = None
+
+class AppAuthViewSet(AuthViewSet):
+    user_model = User
+    input_schema = AppRegisterInput
+```
+
+O OpenAPI do registo passa a mostrar estes campos; a resposta mantém-se em tokens (`access_token`, `refresh_token`, …).
+
+> Se definires **ao mesmo tempo** `input_schema` e `extra_register_fields`, o **`input_schema`** manda e a lista de extras **não** compõe outro schema dinâmico.
+
+**1. `register_schema` — subclasse de `BaseRegisterInput`**
+
+Define explicitamente todos os campos aceites no registo (recomendado quando queres validações Pydantic claras e documentação estável).
+
+```python
+# src/apps/users/schemas.py
+from pydantic import EmailStr, field_validator
+from strider.auth.schemas import BaseRegisterInput
+
+class AppRegisterInput(BaseRegisterInput):
+    first_name: str
+    last_name: str | None = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 10:
+            raise ValueError("Password must be at least 10 characters")
+        return v
+
+# src/apps/users/views.py
+from strider.auth import AuthViewSet
+from .models import User
+from .schemas import AppRegisterInput
+
+class AppAuthViewSet(AuthViewSet):
+    user_model = User
+    register_schema = AppRegisterInput
+```
+
+Exemplo de body alinhado com o schema acima:
+
+```json
+{
+  "email": "nova@example.com",
+  "password": "minimo10ch",
+  "first_name": "Ana",
+  "last_name": "Silva"
+}
+```
+
+Não é obrigatório listar `extra_register_fields` quando todos os campos extra estão em `register_schema`: o `AuthViewSet` infere os nomes a passar ao `create_user` a partir do schema.
+
+**2. `extra_register_fields` — lista de nomes de colunas do `User`**
+
+Manténs `BaseRegisterInput` e indicas campos extra do modelo. O framework gera um schema Pydantic **dinâmico** em runtime:
+
+- Coluna **NOT NULL** sem default → campo **obrigatório** no JSON.
+- Coluna nullable ou com default → campo **opcional**.
+- Nome que não exista no modelo → aviso e tipo `str | None` opcional.
+
+```python
+class AppAuthViewSet(AuthViewSet):
+    user_model = User
+    extra_register_fields = ["first_name", "phone"]
+```
+
+Exemplo ilustrativo (ajusta obrigatoriedade ao teu modelo):
+
+```json
+{
+  "email": "nova@example.com",
+  "password": "secret12345",
+  "first_name": "Bruno",
+  "phone": "+351912345678"
+}
+```
+
+#### OpenAPI / Swagger
+
+Ao registar o router, o Stride resolve o schema do `POST /auth/register` na ordem: **`register_schema`** → **`input_schema`** → schema dinâmico de **`extra_register_fields`** (instanciando o ViewSet quando necessário). Se o `user_model` ou settings ainda não estiverem disponíveis nessa fase, a documentação pode cair no mínimo (`email` + `password`) até o ambiente estar completo — o comportamento real da API segue sempre `_get_register_schema()` em cada pedido.
+
+#### Hooks relacionados
+
+- **`perform_user_registration(db, data)`** — ponto para lógica antes do `commit` (mantém o mesmo `data` validado pelo schema de registo).
+- **`finalize_token_response`** — igual ao login/refresh se quiseres cookies também no registo.
+
+### GET `/auth/me` e dados sensíveis
+
+A resposta usa `user_output_schema` (por omissão `BaseUserOutput`) e, **antes de enviar o JSON**, o `AuthViewSet` remove sempre as chaves em `AUTH_USER_API_RESPONSE_BLOCKLIST` (`password`, `password_hash`, `hashed_password`), mesmo que um schema customizado as declare por engano.
+
+Para bloquear mais nomes na tua subclasse:
+
+```python
+class AppAuthViewSet(AuthViewSet):
+    user_model = User
+    user_response_secret_keys = frozenset({"api_secret", "totp_seed"})
 ```
 
 ### Request Autenticado

@@ -296,6 +296,44 @@ def _resolve_schemas(
     return input_schema, output_schema
 
 
+def _resolve_auth_register_openapi_input_schema(
+    viewset_class: type,
+    current: type | None,
+) -> type | None:
+    """
+    Alinha o request body do POST /auth/register no OpenAPI com o schema real.
+
+    Prioridade: ``register_schema`` (se ≠ BaseRegisterInput) → ``input_schema`` do ViewSet
+    → schema dinâmico (``extra_register_fields``) → ``BaseRegisterInput``.
+    """
+    try:
+        from strider.auth.views import AuthViewSet
+        from strider.auth.schemas import BaseRegisterInput
+    except Exception:
+        return current
+    if not issubclass(viewset_class, AuthViewSet):
+        return current
+    reg_schema = getattr(viewset_class, "register_schema", BaseRegisterInput)
+    if reg_schema is not BaseRegisterInput:
+        return reg_schema
+    vs_input = getattr(viewset_class, "input_schema", None)
+    if vs_input is not None:
+        return vs_input
+    extra = getattr(viewset_class, "extra_register_fields", None) or []
+    if not extra:
+        return BaseRegisterInput
+    try:
+        return viewset_class()._get_register_schema()
+    except Exception:
+        logger.debug(
+            "OpenAPI: não foi possível resolver schema dinâmico de register para %s; "
+            "a usar schema decorador.",
+            viewset_class.__name__,
+            exc_info=True,
+        )
+        return current or BaseRegisterInput
+
+
 def _is_dynamic_path_segment(segment: str) -> bool:
     """Return True when segment represents a dynamic parameter."""
     if segment.startswith("{") and segment.endswith("}"):
@@ -1841,6 +1879,12 @@ class Router(APIRouter):
                 action_input_schema = viewset_input_schema
             if action_output_schema is None and viewset_output_schema is not None:
                 action_output_schema = viewset_output_schema
+
+            if name == "register":
+                action_input_schema = _resolve_auth_register_openapi_input_schema(
+                    viewset_class,
+                    action_input_schema,
+                )
 
             # Cria endpoint para cada método HTTP
             for http_method in action_methods:

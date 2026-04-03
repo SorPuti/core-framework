@@ -17,9 +17,16 @@ Example:
 
 from __future__ import annotations
 
-from pydantic import EmailStr, field_validator
+from pydantic import ConfigDict, EmailStr, field_validator
 
 from strider.serializers import InputSchema, OrmPrimaryKey, OutputSchema
+
+# Chaves que o AuthViewSet nunca inclui no JSON de `/auth/me` (defesa em profundidade).
+AUTH_USER_API_RESPONSE_BLOCKLIST: frozenset[str] = frozenset({
+    "password",
+    "password_hash",
+    "hashed_password",
+})
 
 
 # =============================================================================
@@ -30,10 +37,27 @@ class BaseRegisterInput(InputSchema):
     """
     Base schema for user registration.
     
+    Chaves JSON extra são **aceites** (``extra="allow"``): não provocam 422.
+    O ``AuthViewSet`` repassa ao ``create_user`` apenas valores cujo nome corresponde
+    a **colunas** do modelo de utilizador (e não são PK, ``email``, ``password`` ou
+    ``password_hash``). ``is_superuser`` / ``is_staff`` enviados só como extra,
+    sem estarem declarados no schema de registo, são **omitidos** por defeito
+    (ver ``register_block_privilege_extras`` no ViewSet).
+    
+    Para **rejeitar** chaves não declaradas (422), usa uma subclasse com
+    ``model_config = ConfigDict(extra="forbid")``.
+    
     Extend this to add custom fields:
         class RegisterInput(BaseRegisterInput):
             phone: str | None = None
     """
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        validate_default=True,
+        extra="allow",
+        from_attributes=True,
+    )
+
     email: EmailStr
     password: str
     
@@ -126,6 +150,7 @@ class MessageResponse(OutputSchema):
 # =============================================================================
 
 __all__ = [
+    "AUTH_USER_API_RESPONSE_BLOCKLIST",
     # Input
     "BaseRegisterInput",
     "BaseLoginInput",

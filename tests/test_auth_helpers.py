@@ -334,6 +334,151 @@ class TestBaseUserOutputUuidPk:
         assert out.email == "user@example.com"
 
 
+class TestAuthViewSetMeStripsSecrets:
+    """GET /auth/me não expõe password_hash mesmo com schema defeituoso."""
+
+    def test_serialize_user_strips_blocklisted_keys(self):
+        from strider.auth.schemas import BaseUserOutput
+        from strider.auth.views import AuthViewSet
+        from strider.serializers import OutputSchema
+
+        class LeakyOutput(BaseUserOutput):
+            password_hash: str
+
+        class VS(AuthViewSet):
+            user_output_schema = LeakyOutput
+
+        vs = VS()
+
+        class FakeUser:
+            id = 1
+            email = "a@b.com"
+            is_active = True
+            is_staff = False
+            is_superuser = False
+            password_hash = "pbkdf2$should_not_leak"
+
+        out = vs._serialize_user_for_public_response(FakeUser())
+        assert "password_hash" not in out
+        assert "password" not in out
+        assert out["email"] == "a@b.com"
+
+
+class TestAuthViewSetInputSchemaAlias:
+    """input_schema no AuthViewSet = mesmo papel que register_schema para /auth/register."""
+
+    def test_get_register_schema_uses_class_input_schema(self):
+        from strider.auth.schemas import BaseRegisterInput
+        from strider.auth.views import AuthViewSet
+
+        class AppReg(BaseRegisterInput):
+            nickname: str | None = None
+
+        class V(AuthViewSet):
+            input_schema = AppReg
+
+        vs = V()
+        assert vs._get_register_schema() is AppReg
+
+
+class TestRegisterInputFlexibleExtraKeys:
+    """BaseRegisterInput aceita extras; create_user recebe só colunas válidas."""
+
+    def test_base_register_input_keeps_unknown_keys_in_dump(self):
+        from strider.auth.schemas import BaseRegisterInput
+
+        v = BaseRegisterInput.model_validate(
+            {
+                "email": "u@example.com",
+                "password": "12345678",
+                "is_superuser": True,
+                "noise": "x",
+            }
+        )
+        assert v.email == "u@example.com"
+        assert v.password == "12345678"
+        d = v.model_dump()
+        assert d["is_superuser"] is True
+        assert d["noise"] == "x"
+
+    def test_register_kwargs_column_filter_and_privilege_block(self):
+        from unittest.mock import MagicMock, patch
+
+        from strider.auth.schemas import BaseRegisterInput
+        from strider.auth.views import AuthViewSet
+
+        def _col(key: str, *, pk: bool = False) -> MagicMock:
+            c = MagicMock()
+            c.key = key
+            c.primary_key = pk
+            return c
+
+        mock_mapper = MagicMock()
+        mock_mapper.columns = [
+            _col("id", pk=True),
+            _col("email"),
+            _col("first_name"),
+            _col("is_superuser"),
+        ]
+
+        FakeUser = type("FakeUser", (), {"__name__": "FakeUser"})
+        vs = AuthViewSet()
+        v = BaseRegisterInput.model_validate(
+            {
+                "email": "u@example.com",
+                "password": "12345678",
+                "first_name": "A",
+                "is_superuser": True,
+                "noise": "x",
+            }
+        )
+
+        with patch("sqlalchemy.inspect", return_value=mock_mapper):
+            kwargs = vs._register_kwargs_for_create_user(FakeUser, v)
+
+        assert kwargs == {"first_name": "A"}
+        assert "is_superuser" not in kwargs
+        assert "noise" not in kwargs
+
+    def test_register_kwargs_allows_privilege_when_declared_on_schema(self):
+        from unittest.mock import MagicMock, patch
+
+        from pydantic import create_model
+
+        from strider.auth.schemas import BaseRegisterInput
+        from strider.auth.views import AuthViewSet
+
+        Reg = create_model(
+            "Reg",
+            __base__=BaseRegisterInput,
+            is_superuser=(bool, False),
+        )
+
+        def _col(key: str, *, pk: bool = False) -> MagicMock:
+            c = MagicMock()
+            c.key = key
+            c.primary_key = pk
+            return c
+
+        mock_mapper = MagicMock()
+        mock_mapper.columns = [_col("id", pk=True), _col("is_superuser")]
+
+        FakeUser = type("FakeUser", (), {"__name__": "FakeUser"})
+        vs = AuthViewSet()
+        v = Reg.model_validate(
+            {
+                "email": "u@example.com",
+                "password": "12345678",
+                "is_superuser": True,
+            }
+        )
+
+        with patch("sqlalchemy.inspect", return_value=mock_mapper):
+            kwargs = vs._register_kwargs_for_create_user(FakeUser, v)
+
+        assert kwargs == {"is_superuser": True}
+
+
 class TestAuthViewSetTokenResponseHooks:
     """finalize_token_response e encadeamento com super().login()."""
 
