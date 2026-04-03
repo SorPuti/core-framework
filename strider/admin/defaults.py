@@ -108,29 +108,27 @@ def register_core_models(site: "AdminSite") -> None:
         from strider.auth.models import get_user_model
         User = get_user_model()
         
-        # Adapta campos do UserAdmin ao modelo real
-        user_admin = UserAdmin()
-        # Verifica quais campos existem no modelo custom
+        # Adapta campos do UserAdmin ao modelo real.
+        # Importante: mutar uma instância e registar a classe não aplica nada — o site
+        # faz ModelAdmin() de novo. Usamos subclasse com atributos de classe filtrados.
         if hasattr(User, "__table__"):
             columns = [col.name for col in User.__table__.columns]
-            # Filtra list_display para campos que existem
-            user_admin.list_display = tuple(
-                f for f in UserAdmin.list_display if f in columns
-            ) or ("id",)
-            user_admin.search_fields = tuple(
-                f for f in UserAdmin.search_fields if f in columns
-            )
-            user_admin.list_filter = tuple(
-                f for f in UserAdmin.list_filter if f in columns
-            )
-            user_admin.readonly_fields = tuple(
-                f for f in UserAdmin.readonly_fields if f in columns
-            )
-            user_admin.exclude = tuple(
-                f for f in UserAdmin.exclude if f in columns
-            )
-        
-        site.register(User, type(user_admin))
+            list_display = tuple(f for f in UserAdmin.list_display if f in columns) or ("id",)
+            search_fields = tuple(f for f in UserAdmin.search_fields if f in columns)
+            list_filter = tuple(f for f in UserAdmin.list_filter if f in columns)
+            readonly_fields = tuple(f for f in UserAdmin.readonly_fields if f in columns)
+            exclude = tuple(f for f in UserAdmin.exclude if f in columns)
+
+            class AdaptedUserAdmin(UserAdmin):
+                list_display = list_display
+                search_fields = search_fields
+                list_filter = list_filter
+                readonly_fields = readonly_fields
+                exclude = exclude
+
+            site.register(User, AdaptedUserAdmin)
+        else:
+            site.register(User, UserAdmin)
         logger.debug("Registered User model (%s) in admin", User.__name__)
         
     except RuntimeError as e:

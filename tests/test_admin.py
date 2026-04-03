@@ -288,6 +288,44 @@ class TestModelAdmin:
         assert len(columns) > 0
         assert any(c["name"] == "id" for c in columns)
         assert any(c["primary_key"] for c in columns)
+
+    def test_exclude_parenthesized_string_coerced_and_hidden(self):
+        """('password_hash') sem vírgula é str; bind() deve normalizar e ocultar a coluna."""
+
+        class MockUserWithHash(MockModel):
+            __table__ = _MockTable(
+                list(MockModel.__table__.columns)
+                + [_MockColumn("password_hash", "VARCHAR")]
+            )
+
+        class BuggyExclude(ModelAdmin):
+            exclude = ("password_hash")
+
+        adm = BuggyExclude()
+        adm.bind(MockUserWithHash)
+        assert adm.exclude == ("password_hash",)
+        names = [c["name"] for c in adm.get_column_info()]
+        assert "password_hash" not in names
+
+    def test_readonly_parenthesized_string_no_substring_false_positives(self):
+        """readonly_fields como str não deve usar matching por substring em nomes."""
+
+        class MockWithHash(MockModel):
+            __table__ = _MockTable(
+                list(MockModel.__table__.columns)
+                + [_MockColumn("hash", "VARCHAR")]
+            )
+
+        class WeirdReadonly(ModelAdmin):
+            readonly_fields = ("id")
+
+        adm = WeirdReadonly()
+        adm.bind(MockWithHash)
+        assert adm.readonly_fields[0] == "id"
+        assert "hash" not in adm.readonly_fields
+        cols = {c["name"]: c for c in adm.get_column_info()}
+        assert cols["id"]["readonly"] is True
+        assert cols["hash"]["readonly"] is False
     
     def test_computed_field_in_list_display(self):
         """Campo computado (método no ModelAdmin) é aceito."""

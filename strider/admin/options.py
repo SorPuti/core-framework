@@ -37,6 +37,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger("strider.admin")
 
 
+def _coerce_field_name_sequence(val: Any) -> tuple[str, ...]:
+    """
+    Normaliza atributos que devem ser tuplas de nomes de campo.
+
+    Em Python, ``("password_hash")`` é uma **string**, não um tuplo de um elemento;
+    o mesmo vale para ``("id")``. Isso quebra ``x not in self.exclude`` e
+    ``x in self.readonly_fields`` (passa a testar substrings).
+    """
+    if val is None:
+        return ()
+    if isinstance(val, str):
+        return (val,) if val else ()
+    if isinstance(val, (list, tuple)):
+        return tuple(val)
+    return ()
+
+
 def _make_json_safe(obj: Any) -> Any:
     """
     Converte valores para formas serializáveis em JSON (para get_column_info).
@@ -378,6 +395,8 @@ class ModelAdmin(Generic[ModelT]):
     
     # -- Detail/Edit View --
     fields: tuple[str, ...] | None = None
+    #: Campos omitidos do formulário e da API de colunas. Usa tupla com vírgula:
+    #: ``("password_hash",)`` — ``("password_hash")`` em Python é só uma string.
     exclude: tuple[str, ...] = ()
     readonly_fields: tuple[str, ...] = ()
     fieldsets: list[FieldsetConfig] | None = None
@@ -443,6 +462,18 @@ class ModelAdmin(Generic[ModelT]):
             columns = []
         
         self._model_fields = columns
+
+        # Tuplas de nomes: evita ("x") ser str e quebrar exclude/readonly/list_display
+        for _attr in (
+            "exclude",
+            "readonly_fields",
+            "list_display",
+            "list_display_links",
+            "list_filter",
+            "search_fields",
+            "ordering",
+        ):
+            setattr(self, _attr, _coerce_field_name_sequence(getattr(self, _attr)))
         
         # Detecta PK
         try:
