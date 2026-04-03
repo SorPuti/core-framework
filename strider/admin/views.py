@@ -1018,10 +1018,13 @@ def create_api_views(site: Any) -> APIRouter:
 
         model, admin_instance = result
         action_method = getattr(admin_instance, action_name, None)
-        if action_method is None or not getattr(action_method, "_admin_action", False):
+        if action_method is None:
+            raise HTTPException(404, f"Action '{action_name}' not found")
+        _fn = getattr(action_method, "__func__", action_method)
+        if not getattr(_fn, "_admin_action", False):
             raise HTTPException(404, f"Action '{action_name}' not found")
 
-        required_permission = str(getattr(action_method, "required_permission", "change") or "change")
+        required_permission = str(getattr(_fn, "required_permission", "change") or "change")
         if required_permission in {"view", "add", "change", "delete"}:
             has_perm = await check_model_permission(user, app_label, model_name, required_permission)
             if not has_perm:
@@ -1035,7 +1038,7 @@ def create_api_views(site: Any) -> APIRouter:
             payload = {}
 
         ids = payload.get("ids") or []
-        requires_selection = bool(getattr(action_method, "requires_selection", False))
+        requires_selection = bool(getattr(_fn, "requires_selection", False))
         if requires_selection and not ids:
             raise HTTPException(400, "This action requires selected items")
 

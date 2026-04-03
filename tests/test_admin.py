@@ -615,6 +615,47 @@ class TestAdminExports:
         assert my_action.short_description == "Test action"
 
 
+class TestModelAdminActionMetadata:
+    """@action aparece na UI sem listar o nome em ``actions``."""
+
+    def test_decorated_methods_in_get_actions_metadata(self):
+        from strider.admin import action
+        from strider.admin.options import ModelAdmin
+
+        class WidgetAdmin(ModelAdmin):
+            @action(description="Desativar", requires_selection=True)
+            async def deactivate_selected(self, db, queryset):
+                await queryset.update(is_active=False)
+
+        admin_inst = WidgetAdmin()
+        admin_inst.bind(MockModel)
+        meta = admin_inst.get_actions_metadata()
+        by_name = {m["name"]: m for m in meta}
+        assert "deactivate_selected" in by_name
+        assert by_name["deactivate_selected"]["description"] == "Desativar"
+        assert by_name["deactivate_selected"]["requires_selection"] is True
+
+    def test_actions_list_can_order_decorated_methods(self):
+        from strider.admin import action
+        from strider.admin.options import ModelAdmin
+
+        class TwoAdmin(ModelAdmin):
+            actions = ["delete_selected", "second_act", "first_act"]
+
+            @action(description="First")
+            async def first_act(self, db, queryset):
+                return {}
+
+            @action(description="Second")
+            async def second_act(self, db, queryset):
+                return {}
+
+        admin_inst = TwoAdmin()
+        admin_inst.bind(MockModel)
+        order = [m["name"] for m in admin_inst.get_actions_metadata()]
+        assert order == ["second_act", "first_act"]
+
+
 # =========================================================================
 # Tests — createsuperuser CLI
 # =========================================================================

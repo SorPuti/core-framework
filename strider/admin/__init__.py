@@ -78,11 +78,14 @@ def action(
     permission: str = "change",
 ):
     """
-    Decorator para custom actions no ModelAdmin.
-    
+    Decorator para ações customizadas no ModelAdmin.
+
+    Os métodos decorados são **descobertos automaticamente** em
+    ``get_actions_metadata()`` (não é obrigatório acrescentar o nome a ``actions``).
+
     Exemplo:
-        @admin.action(description="Desativar selecionados")
-        async def deactivate(self, db, queryset):
+        @admin.action(description="Desativar selecionados", requires_selection=True)
+        async def deactivate_selected(self, db, queryset):
             await queryset.update(is_active=False)
     """
     def decorator(func):

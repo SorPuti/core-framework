@@ -371,6 +371,9 @@ class ModelAdmin(Generic[ModelT]):
     ordering: tuple[str, ...] = ()
     list_per_page: int = 25
     list_max_show_all: int = 200
+    #: Ações da barra do admin. ``delete_selected`` é tratado à parte (bulk delete).
+    #: Métodos marcados com ``@action`` são descobertos automaticamente mesmo que não
+    #: estejam listados aqui; usa esta lista para **ordenar** ou incluir nomes sem decorator.
     actions: list[str] = ["delete_selected"]
     
     # -- Detail/Edit View --
@@ -473,28 +476,66 @@ class ModelAdmin(Generic[ModelT]):
 
     def get_actions_metadata(self) -> list[ActionInfo]:
         """
-        Return registered admin actions metadata for list/detail UIs.
+        Metadados das ações customizadas para a listagem (UI + API).
+
+        Inclui entradas de ``self.actions`` (exceto ``delete_selected``) e **todos** os
+        métodos da subclasse (MRO) marcados com ``@action`` (``_admin_action``), mesmo
+        que o nome não conste em ``actions``.
         """
         from strider.admin.types import ActionInfo
 
+        exclude = frozenset(self.exclude_actions) if self.exclude_actions else frozenset()
         metadata: list[ActionInfo] = []
-        for action_name in self.actions:
-            if action_name == "delete_selected":
-                continue
-            if action_name in self.exclude_actions:
-                continue
+        added: set[str] = set()
+
+        def _underlying(fn: Any) -> Any:
+            return getattr(fn, "__func__", fn)
+
+        def _append_metadata(action_name: str) -> None:
+            if action_name == "delete_selected" or action_name in added:
+                return
+            if action_name in exclude:
+                return
             method = getattr(self, action_name, None)
-            if method is None or not getattr(method, "_admin_action", False):
-                continue
+            if method is None:
+                return
+            underlying = _underlying(method)
+            if not getattr(underlying, "_admin_action", False):
+                return
+            added.add(action_name)
             metadata.append(
                 {
                     "name": action_name,
-                    "description": getattr(method, "short_description", action_name.replace("_", " ").title()),
-                    "requires_selection": bool(getattr(method, "requires_selection", False)),
-                    "confirm": str(getattr(method, "confirm_message", "") or ""),
-                    "permission": str(getattr(method, "required_permission", "change") or "change"),
+                    "description": getattr(
+                        underlying,
+                        "short_description",
+                        action_name.replace("_", " ").title(),
+                    ),
+                    "requires_selection": bool(
+                        getattr(underlying, "requires_selection", False)
+                    ),
+                    "confirm": str(getattr(underlying, "confirm_message", "") or ""),
+                    "permission": str(
+                        getattr(underlying, "required_permission", "change") or "change"
+                    ),
                 }
             )
+
+        for action_name in self.actions:
+            _append_metadata(action_name)
+
+        for cls in type(self).__mro__:
+            if cls is object:
+                continue
+            for attr_name, attr in cls.__dict__.items():
+                if attr_name.startswith("_"):
+                    continue
+                if not callable(attr):
+                    continue
+                if not getattr(attr, "_admin_action", False):
+                    continue
+                _append_metadata(attr_name)
+
         return metadata
     
     def _apply_defaults(self, columns: list[str]) -> None:
