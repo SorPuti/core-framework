@@ -182,8 +182,8 @@ def create_api_views(site: Any) -> APIRouter:
                 offset = (page - 1) * per_page
                 items = await qs.offset(offset).limit(per_page).all()
                 
-                # Serializar
-                display_fields = list(admin_instance.list_display) or admin_instance._model_fields
+                # Serializar (respeita exclude no fallback _model_fields)
+                display_fields = admin_instance.get_effective_list_fields()
                 serialized = [
                     serialize_instance(item, display_fields, admin_instance)
                     for item in items

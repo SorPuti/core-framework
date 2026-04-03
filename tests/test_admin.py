@@ -326,6 +326,43 @@ class TestModelAdmin:
         cols = {c["name"]: c for c in adm.get_column_info()}
         assert cols["id"]["readonly"] is True
         assert cols["hash"]["readonly"] is False
+
+    def test_exclude_string_removes_from_list_display_and_effective_list(self):
+        """exclude em string e coluna na listagem: some da tabela (list API)."""
+
+        class MockUserish(MockModel):
+            __table__ = _MockTable(
+                list(MockModel.__table__.columns)
+                + [_MockColumn("password_hash", "VARCHAR")]
+            )
+
+        class UserishAdmin(ModelAdmin):
+            exclude = "password_hash"
+            list_display = ("id", "email", "password_hash", "name")
+
+        adm = UserishAdmin()
+        adm.bind(MockUserish)
+        assert adm.exclude == ("password_hash",)
+        assert "password_hash" not in adm.list_display
+        assert "password_hash" not in adm.get_effective_list_fields()
+
+    def test_effective_list_fields_filters_exclude_when_list_display_empty(self):
+        """Fallback para colunas do model ainda respeita exclude."""
+
+        class M(MockModel):
+            __table__ = _MockTable(
+                list(MockModel.__table__.columns)
+                + [_MockColumn("password_hash", "VARCHAR")]
+            )
+
+        class A(ModelAdmin):
+            exclude = ("password_hash",)
+            list_display = ()
+
+        adm = A()
+        adm.bind(M)
+        assert "password_hash" not in adm.list_display
+        assert "password_hash" not in adm.get_effective_list_fields()
     
     def test_computed_field_in_list_display(self):
         """Campo computado (método no ModelAdmin) é aceito."""

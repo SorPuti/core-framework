@@ -395,8 +395,10 @@ class ModelAdmin(Generic[ModelT]):
     
     # -- Detail/Edit View --
     fields: tuple[str, ...] | None = None
-    #: Campos omitidos do formulário e da API de colunas. Usa tupla com vírgula:
-    #: ``("password_hash",)`` — ``("password_hash")`` em Python é só uma string.
+    #: Campos omitidos do formulário, do detail e da **listagem** (também retirados de
+    #: ``list_display`` quando lá aparecem). Pode ser string única: ``"password_hash"``.
+    #: Tupla de um elemento: ``("password_hash",)`` — ``("password_hash")`` sem vírgula
+    #: em Python é string (o ``bind()`` normaliza).
     exclude: tuple[str, ...] = ()
     readonly_fields: tuple[str, ...] = ()
     fieldsets: list[FieldsetConfig] | None = None
@@ -484,6 +486,9 @@ class ModelAdmin(Generic[ModelT]):
         
         # Aplica defaults sensatos
         self._apply_defaults(columns)
+
+        # Retira ``exclude`` de list_display / links (listagem ignorava exclude antes)
+        self._sync_list_display_with_exclude(columns)
         
         # Valida configuração
         self._validate(columns)
@@ -572,10 +577,15 @@ class ModelAdmin(Generic[ModelT]):
     def _apply_defaults(self, columns: list[str]) -> None:
         """Aplica defaults sensatos quando campos não foram configurados."""
         if not self.list_display and columns:
-            # PK + primeiras 5 colunas string/int
-            display = [self._pk_field] if self._pk_field in columns else []
+            # PK + primeiras colunas (nunca incluir exclude)
+            ex = frozenset(self.exclude) if self.exclude else frozenset()
+            display = (
+                [self._pk_field]
+                if self._pk_field in columns and self._pk_field not in ex
+                else []
+            )
             for col_name in columns:
-                if col_name == self._pk_field:
+                if col_name == self._pk_field or col_name in ex:
                     continue
                 if len(display) >= 6:
                     break
@@ -624,6 +634,40 @@ class ModelAdmin(Generic[ModelT]):
                                 self.readonly_fields = tuple(self.readonly_fields) + (col.name,)
             except Exception:
                 pass
+
+    def _sync_list_display_with_exclude(self, columns: list[str]) -> None:
+        """
+        Remove nomes em ``exclude`` de ``list_display`` / ``list_display_links``.
+        Se a lista ficar vazia, reconstrói como o default (sem colunas excluídas).
+        """
+        ex = frozenset(self.exclude) if self.exclude else frozenset()
+        if not ex:
+            return
+        self.list_display = tuple(f for f in self.list_display if f not in ex)
+        self.list_display_links = tuple(f for f in self.list_display_links if f not in ex)
+        if not self.list_display and columns:
+            display: list[str] = []
+            if self._pk_field in columns and self._pk_field not in ex:
+                display.append(self._pk_field)
+            for col_name in columns:
+                if col_name == self._pk_field or col_name in ex:
+                    continue
+                if len(display) >= 6:
+                    break
+                display.append(col_name)
+            self.list_display = tuple(display)
+        if self.list_display:
+            links = tuple(f for f in self.list_display_links if f in self.list_display)
+            self.list_display_links = links if links else (self.list_display[0],)
+
+    def get_effective_list_fields(self) -> list[str]:
+        """
+        Campos serializados na listagem (list API / tabela HTML).
+        Aplica ``exclude`` mesmo quando o fallback seria ``_model_fields``.
+        """
+        ex = frozenset(self.exclude) if self.exclude else frozenset()
+        raw = list(self.list_display) if self.list_display else list(self._model_fields)
+        return [f for f in raw if f not in ex]
     
     def _validate(self, columns: list[str]) -> None:
         """

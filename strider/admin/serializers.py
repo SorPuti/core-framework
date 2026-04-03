@@ -116,7 +116,10 @@ def generate_list_schema(
         # Model sem tabela — retorna schema vazio
         return create_model(f"{model_name}ListSchema", __base__=_AdminSchema)
     
-    display_fields = admin.list_display if admin.list_display else tuple(columns.keys())
+    if hasattr(admin, "get_effective_list_fields"):
+        display_fields = tuple(admin.get_effective_list_fields())
+    else:
+        display_fields = admin.list_display if admin.list_display else tuple(columns.keys())
     
     for field_name in display_fields:
         if field_name in columns:
