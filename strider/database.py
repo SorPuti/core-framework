@@ -127,9 +127,19 @@ async def init_db(
 
     After init_db(), use Depends(get_db) in route handlers for session.
     """
+    from strider.citus import asyncpg_connect_args_from_settings, merge_asyncpg_connect_args
     from strider.config import get_settings
+
     s = settings or get_settings()
     url = database_url or s.database_url
+    connect_args = merge_asyncpg_connect_args(
+        kwargs.get("connect_args"),
+        asyncpg_connect_args_from_settings(s),
+    )
+    engine_kwargs = dict(kwargs)
+    if connect_args is not None:
+        engine_kwargs["connect_args"] = connect_args
+
     if getattr(s, "has_read_replica", False):
         await init_replicas(
             write_url=url,
@@ -138,18 +148,21 @@ async def init_db(
             pool_size=pool_size or s.database_pool_size,
             max_overflow=max_overflow or s.database_max_overflow,
             pool_recycle=getattr(s, "database_pool_recycle", None),
-            **kwargs,
+            **engine_kwargs,
         )
     else:
         from strider.models import init_database as _init_database
+
         await _init_database(
             database_url=url,
             echo=echo if echo is not None else getattr(s, "database_echo", False),
             pool_size=pool_size or getattr(s, "database_pool_size", 5),
             max_overflow=max_overflow or getattr(s, "database_max_overflow", 10),
+            connect_args=connect_args,
         )
         if "sqlite" not in url.lower():
             from strider.models import _engine as single_engine
+
             if single_engine is not None:
                 ok = await _ping_engine(single_engine, "database")
                 if not ok:
@@ -158,6 +171,17 @@ async def init_db(
                         "Check DATABASE_URL and that PostgreSQL is running."
                     )
                 logger.info("Database connectivity check: OK")
+                from strider.citus import run_citus_startup_checks
+
+                probe = getattr(s, "database_citus_probe_on_startup", False)
+                require = getattr(s, "database_citus_require", False)
+                if probe or require:
+                    await run_citus_startup_checks(
+                        engine=single_engine,
+                        database_url=url,
+                        probe=probe,
+                        require=require,
+                    )
 
 
 async def init_replicas(
@@ -179,8 +203,12 @@ async def init_replicas(
     # await init_replicas()  # Uses settings
     # await init_replicas(write_url="...", read_url="...")
 
+    citus_probe = False
+    citus_require = False
     try:
+        from strider.citus import asyncpg_connect_args_from_settings, merge_asyncpg_connect_args
         from strider.config import get_settings
+
         settings = get_settings()
 
         write_url = write_url or settings.database_url
@@ -189,6 +217,16 @@ async def init_replicas(
         pool_size = pool_size or settings.database_pool_size
         max_overflow = max_overflow or settings.database_max_overflow
         pool_recycle = pool_recycle or settings.database_pool_recycle
+        citus_probe = settings.database_citus_probe_on_startup
+        citus_require = settings.database_citus_require
+        merged_kwargs = dict(kwargs)
+        ca = merge_asyncpg_connect_args(
+            merged_kwargs.get("connect_args"),
+            asyncpg_connect_args_from_settings(settings),
+        )
+        if ca:
+            merged_kwargs["connect_args"] = ca
+        kwargs = merged_kwargs
     except Exception:
         if write_url is None:
             raise ValueError("write_url is required when settings not available")
@@ -262,6 +300,16 @@ async def init_replicas(
         _read_engine if (read_url and read_url != write_url) else None,
         is_sqlite=is_sqlite,
     )
+
+    if citus_probe or citus_require:
+        from strider.citus import run_citus_startup_checks
+
+        await run_citus_startup_checks(
+            engine=_write_engine,
+            database_url=write_url,
+            probe=citus_probe,
+            require=citus_require,
+        )
 
 
 async def _check_replicas_connectivity(

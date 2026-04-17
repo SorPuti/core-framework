@@ -103,28 +103,26 @@ core kafka delete-topic my-topic
 # Consumir mensagens
 core kafka consume my-topic --group my-service
 
-# Executar worker específico
-core kafka worker MyWorker
-
-# Executar todos os workers
-core kafka worker --all
-
-# Executar worker com opções
-core kafka worker MyWorker --concurrency 8
+# Stream worker (Kafka @worker) — ver também: strider runworker
+# (comandos kafka legacy podem variar; prefira strider runworker)
 ```
 
 ## Workers / Tasks
 
+Dois fluxos distintos: [Tarefas vs stream workers](46-tarefas-vs-stream-workers.md).
+
 ```bash
-# Iniciar worker de background
-stride runworker
+# Jobs @task (strider.tasks) — consome filas tasks.<queue>
+strider worker -q default -c 4
+strider tasks
 
-# Listar workers
-core workers_list
+# Stream workers @worker (mensageria)
+strider runworker MyWorkerClassName
+strider runworker all
+strider workers
 
-# Scheduler
-core scheduler start
-core scheduler stop
+# Agendamento @periodic_task
+strider scheduler
 ```
 
 ## Testing

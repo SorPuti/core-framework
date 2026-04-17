@@ -262,6 +262,9 @@ status = get_configured_subsystems()
 | `database_max_overflow` | `int` | `10` | Conexões extras além do pool |
 | `database_pool_timeout` | `int` | `30` | Timeout para obter conexão (segundos) |
 | `database_pool_recycle` | `int` | `3600` | Tempo para reciclar conexões (segundos) |
+| `database_citus_probe_on_startup` | `bool` | `False` | Loga na subida se a extensão `citus` está instalada ([doc](38-citus.md)) |
+| `database_citus_require` | `bool` | `False` | Falha na subida se PostgreSQL sem extensão `citus` |
+| `database_citus_application_name` | `str \| None` | `None` | `application_name` asyncpg para rastreio em cluster |
 
 ### Database Replicas
 

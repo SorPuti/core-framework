@@ -35,6 +35,7 @@ nav:
   - Operations:
       - CLI: 07-cli.md
       - Migrations: 41-migrations.md
+      - Tarefas vs stream workers: 46-tarefas-vs-stream-workers.md
       - Workers: 31-workers.md
       - Runner: 42-runner.md
       - Messaging: 30-messaging.md
@@ -42,6 +43,7 @@ nav:
       - Soft Delete: 22-soft-delete.md
       - Replicas: 21-replicas.md
       - Storage: 37-storage.md
+      - Citus (Postgres distribuído): 38-citus.md
       - Tenancy: 32-tenancy.md
   - Admin & Security:
       - Admin Panel: 40-admin.md

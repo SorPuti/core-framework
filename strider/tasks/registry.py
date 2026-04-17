@@ -6,6 +6,7 @@ Provides a central place to register and retrieve tasks.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -17,6 +18,32 @@ if TYPE_CHECKING:
 _tasks: dict[str, "Task"] = {}
 _periodic_tasks: dict[str, "PeriodicTask"] = {}
 _task_producer: "Producer | None" = None
+
+_TASK_QUEUE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
+
+
+class TaskRegistrationError(ValueError):
+    """Falha ao registar @task ou @periodic_task (fila inválida, nome duplicado, etc.)."""
+
+
+def _validate_task_queue(queue: str, *, context: str) -> None:
+    q = (queue or "").strip()
+    if not q:
+        raise TaskRegistrationError(f"{context}: queue não pode ser vazia.")
+    if not _TASK_QUEUE_RE.match(q):
+        raise TaskRegistrationError(
+            f"{context}: queue inválida {queue!r}. "
+            "Use letras, dígitos, '.', '_' e '-' (compatível com sufixo Kafka tasks.<queue>)."
+        )
+
+
+def _validate_task_runtime(task: "Task", *, context: str) -> None:
+    if task.retry < 0:
+        raise TaskRegistrationError(f"{context}: retry deve ser >= 0.")
+    if task.retry_delay < 0:
+        raise TaskRegistrationError(f"{context}: retry_delay deve ser >= 0.")
+    if task.timeout < 1:
+        raise TaskRegistrationError(f"{context}: timeout deve ser >= 1 segundo.")
 
 
 def register_task(task: "Task") -> None:
@@ -33,6 +60,18 @@ def register_task(task: "Task") -> None:
         
         # Automatically registered by @task decorator
     """
+    ctx = f"Task {task.name!r}"
+    if task.name in _tasks:
+        raise TaskRegistrationError(
+            f"{ctx}: nome já registado (conflito com {_tasks[task.name].func!r}). "
+            "Use name= explícito em @task(...) ou renomeie a função."
+        )
+    if task.name in _periodic_tasks:
+        raise TaskRegistrationError(
+            f"{ctx}: o mesmo nome já existe como @periodic_task. Escolha outro name= num dos dois."
+        )
+    _validate_task_queue(task.queue, context=ctx)
+    _validate_task_runtime(task, context=ctx)
     _tasks[task.name] = task
 
 
@@ -71,6 +110,17 @@ def register_periodic_task(task: "PeriodicTask") -> None:
     Args:
         task: PeriodicTask instance
     """
+    ctx = f"PeriodicTask {task.name!r}"
+    if task.name in _periodic_tasks:
+        raise TaskRegistrationError(
+            f"{ctx}: nome já registado em periodic tasks. "
+            "Use name= em @periodic_task(...) ou renomeie a função."
+        )
+    if task.name in _tasks:
+        raise TaskRegistrationError(
+            f"{ctx}: o mesmo nome já existe como @task. Escolha outro name= para um dos dois."
+        )
+    _validate_task_queue(task.queue, context=ctx)
     _periodic_tasks[task.name] = task
 
 

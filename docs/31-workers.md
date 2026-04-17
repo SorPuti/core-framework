@@ -1,8 +1,16 @@
-# Workers
+# Workers e tarefas
 
-Sistema de processamento de tasks em background com configuração plug-and-play.
+**Guia de decisão:** [Tarefas (`@task`) vs stream workers (`@worker`)](46-tarefas-vs-stream-workers.md).
 
-## Fluxo do Worker
+Abaixo: **Parte 1** = filas de jobs `strider.tasks` (`strider worker` / `strider tasks`). **Parte 2** = consumo de tópicos `strider.messaging` (`strider runworker` / `strider workers`).
+
+---
+
+## Parte 1 — Tarefas (`strider.tasks`)
+
+Jobs com `@task`, tópicos `tasks.<fila>` no Kafka, processo **`strider worker`**, listagem **`strider tasks`**.
+
+### Fluxo (tarefas em background)
 
 ```mermaid
 flowchart LR
@@ -92,22 +100,46 @@ class AppSettings(Settings):
 | `task_worker_concurrency` | `int` | `4` | Tarefas concorrentes por worker |
 | `task_result_backend` | `Literal` | `"none"` | Backend: none, redis, database |
 
-## Worker com Decorator
+### Definir uma tarefa (`@task` — não confundir com `@worker`)
+
+```python
+# src/tasks.py  (ou módulo apontado por tasks_module / auto-discovery)
+from strider.tasks import task
+
+@task(queue="default", retry=3)
+async def send_digest(user_id: int) -> None:
+    """Job enfileirado com await send_digest.delay(user_id=1)."""
+    ...
+```
+
+- Subir o processo que consome filas: `strider worker` (opção `-q` / `--queue`).
+- Ver o que foi registrado: `strider tasks`.
+- Agendamento com cron/intervalo: `@periodic_task` + `strider scheduler`.
+
+Registo validado na importação: **`TaskRegistrationError`** (nome duplicado entre `@task` e `@periodic_task`, fila inválida, `timeout` &lt; 1, etc.).
+
+## Parte 2 — Stream workers (`strider.messaging`)
+
+Consumidores de **tópico** (pipeline de eventos). Processo **`strider runworker <Nome>`**. Listagem **`strider workers`**.
+
+Decorator `@worker` e classe `Worker` partilham **`WorkerConfig`** e a mesma validação na importação (`WorkerRegistrationError` se algo estiver inconsistente). O prefixo de tópico **`tasks.`** é **rejeitado** aqui (reservado ao sistema de filas `strider.tasks` em Kafka).
+
+### Decorator `@worker` (função)
 
 ```python
 from strider.messaging import worker
 
 @worker(
-    topic="tasks",
-    group_id="task-processor",
+    topic="billing-events",
+    group_id="billing-processor",
 )
-async def process_task(message: dict) -> dict:
-    """Processa uma única task."""
+async def process_billing_event(message: dict) -> dict:
+    """Processa um evento do stream (não é @task de strider.tasks)."""
     result = await do_work(message["data"])
     return {"status": "completed", "result": result}
 ```
 
-## Worker Baseado em Classe
+### Classe `Worker`
 
 ```python
 from strider.messaging import Worker
@@ -136,11 +168,11 @@ class EmailWorker(Worker):
         logger.info(f"Email enviado: {result}")
 ```
 
-## Opções do Worker
+### Opções da classe `Worker`
 
 ```python
 class MyWorker(Worker):
-    input_topic = "tasks"
+    input_topic = "orders-stream"
     output_topic = "results"      # Opcional: publica resultados
     group_id = "my-worker"
     
@@ -159,7 +191,7 @@ class MyWorker(Worker):
     dlq_topic = "tasks-dlq"       # Mensagens com falha vão aqui
 ```
 
-## Processamento em Batch
+### Processamento em batch
 
 ```python
 class BatchWorker(Worker):
@@ -176,18 +208,18 @@ class BatchWorker(Worker):
         return results
 ```
 
-## Política de Retry
+### Política de retry (stream)
 
 ```python
 from strider.messaging import worker
 
 @worker(
-    topic="tasks",
+    topic="orders-stream",
     max_retries=5,
     retry_backoff="exponential",
-    dlq_topic="tasks-dlq",
+    dlq_topic="orders-stream-dlq",
 )
-async def process_task(message: dict):
+async def process_order_stream(message: dict):
     # Se falhar, vai fazer retry com backoff exponencial
     # Após max_retries, mensagem vai para dlq_topic
     ...
@@ -198,7 +230,7 @@ Cálculo de backoff:
 - `"linear"`: `initial_delay * attempt` segundos
 - `"exponential"`: `initial_delay * (2 ** attempt)` segundos
 
-## Output Topic
+### Output topic
 
 ```python
 @worker(
@@ -211,42 +243,33 @@ async def process_order(message: dict) -> dict:
     return {"order_id": message["id"], "status": "processed"}
 ```
 
-## Executar Workers
-
-### Worker Único
+### Executar stream workers (CLI)
 
 ```bash
-core kafka worker EmailWorker
+# Um worker registrado (nome da classe ou do handler)
+strider runworker EmailWorker
+
+# Todos os workers de mensageria
+strider runworker all
 ```
 
-### Todos os Workers
+Opções de concorrência ficam na classe `Worker` (`concurrency`, etc.), não no comando acima.
 
-```bash
-core kafka worker --all
-```
-
-### Com Opções
-
-```bash
-core kafka worker EmailWorker --concurrency 8
-```
-
-## Publicar Tasks
+### Publicar no tópico (messaging)
 
 ```python
 from strider.messaging import get_producer
 
 producer = get_producer("kafka")
 
-# Publicar task
 await producer.send(
-    topic="tasks",
+    topic="orders-stream",
     message={"type": "process", "data": {...}},
-    key="task-123"
+    key="event-123",
 )
 ```
 
-## Registry de Workers
+### Registry (Python)
 
 ```python
 from strider.messaging import (
@@ -268,12 +291,12 @@ await run_worker(EmailWorker)
 await run_all_workers()
 ```
 
-## Tratamento de Erros
+### Tratamento de erros (stream)
 
 ```python
 class MyWorker(Worker):
-    input_topic = "tasks"
-    dlq_topic = "tasks-dlq"
+    input_topic = "orders-stream"
+    dlq_topic = "orders-stream-dlq"
     
     async def process(self, message: dict):
         try:
@@ -292,16 +315,16 @@ class MyWorker(Worker):
         await notify_admin(error)
 ```
 
-## Graceful Shutdown
+### Graceful shutdown
 
-Workers tratam SIGTERM/SIGINT:
+Stream workers tratam SIGTERM/SIGINT:
 
 1. Para de aceitar novas mensagens
 2. Finaliza processamento do batch atual
 3. Commit dos offsets
 4. Sai limpo
 
-## Monitoramento
+### Monitoramento
 
 ```python
 class MyWorker(Worker):
@@ -312,9 +335,9 @@ class MyWorker(Worker):
         metrics.increment("worker.error")
 ```
 
-## Operations Center
+### Operations Center
 
-O admin panel inclui monitoramento de workers:
+O admin panel inclui monitoramento de workers e tarefas:
 
 ```python
 class AppSettings(Settings):
@@ -325,7 +348,7 @@ class AppSettings(Settings):
     ops_worker_offline_ttl: int = 24
 ```
 
-## Exemplo Completo
+### Exemplo completo (stream)
 
 ```python
 # src/workers/email.py
@@ -360,11 +383,11 @@ class EmailWorker(Worker):
 ```
 
 ```bash
-# Executar worker
-core kafka worker EmailWorker
+strider runworker EmailWorker
 ```
 
-## Próximos Passos
+## Próximos passos
 
-- [Messaging](30-messaging.md) — Integração Kafka/Redis
-- [Settings](02-settings.md) — Todas as configurações
+- [Tarefas vs stream workers](46-tarefas-vs-stream-workers.md) — qual comando usar
+- [Messaging](30-messaging.md) — integração Kafka/Redis
+- [Settings](02-settings.md) — configurações

@@ -278,6 +278,27 @@ class Settings(BaseSettings):
         default=3600,
         description="Tempo em segundos para reciclar conexões",
     )
+    database_citus_probe_on_startup: bool = PydanticField(
+        default=False,
+        description=(
+            "Se True, após conectar ao PostgreSQL consulta pg_extension por 'citus' "
+            "e registra versão ou ausência (útil em clusters Citus)."
+        ),
+    )
+    database_citus_require: bool = PydanticField(
+        default=False,
+        description=(
+            "Se True, exige extensão citus no coordinator (falha na subida se "
+            "DATABASE_URL for PostgreSQL sem Citus). Não aplicável a SQLite."
+        ),
+    )
+    database_citus_application_name: str | None = PydanticField(
+        default=None,
+        description=(
+            "Opcional: define asyncpg server_settings.application_name "
+            "(até 64 chars) para rastreio em pg_stat_activity em clusters Citus/Postgres."
+        ),
+    )
     
     # =========================================================================
     # API

@@ -123,6 +123,14 @@ from strider.database import (
     WriteSession,
     ReadSession,
 )
+from strider.citus import (
+    CitusStatus,
+    CITUS_OVERVIEW_URL,
+    probe_citus_on_engine,
+    asyncpg_connect_args_from_settings,
+    merge_asyncpg_connect_args,
+    is_postgres_async_url,
+)
 # DateTime - SEMPRE use timezone.now() em vez de datetime.now()
 from strider.datetime import (
     # Classe principal - USE ESTA
@@ -332,7 +340,7 @@ from strider.views import (
     action,
 )
 
-__version__ = "0.18.73"
+__version__ = "0.18.75"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
@@ -448,6 +456,12 @@ __all__ = [
     "DBSession",
     "WriteSession",
     "ReadSession",
+    "CitusStatus",
+    "CITUS_OVERVIEW_URL",
+    "probe_citus_on_engine",
+    "asyncpg_connect_args_from_settings",
+    "merge_asyncpg_connect_args",
+    "is_postgres_async_url",
     # Advanced QuerySets
     "SoftDeleteQuerySet",
     "TenantQuerySet",

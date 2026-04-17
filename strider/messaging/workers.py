@@ -41,9 +41,13 @@ from typing import Any, Callable, Awaitable, TypeVar, Generic
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 import asyncio
-import functools
+import inspect
+import logging
+import re
 
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 # Type vars
@@ -53,6 +57,111 @@ OutputT = TypeVar("OutputT", bound=BaseModel | dict)
 
 # Worker registry
 _worker_registry: dict[str, "WorkerConfig"] = {}
+
+_VALID_RETRY_BACKOFF = frozenset({"linear", "exponential", "fixed"})
+_QUEUE_LIKE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
+
+
+class WorkerRegistrationError(ValueError):
+    """Falha ao registar stream worker (tópico inválido, nome duplicado, etc.)."""
+
+
+def _worker_config_source(cfg: "WorkerConfig") -> str:
+    if cfg._worker_class is not None:
+        c = cfg._worker_class
+        return f"class {c.__module__}.{c.__name__}"
+    h = cfg.handler
+    mod = getattr(h, "__module__", "?")
+    qual = getattr(h, "__qualname__", repr(h))
+    return f"function {mod}.{qual}"
+
+
+def _validate_stream_worker_config(config: WorkerConfig) -> None:
+    """
+    Regras únicas para @worker e subclasses Worker (mesmo contrato WorkerConfig).
+    """
+    if not (config.input_topic or "").strip():
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': input_topic é obrigatório e não pode ser vazio."
+        )
+    topic = config.input_topic.strip()
+    if topic.startswith("tasks."):
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': input_topic não deve começar com 'tasks.' "
+            "(prefixo reservado a strider.tasks em Kafka). Escolha outro nome de tópico."
+        )
+    if not _QUEUE_LIKE.match(topic):
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': input_topic inválido {topic!r}. "
+            "Use letras, dígitos, '.', '_' e '-' (estilo nome de tópico Kafka)."
+        )
+    gid = (config.group_id or "").strip()
+    if not gid:
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': group_id não pode ser vazio."
+        )
+    if config.concurrency is not None and config.concurrency < 1:
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': concurrency deve ser >= 1 (recebido {config.concurrency!r})."
+        )
+    rp = config.retry_policy
+    if rp.max_retries < 0:
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': max_retries deve ser >= 0."
+        )
+    if rp.backoff not in _VALID_RETRY_BACKOFF:
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': retry_backoff deve ser um de "
+            f"{sorted(_VALID_RETRY_BACKOFF)} (recebido {rp.backoff!r})."
+        )
+    if config.batch_size < 1:
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': batch_size deve ser >= 1."
+        )
+    if config.batch_timeout < 0:
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': batch_timeout não pode ser negativo."
+        )
+    if config.batch_size > 1 and config.batch_handler is None:
+        raise WorkerRegistrationError(
+            f"Stream worker '{config.name}': batch_size>1 exige process_batch / batch_handler."
+        )
+    if config.output_topic:
+        ot = config.output_topic.strip()
+        if ot.startswith("tasks."):
+            raise WorkerRegistrationError(
+                f"Stream worker '{config.name}': output_topic não deve começar com 'tasks.'."
+            )
+        if not _QUEUE_LIKE.match(ot):
+            raise WorkerRegistrationError(
+                f"Stream worker '{config.name}': output_topic inválido {ot!r}."
+            )
+    if config.dlq_topic:
+        dq = (config.dlq_topic or "").strip()
+        if dq.startswith("tasks."):
+            raise WorkerRegistrationError(
+                f"Stream worker '{config.name}': dlq_topic não deve começar com 'tasks.'."
+            )
+        if not _QUEUE_LIKE.match(dq):
+            raise WorkerRegistrationError(
+                f"Stream worker '{config.name}': dlq_topic inválido {dq!r}."
+            )
+
+
+def _register_stream_worker_config(config: WorkerConfig) -> None:
+    """Registo central com validação e deteção de colisão de nomes."""
+    _validate_stream_worker_config(config)
+    existing = _worker_registry.get(config.name)
+    if existing is not None:
+        if existing.handler is config.handler and existing.input_topic == config.input_topic:
+            return
+        raise WorkerRegistrationError(
+            f"Stream worker com nome {config.name!r} já está registado "
+            f"({_worker_config_source(existing)}). "
+            f"Conflito ao registar {_worker_config_source(config)}. "
+            "Renomeie a função/classe ou use um módulo distinto."
+        )
+    _worker_registry[config.name] = config
 
 
 class classproperty:
@@ -170,8 +279,12 @@ def worker(
             dlq_topic=_resolve(dlq_topic) if dlq_topic else None,
         )
         
-        # Register worker
-        _worker_registry[func.__name__] = config
+        try:
+            _register_stream_worker_config(config)
+        except WorkerRegistrationError:
+            raise
+        except Exception as e:
+            raise WorkerRegistrationError(str(e)) from e
         
         # Add config to function
         func._worker_config = config
@@ -246,6 +359,17 @@ class Worker(ABC):
         input_topic = cls._resolve_topic(cls.input_topic)
         output_topic = cls._resolve_topic(cls.output_topic) if cls.output_topic else None
         dlq_topic = cls._resolve_topic(cls.dlq_topic) if cls.dlq_topic else None
+
+        if not (input_topic or "").strip():
+            logger.warning(
+                "Classe %s herda Worker mas não define input_topic — não será registada "
+                "como stream worker (use como base intermédia ou defina input_topic).",
+                cls.__name__,
+            )
+            return
+
+        if inspect.isabstract(cls):
+            return
         
         # Check if has batch handler
         has_batch = hasattr(cls, 'process_batch') and cls.process_batch is not Worker.process_batch
@@ -274,8 +398,12 @@ class Worker(ABC):
         # Store config on class
         cls._config = config
         
-        # Register
-        _worker_registry[cls.__name__] = config
+        try:
+            _register_stream_worker_config(config)
+        except WorkerRegistrationError:
+            raise
+        except Exception as e:
+            raise WorkerRegistrationError(str(e)) from e
     
     @classmethod
     def _resolve_topic(cls, topic: str | Any) -> str:

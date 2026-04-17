@@ -129,7 +129,7 @@ O framework usa apenas bibliotecas estaveis e bem mantidas:
 
 **Dependencias opcionais por feature:**
 - Messaging: `aiokafka`, `aio-pika` (RabbitMQ), `redis`
-- PostgreSQL: `asyncpg`
+- PostgreSQL: `asyncpg` (clusters [Citus](https://www.citusdata.com/overview/) usam o mesmo coordinator Postgres; veja `docs/38-citus.md` e settings `database_citus_*`)
 - Argon2: `argon2-cffi`
 
 ## Instalacao

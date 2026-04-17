@@ -24,9 +24,10 @@ Usage:
     async def sync_external_data():
         await ExternalAPI.sync()
 
-CLI Commands:
-    core worker --queue default --concurrency 4
-    core scheduler
+CLI (tarefas em background, não confundir com ``strider runworker``):
+    strider worker -q default -c 4
+    strider scheduler
+    strider tasks
 """
 
 from strider.tasks.base import (
@@ -44,6 +45,7 @@ from strider.tasks.registry import (
     get_all_tasks,
     get_periodic_tasks,
     register_task,
+    TaskRegistrationError,
 )
 from strider.tasks.config import (
     TaskSettings,
@@ -65,6 +67,7 @@ __all__ = [
     "get_all_tasks",
     "get_periodic_tasks",
     "register_task",
+    "TaskRegistrationError",
     # Config
     "TaskSettings",
     "get_task_settings",

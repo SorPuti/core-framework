@@ -87,6 +87,21 @@ class PostViewSet(ModelViewSet):
 
 Ver [Serializers](13-serializers.md).
 
+## Tipagem genérica (opcional)
+
+Nos tipos do framework, `ModelT`, `InputT` e `OutputT` têm **default** (`typing_extensions.TypeVar`). Na prática:
+
+- Pode declarar `class PostViewSet(ModelViewSet):` **sem** `ModelViewSet[Post, PostInput, PostOutput]` — é o estilo usado na maioria da documentação e dos templates CLI.
+- Use `ModelViewSet[Post, PostInput, PostOutput]` (ou `ViewSet[...]`) quando quiser que o type checker trate `data` nas actions como seu `InputSchema` concreto ao sobrescrever `create` / `update` / `partial_update`.
+
+O contrato de API continua vindo de `serializer_class` ou de `input_schema` / `output_schema`; os colchetes só refinam **anotações estáticas**.
+
+### Inventário neste repositório
+
+- **`UnifiedModelSerializer`**: implementado em `strider/serializers.py` e exemplificado na documentação (`13-serializers.md`, `00-criar-aplicacao.md`). Não há apps de exemplo com `serializers.py` próprio no monorepo (apenas o núcleo e o admin).
+- **`ModelViewSet` sem colchetes**: padrão em testes, templates em `strider/cli/templates/**/views.py.template` e na maior parte dos trechos em `docs/`.
+- **`ModelViewSet[ModelT, InputT, OutputT]`**: usado em bases reutilizáveis (`SearchModelViewSet`, `BulkModelViewSet`) e em exemplos de docstring para tipagem explícita.
+
 ## Permissions
 
 ```python

@@ -12,7 +12,9 @@ Usage:
 from __future__ import annotations
 
 import inspect as py_inspect
-from typing import Any, ClassVar, Generic, TypeVar, get_type_hints
+from typing import Any, ClassVar, Generic, get_type_hints
+
+from typing_extensions import TypeVar
 from collections.abc import Sequence, Callable, Awaitable
 
 from fastapi import APIRouter, Request, HTTPException, status, Depends
@@ -38,10 +40,10 @@ from strider.validators import (
     AsyncValidator,
 )
 
-# Type vars
-ModelT = TypeVar("ModelT")
-InputT = TypeVar("InputT", bound=InputSchema)
-OutputT = TypeVar("OutputT", bound=OutputSchema)
+# Type vars (defaults: generics nos ViewSets são opcionais — alinha com o uso `class X(ModelViewSet):` sem colchetes)
+ModelT = TypeVar("ModelT", default=Any)
+InputT = TypeVar("InputT", bound=InputSchema, default=Any)
+OutputT = TypeVar("OutputT", bound=OutputSchema, default=Any)
 
 
 def _require_mapping_after_hook(
@@ -332,8 +334,8 @@ class ViewSet(Generic[ModelT, InputT, OutputT]):
     
     Define actions: list, retrieve, create, update, partial_update, destroy.
     
-    Exemplo:
-        class UserViewSet(ViewSet[User, UserInput, UserOutput]):
+    Exemplo (generics nos colchetes são opcionais; use-os só se quiser anotar `data` nas actions):
+        class UserViewSet(ViewSet):
             model = User
             serializer_class = UserSerializer
             permission_classes = [IsAuthenticated]
@@ -1118,11 +1120,16 @@ class ModelViewSet(ViewSet[ModelT, InputT, OutputT]):
     Fornece todas as operações CRUD automaticamente.
     
     Exemplo:
-        class UserViewSet(ModelViewSet[User, UserInput, UserOutput]):
+        class UserViewSet(ModelViewSet):
+            model = User
+            serializer_class = UserSerializer  # recomendado: tipos vêm do serializer
+            permission_classes = [IsAuthenticated]
+
+        # Tipagem explícita (opcional), útil se você sobrescreve create/update e quer `data: UserInput`:
+        class UserViewSetTyped(ModelViewSet[User, UserInput, UserOutput]):
             model = User
             input_schema = UserInput
             output_schema = UserOutput
-            permission_classes = [IsAuthenticated]
             
             # Customizar actions específicas
             permission_classes_by_action = {
@@ -1137,9 +1144,9 @@ class ReadOnlyModelViewSet(ViewSet[ModelT, InputT, OutputT]):
     ViewSet apenas para leitura (list e retrieve).
     
     Exemplo:
-        class PublicUserViewSet(ReadOnlyModelViewSet[User, UserInput, UserOutput]):
+        class PublicUserViewSet(ReadOnlyModelViewSet):
             model = User
-            output_schema = UserOutput
+            serializer_class = UserSerializer
     """
     
     async def create(self, *args: Any, **kwargs: Any) -> Any:

@@ -853,6 +853,8 @@ async def init_database(
     echo: bool = False,
     pool_size: int = 5,
     max_overflow: int = 10,
+    *,
+    connect_args: dict | None = None,
 ) -> None:
     """
     Inicializa a conexão com o banco de dados.
@@ -862,13 +864,16 @@ async def init_database(
         echo: Habilita logging de SQL
         pool_size: Tamanho do pool de conexões
         max_overflow: Conexões extras além do pool
+        connect_args: Repassado ao create_async_engine (ex.: asyncpg server_settings)
     """
     global _engine, _session_factory
 
-    kwargs = {"echo": echo}
+    kwargs: dict = {"echo": echo}
     if "sqlite" not in database_url:
         kwargs["pool_size"] = pool_size
         kwargs["max_overflow"] = max_overflow
+    if connect_args:
+        kwargs["connect_args"] = connect_args
 
     _engine = create_async_engine(database_url, **kwargs)
     

@@ -2615,8 +2615,14 @@ from httpx import AsyncClient
 def cmd_worker(args: argparse.Namespace) -> int:
     """Start background task worker."""
     print()
-    print(bold("Starting Task Worker"))
+    print(bold("Starting Task Worker (@task / strider.tasks)"))
     print("=" * 50)
+    print(
+        info(
+            "Consome filas tasks.<queue> no broker. Stream workers Kafka usam: strider runworker <nome>"
+        )
+    )
+    print()
     
     queues = args.queues or ["default"]
     concurrency = args.concurrency or 4
@@ -2631,23 +2637,23 @@ def cmd_worker(args: argparse.Namespace) -> int:
         sys.path.insert(0, cwd)
     os.environ["PYTHONPATH"] = cwd
     
-    # Import and discover tasks
+    imported: list[str] = []
     try:
-        # Try to import app to register tasks
-        config = load_config()
-        app_module = config.get("app_module", "src.main")
-        try:
-            importlib.import_module(app_module)
-        except ImportError:
-            pass
-        
-        # Also try to import tasks module
-        try:
-            importlib.import_module("src.tasks")
-        except ImportError:
-            pass
+        imported = _discover_and_import_tasks()
     except Exception as e:
-        print(warning(f"Warning: Could not import app module: {e}"))
+        print(warning(f"Warning: task module discovery failed: {e}"))
+    
+    from strider.tasks.registry import get_all_tasks
+
+    if not get_all_tasks():
+        print(
+            warning(
+                "Nenhuma @task registrada. Defina funções com @task (strider.tasks) e "
+                "garanta import do módulo (tasks_module / tasks.py). Compare com: strider tasks"
+            )
+        )
+        if imported:
+            print(info(f"Módulos importados nesta tentativa: {', '.join(imported)}"))
     
     # Run worker
     from strider.tasks.worker import run_worker
@@ -2664,7 +2670,7 @@ def cmd_worker(args: argparse.Namespace) -> int:
 def cmd_scheduler(args: argparse.Namespace) -> int:
     """Start periodic task scheduler."""
     print()
-    print(bold("Starting Task Scheduler"))
+    print(bold("Starting Task Scheduler (@periodic_task / strider.tasks)"))
     print("=" * 50)
     print()
     
@@ -2674,21 +2680,10 @@ def cmd_scheduler(args: argparse.Namespace) -> int:
         sys.path.insert(0, cwd)
     os.environ["PYTHONPATH"] = cwd
     
-    # Import and discover tasks
     try:
-        config = load_config()
-        app_module = config.get("app_module", "src.main")
-        try:
-            importlib.import_module(app_module)
-        except ImportError:
-            pass
-        
-        try:
-            importlib.import_module("src.tasks")
-        except ImportError:
-            pass
+        _discover_and_import_tasks()
     except Exception as e:
-        print(warning(f"Warning: Could not import app module: {e}"))
+        print(warning(f"Warning: task module discovery failed: {e}"))
     
     # Run scheduler
     from strider.tasks.scheduler import run_scheduler
@@ -2814,8 +2809,14 @@ def cmd_runworker(args: argparse.Namespace) -> int:
         return 1
     
     print()
-    print(bold("Starting Message Worker"))
+    print(bold("Starting Message Stream Worker (strider.messaging @worker)"))
     print("=" * 50)
+    print(
+        info(
+            "Kafka/stream workers — não executa @task de strider.tasks (use: strider worker)"
+        )
+    )
+    print()
     
     worker_name = args.name
     
@@ -4112,7 +4113,10 @@ For more information, visit: https://github.com/SorPuti/strider
     # worker
     worker_parser = subparsers.add_parser(
         "worker",
-        help="Start background task worker"
+        help=(
+            "Inicia o consumidor de FILAS @task (strider.tasks; tópicos tasks.*). "
+            "Não é o mesmo que 'runworker' (stream Kafka @worker)."
+        ),
     )
     worker_parser.add_argument(
         "-q", "--queue",
@@ -4130,7 +4134,7 @@ For more information, visit: https://github.com/SorPuti/strider
     # scheduler
     scheduler_parser = subparsers.add_parser(
         "scheduler",
-        help="Start periodic task scheduler"
+        help="Inicia agendador @periodic_task (strider.tasks). Diferente de strider runworker.",
     )
     scheduler_parser.set_defaults(func=cmd_scheduler)
     
@@ -4155,7 +4159,10 @@ For more information, visit: https://github.com/SorPuti/strider
     # runworker (message workers)
     runworker_parser = subparsers.add_parser(
         "runworker",
-        help="Run a message worker"
+        help=(
+            "Executa um stream worker de mensageria (@worker / Worker; Kafka). "
+            "Para jobs @task use o comando 'worker'."
+        ),
     )
     runworker_parser.add_argument(
         "name",
@@ -4194,7 +4201,7 @@ For more information, visit: https://github.com/SorPuti/strider
     # workers (list workers)
     workers_parser = subparsers.add_parser(
         "workers",
-        help="List registered message workers"
+        help="Lista stream workers de mensageria (@worker). Para @task use 'tasks'.",
     )
     workers_parser.set_defaults(func=cmd_workers_list)
     
@@ -4238,7 +4245,7 @@ For more information, visit: https://github.com/SorPuti/strider
     # tasks
     tasks_parser = subparsers.add_parser(
         "tasks",
-        help="List registered tasks"
+        help="Lista @task registradas (strider.tasks). Stream workers: strider workers",
     )
     tasks_parser.set_defaults(func=cmd_tasks)
     

@@ -63,16 +63,15 @@ TEMPLATE_METADATA = {
         "recommended_for": "SaaS platforms, B2B applications",
     },
     "workers": {
-        "name": "Background Workers",
-        "description": "API with background task processing",
+        "name": "Messaging stream workers",
+        "description": "Kafka-style @worker / Worker classes (strider runworker), not strider.tasks",
         "features": [
-            "@worker decorator for tasks",
-            "Task model for tracking",
-            "Redis task queue",
-            "Retry with backoff",
+            "@worker (strider.messaging) + Worker subclasses",
+            "strider runworker / strider workers",
+            "Retry, DLQ, batch (see docs/31-workers.md Parte 2)",
             "Docker Compose included",
         ],
-        "recommended_for": "Email sending, data processing, scheduled jobs",
+        "recommended_for": "Event pipelines, consumers, stream processing",
     },
 }
 

@@ -33,7 +33,7 @@ Workers:
         async def process(self, event: dict) -> dict:
             return {**event, "processed": True}
     
-    # Run: core runworker enrich_event
+    # Run: strider runworker enrich_event  (lista: strider workers)
 
 Avro Support:
     from strider.messaging import AvroModel
@@ -100,6 +100,7 @@ from strider.messaging.workers import (
     worker,
     Worker,
     WorkerConfig,
+    WorkerRegistrationError,
     RetryPolicy,
     get_worker,
     get_all_workers,
@@ -161,6 +162,7 @@ __all__ = [
     "worker",
     "Worker",
     "WorkerConfig",
+    "WorkerRegistrationError",
     "RetryPolicy",
     "get_worker",
     "get_all_workers",

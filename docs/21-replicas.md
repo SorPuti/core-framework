@@ -80,6 +80,10 @@ DATABASE_READ_URL=postgresql+asyncpg://user:pass@replica:5432/db
 | `database_read_pool_size` | `int \| None` | `None` | Pool size para replica (default: 2x write) |
 | `database_read_max_overflow` | `int \| None` | `None` | Max overflow para replica (default: 2x write) |
 
+## Citus e réplica de leitura
+
+Em clusters **Citus** ([overview](https://www.citusdata.com/overview/)), escritos e muitas leituras passam pelo **coordinator**. Separar `DATABASE_READ_URL` para outro host pode ou não fazer sentido conforme o provedor e o plano de roteamento. Veja [Citus (Postgres distribuído)](38-citus.md).
+
 ## Como Funciona
 
 Quando `database_read_url` está configurado:
