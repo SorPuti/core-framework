@@ -1,6 +1,6 @@
 [project]
 name = "strider-framework"
-version = "0.18.75"
+version = "0.18.76"
 description = "Strider - Django-inspired, FastAPI-powered. Alta performance, baixo acoplamento, produtividade extrema."
 requires-python = ">=3.10,<4.0"
 readme = "README.md"
@@ -96,9 +96,9 @@ storage = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/SorPuti/stride"
-Documentation = "https://github.com/SorPuti/stride#readme"
-Repository = "https://github.com/SorPuti/stride"
+Homepage = "https://github.com/SorPuti/core-framework#por-que-mais-um-framework"
+Documentation = "https://sorputi.github.io/core-framework/"
+Repository = "https://github.com/SorPuti/core-framework"
 
 [build-system]
 requires = ["hatchling"]
