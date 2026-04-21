@@ -301,6 +301,34 @@ class Settings(BaseSettings):
     )
     
     # =========================================================================
+    # Pushpin (proxy GRIP na borda — realtime push)
+    # =========================================================================
+    # Ver https://pushpin.org/docs/getting-started/#quickstart
+    
+    pushpin_enabled: bool = PydanticField(
+        default=False,
+        description=(
+            "Quando True, indica uso de Pushpin na frente da app; "
+            "helpers leem pushpin_publish_url / timeout das settings."
+        ),
+    )
+    pushpin_publish_url: str = PydanticField(
+        default="http://127.0.0.1:5561/publish/",
+        description="URL do endpoint HTTP de publicação GRIP do Pushpin (porta de controlo).",
+    )
+    pushpin_publish_timeout: float = PydanticField(
+        default=5.0,
+        description="Timeout em segundos para POST no endpoint de publish.",
+    )
+    pushpin_default_channel_prefix: str = PydanticField(
+        default="",
+        description=(
+            "Prefixo opcional aplicado a canais lógicos (ex.: 'myapp.'). "
+            "Evite caracteres estranhos; use letras, dígitos, '.', '_', '-'."
+        ),
+    )
+    
+    # =========================================================================
     # API
     # =========================================================================
     

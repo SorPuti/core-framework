@@ -243,6 +243,18 @@ from strider.querysets import (
     TenantSoftDeleteQuerySet,
 )
 from strider.realtime import WebSocketView, SSEView, Channel, sse_response
+from strider.pushpin import (
+    grip_stream_headers,
+    grip_stream_response,
+    grip_response_hold_headers,
+    merge_grip_into_response_headers,
+    qualify_channel,
+    qualify_channel_from_settings,
+    PushpinPublishError,
+    build_http_stream_item,
+    publish_pushpin_items,
+    publish_http_stream,
+)
 # Relations - Django-like relationship helpers
 from strider.relations import (
     Rel,
@@ -340,7 +352,7 @@ from strider.views import (
     action,
 )
 
-__version__ = "0.18.76"
+__version__ = "0.18.77"
 __all__ = [
     # Logger - use diretamente: from strider import logger
     "logger",
@@ -435,6 +447,17 @@ __all__ = [
     "SSEView",
     "Channel",
     "sse_response",
+    # Pushpin (GRIP edge proxy)
+    "grip_stream_headers",
+    "grip_stream_response",
+    "grip_response_hold_headers",
+    "merge_grip_into_response_headers",
+    "qualify_channel",
+    "qualify_channel_from_settings",
+    "PushpinPublishError",
+    "build_http_stream_item",
+    "publish_pushpin_items",
+    "publish_http_stream",
     # Multi-Tenancy
     "set_tenant",
     "get_tenant",

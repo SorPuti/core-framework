@@ -2,6 +2,8 @@
 
 Primitivas para comunicação em tempo real com suporte a permissões, autenticação JWT e integração nativa com o sistema de routing. Para um resumo de uso no fluxo de criação de aplicação, veja [Criar uma aplicação — WebSocket e SSE](00-criar-aplicacao.md#8-websocket-e-sse).
 
+**Pushpin (proxy GRIP na borda):** integração opcional com cabeçalhos `Grip-*` e publicação HTTP — [Pushpin com Strider](47-pushpin.md).
+
 ## Arquitetura
 
 ```mermaid

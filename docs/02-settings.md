@@ -265,6 +265,10 @@ status = get_configured_subsystems()
 | `database_citus_probe_on_startup` | `bool` | `False` | Loga na subida se a extensão `citus` está instalada ([doc](38-citus.md)) |
 | `database_citus_require` | `bool` | `False` | Falha na subida se PostgreSQL sem extensão `citus` |
 | `database_citus_application_name` | `str \| None` | `None` | `application_name` asyncpg para rastreio em cluster |
+| `pushpin_enabled` | `bool` | `False` | Documental: app atrás do Pushpin; helpers usam URL de publish |
+| `pushpin_publish_url` | `str` | `http://127.0.0.1:5561/publish/` | Endpoint HTTP de publicação GRIP |
+| `pushpin_publish_timeout` | `float` | `5.0` | Timeout do POST de publish (segundos) |
+| `pushpin_default_channel_prefix` | `str` | `""` | Prefixo opcional para canais (`qualify_channel_from_settings`) |
 
 ### Database Replicas
 
